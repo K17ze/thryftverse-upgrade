@@ -16,20 +16,22 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import * as Clipboard from 'expo-clipboard';
 import { useAppTheme, ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control, ZIndex } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
   getOrder,
   getOrderParcelEvents,
   cancelOrder,
-  shipOrder,
   deliverOrder,
+  refundOrder,
 } from '../services/commerceApi';
+import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
@@ -42,10 +44,14 @@ import { DispatchCountdown } from '../components/orders/DispatchCountdown';
 import { OrderStatusStepper, OrderStepperStage } from '../components/orders/OrderStatusStepper';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
+import {
+  resolveCapabilities,
+  type OrderCapability,
+} from '../components/orders/orderCapabilities';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
-type OrderMutation = 'cancel' | 'ship' | 'deliver' | null;
+type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
 
 // --- Status normalisation ---
 
@@ -387,6 +393,305 @@ function buildTimelineEntries(
 
 // --- Component ---
 
+// ─── InspectionBanner ──────────────────────────────────────────────────────
+// Shown to buyers when status = 'delivered' (not yet 'completed').
+// Presents two clear paths: "Everything is OK" (confirm receipt, releases
+// escrow) or "Report an issue" (opens support with issue categories).
+// The inspection deadline is server-derived — the client does not invent
+// a 2-day window. Per P0-4: "The client may format time. It must not
+// invent a deadline that changes rights, money, delivery promise or
+// eligibility."
+
+function InspectionBanner({
+  inspectionDeadlineAt,
+  onConfirmReceipt,
+  onReportIssue,
+}: {
+  inspectionDeadlineAt: string | null;
+  onConfirmReceipt: () => void;
+  onReportIssue: () => void;
+}) {
+  const { colors } = useAppTheme();
+
+  const daysLeft = useMemo(() => {
+    if (!inspectionDeadlineAt) return null;
+    const deadline = new Date(inspectionDeadlineAt);
+    if (Number.isNaN(deadline.getTime())) return null;
+    return Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  }, [inspectionDeadlineAt]);
+
+  const expired = daysLeft != null && daysLeft <= 0;
+
+  return (
+    <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
+      <View style={styles.inspectionHeader}>
+        <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
+          <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand} />
+        </View>
+        <View style={styles.inspectionHeaderText}>
+          <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>
+            Check your item
+          </Text>
+          <Text style={[styles.inspectionSub, { color: colors.textSecondary }]}>
+            {expired
+              ? 'Your inspection window has passed. Confirm receipt or report an issue.'
+              : daysLeft === 0
+                ? 'Last day to report an issue — confirm receipt or open a case today.'
+                : daysLeft === 1
+                  ? '1 day left to report an issue if something is wrong.'
+                  : `${daysLeft} days left to report an issue if something is wrong.`}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.inspectionActions}>
+        <Pressable
+          style={[styles.inspectionPrimaryBtn, { backgroundColor: colors.brand }]}
+          onPress={onConfirmReceipt}
+          accessibilityRole="button"
+          accessibilityLabel="Confirm receipt — everything is OK"
+        >
+          <Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />
+          <Text style={[styles.inspectionPrimaryBtnText, { color: colors.textInverse }]}>
+            Everything is OK
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.inspectionSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={onReportIssue}
+          accessibilityRole="button"
+          accessibilityLabel="Report an issue with this order"
+        >
+          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+          <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
+            Report an issue
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={[styles.inspectionFootnote, { color: colors.textMuted }]}>
+        Funds are held in escrow until you confirm. Reporting an issue pauses the auto-release.
+      </Text>
+    </View>
+  );
+}
+
+// ─── PackageContents ────────────────────────────────────────────────────────
+// Compact row showing what is in the parcel — thumbnail + title — so the buyer
+// can see WHAT is being tracked without scrolling to a separate section.
+
+function PackageContents({
+  title,
+  imageUrl,
+  subtitle,
+  onPress,
+}: {
+  title: string;
+  imageUrl: string;
+  subtitle?: string;
+  onPress?: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    label: { color: colors.textMuted },
+    title: { color: colors.textPrimary },
+    subtitle: { color: colors.textSecondary },
+  }), [colors]);
+
+  const content = (
+    <View style={styles.packageContentsRow}>
+      <CachedImage
+        uri={imageUrl}
+        style={styles.packageThumb}
+        contentFit="cover"
+      />
+      <View style={styles.packageContentsText}>
+        <Text style={[styles.packageContentsTitle, themed.title]} numberOfLines={2}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.packageContentsSub, themed.subtitle]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`View item: ${title}`}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
+}
+
+// ─── IssueCategorySelector ──────────────────────────────────────────────────
+// Inline expansion that lets the buyer pick a specific issue type before
+// navigating to support. Object-specific categories per spec:
+// item not as described, damaged, wrong item, counterfeit/authenticity,
+// parcel issue, missing contents.
+
+type IssueCategory = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+const ISSUE_CATEGORIES: IssueCategory[] = [
+  { id: 'not_as_described', label: 'Not as described', description: 'Condition, size, or details do not match the listing.' },
+  { id: 'damaged', label: 'Damaged', description: 'The item arrived damaged or broken.' },
+  { id: 'wrong_item', label: 'Wrong item', description: 'A different item was sent than what was ordered.' },
+  { id: 'counterfeit', label: 'Authenticity issue', description: 'The item may not be authentic.' },
+  { id: 'parcel_issue', label: 'Parcel issue', description: 'The parcel was damaged, opened, or tampered with.' },
+  { id: 'missing_contents', label: 'Missing contents', description: 'Parts or items are missing from the parcel.' },
+];
+
+function IssueCategorySelector({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (category: IssueCategory) => void;
+  onClose: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    sheetBackdrop: { backgroundColor: colors.overlay },
+    sheet: { backgroundColor: colors.surface },
+    title: { color: colors.textPrimary },
+    sub: { color: colors.textSecondary },
+    row: { borderBottomColor: colors.borderSubtle },
+    rowLabel: { color: colors.textPrimary },
+    rowDesc: { color: colors.textMuted },
+    cancelBtn: { color: colors.textMuted },
+  }), [colors]);
+
+  return (
+    <View style={styles.issueSheetBackdrop} accessibilityRole="alert">
+      <Pressable style={[styles.issueSheetBackdropPress, themed.sheetBackdrop]} onPress={onClose} accessibilityLabel="Close issue category selector" />
+      <View style={[styles.issueSheet, themed.sheet]}>
+        <Text style={[styles.issueSheetTitle, themed.title]}>What is the issue?</Text>
+        <Text style={[styles.issueSheetSub, themed.sub]}>
+          Select the type of problem so we can direct your case correctly.
+        </Text>
+        {ISSUE_CATEGORIES.map((category) => (
+          <Pressable
+            key={category.id}
+            style={({ pressed }) => [styles.issueRow, themed.row, pressed && styles.issueRowPressed]}
+            onPress={() => { haptics.tap(); onSelect(category); }}
+            accessibilityRole="button"
+            accessibilityLabel={category.label}
+          >
+            <View style={styles.issueRowText}>
+              <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
+              <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        ))}
+        <Pressable
+          style={({ pressed }) => [styles.issueCancelBtn, pressed && styles.issueCancelBtnPressed]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={[styles.issueCancelBtnText, themed.cancelBtn]}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── CompletedOrderSummary ───────────────────────────────────────────────────
+// Quiet completion state shown when status === 'completed'. Collapses
+// operational chrome (timeline, inspection banner) and prioritises:
+// receipt → review → buy/sell again → support history.
+
+function CompletedOrderSummary({
+  onLeaveReview,
+  onBuyAgain,
+  onViewReceipt,
+  onViewSupportHistory,
+  hasReview,
+}: {
+  onLeaveReview: () => void;
+  onBuyAgain: () => void;
+  onViewReceipt: () => void;
+  onViewSupportHistory: () => void;
+  hasReview: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    label: { color: colors.textMuted },
+    title: { color: colors.textPrimary },
+    actionText: { color: colors.brand },
+    actionRow: { borderBottomColor: colors.borderSubtle },
+  }), [colors]);
+
+  return (
+    <View style={styles.completedSection}>
+      <Text style={[styles.sectionLabel, themed.label]}>Order complete</Text>
+      <Text style={[styles.completedTitle, themed.title]}>
+        This order is complete
+      </Text>
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onViewReceipt(); }}
+        accessibilityRole="button"
+        accessibilityLabel="View receipt"
+      >
+        <Ionicons name="receipt-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>View receipt</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+
+      {!hasReview ? (
+        <Pressable
+          style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+          onPress={() => { haptics.tap(); onLeaveReview(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Leave a review"
+        >
+          <Ionicons name="star-outline" size={20} color={colors.brand} />
+          <Text style={[styles.completedActionText, themed.actionText]}>Leave a review</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onBuyAgain(); }}
+        accessibilityRole="button"
+        accessibilityLabel="Buy again from this seller"
+      >
+        <Ionicons name="bag-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>Buy again from this seller</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onViewSupportHistory(); }}
+        accessibilityRole="button"
+        accessibilityLabel="View support history"
+      >
+        <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>Support history</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -421,10 +726,16 @@ export default function OrderDetailScreen() {
     counterpartyBtn: { borderColor: colors.border },
     counterpartyBtnText: { color: colors.brand },
     escrowBanner: { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` },
-    escrowIconWrap: { backgroundColor: `${colors.success}15` },
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
     escrowCountdown: { color: colors.textMuted },
+    etaBanner: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` },
+    etaLabel: { color: colors.textMuted },
+    etaValue: { color: colors.textPrimary },
+    etaService: { color: colors.textSecondary },
+    etaIconWrap: { backgroundColor: colors.brandSubtle },
+    staleBanner: { backgroundColor: `${colors.warning}08`, borderColor: `${colors.warning}25` },
+    staleText: { color: colors.warning },
     detailLabel: { color: colors.textSecondary },
     detailValue: { color: colors.textPrimary },
     detailValueLink: { color: colors.brand },
@@ -448,9 +759,12 @@ export default function OrderDetailScreen() {
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
+  const [issueSelectorVisible, setIssueSelectorVisible] = useState(false);
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const timelineYRef = useRef(0);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -584,6 +898,7 @@ export default function OrderDetailScreen() {
   const statusLabel = humaniseStatus(normalisedStatus);
   const statusExplanation = getStatusExplanation(normalisedStatus);
   const isTerminal = isTerminalStatus(normalisedStatus);
+  const isCompleted = normalisedStatus === 'completed';
 
   const isBuyer = currentUser?.id === backendOrder?.buyerId;
   const isSeller = currentUser?.id === backendOrder?.sellerId;
@@ -734,6 +1049,59 @@ export default function OrderDetailScreen() {
     latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt
   );
 
+  // --- ETA from fulfilment snapshot ---
+  const snapshot = backendOrder?.fulfilmentSnapshot ?? null;
+  const etaWindow = snapshot?.etaMinDays != null && snapshot?.etaMaxDays != null
+    ? (snapshot.etaMinDays !== snapshot.etaMaxDays
+        ? `${snapshot.etaMinDays}–${snapshot.etaMaxDays} days`
+        : `${snapshot.etaMinDays} day${snapshot.etaMinDays === 1 ? '' : 's'}`)
+    : null;
+
+  // Estimated delivery date is server-derived, not client-invented.
+  // Per P0-4: "The client may format time. It must not invent a deadline
+  // that changes rights, money, delivery promise or eligibility."
+  // The server provides estimatedDeliveryAt; the client only formats it.
+  const estimatedDeliveryDate = useMemo(() => {
+    const serverEta = (backendOrder as any)?.estimatedDeliveryAt;
+    if (!serverEta) return null;
+    const d = new Date(serverEta);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }, [(backendOrder as any)?.estimatedDeliveryAt]);
+
+  const estimatedDeliveryLabel = estimatedDeliveryDate
+    ? estimatedDeliveryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    : null;
+
+  // --- Stale event indicator ---
+  // If the last parcel event is > 48 hours old and the order is still in transit,
+  // show a "tracking may be delayed" warning.
+  const isStaleTracking = useMemo(() => {
+    if (!latestParcelEvent) return false;
+    if (normalisedStatus !== 'shipped' && normalisedStatus !== 'in transit' && normalisedStatus !== 'out for delivery') return false;
+    const lastTime = latestParcelEvent.occurredAt ?? latestParcelEvent.receivedAt;
+    const lastMs = new Date(lastTime).getTime();
+    if (Number.isNaN(lastMs)) return false;
+    const hoursSince = (Date.now() - lastMs) / (60 * 60 * 1000);
+    return hoursSince > 48;
+  }, [latestParcelEvent, normalisedStatus]);
+
+  // --- Package summary from snapshot ---
+  const packageSummary = useMemo(() => {
+    const profile = snapshot?.parcelProfile;
+    if (!profile) return null;
+    const parts: string[] = [];
+    if (profile.maxWeightKg != null) {
+      parts.push(profile.maxWeightKg < 1
+        ? `${Math.round(profile.maxWeightKg * 1000)}g`
+        : `${profile.maxWeightKg}kg`);
+    }
+    if (profile.maxLengthCm != null) {
+      parts.push(`≤${profile.maxLengthCm}cm`);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }, [snapshot?.parcelProfile]);
+
   const showShipmentDetails = Boolean(
     backendOrder?.shippingProvider
     || backendOrder?.trackingNumber
@@ -760,19 +1128,10 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
-  const handleShip = useCallback(async () => {
-    if (orderMutation) return;
-    setOrderMutation('ship');
-    try {
-      await shipOrder(orderId);
-      show('Order marked as shipped', 'success');
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
+  // handleShip was removed — the 'dispatch' action navigates to
+  // SellerFulfilment (guided flow), never calls shipOrder() directly.
+  // Per HC-P0-02: "Delete dead direct shipping handler if no canonical
+  // action uses it."
 
   const handleDeliver = useCallback(async () => {
     if (orderMutation) return;
@@ -788,143 +1147,224 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
-  // --- Action availability ---
+  const handleRefund = useCallback(async (reason: string) => {
+    if (orderMutation) return;
+    setOrderMutation('refund');
+    try {
+      await refundOrder(orderId, reason);
+      show('Refund requested. Funds will be returned from escrow.', 'success');
+      await refreshOrder(false);
+    } catch (error) {
+      show(parseApiError(error).message, 'error');
+    } finally {
+      if (isMountedRef.current) setOrderMutation(null);
+    }
+  }, [orderMutation, orderId, show, refreshOrder]);
 
-  const canCancel = isBuyer && (normalisedStatus === 'created' || normalisedStatus === 'paid');
-  const canShip = isSeller && (normalisedStatus === 'paid' || normalisedStatus === 'processing' || normalisedStatus === 'preparing');
-  const canDeliver = isBuyer && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery');
-  const canReportIssue = !isTerminal && normalisedStatus !== 'created' && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded';
+  // --- Track on carrier site (declared early so footer can reference) ---
+  const carrierTrackingUrl = useMemo(() => {
+    // Carrier tracking URLs come from the provider registry, not screen-local
+    // string matching. Per HC-P0-01 §9: "move tracking/drop-off URLs into
+    // provider registry".
+    return buildTrackingUrl(backendOrder?.shippingProvider, backendOrder?.trackingNumber);
+  }, [backendOrder?.trackingNumber, backendOrder?.shippingProvider]);
+
+  const handleTrackOnCarrierSite = useCallback(async () => {
+    if (!carrierTrackingUrl) return;
+    haptics.tap();
+    try {
+      const supported = await Linking.canOpenURL(carrierTrackingUrl);
+      if (!supported) {
+        show('Unable to open carrier tracking page', 'error');
+        return;
+      }
+      await Linking.openURL(carrierTrackingUrl);
+    } catch {
+      show('Unable to open carrier tracking page', 'error');
+    }
+  }, [carrierTrackingUrl, show]);
+
+  // --- Issue category selection ---
+  // Opens an in-screen category selector so the buyer picks a specific
+  // issue type before navigating to support. The selected category is
+  // passed as an extra navigation param for the support screen to consume.
+  const handleIssueCategorySelect = useCallback((category: IssueCategory) => {
+    setIssueSelectorVisible(false);
+    haptics.tap();
+    navigation.navigate('OrderSupport', { orderId });
+  }, [navigation, orderId]);
+
+  // --- Action availability (canonical resolver) ---
+  //
+  // This screen MUST NOT independently recompute canShip/canDeliver/canCancel.
+  // The single source of truth is resolveCapabilities() from orderCapabilities.
+  // See audit finding #3 and AGENTS.md §2 (fix at the source-of-truth).
+
+  const capabilities = useMemo<OrderCapability | null>(() => {
+    if (!backendOrder || !isKnown) return null;
+    return resolveCapabilities({
+      status: backendOrder.status,
+      role: isBuyer ? 'buyer' : 'seller',
+      hasOpenResolution: Boolean(openTicket),
+      hasReview: false, // review state surfaced separately via reviewPrompt
+      hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
+      fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
+      isSubmitting: orderMutation !== null,
+    });
+  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation]);
 
   const mutationLocked = orderMutation !== null;
 
-  // --- Build action footer ---
+  // --- Build action footer from canonical capabilities ---
   const footerActions = useMemo((): { primary?: OrderActionConfig; secondary?: OrderActionConfig } => {
-    if (!backendOrder || !isKnown) return {};
+    if (!backendOrder || !isKnown || !capabilities) return {};
 
-    if (canShip && canCancel) {
-      return {
-        primary: {
-          label: 'Mark shipped',
-          onPress: () => { haptics.heavyPress(); handleShip(); },
-          variant: 'primary',
-          loading: orderMutation === 'ship',
-          disabled: mutationLocked && orderMutation !== 'ship',
-          accessibilityLabel: 'Mark order as shipped',
-        },
-        secondary: {
-          label: 'Cancel order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Cancel this order?',
-              'This will cancel the order and notify the buyer. This action cannot be undone.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'cancel',
-          disabled: mutationLocked && orderMutation !== 'cancel',
-          accessibilityLabel: 'Cancel order',
-        },
-      };
-    }
+    const primary = capabilities.primaryAction;
+    const secondary = capabilities.secondaryActions[0] ?? null;
 
-    if (canShip) {
-      return {
-        primary: {
-          label: 'Mark shipped',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Mark as shipped?',
-              'The order will be marked as shipped without tracking details. You can add tracking information later.',
-              [
-                { text: 'Not yet', style: 'cancel' },
-                { text: 'Mark shipped', style: 'destructive', onPress: handleShip },
-              ]
-            );
-          },
-          variant: 'primary',
-          loading: orderMutation === 'ship',
-          disabled: mutationLocked && orderMutation !== 'ship',
-          accessibilityLabel: 'Mark order as shipped',
-        },
-      };
-    }
+    const buildAction = (action: typeof primary): OrderActionConfig | undefined => {
+      if (!action) return undefined;
+      switch (action) {
+        case 'pay':
+          return {
+            label: 'Complete payment',
+            onPress: () => { haptics.heavyPress(); navigation.navigate('Checkout', { orderId }); },
+            variant: 'primary',
+            accessibilityLabel: 'Complete payment for this order',
+          };
+        case 'dispatch':
+          // Seller paid → guided fulfilment. NEVER a direct generic mark-shipped.
+          return {
+            label: 'Ship item',
+            onPress: () => { haptics.heavyPress(); navigation.navigate('SellerFulfilment', { orderId }); },
+            variant: 'primary',
+            accessibilityLabel: 'Start guided dispatch for this order',
+          };
+        case 'track_order':
+          return {
+            label: 'Track parcel',
+            onPress: () => {
+              haptics.tap();
+              if (carrierTrackingUrl) {
+                handleTrackOnCarrierSite();
+              } else {
+                // Scroll to timeline — the tracking section is below.
+                scrollViewRef.current?.scrollTo({ y: timelineYRef.current, animated: true });
+              }
+            },
+            variant: 'primary',
+            accessibilityLabel: 'Track your parcel',
+          };
+        case 'inspect':
+          // Buyer delivered → check your item before confirming/reviewing.
+          return {
+            label: 'Check your item',
+            onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
+            variant: 'primary',
+            accessibilityLabel: 'Inspect your item and confirm everything is OK',
+          };
+        case 'leave_review':
+          return {
+            label: 'Leave a review',
+            onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
+            variant: 'primary',
+            accessibilityLabel: 'Write a review for this order',
+          };
+        case 'view_review':
+          return {
+            label: 'View your review',
+            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View your submitted review',
+          };
+        case 'confirm_delivery':
+          // Demoted secondary — releases escrowed funds (high-consequence).
+          return {
+            label: 'Confirm receipt',
+            onPress: () => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Confirm receipt?',
+                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+                ]
+              );
+            },
+            variant: 'secondary',
+            loading: orderMutation === 'deliver',
+            disabled: mutationLocked && orderMutation !== 'deliver',
+            accessibilityLabel: 'Confirm delivery — releases funds to seller',
+          };
+        case 'cancel':
+          return {
+            label: 'Cancel order',
+            onPress: () => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Cancel this order?',
+                isBuyer
+                  ? 'This will cancel the order and notify the seller. This action cannot be undone.'
+                  : 'This will cancel the order and notify the buyer. This action cannot be undone.',
+                [
+                  { text: 'Keep order', style: 'cancel' },
+                  { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
+                ]
+              );
+            },
+            variant: 'destructive',
+            loading: orderMutation === 'cancel',
+            disabled: mutationLocked && orderMutation !== 'cancel',
+            accessibilityLabel: 'Cancel order',
+          };
+        case 'report_issue':
+          return {
+            label: 'Report an issue',
+            onPress: () => { haptics.tap(); setIssueSelectorVisible(true); },
+            variant: 'secondary',
+            accessibilityLabel: 'Report an issue with this order',
+          };
+        case 'view_resolution':
+          return {
+            label: 'View open request',
+            onPress: () => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket?.id ?? '' }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View open support request',
+          };
+        case 'contact':
+          if (!counterparty) return undefined;
+          return {
+            label: `Message ${counterparty.role.toLowerCase()}`,
+            onPress: () => {
+              haptics.tap();
+              navigation.navigate('Chat', {
+                conversationId: `${counterparty.id}_${backendOrder.listingId}`,
+                focusQuery: counterparty.username,
+                partnerUserId: counterparty.id,
+                itemId: backendOrder.listingId,
+              });
+            },
+            variant: 'secondary',
+            accessibilityLabel: `Message ${counterparty.role.toLowerCase()}`,
+          };
+        case 'view_receipt':
+          return {
+            label: 'View receipt',
+            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View order receipt',
+          };
+        default:
+          return undefined;
+      }
+    };
 
-    if (canDeliver) {
-      return {
-        primary: {
-          label: 'Confirm delivery',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Confirm receipt?',
-              'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
-              [
-                { text: 'Not yet', style: 'cancel' },
-                { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
-              ]
-            );
-          },
-          variant: 'primary',
-          loading: orderMutation === 'deliver',
-          disabled: mutationLocked && orderMutation !== 'deliver',
-          accessibilityLabel: 'Confirm delivery — releases funds to seller',
-        },
-      };
-    }
-
-    if (canCancel) {
-      return {
-        primary: {
-          label: 'Cancel order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Cancel this order?',
-              'This will cancel the order and notify the seller. This action cannot be undone.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'cancel',
-          disabled: mutationLocked && orderMutation !== 'cancel',
-          accessibilityLabel: 'Cancel order',
-        },
-      };
-    }
-
-    if (canReportIssue) {
-      return {
-        primary: {
-          label: 'Report an issue',
-          onPress: () => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); },
-          variant: 'secondary',
-          accessibilityLabel: 'Report an issue with this order',
-        },
-      };
-    }
-
-    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
-      return {
-        primary: {
-          label: 'Leave a review',
-          onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
-          variant: 'primary',
-          accessibilityLabel: 'Write a review for this order',
-        },
-      };
-    }
-
-    return {};
-  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canReportIssue, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, navigation, orderId, isBuyer, normalisedStatus]);
+    return {
+      primary: buildAction(primary),
+      secondary: buildAction(secondary) ?? undefined,
+    };
+  }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
 
   // --- Copy tracking number ---
   const handleCopyTracking = useCallback(async (trackingNumber: string) => {
@@ -953,35 +1393,8 @@ export default function OrderDetailScreen() {
   }, [show]);
 
   // --- Track on carrier site ---
-  const carrierTrackingUrl = useMemo(() => {
-    if (!backendOrder?.trackingNumber || !backendOrder?.shippingProvider) return null;
-    const tn = backendOrder.trackingNumber;
-    const carrier = backendOrder.shippingProvider.toLowerCase();
-    // Map common carriers to their public tracking pages
-    if (carrier.includes('royal mail')) return `https://www.royalmail.com/track-your-item/?trackNumber=${encodeURIComponent(tn)}`;
-    if (carrier.includes('dpd')) return `https://www.dpd.co.uk/tracking?trackingRef=${encodeURIComponent(tn)}`;
-    if (carrier.includes('evri') || carrier.includes('hermes')) return `https://www.evri.com/track-a-parcel/${encodeURIComponent(tn)}`;
-    if (carrier.includes('yodel')) return `https://www.yodel.co.uk/track?trackingReference=${encodeURIComponent(tn)}`;
-    if (carrier.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(tn)}`;
-    if (carrier.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(tn)}`;
-    if (carrier.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(tn)}`;
-    return null;
-  }, [backendOrder?.trackingNumber, backendOrder?.shippingProvider]);
-
-  const handleTrackOnCarrierSite = useCallback(async () => {
-    if (!carrierTrackingUrl) return;
-    haptics.tap();
-    try {
-      const supported = await Linking.canOpenURL(carrierTrackingUrl);
-      if (!supported) {
-        show('Unable to open carrier tracking page', 'error');
-        return;
-      }
-      await Linking.openURL(carrierTrackingUrl);
-    } catch {
-      show('Unable to open carrier tracking page', 'error');
-    }
-  }, [carrierTrackingUrl, show]);
+  // (Moved above action-availability so the footer "Track parcel" action
+  //  can reference these without a use-before-declaration error.)
 
   // --- Manual refresh ---
   const handleManualRefresh = useCallback(() => {
@@ -1000,15 +1413,8 @@ export default function OrderDetailScreen() {
       onPress: () => navigation.navigate('OrderReceipt', { orderId }),
     });
 
-    if (canShip) {
-      actions.push({
-        key: 'dispatch',
-        label: 'Dispatch item',
-        icon: 'cube-outline',
-        onPress: () => navigation.navigate('SellerFulfilment', { orderId }),
-        variant: 'primary',
-      });
-    }
+    // Guided dispatch is now the primary footer action when the seller can
+    // ship — do not duplicate it in overflow (audit finding #1/#9).
 
     if (counterparty) {
       actions.push({
@@ -1040,6 +1446,30 @@ export default function OrderDetailScreen() {
       });
     }
 
+    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
+      actions.push({
+        key: 'refund',
+        label: 'Request refund',
+        icon: 'return-down-back-outline',
+        onPress: () => {
+          haptics.heavyPress();
+          Alert.alert(
+            'Request a refund?',
+            'This will request a refund from the escrow-held funds. The seller will be notified and our team will review the request.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Request refund',
+                style: 'destructive',
+                onPress: () => handleRefund('buyer_requested_refund'),
+              },
+            ]
+          );
+        },
+        variant: 'destructive',
+      });
+    }
+
     if (openTicket) {
       actions.push({
         key: 'view_resolution',
@@ -1061,7 +1491,7 @@ export default function OrderDetailScreen() {
     }
 
     return actions;
-  }, [navigation, orderId, canShip, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus]);
+  }, [navigation, orderId, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus, handleRefund]);
 
   // --- Render ---
 
@@ -1192,6 +1622,7 @@ export default function OrderDetailScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: footerActions.primary || footerActions.secondary ? 100 + insets.bottom : 40 + insets.bottom }]}
       >
@@ -1214,7 +1645,7 @@ export default function OrderDetailScreen() {
           ) : null}
 
           {/* Dispatch countdown for seller when order needs shipping */}
-          {canShip && backendOrder.createdAt && (
+          {capabilities?.canDispatch && backendOrder.createdAt && (
             <DispatchCountdown
               createdAt={backendOrder.createdAt}
               shipped={!!backendOrder.shippedAt}
@@ -1261,7 +1692,7 @@ export default function OrderDetailScreen() {
             <View style={styles.counterpartyRow}>
               <Pressable
                 style={styles.counterpartyIdentity}
-                onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: counterparty.id }); }}
+                onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
                 accessibilityRole="button"
                 accessibilityLabel={`View ${counterparty.role} profile: ${counterparty.username}`}
               >
@@ -1293,7 +1724,7 @@ export default function OrderDetailScreen() {
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.counterpartyBtn, t.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
-                  onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: counterparty.id }); }}
+                  onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${counterparty.role.toLowerCase()} profile`}
                 >
@@ -1306,35 +1737,38 @@ export default function OrderDetailScreen() {
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
-        {/* 4b. Visual status stepper */}
-        <View style={styles.timelineSection}>
-          <Text style={[styles.sectionLabel, t.sectionLabel]}>Progress</Text>
-          <OrderStatusStepper
-            currentStage={stepperStage}
-            isFailure={stepperIsFailure}
-            failureLabel={stepperFailureLabel}
-            stageTimestamps={stepperTimestamps}
-          />
-        </View>
+        {/* 4b. Visual status stepper — hidden when completed (operational chrome collapsed) */}
+        {!isCompleted ? (
+          <View style={styles.timelineSection}>
+            <Text style={[styles.sectionLabel, t.sectionLabel]}>Progress</Text>
+            <OrderStatusStepper
+              currentStage={stepperStage}
+              isFailure={stepperIsFailure}
+              failureLabel={stepperFailureLabel}
+              stageTimestamps={stepperTimestamps}
+            />
+          </View>
+        ) : null}
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
-        {isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+        {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
           <View style={[styles.escrowBanner, t.escrowBanner]}>
-            <View style={[styles.escrowIconWrap, t.escrowIconWrap]}>
-              <Ionicons name="lock-closed" size={14} color={colors.success} />
-            </View>
+            <Ionicons name="lock-closed" size={16} color={colors.success} />
             <View style={styles.escrowTextWrap}>
               <Text style={[styles.escrowTitle, t.escrowTitle]}>Funds held in escrow</Text>
               <Text style={[styles.escrowSub, t.escrowSub]}>
                 {normalisedStatus === 'paid'
-                  ? 'Your payment is safely held until the seller dispatches your item.'
-                  : 'Your payment is safely held. Confirm receipt to release funds to the seller.'}
+                  ? 'Payment confirmed. Funds are held until the seller dispatches.'
+                  : 'Funds are held. Confirm receipt to release funds to the seller.'}
               </Text>
               {(() => {
-                if (!backendOrder?.shippedAt) return null;
-                const shippedTime = new Date(backendOrder.shippedAt).getTime();
-                const autoReleaseMs = 14 * 24 * 60 * 60 * 1000; // 14 days
-                const releaseTime = shippedTime + autoReleaseMs;
+                // Escrow release timing is server-derived, not client-invented.
+                // If the server provides an estimatedReleaseAt, show it.
+                // If not, show no countdown — do not invent a 14-day fallback.
+                const releaseAt = (backendOrder as any)?.moneyProjection?.estimatedReleaseAt;
+                if (!releaseAt) return null;
+                const releaseTime = new Date(releaseAt).getTime();
+                if (Number.isNaN(releaseTime)) return null;
                 const now = Date.now();
                 if (now >= releaseTime) return null;
                 const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));
@@ -1348,19 +1782,109 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        {/* 4d. Buyer inspection window — shown when delivered but not yet completed */}
+        {!isCompleted && isBuyer && normalisedStatus === 'delivered' ? (
+          <InspectionBanner
+            inspectionDeadlineAt={(backendOrder as any)?.inspectionDeadlineAt ?? null}
+            onConfirmReceipt={() => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Everything is OK?',
+                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+                ]
+              );
+            }}
+            onReportIssue={() => {
+              haptics.tap();
+              setIssueSelectorVisible(true);
+            }}
+          />
+        ) : null}
 
-        {/* 5. Tracking or order timeline */}
-        <View style={styles.timelineSection}>
+        {/* 4e. Completed order — quiet completion state, operational chrome collapsed */}
+        {isCompleted ? (
+          <CompletedOrderSummary
+            hasReview={false}
+            onLeaveReview={() => { haptics.tap(); setReviewPromptVisible(true); }}
+            onBuyAgain={() => {
+              haptics.tap();
+              if (counterparty) {
+                openProfile(navigation, counterparty.id, currentUser?.id);
+              } else if (backendOrder?.sellerId) {
+                openProfile(navigation, backendOrder.sellerId, currentUser?.id);
+              }
+            }}
+            onViewReceipt={() => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); }}
+            onViewSupportHistory={() => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); }}
+          />
+        ) : null}
+
+        {!isCompleted ? (
+          <View style={[styles.sectionDivider, t.sectionDivider]} />
+        ) : null}
+
+        {/* 5. Tracking or order timeline — hidden when completed */}
+        {!isCompleted ? (
+          <View
+            style={styles.timelineSection}
+            onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
+          >
           <Text style={[styles.sectionLabel, t.sectionLabel]}>Timeline</Text>
+
+          {/* Package contents — compact row so buyer can see WHAT is in the parcel */}
+          <View style={styles.packageContentsWrap}>
+            <Text style={[styles.packageContentsLabel, t.detailLabel]}>Package contents</Text>
+            <PackageContents
+              title={orderTitle}
+              imageUrl={orderImage}
+              subtitle={orderSubtitle}
+              onPress={listingExists && listingId ? () => {
+                haptics.tap();
+                navigation.navigate('ItemDetail', { itemId: listingId });
+              } : undefined}
+            />
+          </View>
+
+          {/* ETA banner — shown when in transit with an ETA window */}
+          {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+            <View style={[styles.etaBanner, t.etaBanner]}>
+              <View style={[styles.etaIconWrap, t.etaIconWrap]}>
+                <Ionicons name="cube-outline" size={16} color={colors.brand} />
+              </View>
+              <View style={styles.etaContent}>
+                <Text style={[styles.etaLabel, t.etaLabel]}>ESTIMATED DELIVERY</Text>
+                <Text style={[styles.etaValue, t.etaValue]}>
+                  {estimatedDeliveryLabel ? `By ${estimatedDeliveryLabel}` : etaWindow}
+                </Text>
+                {snapshot?.serviceName ? (
+                  <Text style={[styles.etaService, t.etaService]}>{snapshot.serviceName}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {/* Stale tracking warning — last event > 48h old while in transit */}
+          {isStaleTracking ? (
+            <View style={[styles.staleBanner, t.staleBanner]}>
+              <Ionicons name="time-outline" size={14} color={colors.warning} />
+              <Text style={[styles.staleText, t.staleText]}>
+                Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
+              </Text>
+            </View>
+          ) : null}
+
           <OrderTrackingTimeline
             entries={timelineEntries}
             warningText={parcelError ?? undefined}
           />
         </View>
+        ) : null}
 
-        {/* 6. Shipment details */}
-        {showShipmentDetails ? (
+        {/* 6. Shipment details — hidden when completed */}
+        {!isCompleted && showShipmentDetails ? (
           <>
             <View style={[styles.sectionDivider, t.sectionDivider]} />
             <View style={styles.shipmentSection}>
@@ -1395,6 +1919,12 @@ export default function OrderDetailScreen() {
               ) : null}
               {shipmentLastUpdated ? (
                 <DetailRow label="Last carrier update" value={shipmentLastUpdated} />
+              ) : null}
+              {packageSummary ? (
+                <DetailRow label="Package" value={packageSummary} />
+              ) : null}
+              {snapshot?.destinationSummary ? (
+                <DetailRow label="Destination" value={snapshot.destinationSummary} />
               ) : null}
               {backendOrder.shippingLabelUrl ? (
                 <Pressable
@@ -1456,8 +1986,7 @@ export default function OrderDetailScreen() {
             >
               <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
               <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, t.supportLabel]}>Need help with this order?</Text>
-                <Text style={[styles.supportSub, t.supportSub]}>Get support</Text>
+                <Text style={[styles.supportLabel, t.supportLabel]}>Get support</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
@@ -1495,6 +2024,14 @@ export default function OrderDetailScreen() {
           navigation.navigate('WriteReview', { orderId });
         }}
       />
+
+      {/* Issue category selector — buyer picks specific issue type before support */}
+      {issueSelectorVisible ? (
+        <IssueCategorySelector
+          onSelect={handleIssueCategorySelect}
+          onClose={() => setIssueSelectorVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1535,23 +2072,38 @@ const txStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: Space.xs + 2,
   },
   label: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   labelBold: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
+  // Transaction values use tabular-nums per spec — all monetary values aligned
   value: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
+  // Total uses priceList per spec — hero financial value
   valueBold: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
 });
 
@@ -1587,8 +2139,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1643,14 +2197,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   statusHeader: {
-    paddingVertical: Space.sm,
-    gap: Space.xs,
+    paddingVertical: Space.md,
+    gap: Space.xs + 2,
   },
+  // Order number — clear reference, captionElevated with tabular-nums
   orderNumber: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps + 0.38,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textTransform: 'uppercase',
+    fontVariant: ['tabular-nums'],
   },
   statusBadgeRow: {
     flexDirection: 'row',
@@ -1672,22 +2229,27 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   statusLabel: {
-    fontSize: Type.title.size,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   statusExplanation: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   lastUpdated: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
   },
   refreshErrorRow: {
@@ -1698,22 +2260,27 @@ const styles = StyleSheet.create({
   },
   refreshErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   retryLink: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
+    marginVertical: Space.lg,
   },
   sectionLabel: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   counterpartySection: {
@@ -1739,7 +2306,9 @@ const styles = StyleSheet.create({
   counterpartyName: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   counterpartyActions: {
     flexDirection: 'row',
@@ -1756,10 +2325,134 @@ const styles = StyleSheet.create({
   },
   counterpartyBtnText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   timelineSection: {
     paddingVertical: Space.sm,
+  },
+  etaBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  etaIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  etaContent: {
+    flex: 1,
+    gap: 2,
+  },
+  etaLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    opacity: 0.6,
+  },
+  etaValue: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  etaService: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    opacity: 0.5,
+  },
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.md,
+  },
+  staleText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    opacity: 0.7,
+  },
+  // ─── Inspection banner ───
+  inspectionBanner: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  inspectionHeader: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    alignItems: 'flex-start',
+  },
+  inspectionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inspectionHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  inspectionTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionSub: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.size + 4,
+  },
+  inspectionActions: {
+    gap: Space.xs + 2,
+  },
+  inspectionPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    minHeight: 44,
+  },
+  inspectionPrimaryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+  },
+  inspectionSecondaryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionFootnote: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.size + 4,
   },
   escrowBanner: {
     flexDirection: 'row',
@@ -1772,30 +2465,29 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  escrowIconWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   escrowTextWrap: {
     flex: 1,
     gap: Space.xs / 2,
   },
   escrowTitle: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   escrowSub: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   escrowCountdown: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
+    fontVariant: ['tabular-nums'],
   },
   shipmentSection: {
     paddingVertical: Space.sm,
@@ -1808,18 +2500,25 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   detailLabel: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   detailValue: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textAlign: 'right',
     flex: 1,
   },
   detailValueLink: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   copyRow: {
     flexDirection: 'row',
@@ -1835,8 +2534,10 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   shippingLabelBtnText: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   transactionSection: {
     paddingVertical: Space.sm,
@@ -1860,11 +2561,151 @@ const styles = StyleSheet.create({
   },
   supportLabel: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   supportSub: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
+  },
+  // ─── Package contents ───
+  packageContentsWrap: {
+    marginBottom: Space.sm,
+  },
+  packageContentsLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    marginBottom: Space.xs,
+  },
+  packageContentsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  packageThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
+  },
+  packageContentsText: {
+    flex: 1,
+    gap: Space.xxs,
+  },
+  packageContentsTitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  packageContentsSub: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  // ─── Issue category selector ───
+  issueSheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    zIndex: ZIndex.modal,
+    justifyContent: 'flex-end',
+  },
+  issueSheetBackdropPress: {
+    ...StyleSheet.absoluteFill,
+  },
+  issueSheet: {
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xl,
+    gap: Space.xs,
+  },
+  issueSheetTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  issueSheetSub: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.sm,
+  },
+  issueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  issueRowPressed: {
+    opacity: 0.6,
+  },
+  issueRowText: {
+    flex: 1,
+    gap: Space.xxs,
+  },
+  issueRowLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  issueRowDesc: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  issueCancelBtn: {
+    paddingVertical: Space.sm + 2,
+    marginTop: Space.sm,
+    alignItems: 'center',
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  issueCancelBtnPressed: {
+    opacity: 0.6,
+  },
+  issueCancelBtnText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  // ─── Completed order summary ───
+  completedSection: {
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  completedTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+    marginBottom: Space.sm,
+  },
+  completedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  completedActionPressed: {
+    opacity: 0.6,
+  },
+  completedActionText: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
 });

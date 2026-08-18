@@ -141,7 +141,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
       <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
-      <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={{ ...modalScreenOptions, headerShown: false }} />
       <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="PosterArchive" getComponent={() => require('../screens/PosterArchiveScreen').default} options={modalScreenOptions} />
@@ -161,12 +161,14 @@ export default function AppNavigator() {
       <Stack.Screen name="MarketLedger" getComponent={() => require('../screens/MarketLedgerScreen').default} />
       <Stack.Screen name="CoOwnHub" getComponent={() => require('../screens/SyndicateHubScreen').default} />
       <Stack.Screen name="AssetDetail" getComponent={() => require('../screens/AssetDetailScreen').default} />
+      <Stack.Screen name="AssetDueDiligence" getComponent={() => require('../screens/AssetDueDiligenceScreen').default} />
       <Stack.Screen name="Trade" getComponent={() => require('../screens/TradeScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="Portfolio" getComponent={() => require('../screens/PortfolioScreen').default} />
       <Stack.Screen name="MyBids" getComponent={() => require('../screens/MyBidsScreen').default} />
       <Stack.Screen name="MyListings" getComponent={() => require('../screens/MyListingsScreen').default} />
       <Stack.Screen name="InventoryManagement" getComponent={() => require('../screens/InventoryManagementScreen').default} />
       <Stack.Screen name="SellerAnalytics" getComponent={() => require('../screens/SellerAnalyticsScreen').default} />
+      <Stack.Screen name="SellerHub" getComponent={() => require('../screens/SellerHubScreen').default} />
       <Stack.Screen name="CreatorAnalyticsDashboard" getComponent={() => require('../screens/CreatorAnalyticsDashboardScreen').default} />
       <Stack.Screen name="BundleBag" getComponent={() => require('../screens/BundleBagScreen').default} />
       <Stack.Screen name="SellerVerification" getComponent={() => require('../screens/SellerVerificationScreen').default} />
@@ -178,6 +180,7 @@ export default function AppNavigator() {
       <Stack.Screen name="DistributionHistory" getComponent={() => require('../screens/DistributionHistoryScreen').default} />
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
+      <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
       <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
       <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
@@ -189,7 +192,13 @@ export default function AppNavigator() {
       <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
+      <Stack.Screen name="Followers" getComponent={() => require('../screens/FollowersScreen').default} />
+      <Stack.Screen name="Following" getComponent={() => require('../screens/FollowingScreen').default} />
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
+      {/* Wallet V3 — focused money-movement destinations (spec 17) */}
+      <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
+      <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
+      <Stack.Screen name="WalletActivity" getComponent={() => require('../screens/WalletActivityScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
       <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} />
       <Stack.Screen name="Settings" getComponent={() => require('../screens/SettingsScreen').default} />
@@ -303,7 +312,6 @@ export default function AppNavigator() {
       <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />
 
-      {/* AI-powered listing creation */}
       <Stack.Screen name="AIPoweredListing" getComponent={() => require('../screens/AIPoweredListingScreen').default} options={modalScreenOptions} />
 
       {/* Pro seller tools */}
@@ -333,6 +341,8 @@ export default function AppNavigator() {
       <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
       {/* AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom */}
       <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
+      {/* Agent activity ledger — transparent record of agent actions and approvals */}
+      <Stack.Screen name="AgentActivity" getComponent={() => require('../screens/AgentActivityScreen').default} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (

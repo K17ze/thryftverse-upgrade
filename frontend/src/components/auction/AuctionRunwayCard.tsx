@@ -98,7 +98,7 @@ export function AuctionRunwayCard({
           />
           {/* Subtle top gradient only for badge legibility */}
           <LinearGradient
-            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
+            colors={[colors.overlay, 'transparent']}
             locations={[0, 0.35]}
             style={styles.topGradient}
           />
@@ -115,7 +115,7 @@ export function AuctionRunwayCard({
                 <Ionicons
                   name={isWatching ? 'eye' : 'eye-outline'}
                   size={16}
-                  color={isWatching ? colors.brand : '#FFFFFF'}
+                  color={isWatching ? colors.brand : colors.textInverse}
                 />
               </AnimatedPressable>
             )}
@@ -134,7 +134,9 @@ export function AuctionRunwayCard({
           />
           <View style={styles.belowMetaRow}>
             <AuctionCountdown text={countdownText} urgent={urgent} compact />
-            <Text style={styles.belowBidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            {bidCount > 0 && (
+              <Text style={styles.belowBidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            )}
           </View>
           {/* Personal action — single, no duplication */}
           {personalActionLabel && onPersonalAction && (
@@ -172,7 +174,7 @@ export function AuctionRunwayCard({
         />
         {/* Bottom gradient — deeper for text legibility */}
         <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.75)']}
+          colors={['transparent', colors.overlay, colors.shadow]}
           locations={[0.35, 0.65, 1]}
           style={styles.gradient}
         />
@@ -184,13 +186,14 @@ export function AuctionRunwayCard({
               style={styles.watchBtn}
               scaleValue={0.9}
               onPress={onWatch}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={isWatching ? 'Stop watching' : 'Watch this auction'}
             >
               <Ionicons
                 name={isWatching ? 'eye' : 'eye-outline'}
                 size={16}
-                color={isWatching ? colors.brand : '#FFFFFF'}
+                color={isWatching ? colors.brand : colors.textInverse}
               />
             </AnimatedPressable>
           )}
@@ -207,7 +210,9 @@ export function AuctionRunwayCard({
           />
           <View style={styles.metaRow}>
             <AuctionCountdown text={countdownText} urgent={urgent} compact />
-            <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            {bidCount > 0 && (
+              <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            )}
           </View>
         </View>
       </View>
@@ -282,11 +287,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 34,
     height: 34,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: `${colors.border}40`,
   },
   bottomContent: {
     position: 'absolute',
@@ -299,7 +304,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   brand: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textInverse,
     letterSpacing: 0.2,
   },
   title: {
@@ -319,7 +324,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   bidCount: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.65)',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
 
   // ── Metadata-below variant ──
@@ -352,6 +358,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   personalActionBtn: {
     marginTop: Space.sm + 2,

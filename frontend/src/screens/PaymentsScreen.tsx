@@ -6,7 +6,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -21,7 +20,6 @@ import {
 } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -48,7 +46,6 @@ export default function PaymentsScreen({ navigation }: Props) {
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   // ── Biometric gate (OWASP M5) ──
   // Payment methods are sensitive. Require biometric re-authentication before
@@ -269,7 +266,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         header={
           <FlagshipHeader
             title="Payment Centre"
-            subtitle="Manage your payment methods"
+            subtitle="Payment methods"
             onBack={() => navigation.goBack()}
           />
         }
@@ -289,7 +286,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Payment Centre"
-          subtitle="Manage your payment methods"
+          subtitle="Payment methods"
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable
@@ -310,7 +307,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : null}
 
       {/* Hero summary — payment methods count + security status */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -326,13 +323,13 @@ export default function PaymentsScreen({ navigation }: Props) {
             </View>
             {defaultMethod && (
               <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                <Ionicons name="lock-closed-outline" size={12} color={colors.success} />
                 <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
               </View>
             )}
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
       {isSyncing && backendPaymentMethods.length === 0 && (
         <FlagshipState variant="loading" />
@@ -349,7 +346,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Primary Payment Method Summary */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <View>
             {defaultMethod ? (
               <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.primaryCardHeader}>
@@ -400,10 +397,10 @@ export default function PaymentsScreen({ navigation }: Props) {
                 </AnimatedPressable>
               </View>
             )}
-          </Reanimated.View>
+          </View>
 
           {/* Preferences */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <View>
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
@@ -417,10 +414,10 @@ export default function PaymentsScreen({ navigation }: Props) {
                 isLast
               />
             </PremiumListSection>
-          </Reanimated.View>
+          </View>
 
           {/* Cards */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View>
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
@@ -447,17 +444,17 @@ export default function PaymentsScreen({ navigation }: Props) {
                 />
               ) : null}
             </PremiumListSection>
-          </Reanimated.View>
+          </View>
 
           {/* Security Note */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+          <View>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+              <Ionicons name="lock-closed-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>
                 Thryftverse stores provider references and limited display details, not card numbers or security codes.
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
 
         </>
       )}

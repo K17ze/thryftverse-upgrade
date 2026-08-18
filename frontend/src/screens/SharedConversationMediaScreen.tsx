@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -10,10 +11,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -22,6 +24,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia
 
 const GAP = 2;
 const COLS = 3;
+const FILTER_THRESHOLD = 6;
 
 type MediaItem = {
   id: string;
@@ -30,6 +33,8 @@ type MediaItem = {
   senderLabel: string;
   timestamp?: string;
 };
+
+type Filter = 'all' | 'photos' | 'videos';
 
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
   const { conversationId } = route.params as { conversationId: string };
@@ -46,7 +51,16 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     [conversations, conversationId]
   );
 
-  const mediaItems = useMemo<MediaItem[]>(() => {
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<Filter>('all');
+
+  useEffect(() => {
+    setLoading(true);
+    const t = setTimeout(() => setLoading(false), 1);
+    return () => clearTimeout(t);
+  }, [conversationId]);
+
+  const allMedia = useMemo<MediaItem[]>(() => {
     if (!conversation?.messages?.length) return [];
     return conversation.messages
       .filter((m) => m.mediaUri)
@@ -59,6 +73,18 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       }));
   }, [conversation]);
 
+  const photos = useMemo(() => allMedia.filter((m) => !m.isVideo), [allMedia]);
+  const videos = useMemo(() => allMedia.filter((m) => m.isVideo), [allMedia]);
+
+  const showFilter =
+    photos.length >= FILTER_THRESHOLD && videos.length >= FILTER_THRESHOLD;
+
+  const filteredMedia = useMemo(() => {
+    if (filter === 'photos') return photos;
+    if (filter === 'videos') return videos;
+    return allMedia;
+  }, [allMedia, photos, videos, filter]);
+
   const handlePress = (item: MediaItem) => {
     haptic.light();
     navigation.navigate('ChatMediaPreview', {
@@ -67,6 +93,28 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       senderLabel: item.senderLabel,
       timestamp: item.timestamp,
     });
+  };
+
+  const subtitle =
+    allMedia.length > 0
+      ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'}`
+      : undefined;
+
+  const renderSkeleton = () => {
+    const count = COLS * 4;
+    return (
+      <View style={styles.grid}>
+        {Array.from({ length: count }).map((_, i) => (
+          <SkeletonLoader
+            key={i}
+            width={thumbSize}
+            height={thumbSize}
+            borderRadius={Radius.sm}
+            style={styles.skeletonTile}
+          />
+        ))}
+      </View>
+    );
   };
 
   const renderItem = ({ item }: { item: MediaItem }) => (
@@ -102,24 +150,56 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     <FlagshipScreen
       header={(
         <FlagshipHeader
-          title="Shared Media"
-          subtitle={mediaItems.length > 0 ? `${mediaItems.length} photo${mediaItems.length === 1 ? '' : 's'} & video${mediaItems.length === 1 ? '' : 's'}` : undefined}
+          title="Shared media"
+          subtitle={subtitle}
           onBack={() => navigation.goBack()}
         />
       )}
       scrollEnabled={false}
     >
-      {mediaItems.length === 0 ? (
+      {showFilter && !loading && (
+        <View style={styles.filterRow}>
+          {(['all', 'photos', 'videos'] as Filter[]).map((f) => {
+            const active = filter === f;
+            const label =
+              f === 'all' ? 'All' : f === 'photos' ? 'Photos' : 'Videos';
+            return (
+              <AnimatedPressable
+                key={f}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => {
+                  haptic.selection();
+                  setFilter(f);
+                }}
+                activeOpacity={0.7}
+                scaleValue={0.96}
+                hapticFeedback="selection"
+                accessibilityRole="tab"
+                accessibilityLabel={`${label} filter`}
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                  {label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </View>
+      )}
+
+      {loading ? (
+        renderSkeleton()
+      ) : filteredMedia.length === 0 ? (
         <EmptyState
           icon="images-outline"
-          title="No shared media"
+          title="No shared media yet"
           subtitle="Photos and videos shared in this conversation will appear here."
           ctaLabel="Back"
           onCtaPress={() => navigation.goBack()}
         />
       ) : (
         <FlashList
-          data={mediaItems}
+          data={filteredMedia}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           numColumns={COLS}
@@ -138,6 +218,45 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.xxl,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      gap: GAP,
+    },
+    skeletonTile: {
+      marginRight: GAP,
+      marginBottom: GAP,
+    },
+    filterRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+    },
+    filterChip: {
+      minHeight: Control.chrome,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterChipActive: {
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary,
+    },
+    filterText: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textSecondary,
+    },
+    filterTextActive: {
+      color: colors.textInverse,
     },
     thumbWrap: {
       borderRadius: Radius.sm,

@@ -26,11 +26,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -42,7 +40,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
 // Demo mode flag — live shopping & preview toggles are local-only in this build.
-const NOTIFICATION_PREFS_DEMO_MODE = true;
+const NOTIFICATION_PREFS_DEMO_MODE = __DEV__;
 
 function formatHour(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -54,7 +52,6 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function NotificationPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -115,7 +112,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       )}
 
       {/* ── Posture hero ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
@@ -144,10 +140,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* ── Master toggle ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <SettingsSection title="Push notifications" noCard>
           <SettingsRow
             icon="notifications-outline"
@@ -159,10 +153,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Category toggles ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <SettingsSection title="Categories" noCard>
           <SettingsRow
             icon="pricetags-outline"
@@ -223,10 +215,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Quiet Hours ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <SettingsSection title="Quiet hours" noCard>
           <SettingsRow
             icon="moon-outline"
@@ -309,10 +299,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             />
           ) : null}
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Notification preview ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
         <SettingsSection title="Privacy" noCard>
           <SettingsRow
             icon="eye-off-outline"
@@ -324,7 +312,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

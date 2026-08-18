@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
+import { VERIFICATION_TIERS } from '../../platform/product';
 
 const AVATAR_SIZE = 96;
 
@@ -15,8 +17,25 @@ interface PublicProfileIdentityHeroProps {
   location?: string | null;
   memberSince?: string;
   listingCount: number;
+  /** Seller trust summary — provides verified badge tier. */
+  sellerTrust?: SellerTrustSummary | null;
+  /** Email-verified flag from the user profile (fallback for verified badge). */
+  emailVerified?: boolean;
 }
 
+/**
+ * Public profile identity hero — authored identity block.
+ *
+ * Composition (2026 flagship pattern):
+ *   avatar (left, overlapping cover seam) + identity column (right)
+ *   display name + verification badge as one identity block
+ *   @handle below, muted
+ *   bio (max 3 lines)
+ *   context line: location · member since · listing count
+ *
+ * Hierarchy: name > handle > bio > context. One type scale step between
+ * each level. Verification badge inline with name — not a separate chip.
+ */
 export function PublicProfileIdentityHero({
   avatarUri,
   displayName,
@@ -25,12 +44,18 @@ export function PublicProfileIdentityHero({
   location,
   memberSince,
   listingCount,
+  sellerTrust,
+  emailVerified,
 }: PublicProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
+
+  const isVerified = sellerTrust?.verified === true || emailVerified === true;
+  const verificationTier: VerificationTier | null =
+    sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
 
   return (
     <View style={styles.container}>
@@ -51,13 +76,24 @@ export function PublicProfileIdentityHero({
         </View>
 
         <View style={styles.identityCol}>
-          <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+          <View style={styles.displayNameRow}>
+            <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+            {verificationTier ? (
+              <Ionicons
+                name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
+                size={18}
+                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? colors.brand : colors.success}
+                style={styles.verifiedBadge}
+                accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
+              />
+            ) : null}
+          </View>
           <Text style={styles.username} numberOfLines={1}>@{username}</Text>
         </View>
       </View>
 
       {bio ? (
-        <Text style={styles.bio}>{bio}</Text>
+        <Text style={styles.bio} numberOfLines={3}>{bio}</Text>
       ) : null}
 
       <View style={styles.contextRow}>
@@ -109,13 +145,24 @@ function createStyles(colors: ThemeColors) {
   },
   identityCol: {
     flex: 1,
+    minWidth: 0,
+  },
+  displayNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    marginBottom: 2,
   },
   displayName: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
-    marginBottom: 2,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    flexShrink: 0,
+    marginTop: 1,
   },
   username: {
     fontSize: Type.body.size,
@@ -126,7 +173,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
     marginBottom: Space.sm,
   },
   contextRow: {

@@ -1,18 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
@@ -21,7 +19,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'PrivacySettings'>;
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const accountPreferences = useStore((s) => s.accountPreferences);
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
@@ -77,11 +74,11 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
       {/* Privacy posture hero */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
-              <Ionicons name="shield" size={20} color={colors.textInverse} />
+              <Ionicons name="checkmark-done-outline" size={20} color={colors.textInverse} />
             </View>
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Privacy posture</Text>
@@ -94,9 +91,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <View>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -122,9 +119,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <View>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -136,9 +133,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <View>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -149,9 +146,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <View>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -162,9 +159,46 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+      {/* Safety tips — empowering, not frightening.
+          A marketplace that visibly
+          educates users on safe trading practices builds reflective trust.
+          This section makes safety actionable rather than buried. Research
+          (TechVinta 2026): "surface a Report link on every surface" and
+          "buyer/seller protection" are core trust pillars. */}
+      <View>
+        <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.safetyTipsHeader}>
+            <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+              <Ionicons name="checkmark-done-outline" size={18} color={colors.commerceTrust} />
+            </View>
+            <Text style={[styles.safetyTipsTitle, { color: colors.textPrimary }]}>Trading safely</Text>
+          </View>
+          <View style={styles.safetyTipsList}>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Keep all payments and messages on ThryftVerse for buyer protection
+              </Text>
+            </View>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Check seller ratings and verification badges before buying
+              </Text>
+            </View>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Report suspicious listings or users — our team reviews every report
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View>
       <SettingsSection title="Data & analytics" noCard>
         <SettingsRow
           icon="analytics-outline"
@@ -176,9 +210,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(360)}>
+      <View>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"
@@ -193,7 +227,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
     </FlagshipScreen>
   );
 }
@@ -237,6 +271,45 @@ function createStyles(colors: ThemeColors) {
     postureBadgeText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
+    },
+    // Safety tips card
+    safetyTipsCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginBottom: Space.md,
+    },
+    safetyTipsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      marginBottom: Space.sm + 2,
+    },
+    safetyTipsIcon: {
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    safetyTipsTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    safetyTipsList: {
+      gap: Space.sm,
+    },
+    safetyTipItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+    },
+    safetyTipText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
     },
   });
 }

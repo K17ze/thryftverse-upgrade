@@ -350,10 +350,10 @@ export function getCommands(navigation: CommandNavigation): Command[] {
     },
     {
       id: 'action-ai-listing',
-      label: 'AI-powered listing',
-      subtitle: 'Generate a listing with AI',
+      label: 'Quick listing',
+      subtitle: 'Create a listing with suggestions',
       category: 'action',
-      icon: 'sparkles-outline',
+      icon: 'document-text-outline',
       keywords: ['ai', 'smart sell', 'auto listing', 'generate'],
       action: nav('AIPoweredListing'),
     },
@@ -489,7 +489,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
     {
       id: 'search-saved',
       label: 'Saved searches',
-      subtitle: 'Manage your search alerts',
+      subtitle: 'Search alerts',
       category: 'search',
       icon: 'bookmark-outline',
       keywords: ['saved', 'alerts', 'search alerts'],
@@ -536,6 +536,15 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       icon: 'key-outline',
       keywords: ['ai', 'api key', 'integration', 'agent', 'byok'],
       action: nav('AIAgentIntegration'),
+    },
+    {
+      id: 'settings-agent-activity',
+      label: 'Agent activity',
+      subtitle: 'Record of agent actions and approvals',
+      category: 'settings',
+      icon: 'list-outline',
+      keywords: ['agent', 'activity', 'ledger', 'log', 'approval', 'tool'],
+      action: nav('AgentActivity'),
     },
     {
       id: 'settings-notifications',

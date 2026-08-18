@@ -8,7 +8,7 @@ import {
   type RecommendationLook,
   type RecommendationItem,
 } from '../platform/product/recommendationTypes';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 describe('recommendationTypes', () => {
   describe('RECOMMENDATION_REASON_CODES', () => {

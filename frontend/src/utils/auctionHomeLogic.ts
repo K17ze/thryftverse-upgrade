@@ -1,6 +1,54 @@
 import { resolveAuctionTiming, formatCountdown, type AuctionTimingInput, type AuctionEffectiveState } from '../hooks/useServerClock';
+import type { AuctionScope, AuctionSortMode } from '../services/marketApi';
 
 export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
+
+// ── Canonical browse state (Phase 2 — one taxonomy, not three) ──
+
+export type AuctionBrowseSort = 'recommended' | AuctionSortMode;
+
+export interface AuctionBrowseState {
+  scope: AuctionScope;
+  sort: AuctionBrowseSort;
+  categories: string[];
+  priceMin?: number;
+  priceMax?: number;
+  query?: string;
+}
+
+export const DEFAULT_BROWSE_STATE: AuctionBrowseState = {
+  scope: 'live',
+  sort: 'recommended',
+  categories: [],
+};
+
+export function hasActiveFilters(state: AuctionBrowseState): boolean {
+  return (
+    state.sort !== 'recommended' ||
+    state.categories.length > 0 ||
+    state.priceMin != null ||
+    state.priceMax != null ||
+    (state.query != null && state.query.trim().length > 0)
+  );
+}
+
+export function scopeToApiStatus(scope: AuctionScope): 'live' | 'scheduled' | 'ended' | 'all' | undefined {
+  switch (scope) {
+    case 'live': return 'live';
+    case 'upcoming': return 'scheduled';
+    case 'results': return 'ended';
+    case 'watching': return undefined;
+  }
+}
+
+export function scopeUsesWatchedOnly(scope: AuctionScope): boolean {
+  return scope === 'watching';
+}
+
+export function sortToApiSort(sort: AuctionBrowseSort): AuctionSortMode | undefined {
+  if (sort === 'recommended') return undefined;
+  return sort;
+}
 
 export interface AuctionHomeItem {
   id: string;

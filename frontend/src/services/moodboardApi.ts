@@ -99,7 +99,7 @@ export interface Moodboard {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const MOODBOARD_DEMO_MODE = true;
+export const MOODBOARD_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data

@@ -10,6 +10,7 @@ import {
   TextInput,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +31,13 @@ import {
   IDLE_SEARCH_STATE,
   type AuctionHomeItem,
   type AuctionSearchState,
+  type AuctionBrowseState,
+  type AuctionBrowseSort,
+  DEFAULT_BROWSE_STATE,
+  hasActiveFilters,
+  scopeToApiStatus,
+  scopeUsesWatchedOnly,
+  sortToApiSort,
 } from '../utils/auctionHomeLogic';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -55,16 +63,17 @@ import {
 import {
   listAuctions,
   getAuctionHome,
+  getAuctionFacets,
   type MarketAuction,
   type AttentionReason,
   type CategoryWorld,
   type AuctionHomeActivity,
   type SellerSummary,
+  type AuctionScope,
+  type AuctionFacets,
 } from '../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-
-type MarketSegment = 'live' | 'endingSoon' | 'upcoming' | 'watching';
 
 function toViewModel(api: MarketAuction): AuctionHomeItem {
   return {
@@ -329,9 +338,9 @@ export default function AuctionHomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // ── Segment state ──
-  const [activeSegment, setActiveSegment] = useState<MarketSegment>('live');
-  const hasSetDefaultSegment = useRef(false);
+  // ── Canonical browse state (one taxonomy, not three) ──
+  const [browseState, setBrowseState] = useState<AuctionBrowseState>(DEFAULT_BROWSE_STATE);
+  const hasSetDefaultScope = useRef(false);
 
   // ── Search overlay ──
   const [searchOverlayVisible, setSearchOverlayVisible] = React.useState(false);
@@ -341,57 +350,92 @@ export default function AuctionHomeScreen() {
   const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
   const [paginationError, setPaginationError] = React.useState<string | null>(null);
 
-  // ── Filter result mode ──
-  const [filterResult, setFilterResult] = React.useState<{
+  // ── Recent auction searches (persisted, per audit doc 07) ──
+  const RECENT_AUCTION_SEARCHES_KEY = '@thryftverse_recent_auction_searches';
+  const [recentSearches, setRecentSearches] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem(RECENT_AUCTION_SEARCHES_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as string[];
+          if (Array.isArray(parsed)) setRecentSearches(parsed);
+        } catch { /* ignore corrupt */ }
+      }
+    }).catch(() => { /* non-fatal */ });
+  }, []);
+
+  const saveRecentSearch = React.useCallback(async (term: string) => {
+    setRecentSearches((prev) => {
+      const updated = [term, ...prev.filter((s) => s !== term)].slice(0, 6);
+      void AsyncStorage.setItem(RECENT_AUCTION_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const clearRecentSearches = React.useCallback(() => {
+    setRecentSearches([]);
+    void AsyncStorage.removeItem(RECENT_AUCTION_SEARCHES_KEY).catch(() => {});
+  }, []);
+
+  // ── Browse result (API-fetched when filters are active) ──
+  const [browseResult, setBrowseResult] = React.useState<{
     status: 'idle' | 'loading' | 'ready' | 'empty' | 'error';
     items: AuctionHomeItem[];
     cursor: string | null;
   }>({ status: 'idle', items: [], cursor: null });
-  const [isLoadingMoreFilters, setIsLoadingMoreFilters] = React.useState(false);
-  const filterReqIdRef = React.useRef(0);
-  const [filterRefreshTick, setFilterRefreshTick] = React.useState(0);
+  const [isLoadingMoreBrowse, setIsLoadingMoreBrowse] = React.useState(false);
+  const browseReqIdRef = React.useRef(0);
+  const [browseRefreshTick, setBrowseRefreshTick] = React.useState(0);
 
-  // ── Filter state ──
-  const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
-  const [filterSort, setFilterSort] = useState<'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh'>('endingSoon');
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  // ── Filter sheet ──
   const [filterSheetVisible, setFilterSheetVisible] = React.useState(false);
+  const [draftBrowse, setDraftBrowse] = useState<AuctionBrowseState>(DEFAULT_BROWSE_STATE);
 
-  // ── Draft filter state ──
-  const [draftStatus, setDraftStatus] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
-  const [draftSort, setDraftSort] = useState<'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh'>('endingSoon');
-  const [draftCategory, setDraftCategory] = useState<string | null>(null);
+  // ── Server-driven facets (canonical category endpoint, not derived from inventory) ──
+  const [facets, setFacets] = React.useState<AuctionFacets | null>(null);
+  const [facetsLoading, setFacetsLoading] = React.useState(false);
+  const facetsReqIdRef = React.useRef(0);
 
-  const isFiltering = filterStatus !== 'all' || !!filterCategory || filterSort !== 'endingSoon';
+  const isBrowsing = hasActiveFilters(browseState);
   const isSearching = searchState.status !== 'idle';
 
   const openFilterSheet = useCallback(() => {
-    setDraftStatus(filterStatus);
-    setDraftSort(filterSort);
-    setDraftCategory(filterCategory);
+    setDraftBrowse(browseState);
     setFilterSheetVisible(true);
-  }, [filterStatus, filterSort, filterCategory]);
+  }, [browseState]);
 
   const applyDraftFilters = useCallback(() => {
     haptics.tap();
-    setFilterStatus(draftStatus);
-    setFilterSort(draftSort);
-    setFilterCategory(draftCategory);
+    setBrowseState(draftBrowse);
     setFilterSheetVisible(false);
-  }, [draftStatus, draftSort, draftCategory]);
+  }, [draftBrowse]);
 
   const resetDraftFilters = useCallback(() => {
     haptics.tap();
-    setDraftStatus('all');
-    setDraftSort('endingSoon');
-    setDraftCategory(null);
-  }, []);
+    setDraftBrowse({ ...DEFAULT_BROWSE_STATE, scope: draftBrowse.scope });
+  }, [draftBrowse.scope]);
 
   const clearAllFilters = useCallback(() => {
     haptics.tap();
-    setFilterStatus('all');
-    setFilterSort('endingSoon');
-    setFilterCategory(null);
+    setBrowseState((prev) => ({ ...DEFAULT_BROWSE_STATE, scope: prev.scope }));
+  }, []);
+
+  const setScope = useCallback((scope: AuctionScope) => {
+    haptics.selection();
+    setBrowseState((prev) => ({ ...prev, scope }));
+  }, []);
+
+  const removeFilterChip = useCallback((chipType: 'sort' | 'category' | 'priceMin' | 'priceMax' | 'query', value?: string) => {
+    haptics.tap();
+    setBrowseState((prev) => {
+      if (chipType === 'sort') return { ...prev, sort: 'recommended' };
+      if (chipType === 'category') return { ...prev, categories: prev.categories.filter((c) => c !== value) };
+      if (chipType === 'priceMin') return { ...prev, priceMin: undefined };
+      if (chipType === 'priceMax') return { ...prev, priceMax: undefined };
+      if (chipType === 'query') return { ...prev, query: undefined };
+      return prev;
+    });
   }, []);
 
   const { secondClock, minuteClock, resync, needsResync, markResyncFailed, clearResyncFailed } = useBucketedServerClock(homeData.serverNow);
@@ -453,6 +497,42 @@ export default function AuctionHomeScreen() {
     }
   }, [needsResync, fetchHome]);
 
+  // ── Fetch server-driven facets when the filter sheet opens ──
+  // Provides canonical category list + price range + status counts
+  // independent of loaded home inventory (Phase 2 Finding D fix).
+  // Passes the full draft state so the CTA count reflects all active
+  // filters, not just the scope (2026 best practice: live counts).
+  const fetchFacets = React.useCallback(async (draft: AuctionBrowseState) => {
+    setFacetsLoading(true);
+    const reqId = ++facetsReqIdRef.current;
+    try {
+      const result = await getAuctionFacets({
+        scope: draft.scope,
+        query: draft.query,
+        category: draft.categories.length > 0 ? draft.categories[0] : undefined,
+        priceMin: draft.priceMin,
+        priceMax: draft.priceMax,
+      });
+      if (reqId !== facetsReqIdRef.current) return;
+      setFacets(result);
+    } catch {
+      // Non-fatal — filter sheet falls back to derived categories
+      if (reqId === facetsReqIdRef.current) {
+        setFacets(null);
+      }
+    } finally {
+      if (reqId === facetsReqIdRef.current) {
+        setFacetsLoading(false);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (filterSheetVisible) {
+      void fetchFacets(draftBrowse);
+    }
+  }, [filterSheetVisible, draftBrowse, fetchFacets]);
+
   // ── Search ──
   const searchReqIdRef = useRef(0);
 
@@ -462,7 +542,7 @@ export default function AuctionHomeScreen() {
       setPaginationError(null);
       const reqId = ++searchReqIdRef.current;
       setSearchState(createSearchState(debouncedQuery, 'loading'));
-      listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
+      listAuctions({ query: debouncedQuery, status: scopeToApiStatus(browseState.scope), sort: sortToApiSort(browseState.sort) ?? 'endingSoon', limit: 30 })
         .then((result) => {
           if (reqId !== searchReqIdRef.current) return;
           const items = result.items.map(toViewModel);
@@ -477,14 +557,14 @@ export default function AuctionHomeScreen() {
             setRefreshing(false);
           }
         });
-    } else if (isFiltering) {
+    } else if (isBrowsing) {
       setPaginationError(null);
-      setFilterRefreshTick((t) => t + 1);
+      setBrowseRefreshTick((t) => t + 1);
       void fetchHome().finally(() => setRefreshing(false));
     } else {
       void fetchHome();
     }
-  }, [fetchHome, isSearching, debouncedQuery, isFiltering]);
+  }, [fetchHome, isSearching, debouncedQuery, isBrowsing, browseState.scope, browseState.sort]);
 
   const handleSearchChange = useCallback((text: string) => {
     searchReqIdRef.current++;
@@ -514,11 +594,15 @@ export default function AuctionHomeScreen() {
     const timer = setTimeout(() => {
       const reqId = ++searchReqIdRef.current;
       setSearchState(createSearchState(debouncedQuery, 'loading'));
-      listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', limit: 30 })
+      listAuctions({ query: debouncedQuery, status: scopeToApiStatus(browseState.scope), sort: sortToApiSort(browseState.sort) ?? 'endingSoon', limit: 30 })
         .then((result) => {
           if (reqId !== searchReqIdRef.current) return;
           const items = result.items.map(toViewModel);
           setSearchState(createSearchState(debouncedQuery, items.length > 0 ? 'ready' : 'empty', items, result.nextCursor));
+          // Persist recent search only when results are found
+          if (items.length > 0) {
+            void saveRecentSearch(debouncedQuery.trim());
+          }
         })
         .catch(() => {
           if (reqId !== searchReqIdRef.current) return;
@@ -526,7 +610,7 @@ export default function AuctionHomeScreen() {
         });
     }, 400);
     return () => clearTimeout(timer);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, browseState.scope, browseState.sort, saveRecentSearch]);
 
   React.useEffect(() => {
     return () => { searchReqIdRef.current++; };
@@ -538,7 +622,7 @@ export default function AuctionHomeScreen() {
     setPaginationError(null);
     const reqId = ++searchReqIdRef.current;
     try {
-      const result = await listAuctions({ query: debouncedQuery, status: 'all', sort: 'endingSoon', cursor: searchState.cursor, limit: 30 });
+      const result = await listAuctions({ query: debouncedQuery, status: scopeToApiStatus(browseState.scope), sort: sortToApiSort(browseState.sort) ?? 'endingSoon', cursor: searchState.cursor, limit: 30 });
       if (reqId !== searchReqIdRef.current) return;
       setSearchState((prev) => {
         const existingIds = new Set(prev.items.map((a) => a.id));
@@ -554,68 +638,80 @@ export default function AuctionHomeScreen() {
         setIsLoadingMoreSearch(false);
       }
     }
-  }, [searchState.cursor, isLoadingMoreSearch, debouncedQuery]);
+  }, [searchState.cursor, isLoadingMoreSearch, debouncedQuery, browseState.scope, browseState.sort]);
 
-  // ── Filter results fetching ──
+  // ── Browse results fetching (when filters are active) ──
   React.useEffect(() => {
-    if (!isFiltering) {
-      setFilterResult({ status: 'idle', items: [], cursor: null });
+    if (!isBrowsing) {
+      setBrowseResult({ status: 'idle', items: [], cursor: null });
       return;
     }
-    const reqId = ++filterReqIdRef.current;
-    setFilterResult({ status: 'loading', items: [], cursor: null });
-    const apiStatus = filterStatus === 'all' ? undefined : filterStatus === 'scheduled' ? 'scheduled' : filterStatus;
+    const reqId = ++browseReqIdRef.current;
+    setBrowseResult({ status: 'loading', items: [], cursor: null });
+    const apiStatus = scopeToApiStatus(browseState.scope);
+    const apiSort = sortToApiSort(browseState.sort);
+    const category = browseState.categories.length > 0 ? browseState.categories[0] : undefined;
     listAuctions({
-      status: apiStatus as 'live' | 'scheduled' | 'ended' | 'all' | undefined,
-      sort: filterSort,
-      category: filterCategory ?? undefined,
+      status: apiStatus,
+      sort: apiSort,
+      category,
+      query: browseState.query,
+      priceMin: browseState.priceMin,
+      priceMax: browseState.priceMax,
+      watchedOnly: scopeUsesWatchedOnly(browseState.scope) ? true : undefined,
       limit: 30,
     })
       .then((result) => {
-        if (reqId !== filterReqIdRef.current) return;
+        if (reqId !== browseReqIdRef.current) return;
         const items = result.items.map(toViewModel);
-        setFilterResult({
+        setBrowseResult({
           status: items.length > 0 ? 'ready' : 'empty',
           items,
           cursor: result.nextCursor,
         });
       })
       .catch(() => {
-        if (reqId !== filterReqIdRef.current) return;
-        setFilterResult({ status: 'error', items: [], cursor: null });
+        if (reqId !== browseReqIdRef.current) return;
+        setBrowseResult({ status: 'error', items: [], cursor: null });
       });
-  }, [filterStatus, filterSort, filterCategory, isFiltering, filterRefreshTick]);
+  }, [browseState, isBrowsing, browseRefreshTick]);
 
-  const loadMoreFilters = React.useCallback(async () => {
-    if (filterResult.cursor === null || isLoadingMoreFilters) return;
-    setIsLoadingMoreFilters(true);
+  const loadMoreBrowse = React.useCallback(async () => {
+    if (browseResult.cursor === null || isLoadingMoreBrowse) return;
+    setIsLoadingMoreBrowse(true);
     setPaginationError(null);
-    const reqId = ++filterReqIdRef.current;
+    const reqId = ++browseReqIdRef.current;
     try {
-      const apiStatus = filterStatus === 'all' ? undefined : filterStatus === 'scheduled' ? 'scheduled' : filterStatus;
+      const apiStatus = scopeToApiStatus(browseState.scope);
+      const apiSort = sortToApiSort(browseState.sort);
+      const category = browseState.categories.length > 0 ? browseState.categories[0] : undefined;
       const result = await listAuctions({
-        status: apiStatus as 'live' | 'scheduled' | 'ended' | 'all' | undefined,
-        sort: filterSort,
-        category: filterCategory ?? undefined,
-        cursor: filterResult.cursor,
+        status: apiStatus,
+        sort: apiSort,
+        category,
+        query: browseState.query,
+        priceMin: browseState.priceMin,
+        priceMax: browseState.priceMax,
+        watchedOnly: scopeUsesWatchedOnly(browseState.scope) ? true : undefined,
+        cursor: browseResult.cursor,
         limit: 30,
       });
-      if (reqId !== filterReqIdRef.current) return;
-      setFilterResult((prev) => {
+      if (reqId !== browseReqIdRef.current) return;
+      setBrowseResult((prev) => {
         const existingIds = new Set(prev.items.map((a) => a.id));
         const newItems = result.items.map(toViewModel).filter((a) => !existingIds.has(a.id));
         return { ...prev, items: [...prev.items, ...newItems], cursor: result.nextCursor };
       });
     } catch {
-      if (reqId === filterReqIdRef.current) {
+      if (reqId === browseReqIdRef.current) {
         setPaginationError('Failed to load more results');
       }
     } finally {
-      if (reqId === filterReqIdRef.current) {
-        setIsLoadingMoreFilters(false);
+      if (reqId === browseReqIdRef.current) {
+        setIsLoadingMoreBrowse(false);
       }
     }
-  }, [filterResult.cursor, isLoadingMoreFilters, filterStatus, filterSort, filterCategory]);
+  }, [browseResult.cursor, isLoadingMoreBrowse, browseState]);
 
   const navigateToDetail = useCallback((auctionId: string) => {
     navigation.navigate('AuctionDetail', { auctionId });
@@ -635,39 +731,7 @@ export default function AuctionHomeScreen() {
 
   const handleCategoryPress = useCallback((categoryKey: string) => {
     haptics.tap();
-    setFilterCategory(categoryKey);
-    setFilterStatus('all');
-    setFilterSort('endingSoon');
-  }, []);
-
-  // ── Primary filter pills (Live / Upcoming / Ended) ──
-  // These are the prominent top-level filter mechanism. The segment rail
-  // below remains as a secondary refinement within the home composition.
-  const primaryFilterLiveActive = !isFiltering && activeSegment === 'live';
-  const primaryFilterUpcomingActive = !isFiltering && activeSegment === 'upcoming';
-  const primaryFilterEndedActive = isFiltering && filterStatus === 'ended';
-
-  const handlePrimaryFilterLive = useCallback(() => {
-    haptics.selection();
-    if (isFiltering) {
-      clearAllFilters();
-    }
-    setActiveSegment('live');
-  }, [isFiltering, clearAllFilters]);
-
-  const handlePrimaryFilterUpcoming = useCallback(() => {
-    haptics.selection();
-    if (isFiltering) {
-      clearAllFilters();
-    }
-    setActiveSegment('upcoming');
-  }, [isFiltering, clearAllFilters]);
-
-  const handlePrimaryFilterEnded = useCallback(() => {
-    haptics.selection();
-    setFilterStatus('ended');
-    setFilterSort('endingSoon');
-    setFilterCategory(null);
+    setBrowseState((prev) => ({ ...prev, categories: [categoryKey] }));
   }, []);
 
   // ── 1ZE + local semantic display ──
@@ -751,31 +815,80 @@ export default function AuctionHomeScreen() {
   }, [secondClock, navigateToDetail, formatValueLockup]);
 
   // ── Category options for filter sheet ──
+  // Prefer server-driven facets (canonical endpoint) over derived inventory.
+  // Falls back to derived categories only if facets are unavailable.
   const categoryOptions = useMemo(() => {
+    if (facets && facets.categories.length > 0) {
+      return facets.categories.map((c) => c.id);
+    }
     const cats = new Set<string>();
     [...homeData.live, ...homeData.upcoming, ...homeData.recentlyClosed].forEach((a) => {
       if (a.category) cats.add(a.category);
     });
     return Array.from(cats).sort();
-  }, [homeData]);
+  }, [facets, homeData]);
 
-  // ── Active filter chips ──
+  // ── Category labels from facets (canonical display names) ──
+  const categoryLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (facets) {
+      for (const c of facets.categories) {
+        map[c.id] = c.label;
+      }
+    }
+    return map;
+  }, [facets]);
+
+  // ── Category counts from facets (2026: show counts next to each option) ──
+  const categoryCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (facets) {
+      for (const c of facets.categories) {
+        map[c.id] = c.count;
+      }
+    }
+    return map;
+  }, [facets]);
+
+  // ── Result count for filter sheet CTA ──
+  // Uses statusCounts from facets when available, otherwise falls back to
+  // the active filter count.
+  const filterResultCount = useMemo(() => {
+    if (facets) {
+      return facets.statusCounts[draftBrowse.scope] ?? 0;
+    }
+    return undefined;
+  }, [facets, draftBrowse.scope]);
+
+  // ── Active filter chips (individually removable) ──
   const activeFilterChips = useMemo(() => {
-    const chips: string[] = [];
-    if (filterStatus !== 'all') {
-      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Upcoming' : 'Ended');
+    const chips: { key: string; label: string; type: 'sort' | 'category' | 'priceMin' | 'priceMax' | 'query'; value?: string }[] = [];
+    if (browseState.sort !== 'recommended') {
+      const sortLabels: Record<AuctionBrowseSort, string> = {
+        recommended: 'Recommended',
+        endingSoon: 'Ending soon',
+        newest: 'Newest',
+        mostBids: 'Most bids',
+        priceLow: 'Price: low to high',
+        priceHigh: 'Price: high to low',
+      };
+      chips.push({ key: 'sort', label: sortLabels[browseState.sort], type: 'sort' });
     }
-    if (filterSort !== 'endingSoon') {
-      chips.push(
-        filterSort === 'newest' ? 'Newest'
-        : filterSort === 'mostBids' ? 'Most bids'
-        : filterSort === 'priceLow' ? 'Price: low to high'
-        : 'Price: high to low'
-      );
+    for (const cat of browseState.categories) {
+      const label = categoryLabels[cat] ?? cat;
+      chips.push({ key: `cat-${cat}`, label: `Category: ${label}`, type: 'category', value: cat });
     }
-    if (filterCategory) chips.push(filterCategory);
+    if (browseState.priceMin != null) {
+      chips.push({ key: 'priceMin', label: `Over £${browseState.priceMin}`, type: 'priceMin' });
+    }
+    if (browseState.priceMax != null) {
+      chips.push({ key: 'priceMax', label: `Under £${browseState.priceMax}`, type: 'priceMax' });
+    }
+    if (browseState.query && browseState.query.trim().length > 0) {
+      chips.push({ key: 'query', label: `"${browseState.query}"`, type: 'query' });
+    }
     return chips;
-  }, [filterStatus, filterSort, filterCategory]);
+  }, [browseState, categoryLabels]);
 
   const renderLoadingState = useCallback(() => (
     <AuctionSkeletons />
@@ -800,8 +913,33 @@ export default function AuctionHomeScreen() {
   }, [homeData.closingSoon, homeData.live]);
 
   const dedupedWatchlist = useMemo(
-    () => homeData.watchlist.filter((a) => !spotlightIds.has(a.id)),
-    [homeData.watchlist, spotlightIds]
+    () => homeData.watchlist
+      .filter((a) => !spotlightIds.has(a.id))
+      .sort((a, b) => {
+        // Urgency sort: ending soonest first, then upcoming soonest.
+        // Ended/cancelled items sink to the bottom.
+        // Uses the server-aligned minuteClock so the sort stays accurate
+        // even if the device clock drifts, and recomputes every minute
+        // as auctions transition between live/upcoming/ended states.
+        const aEnd = new Date(a.endsAt).getTime();
+        const bEnd = new Date(b.endsAt).getTime();
+        const aStart = new Date(a.startsAt).getTime();
+        const bStart = new Date(b.startsAt).getTime();
+        const now = minuteClock;
+        const aLive = aEnd > now && aStart <= now;
+        const bLive = bEnd > now && bStart <= now;
+        const aUpcoming = aStart > now;
+        const bUpcoming = bStart > now;
+        // Live items first (sorted by soonest end), then upcoming (sorted by soonest start), then ended
+        if (aLive && !bLive) return -1;
+        if (!aLive && bLive) return 1;
+        if (aLive && bLive) return aEnd - bEnd;
+        if (aUpcoming && !bUpcoming) return -1;
+        if (!aUpcoming && bUpcoming) return 1;
+        if (aUpcoming && bUpcoming) return aStart - bStart;
+        return 0; // both ended — preserve server order
+      }),
+    [homeData.watchlist, spotlightIds, minuteClock]
   );
 
   const hasAnyContent =
@@ -811,24 +949,29 @@ export default function AuctionHomeScreen() {
     homeData.categoryWorlds.length > 0 ||
     dedupedWatchlist.length > 0;
 
-  // ── Default segment selection ──
+  // ── Default scope selection ──
   React.useEffect(() => {
-    if (loading || hasSetDefaultSegment.current) return;
-    if (homeData.closingSoon.length > 0) setActiveSegment('endingSoon');
-    else if (homeData.live.length > 0) setActiveSegment('live');
-    else if (homeData.upcoming.length > 0) setActiveSegment('upcoming');
-    else if (dedupedWatchlist.length > 0) setActiveSegment('watching');
-    hasSetDefaultSegment.current = true;
+    if (loading || hasSetDefaultScope.current) return;
+    if (homeData.live.length > 0 || homeData.closingSoon.length > 0) setBrowseState((prev) => ({ ...prev, scope: 'live' }));
+    else if (homeData.upcoming.length > 0) setBrowseState((prev) => ({ ...prev, scope: 'upcoming' }));
+    else if (homeData.recentlyClosed.length > 0) setBrowseState((prev) => ({ ...prev, scope: 'results' }));
+    else if (dedupedWatchlist.length > 0) setBrowseState((prev) => ({ ...prev, scope: 'watching' }));
+    hasSetDefaultScope.current = true;
   }, [loading, homeData, dedupedWatchlist]);
 
-  // ── Segment rail ──
-  const segments: Segment[] = useMemo(() => {
-    const segs: Segment[] = [{ key: 'live', label: 'Live', count: homeData.live.length }];
-    if (homeData.closingSoon.length > 0) segs.push({ key: 'endingSoon', label: 'Ending soon', count: homeData.closingSoon.length });
-    if (homeData.upcoming.length > 0) segs.push({ key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length });
-    if (dedupedWatchlist.length > 0) segs.push({ key: 'watching', label: 'Watching', count: dedupedWatchlist.length });
-    return segs;
-  }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, dedupedWatchlist.length]);
+  // ── Scope rail — one canonical taxonomy: Live | Upcoming | Results | Watching ──
+  // Each scope carries a distinct accent color so lifecycle phases are
+  // visually distinguishable at a glance:
+  //   Live     → danger (urgent/warm — active bidding)
+  //   Upcoming → brand  (neutral/calm — scheduled)
+  //   Results  → textMuted (muted/gray — ended)
+  //   Watching → textSecondary (restrained — personal)
+  const scopeSegments: Segment[] = useMemo(() => [
+    { key: 'live', label: 'Live', count: homeData.live.length + homeData.closingSoon.length, accentColor: colors.danger },
+    { key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length, accentColor: colors.brand },
+    { key: 'results', label: 'Results', count: homeData.recentlyClosed.length, accentColor: colors.textMuted },
+    { key: 'watching', label: 'Watching', count: dedupedWatchlist.length, accentColor: colors.textSecondary },
+  ], [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, homeData.recentlyClosed.length, dedupedWatchlist.length, colors.danger, colors.brand, colors.textMuted, colors.textSecondary]);
 
   // ── Compact header context ──
   const headerContext = useMemo(() => {
@@ -844,14 +987,16 @@ export default function AuctionHomeScreen() {
     return total > 0 ? `${total} active auctions` : undefined;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
 
-  // ── Header actions ──
+  // ── Header actions — reduced to title + search + filter only ──
+  // Per P4-09 spec: first viewport allows title/search/filter, lifecycle
+  // scope, attention if real, live content. Create, Seller Centre, and
+  // Activity are accessible elsewhere (tab bar, attention strip) and
+  // were crowding the header with 5 actions. The attention strip
+  // already surfaces real attention needs — the badge icon was redundant.
   const headerActions: AuctionHeaderAction[] = useMemo(() => [
     { key: 'search', icon: 'search-outline', label: 'Search auctions', onPress: () => { haptics.tap(); setSearchOverlayVisible(true); }, priority: 'primary' },
     { key: 'filter', icon: 'options-outline', label: 'Filter auctions', onPress: () => { haptics.tap(); openFilterSheet(); }, priority: 'secondary' },
-    { key: 'create', icon: 'add-outline', label: 'Create auction', onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); }, priority: 'primary' },
-    { key: 'seller', icon: 'storefront-outline', label: 'Open Seller Centre', onPress: () => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }, priority: 'primary' },
-    { key: 'activity', icon: 'pulse-outline', label: 'View auction activity', onPress: () => { haptics.tap(); handleActivity(); }, badgeCount: homeData.activity.needsAttentionCount, priority: 'secondary' },
-  ], [openFilterSheet, navigation, handleActivity, homeData.activity.needsAttentionCount]);
+  ], [openFilterSheet]);
 
   // ── Personal attention strip props ──
   const attentionProps = useMemo(() => {
@@ -912,23 +1057,27 @@ export default function AuctionHomeScreen() {
     return null;
   }, [homeData.attentionReason, homeData.attentionItem, dedupedWatchlist, navigateToDetail, handleActivity, secondClock]);
 
-  // ── Selected segment data ──
-  const segmentItems = useMemo(() => {
-    switch (activeSegment) {
-      case 'live': return homeData.live;
-      case 'endingSoon': return homeData.closingSoon;
+  // ── Selected scope data (from homeData when no active filters) ──
+  const scopeItems = useMemo(() => {
+    switch (browseState.scope) {
+      case 'live':
+        // Ending soon sort uses closingSoon; otherwise live
+        return browseState.sort === 'endingSoon' && homeData.closingSoon.length > 0
+          ? homeData.closingSoon
+          : homeData.live;
       case 'upcoming': return homeData.upcoming;
+      case 'results': return homeData.recentlyClosed;
       case 'watching': return dedupedWatchlist;
       default: return [];
     }
-  }, [activeSegment, homeData.live, homeData.closingSoon, homeData.upcoming, dedupedWatchlist]);
+  }, [browseState.scope, browseState.sort, homeData.live, homeData.closingSoon, homeData.upcoming, homeData.recentlyClosed, dedupedWatchlist]);
 
   // ── Continuous "More to explore" feed ──
   // Combines all auction items across every segment + recently closed,
   // excluding those already shown in the active segment composition above.
   // This is the feed layer — scrolling down keeps revealing more auctions.
   const exploreFeedItems = useMemo(() => {
-    const seen = new Set(segmentItems.map((i) => i.id));
+    const seen = new Set(scopeItems.map((i) => i.id));
     const combined: AuctionHomeItem[] = [
       ...homeData.live,
       ...homeData.closingSoon,
@@ -944,14 +1093,18 @@ export default function AuctionHomeScreen() {
       deduped.push(item);
     }
     return deduped;
-  }, [segmentItems, homeData.live, homeData.closingSoon, homeData.upcoming, homeData.recentlyClosed, dedupedWatchlist]);
+  }, [scopeItems, homeData.live, homeData.closingSoon, homeData.upcoming, homeData.recentlyClosed, dedupedWatchlist]);
 
   // ════════════════════════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════════════════════════
 
-  // ── Search overlay ──
+  // ── Search overlay (preserves scope) ──
   if (searchOverlayVisible) {
+    const scopeLabel = browseState.scope === 'live' ? 'Live'
+      : browseState.scope === 'upcoming' ? 'Upcoming'
+      : browseState.scope === 'results' ? 'Results'
+      : 'Watching';
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.searchOverlayHeader}>
@@ -966,7 +1119,7 @@ export default function AuctionHomeScreen() {
           <TextInput
             value={searchQuery}
             onChangeText={handleSearchChange}
-            placeholder="Search auctions…"
+            placeholder={`Search ${scopeLabel.toLowerCase()} auctions…`}
             autoFocus
             returnKeyType="search"
             placeholderTextColor={colors.textMuted}
@@ -984,6 +1137,11 @@ export default function AuctionHomeScreen() {
           )}
         </View>
 
+        {/* Scope context indicator */}
+        <View style={styles.searchScopeContext}>
+          <Text style={styles.searchScopeText}>Searching in {scopeLabel}</Text>
+        </View>
+
         {isSearching ? (
           <FlashList
             data={searchState.items}
@@ -993,7 +1151,7 @@ export default function AuctionHomeScreen() {
             ListEmptyComponent={
               searchState.status === 'loading' ? renderLoadingState() : (
                 searchState.status === 'error' ? (
-                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={handleRefresh} />
+                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Try again" ctaLabel="Retry" onCtaPress={handleRefresh} />
                 ) : (
                   <EmptyState icon="search-outline" title="No results" subtitle="Try a different search term" />
                 )
@@ -1015,103 +1173,71 @@ export default function AuctionHomeScreen() {
             onEndReachedThreshold={0.25}
           />
         ) : (
-          <View style={styles.searchIdleContainer}>
-            <Text style={styles.searchIdleHint}>Search by title, brand, or category</Text>
-          </View>
-        )}
-      </SafeAreaView>
-    );
-  }
-
-  // ── Filter result mode ──
-  if (isFiltering && !isSearching) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.filterResultHeader}>
-          <Pressable
-            onPress={() => { haptics.tap(); clearAllFilters(); }}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Clear filters and go back"
-            style={styles.filterResultBackBtn}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <View style={styles.filterResultTitleWrap}>
-            <Text style={styles.filterResultTitle}>Filtered results</Text>
-            <Text style={styles.filterResultCount}>
-              {filterResult.status === 'ready' ? `${filterResult.items.length} auctions` : '…'}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => { haptics.tap(); openFilterSheet(); }}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Open filter sheet"
-          >
-            <Ionicons name="options-outline" size={24} color={colors.textPrimary} />
-          </Pressable>
-        </View>
-
-        {activeFilterChips.length > 0 && (
-          <HorizontalRail style={styles.filterChipsRow}>
-            {activeFilterChips.map((chip) => (
-              <View key={chip} style={styles.filterChip}>
-                <Text style={styles.filterChipText}>{chip}</Text>
-              </View>
-            ))}
-            <Pressable
-              onPress={() => { haptics.tap(); clearAllFilters(); }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Clear all filters"
-              style={({ pressed }) => [styles.filterChipClear, pressed && { opacity: 0.6 }]}
-            >
-              <Text style={styles.filterChipClearText}>Clear all</Text>
-            </Pressable>
-          </HorizontalRail>
-        )}
-
-        {filterResult.status === 'loading' ? renderLoadingState() :
-         filterResult.status === 'error' ? (
-          <EmptyState icon="cloud-offline-outline" title="Filter failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={() => setFilterRefreshTick((t) => t + 1)} />
-         ) : filterResult.status === 'empty' ? (
-          <EmptyState icon="filter-outline" title="No matches" subtitle="Try adjusting your filters" />
-         ) : (
-          <FlashList
-            data={filterResult.items}
-            keyExtractor={(item) => item.id}
-            renderItem={renderFilterItem}
-            numColumns={2}
-            contentContainerStyle={styles.contentContainer}
+          <ScrollView
+            style={styles.searchIdleScroll}
+            contentContainerStyle={styles.searchIdleContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor={colors.brand}
-                colors={[colors.brand]}
-                progressBackgroundColor={colors.surfaceAlt}
-              />
-            }
-            onEndReached={loadMoreFilters}
-            onEndReachedThreshold={0.25}
-          />
-        )}
+          >
+            {/* Recent searches */}
+            {recentSearches.length > 0 && (
+              <View style={styles.searchIdleSection}>
+                <View style={styles.searchIdleSectionHeader}>
+                  <Text style={styles.searchIdleSectionTitle}>Recent searches</Text>
+                  <Pressable
+                    onPress={() => { haptics.tap(); clearRecentSearches(); }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear recent searches"
+                  >
+                    <Text style={styles.searchIdleClearBtn}>Clear</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.searchIdleChips}>
+                  {recentSearches.map((term, idx) => (
+                    <Pressable
+                      key={idx}
+                      style={styles.searchIdleChip}
+                      onPress={() => { haptics.tap(); handleSearchChange(term); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search for ${term}`}
+                    >
+                      <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.searchIdleChipText} numberOfLines={1}>{term}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
 
-        <FilterSheet
-          visible={filterSheetVisible}
-          onDismiss={() => setFilterSheetVisible(false)}
-          categoryOptions={categoryOptions}
-          draftStatus={draftStatus}
-          setDraftStatus={setDraftStatus}
-          draftSort={draftSort}
-          setDraftSort={setDraftSort}
-          draftCategory={draftCategory}
-          setDraftCategory={setDraftCategory}
-          onReset={resetDraftFilters}
-          onApply={applyDraftFilters}
-        />
+            {/* Watched categories */}
+            {homeData.categoryWorlds.length > 0 && (
+              <View style={styles.searchIdleSection}>
+                <Text style={styles.searchIdleSectionTitle}>Browse by category</Text>
+                <View style={styles.searchIdleChips}>
+                  {homeData.categoryWorlds.slice(0, 6).map((world) => (
+                    <Pressable
+                      key={world.categoryKey}
+                      style={styles.searchIdleChip}
+                      onPress={() => { haptics.tap(); handleSearchChange(world.displayName); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search ${world.displayName} auctions`}
+                    >
+                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.searchIdleChipText} numberOfLines={1}>{world.displayName}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Fallback hint when no recent searches and no categories */}
+            {recentSearches.length === 0 && homeData.categoryWorlds.length === 0 && (
+              <View style={styles.searchIdleFallback}>
+                <Text style={styles.searchIdleHint}>Search by title, brand, or category</Text>
+              </View>
+            )}
+          </ScrollView>
+        )}
       </SafeAreaView>
     );
   }
@@ -1197,14 +1323,14 @@ export default function AuctionHomeScreen() {
           visible={filterSheetVisible}
           onDismiss={() => setFilterSheetVisible(false)}
           categoryOptions={categoryOptions}
-          draftStatus={draftStatus}
-          setDraftStatus={setDraftStatus}
-          draftSort={draftSort}
-          setDraftSort={setDraftSort}
-          draftCategory={draftCategory}
-          setDraftCategory={setDraftCategory}
+          categoryLabels={categoryLabels}
+          categoryCounts={categoryCounts}
+          draftBrowse={draftBrowse}
+          setDraftBrowse={setDraftBrowse}
           onReset={resetDraftFilters}
           onApply={applyDraftFilters}
+          resultCount={filterResultCount}
+          facetsLoading={facetsLoading}
         />
       </View>
     );
@@ -1218,9 +1344,57 @@ export default function AuctionHomeScreen() {
   const featuredWidth = isSmallWidth ? fullWidth : fullWidth * 0.62;
   const supportingColumnWidth = isSmallWidth ? 0 : fullWidth - featuredWidth - Space.sm;
 
-  // ── Render selected market composition ──
+  // ── Render selected market composition (single composition per scope, no duplicate rails) ──
   const renderComposition = () => {
-    if (segmentItems.length === 0) {
+    if (isBrowsing) {
+      // When filters are active, show API-fetched browse results in-place
+      if (browseResult.status === 'loading') return renderLoadingState();
+      if (browseResult.status === 'error') {
+        return (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Filter failed"
+            subtitle="Try again"
+            ctaLabel="Retry"
+            onCtaPress={() => setBrowseRefreshTick((t) => t + 1)}
+          />
+        );
+      }
+      if (browseResult.status === 'empty') {
+        return (
+          <EmptyState
+            icon="filter-outline"
+            title="No matches"
+            subtitle="Try adjusting your filters"
+            ctaLabel="Clear filters"
+            onCtaPress={clearAllFilters}
+          />
+        );
+      }
+      return (
+        <FlashList
+          data={browseResult.items}
+          keyExtractor={(item) => item.id}
+          renderItem={renderFilterItem}
+          numColumns={2}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+              progressBackgroundColor={colors.surfaceAlt}
+            />
+          }
+          onEndReached={loadMoreBrowse}
+          onEndReachedThreshold={0.25}
+        />
+      );
+    }
+
+    if (scopeItems.length === 0) {
       return (
         <View style={styles.compositionEmpty}>
           <Text style={styles.compositionEmptyText}>No auctions in this view</Text>
@@ -1228,67 +1402,12 @@ export default function AuctionHomeScreen() {
       );
     }
 
-    switch (activeSegment) {
+    switch (browseState.scope) {
       case 'live': {
-        // ── Horizontal discovery rail — swipe left for more live auctions ──
-        // Each card ~82% viewport with a deliberate peek of the next card.
-        // Built ON TOP of the existing asymmetric editorial composition below.
-        const railCardWidth = Math.round(width * 0.82);
-        const railImageHeight = Math.round(Math.min(420, width * 1.0));
-        const renderLiveRailItem = ({ item }: { item: AuctionHomeItem }) => {
-          const timing = resolveAuctionTiming(item, secondClock);
-          const urgency = resolveUrgency(timing);
-          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
-          const timeLabel = urgency === 'finalMinutes'
-            ? formatFinalMinutesCountdown(timing.msToEnd)
-            : resolveTimeLabel(timing);
-          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
-            : item.viewerState === 'won' ? 'View result'
-            : null;
-          return (
-            <AuctionRunwayCard
-              title={item.title}
-              imageUrl={item.imageUrl || null}
-              brand={item.brand ?? null}
-              izeText={valueLockup.izeText}
-              localText={valueLockup.localText}
-              valueState="current"
-              bidCount={item.bidCount}
-              countdownText={timeLabel}
-              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-              state="live"
-              viewerState={item.viewerState}
-              onPress={() => navigateToDetail(item.id)}
-              cardWidth={railCardWidth}
-              imageHeight={railImageHeight}
-              metadataBelow
-              personalActionLabel={personalAction}
-              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
-            />
-          );
-        };
-        const liveRail = segmentItems.length > 0 ? (
-          <View style={styles.railWrap}>
-            <View style={styles.railHeader}>
-              <Text style={styles.railTitle}>Live now</Text>
-              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
-            </View>
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-            >
-              {segmentItems.map((item, idx) => (
-                <React.Fragment key={item.id}>
-                  {idx > 0 && <View style={{ width: Space.sm }} />}
-                  {renderLiveRailItem({ item })}
-                </React.Fragment>
-              ))}
-            </HorizontalRail>
-          </View>
-        ) : null;
-
-        // True asymmetric edit: featured left + 2 stacked supporting right
-        if (segmentItems.length >= 3 && !isSmallWidth) {
-          const [featured, ...rest] = segmentItems;
+        // ── Editorial composition: featured + supporting + continuation grid ──
+        // No duplicate horizontal rail — one composition per viewport.
+        if (scopeItems.length >= 3 && !isSmallWidth) {
+          const [featured, ...rest] = scopeItems;
           const supporting = rest.slice(0, 2);
           const continuation = rest.slice(2);
           const featuredTiming = resolveAuctionTiming(featured, secondClock);
@@ -1301,8 +1420,6 @@ export default function AuctionHomeScreen() {
             : featured.viewerState === 'won' ? 'View result'
             : null;
           return (
-            <View>
-              {liveRail}
             <View style={styles.compositionWrap}>
               <View style={styles.asymmetricRow}>
                 <AuctionRunwayCard
@@ -1337,6 +1454,7 @@ export default function AuctionHomeScreen() {
                         key={item.id}
                         title={item.title}
                         imageUrl={item.imageUrl || null}
+                        brand={item.brand}
                         izeText={valueLockup.izeText}
                         localText={valueLockup.localText}
                         valueState="current"
@@ -1381,12 +1499,11 @@ export default function AuctionHomeScreen() {
                 </View>
               )}
             </View>
-            </View>
           );
         }
         // Small width or <3 items: featured wide + supporting row
-        if (segmentItems.length >= 3 && isSmallWidth) {
-          const [featured, ...rest] = segmentItems;
+        if (scopeItems.length >= 3 && isSmallWidth) {
+          const [featured, ...rest] = scopeItems;
           const supporting = rest.slice(0, 2);
           const continuation = rest.slice(2);
           const featuredTiming = resolveAuctionTiming(featured, secondClock);
@@ -1399,8 +1516,6 @@ export default function AuctionHomeScreen() {
             : featured.viewerState === 'won' ? 'View result'
             : null;
           return (
-            <View>
-              {liveRail}
             <View style={styles.compositionWrap}>
               <AuctionRunwayCard
                 title={featured.title}
@@ -1422,7 +1537,7 @@ export default function AuctionHomeScreen() {
                 onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
               />
               <View style={styles.supportingRow}>
-                {supporting.map((item) => {
+                {supporting.map((item, supportIdx) => {
                   const timing = resolveAuctionTiming(item, secondClock);
                   const urgency = resolveUrgency(timing);
                   const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
@@ -1446,6 +1561,7 @@ export default function AuctionHomeScreen() {
                       viewerState={item.viewerState}
                       onPress={() => navigateToDetail(item.id)}
                       cardWidth={gridCardWidth}
+                      testID={supportIdx === 0 ? 'golden-auction-first-card' : undefined}
                     />
                   );
                 })}
@@ -1482,17 +1598,14 @@ export default function AuctionHomeScreen() {
                 </View>
               )}
             </View>
-            </View>
           );
         }
         // 2 items: balanced editorial columns
-        if (segmentItems.length === 2) {
+        if (scopeItems.length === 2) {
           return (
-            <View>
-              {liveRail}
             <View style={styles.compositionWrap}>
               <View style={styles.continuationGrid}>
-                {segmentItems.map((item) => {
+                {scopeItems.map((item) => {
                   const timing = resolveAuctionTiming(item, secondClock);
                   const urgency = resolveUrgency(timing);
                   const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
@@ -1521,11 +1634,10 @@ export default function AuctionHomeScreen() {
                 })}
               </View>
             </View>
-            </View>
           );
         }
-        // 1 item: feature + category continuation
-        const featured = segmentItems[0];
+        // 1 item: feature
+        const featured = scopeItems[0];
         const featuredTiming = resolveAuctionTiming(featured, secondClock);
         const featuredUrgency = resolveUrgency(featuredTiming);
         const featuredValue = formatValueLockup(featured.currentBidGbp || featured.startingBidGbp);
@@ -1536,8 +1648,6 @@ export default function AuctionHomeScreen() {
           : featured.viewerState === 'won' ? 'View result'
           : null;
         return (
-          <View>
-            {liveRail}
           <View style={styles.compositionWrap}>
             <AuctionRunwayCard
               title={featured.title}
@@ -1559,177 +1669,15 @@ export default function AuctionHomeScreen() {
               onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
             />
           </View>
-          </View>
-        );
-      }
-
-      case 'endingSoon': {
-        // ── Horizontal discovery rail — swipe left for more ending-soon auctions ──
-        const endingRailCardWidth = Math.round(width * 0.82);
-        const endingRailImageHeight = Math.round(Math.min(380, width * 0.9));
-        const renderEndingRailItem = ({ item }: { item: AuctionHomeItem }) => {
-          const timing = resolveAuctionTiming(item, secondClock);
-          const urgency = resolveUrgency(timing);
-          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
-          const timeLabel = urgency === 'finalMinutes'
-            ? formatFinalMinutesCountdown(timing.msToEnd)
-            : resolveTimeLabel(timing);
-          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
-            : item.viewerState === 'won' ? 'View result'
-            : null;
-          return (
-            <AuctionRunwayCard
-              title={item.title}
-              imageUrl={item.imageUrl || null}
-              brand={item.brand ?? null}
-              izeText={valueLockup.izeText}
-              localText={valueLockup.localText}
-              valueState="current"
-              bidCount={item.bidCount}
-              countdownText={timeLabel}
-              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-              state="live"
-              viewerState={item.viewerState}
-              onPress={() => navigateToDetail(item.id)}
-              cardWidth={endingRailCardWidth}
-              imageHeight={endingRailImageHeight}
-              metadataBelow
-              personalActionLabel={personalAction}
-              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
-            />
-          );
-        };
-        const endingRail = segmentItems.length > 0 ? (
-          <View style={styles.railWrap}>
-            <View style={styles.railHeader}>
-              <Text style={styles.railTitle}>Ending soon</Text>
-              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
-            </View>
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-            >
-              {segmentItems.map((item, idx) => (
-                <React.Fragment key={item.id}>
-                  {idx > 0 && <View style={{ width: Space.sm }} />}
-                  {renderEndingRailItem({ item })}
-                </React.Fragment>
-              ))}
-            </HorizontalRail>
-          </View>
-        ) : null;
-        // Dense editorial rows — countdown is the strongest signal
-        return (
-          <View>
-            {endingRail}
-          <View style={styles.compositionWrap}>
-            <View style={styles.endingSoonContainer}>
-              {segmentItems.map((item) => {
-                const timing = resolveAuctionTiming(item, secondClock);
-                const urgency = resolveUrgency(timing);
-                const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
-                const timeLabel = urgency === 'finalMinutes'
-                  ? formatFinalMinutesCountdown(timing.msToEnd)
-                  : resolveTimeLabel(timing);
-                const isUrgent = urgency === 'finalMinutes';
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={styles.endingSoonRow}
-                    onPress={() => navigateToDetail(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.title}, ${valueLockup.izeText}, ${timeLabel}, ${item.bidCount} bids`}
-                    accessibilityHint="Opens auction details"
-                  >
-                    <View style={styles.endingSoonImageWrap}>
-                      {item.imageUrl ? (
-                        <CachedImage
-                          uri={item.imageUrl}
-                          style={styles.endingSoonImage}
-                          containerStyle={StyleSheet.absoluteFill}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
-                      )}
-                    </View>
-                    <View style={styles.endingSoonBody}>
-                      <Text style={styles.endingSoonTitle} numberOfLines={1}>{item.title}</Text>
-                      <AuctionValueLockup
-                        izeText={valueLockup.izeText}
-                        localText={valueLockup.localText}
-                        state="current"
-                        scale="compact"
-                      />
-                      <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
-                    </View>
-                    <View style={styles.endingSoonTimeCol}>
-                      <Text style={[styles.endingSoonTime, isUrgent && { color: colors.danger }]}>
-                        {timeLabel}
-                      </Text>
-                      {isUrgent && <View style={styles.urgencyBar} />}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          </View>
         );
       }
 
       case 'upcoming': {
-        // ── Horizontal discovery rail — swipe left for more upcoming auctions ──
-        const upcomingRailCardWidth = Math.round(width * 0.82);
-        const upcomingRailImageHeight = Math.round(Math.min(380, width * 0.9));
-        const renderUpcomingRailItem = ({ item }: { item: AuctionHomeItem }) => {
-          const timing = resolveAuctionTiming(item, secondClock);
-          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
-          const timeLabel = resolveTimeLabel(timing);
-          return (
-            <AuctionRunwayCard
-              title={item.title}
-              imageUrl={item.imageUrl || null}
-              brand={item.brand ?? null}
-              izeText={valueLockup.izeText}
-              localText={valueLockup.localText}
-              valueState="starting"
-              bidCount={item.bidCount}
-              countdownText={timeLabel}
-              urgent={false}
-              state="upcoming"
-              viewerState={item.viewerState}
-              onPress={() => navigateToDetail(item.id)}
-              cardWidth={upcomingRailCardWidth}
-              imageHeight={upcomingRailImageHeight}
-              metadataBelow
-            />
-          );
-        };
-        const upcomingRail = segmentItems.length > 0 ? (
-          <View style={styles.railWrap}>
-            <View style={styles.railHeader}>
-              <Text style={styles.railTitle}>Coming up</Text>
-              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
-            </View>
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-            >
-              {segmentItems.map((item, idx) => (
-                <React.Fragment key={item.id}>
-                  {idx > 0 && <View style={{ width: Space.sm }} />}
-                  {renderUpcomingRailItem({ item })}
-                </React.Fragment>
-              ))}
-            </HorizontalRail>
-          </View>
-        ) : null;
-        // Scheduled programme rows
+        // Scheduled programme rows — no duplicate rail
         return (
-          <View>
-            {upcomingRail}
           <View style={styles.compositionWrap}>
             <View style={styles.upcomingContainer}>
-              {segmentItems.map((item) => (
+              {scopeItems.map((item) => (
                 <UpcomingRow
                   key={item.id}
                   item={item}
@@ -1739,73 +1687,33 @@ export default function AuctionHomeScreen() {
               ))}
             </View>
           </View>
+        );
+      }
+
+      case 'results': {
+        // Results ledger — compact rows with outcome, price, bid count
+        return (
+          <View style={styles.compositionWrap}>
+            <View style={styles.resultsContainer}>
+              {scopeItems.map((item) => (
+                <ResultRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => navigateToDetail(item.id)}
+                  formatValueLockup={formatValueLockup}
+                />
+              ))}
+            </View>
           </View>
         );
       }
 
       case 'watching': {
-        // ── Horizontal discovery rail — swipe left for more watched auctions ──
-        const watchingRailCardWidth = Math.round(width * 0.82);
-        const watchingRailImageHeight = Math.round(Math.min(400, width * 0.95));
-        const renderWatchingRailItem = ({ item }: { item: AuctionHomeItem }) => {
-          const timing = resolveAuctionTiming(item, secondClock);
-          const urgency = resolveUrgency(timing);
-          const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
-          const timeLabel = urgency === 'finalMinutes'
-            ? formatFinalMinutesCountdown(timing.msToEnd)
-            : resolveTimeLabel(timing);
-          const effectiveState = timing.effectiveState === 'live' ? 'live' : timing.effectiveState === 'upcoming' ? 'upcoming' : 'ended';
-          const valueState = effectiveState === 'ended' ? 'final' : effectiveState === 'upcoming' ? 'starting' : 'current';
-          const personalAction = item.viewerState === 'outbid' ? 'Bid again'
-            : item.viewerState === 'won' ? 'View result'
-            : null;
-          return (
-            <AuctionRunwayCard
-              title={item.title}
-              imageUrl={item.imageUrl || null}
-              brand={item.brand ?? null}
-              izeText={valueLockup.izeText}
-              localText={valueLockup.localText}
-              valueState={valueState}
-              bidCount={item.bidCount}
-              countdownText={timeLabel}
-              urgent={urgency === 'finalMinutes' || urgency === 'endingSoon'}
-              state={effectiveState}
-              viewerState={item.viewerState}
-              onPress={() => navigateToDetail(item.id)}
-              cardWidth={watchingRailCardWidth}
-              imageHeight={watchingRailImageHeight}
-              metadataBelow
-              personalActionLabel={personalAction}
-              onPersonalAction={personalAction ? () => navigateToDetail(item.id) : undefined}
-            />
-          );
-        };
-        const watchingRail = segmentItems.length > 0 ? (
-          <View style={styles.railWrap}>
-            <View style={styles.railHeader}>
-              <Text style={styles.railTitle}>Watching</Text>
-              <Text style={styles.railCount}>{segmentItems.length} {segmentItems.length === 1 ? 'auction' : 'auctions'}</Text>
-            </View>
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-            >
-              {segmentItems.map((item, idx) => (
-                <React.Fragment key={item.id}>
-                  {idx > 0 && <View style={{ width: Space.sm }} />}
-                  {renderWatchingRailItem({ item })}
-                </React.Fragment>
-              ))}
-            </HorizontalRail>
-          </View>
-        ) : null;
-        // Compact continuity grid
+        // Compact continuity grid — no duplicate rail
         return (
-          <View>
-            {watchingRail}
           <View style={styles.compositionWrap}>
             <View style={styles.continuationGrid}>
-              {segmentItems.map((item) => {
+              {scopeItems.map((item) => {
                 const timing = resolveAuctionTiming(item, secondClock);
                 const urgency = resolveUrgency(timing);
                 const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
@@ -1836,7 +1744,6 @@ export default function AuctionHomeScreen() {
               })}
             </View>
           </View>
-          </View>
         );
       }
 
@@ -1854,62 +1761,12 @@ export default function AuctionHomeScreen() {
         compactContext={compactHeaderContext}
         actions={headerActions}
       />
-      {/* Primary filter pills — prominent Live / Upcoming / Ended navigation */}
-      <View style={styles.primaryFilterBar}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.primaryFilterContent}
-        >
-          <Pressable
-            style={[
-              styles.primaryPill,
-              primaryFilterLiveActive && styles.primaryPillActive,
-            ]}
-            onPress={handlePrimaryFilterLive}
-            accessibilityRole="button"
-            accessibilityLabel="Filter live auctions"
-            accessibilityState={{ selected: primaryFilterLiveActive }}
-          >
-            <View style={[styles.primaryPillDot, { backgroundColor: primaryFilterLiveActive ? colors.textInverse : colors.danger }]} />
-            <Text style={[styles.primaryPillText, primaryFilterLiveActive && styles.primaryPillTextActive]}>Live</Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.primaryPill,
-              primaryFilterUpcomingActive && styles.primaryPillActive,
-            ]}
-            onPress={handlePrimaryFilterUpcoming}
-            accessibilityRole="button"
-            accessibilityLabel="Filter upcoming auctions"
-            accessibilityState={{ selected: primaryFilterUpcomingActive }}
-          >
-            <Ionicons
-              name="time-outline"
-              size={15}
-              color={primaryFilterUpcomingActive ? colors.textInverse : colors.textSecondary}
-            />
-            <Text style={[styles.primaryPillText, primaryFilterUpcomingActive && styles.primaryPillTextActive]}>Upcoming</Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.primaryPill,
-              primaryFilterEndedActive && styles.primaryPillActive,
-            ]}
-            onPress={handlePrimaryFilterEnded}
-            accessibilityRole="button"
-            accessibilityLabel="Filter ended auctions"
-            accessibilityState={{ selected: primaryFilterEndedActive }}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={15}
-              color={primaryFilterEndedActive ? colors.textInverse : colors.textSecondary}
-            />
-            <Text style={[styles.primaryPillText, primaryFilterEndedActive && styles.primaryPillTextActive]}>Ended</Text>
-          </Pressable>
-        </ScrollView>
-      </View>
+      {/* Single scope rail: Live | Upcoming | Results | Watching */}
+      <AuctionSegmentRail
+        segments={scopeSegments}
+        activeKey={browseState.scope}
+        onSelect={(key) => setScope(key as AuctionScope)}
+      />
       <ScrollView
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -1930,20 +1787,52 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* Segment rail */}
-        <AuctionSegmentRail
-          segments={segments}
-          activeKey={activeSegment}
-          onSelect={(key) => { haptics.selection(); setActiveSegment(key as MarketSegment); }}
-        />
+        {/* Active filter chips — individually removable, with result count */}
+        {activeFilterChips.length > 0 && (
+          <View style={styles.filterChipsBar}>
+            {browseResult.status === 'ready' && (
+              <Text style={styles.filterResultSummary}>
+                {browseResult.items.length} {browseResult.items.length === 1 ? 'result' : 'results'}
+              </Text>
+            )}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterChipsContent}
+            >
+              {activeFilterChips.map((chip) => (
+                <Pressable
+                  key={chip.key}
+                  style={styles.filterChip}
+                  onPress={() => removeFilterChip(chip.type, chip.value)}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove filter ${chip.label}`}
+                >
+                  <Text style={styles.filterChipText} numberOfLines={1}>{chip.label}</Text>
+                  <Ionicons name="close" size={13} color={colors.textSecondary} />
+                </Pressable>
+              ))}
+              <Pressable
+                style={styles.filterChipClear}
+                onPress={clearAllFilters}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+              >
+                <Text style={styles.filterChipClearText}>Clear all</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        )}
 
-        {/* Selected market composition */}
-        <SegmentContentTransition segmentKey={activeSegment}>
+        {/* Selected scope composition */}
+        <SegmentContentTransition segmentKey={browseState.scope}>
           {renderComposition()}
         </SegmentContentTransition>
 
         {/* Category discovery */}
-        {homeData.categoryWorlds.length > 0 && (
+        {homeData.categoryWorlds.length > 0 && !isBrowsing && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>Categories</Text>
             <HorizontalRail
@@ -1961,8 +1850,8 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* Results — compact, near lower page */}
-        {homeData.recentlyClosed.length > 0 && (
+        {/* Results — compact, near lower page (only when not browsing and not in results scope) */}
+        {homeData.recentlyClosed.length > 0 && !isBrowsing && browseState.scope !== 'results' && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>Results</Text>
             <View style={styles.resultsContainer}>
@@ -1979,7 +1868,7 @@ export default function AuctionHomeScreen() {
         )}
 
         {/* ── More to explore — continuous feed ── */}
-        {exploreFeedItems.length > 0 && (
+        {exploreFeedItems.length > 0 && !isBrowsing && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>More to explore</Text>
             <View style={styles.continuationGrid}>
@@ -2020,107 +1909,228 @@ export default function AuctionHomeScreen() {
         visible={filterSheetVisible}
         onDismiss={() => setFilterSheetVisible(false)}
         categoryOptions={categoryOptions}
-        draftStatus={draftStatus}
-        setDraftStatus={setDraftStatus}
-        draftSort={draftSort}
-        setDraftSort={setDraftSort}
-        draftCategory={draftCategory}
-        setDraftCategory={setDraftCategory}
+        categoryLabels={categoryLabels}
+        categoryCounts={categoryCounts}
+        draftBrowse={draftBrowse}
+        setDraftBrowse={setDraftBrowse}
         onReset={resetDraftFilters}
         onApply={applyDraftFilters}
+        resultCount={filterResultCount}
+        facetsLoading={facetsLoading}
       />
     </View>
   );
 }
 
 // ════════════════════════════════════════════════════════════════
-// FILTER SHEET — extracted for reuse across render paths
+// FILTER SHEET — redesigned with hierarchical categories, checkmarked
+// sort rows, price range/presets, and bottom CTA with count
 // ════════════════════════════════════════════════════════════════
+const SORT_OPTIONS: { key: AuctionBrowseSort; label: string }[] = [
+  { key: 'recommended', label: 'Recommended' },
+  { key: 'endingSoon', label: 'Ending soon' },
+  { key: 'newest', label: 'Newest' },
+  { key: 'mostBids', label: 'Most bids' },
+  { key: 'priceLow', label: 'Price: low to high' },
+  { key: 'priceHigh', label: 'Price: high to low' },
+];
+
+const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
+  { label: 'Under £50', max: 50 },
+  { label: '£50 – £200', min: 50, max: 200 },
+  { label: '£200 – £500', min: 200, max: 500 },
+  { label: 'Over £500', min: 500 },
+];
+
 const FilterSheet = memo(function FilterSheet({
   visible,
   onDismiss,
   categoryOptions,
-  draftStatus,
-  setDraftStatus,
-  draftSort,
-  setDraftSort,
-  draftCategory,
-  setDraftCategory,
+  categoryLabels,
+  categoryCounts,
+  draftBrowse,
+  setDraftBrowse,
   onReset,
   onApply,
+  resultCount,
+  facetsLoading,
 }: {
   visible: boolean;
   onDismiss: () => void;
   categoryOptions: string[];
-  draftStatus: 'all' | 'live' | 'scheduled' | 'ended';
-  setDraftStatus: (s: 'all' | 'live' | 'scheduled' | 'ended') => void;
-  draftSort: 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
-  setDraftSort: (s: 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh') => void;
-  draftCategory: string | null;
-  setDraftCategory: (c: string | null) => void;
+  categoryLabels?: Record<string, string>;
+  categoryCounts?: Record<string, number>;
+  draftBrowse: AuctionBrowseState;
+  setDraftBrowse: React.Dispatch<React.SetStateAction<AuctionBrowseState>>;
   onReset: () => void;
   onApply: () => void;
+  resultCount?: number;
+  facetsLoading?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const activeCount = useMemo(() => {
+    let n = 0;
+    if (draftBrowse.sort !== 'recommended') n++;
+    n += draftBrowse.categories.length;
+    if (draftBrowse.priceMin != null) n++;
+    if (draftBrowse.priceMax != null) n++;
+    return n;
+  }, [draftBrowse]);
+
+  const toggleCategory = useCallback((cat: string) => {
+    haptics.tap();
+    setDraftBrowse((prev) => {
+      const has = prev.categories.includes(cat);
+      return {
+        ...prev,
+        categories: has
+          ? prev.categories.filter((c) => c !== cat)
+          : [...prev.categories, cat],
+      };
+    });
+  }, [setDraftBrowse]);
+
+  const setSort = useCallback((sort: AuctionBrowseSort) => {
+    haptics.tap();
+    setDraftBrowse((prev) => ({ ...prev, sort }));
+  }, [setDraftBrowse]);
+
+  const applyPricePreset = useCallback((preset: { min?: number; max?: number }) => {
+    haptics.tap();
+    setDraftBrowse((prev) => ({ ...prev, priceMin: preset.min, priceMax: preset.max }));
+  }, [setDraftBrowse]);
+
+  const clearPrice = useCallback(() => {
+    haptics.tap();
+    setDraftBrowse((prev) => ({ ...prev, priceMin: undefined, priceMax: undefined }));
+  }, [setDraftBrowse]);
+
+  const priceLabel = useMemo(() => {
+    if (draftBrowse.priceMin != null && draftBrowse.priceMax != null) {
+      return `£${draftBrowse.priceMin} – £${draftBrowse.priceMax}`;
+    }
+    if (draftBrowse.priceMin != null) return `Over £${draftBrowse.priceMin}`;
+    if (draftBrowse.priceMax != null) return `Under £${draftBrowse.priceMax}`;
+    return 'Any price';
+  }, [draftBrowse.priceMin, draftBrowse.priceMax]);
+
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss}>
       <View style={styles.filterSheetContent}>
         <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
 
-        <Text style={styles.filterSectionLabel}>Status</Text>
-        <View style={styles.filterOptionRow}>
-          {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
-            <Pressable
-              key={opt}
-              style={({ pressed }) => [styles.filterOption, draftStatus === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
-              onPress={() => { haptics.tap(); setDraftStatus(opt); }}
-            >
-              <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Upcoming' : 'Ended'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
+        {/* ── Sort: checkmarked rows ── */}
         <Text style={styles.filterSectionLabel}>Sort</Text>
-        <View style={styles.filterOptionRow}>
-          {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
-            <Pressable
-              key={opt}
-              style={({ pressed }) => [styles.filterOption, draftSort === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
-              onPress={() => { haptics.tap(); setDraftSort(opt); }}
-            >
-              <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
-                {opt === 'endingSoon' ? 'Ending soon' : opt === 'newest' ? 'Newest' : opt === 'mostBids' ? 'Most bids' : opt === 'priceLow' ? 'Price ↑' : 'Price ↓'}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.filterSortRows}>
+          {SORT_OPTIONS.map((opt) => {
+            const selected = draftBrowse.sort === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                style={({ pressed }) => [
+                  styles.filterSortRow,
+                  pressed && styles.filterOptionPressed,
+                ]}
+                onPress={() => setSort(opt.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${opt.label}`}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterSortRowText, selected && styles.filterSortRowTextActive]}>
+                  {opt.label}
+                </Text>
+                {selected && (
+                  <Ionicons name="checkmark" size={18} color={colors.brand} />
+                )}
+              </Pressable>
+            );
+          })}
         </View>
 
+        {/* ── Price range: presets + current label ── */}
+        <Text style={styles.filterSectionLabel}>Price</Text>
+        <View style={styles.filterPricePresets}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterPriceChip,
+              draftBrowse.priceMin == null && draftBrowse.priceMax == null && styles.filterPriceChipActive,
+              pressed && styles.filterOptionPressed,
+            ]}
+            onPress={clearPrice}
+            accessibilityRole="button"
+            accessibilityLabel="Any price"
+            accessibilityState={{ selected: draftBrowse.priceMin == null && draftBrowse.priceMax == null }}
+          >
+            <Text style={[styles.filterPriceChipText, draftBrowse.priceMin == null && draftBrowse.priceMax == null && styles.filterPriceChipTextActive]}>
+              Any
+            </Text>
+          </Pressable>
+          {PRICE_PRESETS.map((preset) => {
+            const selected = draftBrowse.priceMin === preset.min && draftBrowse.priceMax === preset.max;
+            return (
+              <Pressable
+                key={preset.label}
+                style={({ pressed }) => [
+                  styles.filterPriceChip,
+                  selected && styles.filterPriceChipActive,
+                  pressed && styles.filterOptionPressed,
+                ]}
+                onPress={() => applyPricePreset(preset)}
+                accessibilityRole="button"
+                accessibilityLabel={preset.label}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterPriceChipText, selected && styles.filterPriceChipTextActive]}>
+                  {preset.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.filterPriceCurrent}>{priceLabel}</Text>
+
+        {/* ── Categories: hierarchical checkmarked rows ── */}
         {categoryOptions.length > 0 && (
           <>
-            <Text style={styles.filterSectionLabel}>Category</Text>
-            <HorizontalRail style={styles.filterCategoryScroll}>
-              <Pressable
-                style={({ pressed }) => [styles.filterOption, draftCategory === null && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
-                onPress={() => { haptics.tap(); setDraftCategory(null); }}
-              >
-                <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
-              </Pressable>
-              {categoryOptions.map((cat) => (
-                <Pressable
-                  key={cat}
-                  style={({ pressed }) => [styles.filterOption, draftCategory === cat && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
-                  onPress={() => { haptics.tap(); setDraftCategory(cat); }}
-                >
-                  <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
-                </Pressable>
-              ))}
-            </HorizontalRail>
+            <Text style={styles.filterSectionLabel}>Categories</Text>
+            <View style={styles.filterCategoryList}>
+              {categoryOptions.map((cat) => {
+                const selected = draftBrowse.categories.includes(cat);
+                const displayLabel = categoryLabels?.[cat] ?? cat;
+                const count = categoryCounts?.[cat];
+                return (
+                  <Pressable
+                    key={cat}
+                    style={({ pressed }) => [
+                      styles.filterCategoryRow,
+                      pressed && styles.filterOptionPressed,
+                    ]}
+                    onPress={() => toggleCategory(cat)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Category ${displayLabel}${count != null ? `, ${count} auctions` : ''}`}
+                    accessibilityState={{ selected }}
+                  >
+                    <View style={styles.filterCategoryRowLabel}>
+                      <Text style={[styles.filterCategoryRowText, selected && styles.filterCategoryRowTextActive]}>
+                        {displayLabel}
+                      </Text>
+                      {count != null && (
+                        <Text style={styles.filterCategoryCount}>{count}</Text>
+                      )}
+                    </View>
+                    <View style={styles.filterCheckbox}>
+                      {selected && <Ionicons name="checkmark" size={16} color={colors.brand} />}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </>
         )}
 
+        {/* ── Bottom CTA with result count ── */}
         <View style={styles.filterActionsRow}>
           <Pressable
             style={styles.filterResetBtn}
@@ -2136,9 +2146,22 @@ const FilterSheet = memo(function FilterSheet({
             onPress={onApply}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Show results"
+            accessibilityLabel={
+              resultCount != null
+                ? `Show ${resultCount} results`
+                : activeCount > 0
+                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+                  : 'Show results'
+            }
           >
-            <Text style={styles.filterApplyText}>Show results</Text>
+            <Text style={styles.filterApplyText}>
+              {resultCount != null
+                ? `Show ${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
+                : activeCount > 0
+                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+                  : 'Show results'
+              }
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -2156,44 +2179,55 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xxl + 24,
   },
 
-  // ── Primary filter pills (Live / Upcoming / Ended) ──
-  primaryFilterBar: {
-    paddingVertical: Space.sm,
+  // ── Active filter chips (individually removable) ──
+  filterChipsBar: {
+    paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  primaryFilterContent: {
+  filterResultSummary: {
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  filterChipsContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
     alignItems: 'center',
   },
-  primaryPill: {
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    minHeight: 36,
+    minHeight: 32,
   },
-  primaryPillActive: {
-    backgroundColor: colors.brand,
+  filterChipText: {
+    fontSize: Type.caption.size,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0,
+    maxWidth: 160,
   },
-  primaryPillDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.full,
+  filterChipClear: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
+    minHeight: 32,
+    justifyContent: 'center',
   },
-  primaryPillText: {
-    fontSize: Type.bodyEmphasis.size,
+  filterChipClearText: {
+    fontSize: Type.caption.size,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  primaryPillTextActive: {
-    color: colors.textInverse,
   },
 
   // ── Zone wrapper ──
@@ -2218,36 +2252,6 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     marginTop: Space.sm,
     marginBottom: Space.xs,
-  },
-
-  // ── Horizontal discovery rail ──
-  railWrap: {
-    marginTop: Space.lg,
-    marginBottom: Space.xs,
-  },
-  railHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  railTitle: {
-    fontSize: Type.subtitle.size,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  railCount: {
-    fontSize: Type.meta.size,
-    color: colors.textMuted,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide + 0.08,
-  },
-  railContent: {
-    paddingHorizontal: Space.md,
-    paddingRight: Space.xl + Space.md,
   },
 
   // ── Composition ──
@@ -2284,72 +2288,6 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     gap: Space.sm,
     marginTop: Space.sm,
-  },
-
-  // ── Ending soon rows ──
-  endingSoonContainer: {
-    gap: 0,
-  },
-  endingSoonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  endingSoonImageWrap: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  endingSoonImage: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-  },
-  endingSoonBody: {
-    flex: 1,
-  },
-  endingSoonTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.size + 4,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-    marginBottom: Space.xs / 2 + 1,
-  },
-  endingSoonPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceList.letterSpacing,
-    marginBottom: Space.xs / 2,
-  },
-  endingSoonBids: {
-    fontSize: Type.meta.size,
-    color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-  endingSoonTimeCol: {
-    alignItems: 'flex-end',
-  },
-  endingSoonTime: {
-    fontSize: Type.body.size,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  urgencyBar: {
-    width: Space.lg + 4,
-    height: Stroke.emphasis,
-    borderRadius: Radius.full,
-    backgroundColor: colors.danger,
-    marginTop: Space.xs,
   },
 
   // ── Horizontal rail ──
@@ -2410,12 +2348,14 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 4,
   },
   upcomingDate: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontWeight: '600',
-    letterSpacing: LetterSpacing.wide + 0.08,
+    letterSpacing: Type.metaElevated.letterSpacing,
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs / 2,
+    fontVariant: ['tabular-nums'],
   },
   upcomingEyebrow: {
     fontSize: Type.meta.size,
@@ -2425,12 +2365,12 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.captionElevated.letterSpacing,
   },
   upcomingTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.size + 4,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   upcomingNotify: {
     width: Control.hit,
@@ -2467,18 +2407,20 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 2,
   },
   resultTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.size + 4,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   resultOutcome: {
-    fontSize: Type.caption.size,
-    fontWeight: '500',
-    fontFamily: Typography.family.medium,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   resultActionWrap: {
     flexDirection: 'row',
@@ -2524,11 +2466,37 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     backgroundColor: colors.surfaceAlt,
   },
+  searchScopeContext: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  searchScopeText: {
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0,
+  },
   searchIdleContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
+  },
+  searchIdleScroll: {
+    flex: 1,
+  },
+  searchIdleContent: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.lg,
+    gap: Space.xl,
+  },
+  searchIdleFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xxl,
   },
   searchIdleHint: {
     fontSize: Type.body.size,
@@ -2536,63 +2504,45 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     textAlign: 'center',
   },
-
-  // ── Filter result mode ──
-  filterResultHeader: {
+  searchIdleSection: {
+    gap: Space.sm,
+  },
+  searchIdleSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    justifyContent: 'space-between',
   },
-  filterResultBackBtn: {
-    padding: Space.xs,
-  },
-  filterResultTitleWrap: {
-    flex: 1,
-  },
-  filterResultTitle: {
-    fontSize: Type.subtitle.size,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: Typography.family.bold,
-  },
-  filterResultCount: {
+  searchIdleSectionTitle: {
     fontSize: Type.caption.size,
+    fontWeight: '600',
+    letterSpacing: LetterSpacing.wide + 0.08,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
+    fontFamily: Typography.family.semibold,
   },
-  filterChipsRow: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+  searchIdleClearBtn: {
+    fontSize: Type.caption.size,
+    color: colors.brand,
+    fontFamily: Typography.family.medium,
   },
-  filterChip: {
-    paddingVertical: Space.xs + 1,
-    paddingHorizontal: Space.md,
+  searchIdleChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+  },
+  searchIdleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    marginRight: Space.xs,
+    backgroundColor: colors.surfaceAlt,
   },
-  filterChipText: {
+  searchIdleChipText: {
     fontSize: Type.caption.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  filterChipClear: {
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    marginRight: Space.xs,
-  },
-  filterChipClearText: {
-    fontSize: Type.caption.size,
-    color: colors.danger,
-    fontFamily: Typography.family.medium,
+    maxWidth: 140,
   },
 
   // ── Filter sheet ──
@@ -2615,38 +2565,108 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     marginTop: Space.md,
   },
-  filterOptionRow: {
+  filterOptionPressed: {
+    opacity: 0.7,
+  },
+
+  // ── Sort rows (checkmarked) ──
+  filterSortRows: {
+    gap: 0,
+  },
+  filterSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+  },
+  filterSortRowText: {
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.medium,
+  },
+  filterSortRowTextActive: {
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+
+  // ── Price presets ──
+  filterPricePresets: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
   },
-  filterCategoryScroll: {
-    flexDirection: 'row',
-  },
-  filterOption: {
+  filterPriceChip: {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    marginRight: Space.sm,
   },
-  filterOptionActive: {
+  filterPriceChipActive: {
     backgroundColor: colors.brand,
     borderColor: colors.brand,
   },
-  filterOptionPressed: {
-    opacity: 0.7,
-  },
-  filterOptionText: {
+  filterPriceChipText: {
     fontSize: Type.captionElevated.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
-  filterOptionTextActive: {
+  filterPriceChipTextActive: {
     color: colors.textInverse,
   },
+  filterPriceCurrent: {
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.sm,
+  },
+
+  // ── Category rows (hierarchical with checkboxes) ──
+  filterCategoryList: {
+    gap: 0,
+  },
+  filterCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+  },
+  filterCategoryRowText: {
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.medium,
+  },
+  filterCategoryRowTextActive: {
+    fontFamily: Typography.family.semibold,
+  },
+  filterCategoryRowLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  filterCategoryCount: {
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  filterCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Filter actions ──
   filterActionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

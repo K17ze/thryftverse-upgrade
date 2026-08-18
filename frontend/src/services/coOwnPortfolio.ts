@@ -1,5 +1,5 @@
 import { listCoOwnAssets, fetchCoOwnHoldings, type MarketCoOwnAsset, type MarketCoOwnHolding } from './marketApi';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 // ── Portfolio DTO ──
 // A joined position view model that the PortfolioScreen consumes.

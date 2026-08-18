@@ -5,7 +5,7 @@ import { Space, Radius, Type, Typography } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 
-export type ChatAction = "gallery" | "camera";
+export type ChatAction = "gallery" | "camera" | "agent";
 
 interface ChatActionSheetProps {
   visible: boolean;
@@ -42,16 +42,22 @@ export function ChatActionSheet({
         label: "Camera",
         description: "Take a new photo or video",
       },
+      {
+        id: "agent",
+        icon: "sparkles-outline",
+        label: "Add assistant",
+        description: "Deploy an AI assistant into this chat",
+      },
     ],
     [],
   );
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
@@ -134,8 +140,8 @@ export function ChatActionSheet({
               Cancel
             </Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -187,7 +193,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.lg,

@@ -1,14 +1,7 @@
 /**
- * AI Photo Enhancement API — mock-ready service for AI-powered listing photo
+ * AI Photo Enhancement API — mock-ready service for listing photo
  * enhancement (background removal, AI shadows, auto-crop, colour correction,
  * background replacement, lighting fix).
- *
- * Context (2026 parity):
- *   Depop's Photoroom integration (AI background removal, AI shadows, image
- *   resizing) drove a 1.5% uplift in listings. eBay AI Snap and Tilt Snap AI
- *   followed. AI photo enhancement is table stakes for 2026 marketplaces.
- *   ThryftVerse has AI listing creation but no AI photo enhancement — this
- *   service closes that gap.
  *
  * Per AGENTS.md §11 (Truthful UI):
  *   The mock is truthful. It does NOT fabricate enhanced images. When
@@ -22,6 +15,8 @@
  *   replace the mock branches with real fetch calls. The UI layer does not
  *   need to change.
  */
+
+import { makeStableId } from '../utils/createStableId';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,7 +79,7 @@ export interface BackgroundScene {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const AI_PHOTO_DEMO_MODE = true;
+export const AI_PHOTO_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -235,7 +230,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  return makeStableId(prefix);
 }
 
 // ---------------------------------------------------------------------------

@@ -30,7 +30,6 @@ import { FlashList, ListRenderItem, FlashListRef } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
@@ -149,7 +148,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           setConversation({ ...conversation, messages: [...conversation.messages] });
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+        setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
       } finally {
         setIsProcessing(false);
       }
@@ -405,31 +404,28 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       const message = item.message;
       if (message.role === 'user') {
         return (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(180).springify().damping(18)}
+          <View
             style={localStyles.messageRow}
           >
             {renderUserMessage(message)}
-          </Reanimated.View>
+          </View>
         );
       }
       return (
-        <Reanimated.View
-          entering={reducedMotion ? undefined : FadeInDown.duration(180).springify().damping(18)}
+        <View
           style={localStyles.messageRow}
         >
           {renderAssistantMessage(message)}
-        </Reanimated.View>
+        </View>
       );
     },
-    [colors.surface, colors.textMuted, reducedMotion, renderUserMessage, renderAssistantMessage],
+    [colors.surface, colors.textMuted, renderUserMessage, renderAssistantMessage],
   );
 
   // ── Empty / first-viewport state ──
   const renderEmptyState = () => (
     <View style={localStyles.emptyStateWrap}>
-      <Reanimated.View
-        entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+      <View
         style={localStyles.greetingWrap}
       >
         <Text
@@ -444,7 +440,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         >
           Describe it in your own words.
         </Text>
-      </Reanimated.View>
+      </View>
 
       {/* Suggested query chips */}
       <View style={localStyles.suggestionsSection}>

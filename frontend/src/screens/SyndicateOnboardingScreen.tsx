@@ -6,10 +6,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
@@ -43,7 +41,6 @@ const SLIDES = [
 export default function CoOwnOnboardingScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = React.useState(0);
 
@@ -97,10 +94,8 @@ export default function CoOwnOnboardingScreen() {
 
       {/* Hero slide */}
       <View style={styles.hero}>
-        <Reanimated.View
+        <View
           key={slide.title}
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(320)}
-          exiting={reducedMotionEnabled ? undefined : FadeOutUp.duration(220)}
           style={styles.heroSlide}
         >
           <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
@@ -110,7 +105,7 @@ export default function CoOwnOnboardingScreen() {
           {/* Welcome badge — shown only on the first slide */}
           {index === 0 && (
             <View style={[styles.welcomeBadge, { backgroundColor: `${colors.brand}15` }]}>
-              <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Welcome to Co-Own</Text>
+              <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Co-Own investing</Text>
             </View>
           )}
 
@@ -133,7 +128,7 @@ export default function CoOwnOnboardingScreen() {
               ))}
             </View>
           )}
-        </Reanimated.View>
+        </View>
       </View>
 
       {/* Footer */}
@@ -290,7 +285,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     borderRadius: Radius.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

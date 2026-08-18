@@ -24,7 +24,7 @@ function SheetItem({
 }) {
   return (
     <Pressable
-      style={styles.sheetItem}
+      style={({ pressed }) => [styles.sheetItem, pressed && { opacity: 0.6 }]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -63,17 +63,17 @@ export function ProfileMoreSheet({
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.38 }]}>
       <View style={styles.sheetContainer}>
         <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-          Profile options
+          More options
         </Text>
-        <SheetItem icon="share-outline" label="Share profile" onPress={() => { onDismiss(); onShare(); }} colors={colors} />
-        <SheetItem icon="link-outline" label="Copy profile link" onPress={onCopyLink} colors={colors} />
+        <SheetItem icon="share-outline" label="Share" onPress={() => { onDismiss(); onShare(); }} colors={colors} />
+        <SheetItem icon="link-outline" label="Copy link" onPress={onCopyLink} colors={colors} />
         {!isSelfProfile ? (
           <>
-            <SheetItem icon="flag-outline" label="Report profile" onPress={onReport} colors={colors} />
+            <SheetItem icon="flag-outline" label="Report" onPress={onReport} colors={colors} />
             {isBlocked ? (
-              <SheetItem icon="hand-right-outline" label="Unblock user" onPress={onUnblock} colors={colors} />
+              <SheetItem icon="hand-right-outline" label="Unblock" onPress={onUnblock} colors={colors} />
             ) : (
-              <SheetItem icon="hand-right-outline" label="Block user" onPress={onBlock} destructive colors={colors} />
+              <SheetItem icon="hand-right-outline" label="Block" onPress={onBlock} destructive colors={colors} />
             )}
           </>
         ) : null}
@@ -130,10 +130,10 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
         {/* Title stays visible — not scrolled */}
         <View style={styles.reportSheetHeader}>
           <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-            Report profile
+            Report
           </Text>
           <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
-            Help us understand the issue. Reports are reviewed by our team.
+            Tell us what's wrong. Our team reviews all reports.
           </Text>
         </View>
 
@@ -181,7 +181,7 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
           {selected ? (
             <View style={styles.detailsWrap}>
               <Text style={[styles.detailsLabel, { color: colors.textSecondary }]}>
-                {requiresDetails ? 'Details (required)' : 'Additional details (optional)'}
+                {requiresDetails ? 'Details' : 'Add details (optional)'}
               </Text>
               <TextInput
                 style={[
@@ -193,7 +193,7 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
                 ]}
                 value={details}
                 onChangeText={setDetails}
-                placeholder={requiresDetails ? 'Please describe the issue' : 'Add more context'}
+                placeholder={requiresDetails ? 'What\'s the issue?' : 'Add more context'}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 maxLength={500}
@@ -250,7 +250,7 @@ export function ProfileBlockConfirmSheet({
           Block {displayHandle}?
         </Text>
         <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
-          They won't be able to follow you, message you, or view your profile. You can unblock them anytime.
+          They can't follow, message, or view your profile. Unblock anytime.
         </Text>
         <View style={styles.confirmRow}>
           <AnimatedPressable

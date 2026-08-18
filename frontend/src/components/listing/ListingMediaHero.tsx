@@ -122,7 +122,7 @@ export function ListingMediaHero({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color="#fff" />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>

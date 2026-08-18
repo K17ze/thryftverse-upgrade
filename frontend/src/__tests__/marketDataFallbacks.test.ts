@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 type FeedLookPayload = {
   id: string;

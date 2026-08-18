@@ -1,5 +1,6 @@
 import React from 'react';
-import { Listing, MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import type { Listing } from '../domain';
+import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
 import {
@@ -13,7 +14,7 @@ import { BackendDiagnosticsOverlay } from '../dev/BackendDiagnosticsOverlay';
 
 interface BackendDataContextValue {
   listings: Listing[];
-  source: 'api';
+  source: 'api' | 'fixture' | 'cache' | 'offline-cache';
   apiBaseUrl: string;
   isSyncing: boolean;
   lastError: string | null;
@@ -44,7 +45,7 @@ const DEVELOPMENT_LISTINGS = MOCK_LISTINGS.map((listing) => {
 
 export function BackendDataProvider({ children }: { children: React.ReactNode }) {
   const [listings, setListings] = React.useState<Listing[]>([]);
-  const [source] = React.useState<'api'>('api');
+  const [source, setSource] = React.useState<BackendDataContextValue['source']>('api');
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [lastError, setLastError] = React.useState<string | null>(null);
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
@@ -60,6 +61,7 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setCursor(result.nextCursor);
       setHasMore(Boolean(result.nextCursor));
       setLastError(result.error ?? null);
+      setSource('api');
     } else if (ENABLE_RUNTIME_MOCKS) {
       // fixture-design mode: substitute demo listings so design work proceeds
       // without a live backend. This branch never runs in integration-truth or
@@ -68,11 +70,15 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setCursor(undefined);
       setHasMore(false);
       setLastError(null);
+      setSource('fixture');
     } else {
       setListings([]);
       setCursor(undefined);
       setHasMore(false);
       setLastError(result.error ?? null);
+      // integration-truth mode keeps source as 'api' so consumers can tell the
+      // API was the source of truth (even when it returned an empty page).
+      setSource('api');
       if (IS_INTEGRATION_TRUTH_MODE && result.error) {
         console.warn(
           `[BackendDataContext] integration-truth mode: listings API returned no results. ` +

@@ -1,12 +1,9 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -16,14 +13,14 @@ import {
   listUserMarketHistory,
 } from '../services/marketApi';
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
-import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -96,12 +93,11 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 
 export default function MarketLedgerScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
@@ -201,80 +197,129 @@ export default function MarketLedgerScreen() {
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Ledger"
+            subtitle="Market activity and trade history"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
+        <CoOwnActivitySkeleton />
+      </FlagshipScreen>
+    );
+  }
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible ledger rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderLedgerItem = useCallback(({ item }: { item: LedgerEntry }) => {
+    const isAuction = item.channel === 'auction';
+    const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
+    const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
+    const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
+    const cashflow = getEntryCashflow(item);
+    const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
+
+    return (
+      <OrderHistoryRow
+        id={item.id}
+        side={side}
+        type="market"
+        assetTitle={title}
+        quantity={item.units ?? 1}
+        pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
+        totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
+        status={item.action === 'bid' ? 'open' : 'filled'}
+        timestamp={relativeTime(item.timestamp)}
+        onPress={() => {
+          haptics.tap();
+          const source: CommerceDestinationSource = isAuction
+            ? { commerceMode: 'auction', auctionId: item.referenceId }
+            : { commerceMode: 'co_own', assetId: item.referenceId };
+          const destination = resolveCommerceDestination(source);
+          if (destination.ok) {
+            if (destination.screen === 'ItemDetail') {
+              navigation.navigate('ItemDetail', destination.params);
+            } else if (destination.screen === 'AuctionDetail') {
+              navigation.navigate('AuctionDetail', destination.params);
+            } else if (destination.screen === 'AssetDetail') {
+              navigation.navigate('AssetDetail', destination.params);
+            }
+          }
+        }}
+      />
+    );
+  }, [
+    getEntryCashflow,
+    formatCoOwnIze,
+    formatMoney,
+    formatSignedMoney,
+    relativeTime,
+    haptics,
+    navigation,
+    resolveCommerceDestination,
+  ]);
+
+  return (
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
           title="Ledger"
           subtitle="Market activity and trade history"
           onBack={handleBack}
         />
-        <CoOwnActivitySkeleton />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Ledger"
-        subtitle="Market activity and trade history"
-        onBack={handleBack}
-      />
-
+      }
+      scrollEnabled={false}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
 
       {/* Summary card */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Volume</Text>
-            <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatMoney(totalMarketValue)}</Text>
-          </View>
-          <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Net cashflow</Text>
-            <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
-              {formatSignedMoney(netCashflow)}
-            </Text>
-          </View>
-          <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.summaryStat}>
-            <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realized P&L</Text>
-            <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
-              {formatSignedMoney(realizedCoOwnPL)}
-            </Text>
-          </View>
+      <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.summaryStat}>
+          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Volume</Text>
+          <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatMoney(totalMarketValue)}</Text>
         </View>
-      </Reanimated.View>
+        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.summaryStat}>
+          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Net cashflow</Text>
+          <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
+            {formatSignedMoney(netCashflow)}
+          </Text>
+        </View>
+        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.summaryStat}>
+          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realized P&L</Text>
+          <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
+            {formatSignedMoney(realizedCoOwnPL)}
+          </Text>
+        </View>
+      </View>
 
       {/* Phase 4: Ledger summary with mark-used + window labels */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
-        <CoOwnLedgerSummary
-          issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
-          boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
-          soldCount={filteredEntries.filter((e) => e.action === 'sell-units').length}
-          pausedCount={0}
-          markUsedLabel="Last trade"
-          windowLabel="All time"
-          markTimestamp={undefined}
-          isStaleMark={false}
-        />
-      </Reanimated.View>
+      <CoOwnLedgerSummary
+        issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
+        boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
+        soldCount={filteredEntries.filter((e) => e.action === 'sell-units').length}
+        pausedCount={0}
+        markUsedLabel="Last trade"
+        windowLabel="All time"
+        markTimestamp={undefined}
+        isStaleMark={false}
+      />
 
       {/* Filter */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-        <View style={styles.filterWrap}>
-          <AppSegmentControl
-            options={FILTER_OPTIONS}
-            value={filter}
-            onChange={setFilter}
-            fullWidth
-          />
-        </View>
-      </Reanimated.View>
+      <View style={styles.filterWrap}>
+        <AppSegmentControl
+          options={FILTER_OPTIONS}
+          value={filter}
+          onChange={setFilter}
+          fullWidth
+        />
+      </View>
 
       <FlashList
         data={filteredEntries}
@@ -283,52 +328,7 @@ export default function MarketLedgerScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteLedger()}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => {
-          const isAuction = item.channel === 'auction';
-          const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
-          const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
-          const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
-          const cashflow = getEntryCashflow(item);
-          const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
-
-          return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
-              }
-            >
-              <OrderHistoryRow
-                id={item.id}
-                side={side}
-                type="market"
-                assetTitle={title}
-                quantity={item.units ?? 1}
-                pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
-                totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
-                status={item.action === 'bid' ? 'open' : 'filled'}
-                timestamp={relativeTime(item.timestamp)}
-                onPress={() => {
-                  haptics.tap();
-                  const source: CommerceDestinationSource = isAuction
-                    ? { commerceMode: 'auction', auctionId: item.referenceId }
-                    : { commerceMode: 'co_own', assetId: item.referenceId };
-                  const destination = resolveCommerceDestination(source);
-                  if (destination.ok) {
-                    if (destination.screen === 'ItemDetail') {
-                      navigation.navigate('ItemDetail', destination.params);
-                    } else if (destination.screen === 'AuctionDetail') {
-                      navigation.navigate('AuctionDetail', destination.params);
-                    } else if (destination.screen === 'AssetDetail') {
-                      navigation.navigate('AssetDetail', destination.params);
-                    }
-                  }
-                }}
-              />
-            </Reanimated.View>
-          );
-        }}
+        renderItem={renderLedgerItem}
         ListEmptyComponent={
           isSyncingLedger ? (
             <View style={styles.loadingWrap}>
@@ -361,14 +361,11 @@ export default function MarketLedgerScreen() {
           />
         }
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',

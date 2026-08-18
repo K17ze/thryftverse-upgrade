@@ -1,10 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, Keyboard } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Keyboard } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -36,11 +35,13 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
+import { useBreakpoint } from '../hooks/useBreakpoint';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnTradeComposer,
   CoOwnTradeSkeleton,
   CoOwnStateCanvas,
@@ -77,12 +78,10 @@ const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; ac
 export default function TradeScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < 360;
+  const { isVeryCompact: isCompact } = useBreakpoint();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { isOffline } = useConnectivity();
 
@@ -307,28 +306,36 @@ export default function TradeScreen() {
   // ── Loading state ──
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Trade"
-          subtitle="Buy or sell Co-Own units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={
+          <FlagshipHeader
+            title="Trade"
+            subtitle="Buy or sell Co-Own units"
+            onBack={handleBack}
+          />
+        }
+      >
         <CoOwnTradeSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (isError || !asset) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Trade"
-          subtitle="Buy or sell Co-Own units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={
+          <FlagshipHeader
+            title="Trade"
+            subtitle="Buy or sell Co-Own units"
+            onBack={handleBack}
+          />
+        }
+      >
         <CoOwnStateCanvas
           variant="error"
           title="Item not found"
@@ -336,7 +343,7 @@ export default function TradeScreen() {
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -348,15 +355,17 @@ export default function TradeScreen() {
   const settlementLabel = '1ZE';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title={side === 'buy' ? 'Buy units' : 'Sell units'}
-        subtitle={asset.title}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title={side === 'buy' ? 'Buy units' : 'Sell units'}
+          subtitle={asset.title}
+          onBack={handleBack}
+        />
+      }
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner
         isActive={Boolean(orderBook && orderBook.reconciliationState !== 'reconciled')}
@@ -384,7 +393,7 @@ export default function TradeScreen() {
         onScrollBeginDrag={Keyboard.dismiss}
       >
         {/* Buy/Sell selector */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <AppSegmentControl
             options={TRADE_SIDE_OPTIONS}
             value={side}
@@ -392,11 +401,11 @@ export default function TradeScreen() {
             fullWidth
             style={styles.sideSwitcher}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Compliance alert */}
         {!eligibility.ok && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <View>
             <View style={[styles.alertCard, { backgroundColor: colors.danger + '12', borderColor: colors.danger + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -404,12 +413,12 @@ export default function TradeScreen() {
               </View>
               <Text style={[styles.alertText, { color: colors.textSecondary }]}>{eligibility.message}</Text>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Rights incomplete alert — spec 10 §9.3: TBC blocks trading on live instruments */}
         {hasIncompleteRights && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(70)}>
+          <View>
             <View style={[styles.alertCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="document-text-outline" size={16} color={colors.warning} />
@@ -434,7 +443,7 @@ export default function TradeScreen() {
                 </Text>
               )}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         <View style={[
@@ -457,7 +466,7 @@ export default function TradeScreen() {
         </View>
 
         {/* Trade composer — product identity, availability, quote, reservation, expandable details */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+        <View>
           <CoOwnTradeComposer
             imageUri={asset.imageUrl}
             title={asset.title}
@@ -494,13 +503,13 @@ export default function TradeScreen() {
             postTradePreview={postTradePreview}
             rightsVersion={asset.rightsVersion ?? undefined}
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── Unified order ticket ──
             One surface containing: order type, quantity, limit price, duration,
             and market context. Previously these were separate cards forcing the
             user to move between editable fields and the calculated result. */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
+        <View>
           <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {/* Order type */}
             <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Order type</Text>
@@ -641,34 +650,34 @@ export default function TradeScreen() {
               </>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Phase 6: Concierge CTA — shown when the market is thin (no opposite side) */}
         {visibleBook.asks.length === 0 && side === 'buy' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
               onRequestQuote={() => navigation.navigate('HelpSupport')}
               onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
-          </Reanimated.View>
+          </View>
         )}
         {visibleBook.bids.length === 0 && side === 'sell' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
               onRequestQuote={() => navigation.navigate('HelpSupport')}
               onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+        <View>
           <CoOwnRiskDisclosure />
-        </Reanimated.View>
+        </View>
       </KeyboardAwareScrollView>
 
       {/* Sticky action dock — thin-market substitution per spec §05 */}
@@ -707,26 +716,30 @@ export default function TradeScreen() {
           </View>
         )}
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  // ── Content padding — 24pt top for calm breathing room ──
+  // Per spec 11_COOWN: "24pt between sections." The trade surface should
+  // feel calm and deliberate, not cramped.
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
   },
+  // ── Buy/Sell selector — 24pt section spacing after ──
   sideSwitcher: {
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
+  // ── Alert card — calm, professional warning surface ──
+  // Per spec 11_COOWN: "Clean, calm, trustworthy." Alert uses subtle
+  // semantic background, not aggressive red. 24pt section spacing.
   alertCard: {
-    borderRadius: Radius.lg,
-    padding: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    padding: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   alertRow: {
     flexDirection: 'row',
@@ -736,44 +749,60 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
   },
+  // Alert title uses bodyEmphasis (15/21/600) for clear hierarchy.
   alertTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     flexShrink: 1,
     minWidth: 0,
   },
+  // Alert text uses body (14/20/400) for readable explanation.
   alertText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
+  // ── Illustrative banner — calm market status indicator ──
+  // Per spec 11_COOWN: "Calm presentation." Subtle background, not aggressive.
+  // Uses semantic colors (success/warning) only for status truth.
+  // 24pt section spacing after.
   illustrativeBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   illustrativeBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  // ── Unified order ticket ──
+  // ── Unified order ticket — the one dominant panel ──
+  // Per AGENTS.md §4: one dominant non-media panel above the fold.
+  // Per spec 11_COOWN: "One-dimensional decision surface." Calm, clear,
+  // trustworthy. 24pt section spacing. Generous internal padding (24pt).
+  // Hairline border, not heavy chrome.
   ticketCard: {
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.md,
+    padding: Space.lg,
+    gap: Space.md,
+    marginBottom: Space.lg,
   },
+  // ── Ticket divider — hairline separator between sections ──
+  // Per AGENTS.md stroke grammar: separators are hairline.
   ticketDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.xs,
+    marginVertical: Space.sm,
   },
   ticketRow: {
     flexDirection: 'row',
@@ -783,9 +812,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Space.xs,
   },
+  // ── Context column — compact market context beside quantity ──
+  // Per spec 11_COOWN: "Calm, clear, professional." Context values use
+  // Numeric.numericMeta (13/18/600) with tabular-nums for stable alignment.
   ticketContextCol: {
     width: Space.xxl * 2 + Space.xs,
-    gap: Space.xs,
+    gap: Space.sm,
     paddingTop: Space.sm,
   },
   contextItem: {
@@ -793,22 +825,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  // Context labels use captionElevated for quiet hierarchy.
   contextLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide + 0.08,
-    textTransform: 'uppercase',
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
+  // Context values use numericMeta with tabular-nums — per spec 11_COOWN:
+  // "Monetary and unit quantities never change width erratically."
   contextValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Numeric.numericMeta.size,
+    lineHeight: Numeric.numericMeta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: Numeric.numericMeta.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // ── Input labels — captionElevated for quiet, professional hierarchy ──
+  // Per Design.md: "Labels: Type.captionElevated."
   inputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide + 0.08,
-    textTransform: 'uppercase',
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
+  // ── Limit row — label + capped pill ──
   limitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,25 +857,36 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: Space.sm,
   },
+  // Capped pill — semantic truth, not decoration. Shows the order is
+  // price-protected, which is a material fact for the user.
   modePill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     flexShrink: 0,
   },
   modePillText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.wide + 0.28,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Max link — quiet, professional quick-fill action. Tabular-nums.
   maxLink: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     alignSelf: 'flex-start',
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Market hint — calm, professional explanation text.
   marketHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   submitBtn: {
     flex: 1,
@@ -843,30 +895,37 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Space.xs,
   },
+  // ── Submit disabled reason — calm, professional feedback ──
+  // Per spec 11_COOWN: "Financial error never resolves via toast alone."
+  // Shows the reason inline below the button.
   submitDisabledReason: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'center',
   },
   thinMarketDock: {
     width: '100%',
   },
-  // ── Phase 2.5: duration selector ──
+  // ── Duration selector — calm, professional chips ──
+  // Per spec 11_COOWN: "Clean, calm, trustworthy." Selected state uses
+  // colors.brand fill, unselected uses surfaceAlt. Tabular-nums for text.
   durationRow: {
     flexDirection: 'row',
     gap: Space.sm,
   },
   durationChip: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
+    paddingVertical: Space.sm + 2,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
   },
   durationText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

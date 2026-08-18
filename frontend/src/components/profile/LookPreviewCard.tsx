@@ -1,14 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -47,11 +45,9 @@ export function LookPreviewCard({
   index = 0,
 }: LookPreviewCardProps) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="button">
+    <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="none" accessibilityLabel={`Look: ${title} by ${creatorName}`} accessibilityHint="Opens look details">
         {/* Cover */}
         <View style={styles.coverWrap}>
           <CachedImage
@@ -93,17 +89,16 @@ export function LookPreviewCard({
 
         {/* Action bar */}
         <View style={styles.actionBar}>
-          <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton}>
+          <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={`Like ${title}`} accessibilityHint="Likes this look">
             <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.danger : colors.textSecondary} />
             <Text style={styles.actionText}>{likes}</Text>
           </AnimatedPressable>
-          <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton}>
+          <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={saved ? `Unsave ${title}` : `Save ${title}`} accessibilityHint="Saves this look to your closet">
             <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? colors.textPrimary : colors.textSecondary} />
             <Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </AnimatedPressable>
         </View>
       </AnimatedPressable>
-    </Reanimated.View>
   );
 }
 
@@ -164,7 +159,7 @@ function createStyles(colors: ThemeColors) {
   coverMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
   },
   creatorName: {
@@ -187,7 +182,7 @@ function createStyles(colors: ThemeColors) {
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   actionText: {
     fontFamily: Typography.family.medium,

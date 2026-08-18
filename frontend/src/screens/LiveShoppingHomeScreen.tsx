@@ -9,16 +9,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, {
-  FadeIn,
-  FadeInDown,
-  withRepeat,
-  withSequence,
-  withTiming,
-  useSharedValue,
-  useAnimatedStyle,
-  Easing,
-} from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,7 +22,6 @@ import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   fetchLiveSessions,
@@ -49,40 +38,11 @@ const FEATURED_CARD_WIDTH = 240;
 const FEATURED_CARD_HEIGHT = 320;
 const UPCOMING_THUMB_SIZE = 72;
 
-// ── Pulsing live dot ──
+// ── Live dot ──
 function LivePulse({ size = 8, color }: { size?: number; color: string }) {
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.4, { duration: 700, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 700, easing: Easing.in(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 700 }),
-        withTiming(1, { duration: 700 }),
-      ),
-      -1,
-      false,
-    );
-  }, [reducedMotion, scale, opacity]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
   return (
-    <Reanimated.View
-      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, animStyle]}
+    <View
+      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}
     />
   );
 }
@@ -330,7 +290,6 @@ export default function LiveShoppingHomeScreen() {
   const styles = useStyles();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   const { formatFromFiat } = useFormattedPrice();
   const { width } = useWindowDimensions();
 
@@ -459,12 +418,12 @@ export default function LiveShoppingHomeScreen() {
 
         {/* ── Demo mode banner (truthful UI — §11) ── */}
         {LIVE_SHOPPING_DEMO_MODE && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(300)} style={styles.demoBanner}>
+          <View style={styles.demoBanner}>
             <Ionicons name="flask-outline" size={16} color={colors.warning} />
             <Text style={styles.demoBannerText}>
               Demo mode — live streams are simulated. Real video coming soon.
             </Text>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Category filter ── */}
@@ -502,7 +461,7 @@ export default function LiveShoppingHomeScreen() {
             <EmptyState
               icon="cloud-offline-outline"
               title="Couldn't load live sessions"
-              subtitle={error ?? 'Please check your connection and try again.'}
+              subtitle={error ?? 'Check your connection and try again.'}
               ctaLabel="Retry"
               onCtaPress={handleRetry}
             />
@@ -515,7 +474,7 @@ export default function LiveShoppingHomeScreen() {
             <EmptyState
               icon="videocam-outline"
               title="No live sessions right now"
-              subtitle="Check back soon or start your own."
+              subtitle="Check back soon, or start your own session from the Seller Hub."
               ctaLabel="Go to Seller Hub"
               onCtaPress={() => navigation.navigate('MyListings')}
             />
@@ -524,7 +483,7 @@ export default function LiveShoppingHomeScreen() {
 
         {/* ── Populated content ── */}
         {showContent && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(280)} style={{ gap: Space.lg, paddingTop: Space.md }}>
+          <View style={{ gap: Space.lg, paddingTop: Space.md }}>
             {/* Featured live strip */}
             {liveSessions.length > 0 ? (
               <View>
@@ -563,17 +522,13 @@ export default function LiveShoppingHomeScreen() {
                 </View>
                 <View style={{ paddingHorizontal: Space.md, gap: Space.xs }}>
                   {upcomingSessions.map((session, index) => (
-                    <Reanimated.View
+                    <UpcomingRow
                       key={session.id}
-                      entering={reducedMotion ? undefined : FadeInDown.duration(260).delay(index * 50)}
-                    >
-                      <UpcomingRow
-                        session={session}
-                        onNotify={() => handleNotify(session.id)}
-                        notified={notifiedIds.has(session.id)}
-                        formatScheduled={formatScheduled}
-                      />
-                    </Reanimated.View>
+                      session={session}
+                      onNotify={() => handleNotify(session.id)}
+                      notified={notifiedIds.has(session.id)}
+                      formatScheduled={formatScheduled}
+                    />
                   ))}
                 </View>
               </View>
@@ -589,7 +544,7 @@ export default function LiveShoppingHomeScreen() {
                 </Text>
               </View>
             )}
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -676,8 +631,9 @@ function useStyles() {
         },
         sectionCount: {
           fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.semibold,
           color: colors.textMuted,
+          fontVariant: ['tabular-nums'],
         },
         noLiveStrip: {
           flexDirection: 'row',
@@ -752,9 +708,11 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: '#FFFFFF',
           letterSpacing: -0.1,
+          fontVariant: ['tabular-nums'],
         },
         viewerChipTextCompact: {
           fontSize: Type.meta.size - 1,
+          fontVariant: ['tabular-nums'],
         },
         featuredBottomArea: {
           position: 'absolute',
@@ -799,8 +757,8 @@ function useStyles() {
           fontSize: Type.bodyLarge.size,
           fontFamily: Typography.family.bold,
           color: '#FFFFFF',
-          letterSpacing: Type.priceList.letterSpacing,
-          lineHeight: Type.bodyLarge.size + 5,
+          letterSpacing: Type.bodyLarge.letterSpacing,
+          lineHeight: Type.bodyLarge.lineHeight,
         },
         featuredBidRow: {
           flexDirection: 'row',
@@ -809,16 +767,20 @@ function useStyles() {
           marginTop: Space.xs / 2,
         },
         featuredBidLabel: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
+          fontSize: Type.metaElevated.size,
+          lineHeight: Type.metaElevated.lineHeight,
+          fontFamily: Typography.family.semibold,
           color: 'rgba(255,255,255,0.7)',
-          letterSpacing: 0.2,
+          letterSpacing: Type.metaElevated.letterSpacing,
+          textTransform: 'uppercase',
         },
         featuredBidValue: {
-          fontSize: Type.bodyLarge.size,
+          fontSize: Type.priceList.size,
+          lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
           color: '#FFFFFF',
-          letterSpacing: Type.bodyLarge.letterSpacing,
+          letterSpacing: Type.priceList.letterSpacing,
+          fontVariant: ['tabular-nums'],
         },
         // Upcoming row
         upcomingRow: {
@@ -861,6 +823,7 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.brand,
           letterSpacing: -0.1,
+          fontVariant: ['tabular-nums'],
         },
         upcomingSellerRow: {
           flexDirection: 'row',
@@ -877,8 +840,8 @@ function useStyles() {
           fontSize: Type.bodyEmphasis.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-          lineHeight: Type.bodyEmphasis.size + 4,
+          letterSpacing: Type.bodyEmphasis.letterSpacing,
+          lineHeight: Type.bodyEmphasis.lineHeight,
         },
         upcomingMetaRow: {
           flexDirection: 'row',
@@ -888,15 +851,16 @@ function useStyles() {
         },
         upcomingMetaText: {
           fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.medium,
           color: colors.textMuted,
           letterSpacing: Type.captionElevated.letterSpacing,
+          fontVariant: ['tabular-nums'],
         },
         notifyBtn: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs / 2 + 1,
-          paddingHorizontal: Space.sm + 4,
+          paddingHorizontal: Space.smMd,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
           borderWidth: Stroke.standard,
@@ -925,8 +889,9 @@ function useStyles() {
         },
         endedHintText: {
           fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.medium,
           color: colors.textMuted,
+          fontVariant: ['tabular-nums'],
         },
       }),
     [colors],

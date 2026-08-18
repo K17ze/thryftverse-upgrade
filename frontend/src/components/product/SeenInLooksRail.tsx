@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,13 +19,52 @@ export interface SeenInLooksRailProps {
 export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRailProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible look cards on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderLookItem = useCallback(
+    ({ item }: { item: RecommendationLook }) => (
+      <AnimatedPressable
+        style={styles.lookCard}
+        onPress={() => onPressItem(item)}
+        {...PressPresets.card}
+        accessibilityLabel={`Look: ${item.title}`}
+        accessibilityRole="button"
+      >
+        <View style={styles.lookImageWrap}>
+          {item.coverImage ? (
+            <CachedImage
+              uri={item.coverImage}
+              style={styles.lookImage}
+              containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
+              contentFit="cover"
+              downscaleWidth={160}
+            />
+          ) : (
+            <View style={styles.lookImageFallback} />
+          )}
+        </View>
+        <Text style={styles.lookTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        {item.creatorUsername ? (
+          <Text style={styles.lookCreator} numberOfLines={1}>
+            @{item.creatorUsername}
+          </Text>
+        ) : null}
+      </AnimatedPressable>
+    ),
+    [styles, onPressItem],
+  );
+
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="sparkles" size={16} color={colors.textMuted} />
+          <Ionicons name="eye-outline" size={16} color={colors.textMuted} />
           <Text style={styles.title}>Seen in Looks</Text>
         </View>
         {onSeeAll && items.length > 2 ? (
@@ -50,36 +89,7 @@ export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRai
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <AnimatedPressable
-            style={styles.lookCard}
-            onPress={() => onPressItem(item)}
-            {...PressPresets.card}
-            accessibilityLabel={`Look: ${item.title}`}
-            accessibilityRole="button"
-          >
-            <View style={styles.lookImageWrap}>
-              {item.coverImage ? (
-                <CachedImage
-                  uri={item.coverImage}
-                  style={styles.lookImage}
-                  containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.lookImageFallback} />
-              )}
-            </View>
-            <Text style={styles.lookTitle} numberOfLines={1}>
-              {item.title}
-            </Text>
-            {item.creatorUsername ? (
-              <Text style={styles.lookCreator} numberOfLines={1}>
-                @{item.creatorUsername}
-              </Text>
-            ) : null}
-          </AnimatedPressable>
-        )}
+        renderItem={renderLookItem}
         ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
       />
     </View>

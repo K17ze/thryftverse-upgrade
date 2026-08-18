@@ -64,7 +64,7 @@ export function ProfileCompletenessIndicator({
 
   return (
     <Pressable
-      style={styles.container}
+      style={({ pressed }) => [styles.container, pressed && { opacity: 0.6 }]}
       onPress={onCompleteProfile}
       disabled={!onCompleteProfile}
       accessibilityRole={onCompleteProfile ? 'button' : undefined}

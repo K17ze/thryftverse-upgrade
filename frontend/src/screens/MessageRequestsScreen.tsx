@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
@@ -13,17 +14,20 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
-import { Caption, BodyEmphasis } from '../components/ui/Text';
+import { Caption } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { blockUser } from '../services/profileApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+
+type PendingAction = 'accept' | 'delete' | 'block' | null;
 
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
@@ -39,7 +43,8 @@ export default function MessageRequestsScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
@@ -47,26 +52,55 @@ export default function MessageRequestsScreen() {
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const handleAccept = (id: string) => {
-    haptic.medium();
-    acceptMessageRequest(id);
-    show('Request accepted', 'success');
-    navigation.navigate('Chat', { conversationId: id });
+  const { listings } = useBackendData();
+
+  const resolveCounterpartyId = (id: string): string | undefined => {
+    const convo = conversations.find((c) => c.id === id);
+    return convo?.participantIds?.find(
+      (pid) => pid !== 'me' && pid !== currentUser?.id
+    );
   };
 
-  const handleDecline = (id: string) => {
+  const handleAccept = (id: string) => {
+    if (pendingId) return;
+    haptic.medium();
+    setPendingId(id);
+    setPendingAction('accept');
+    try {
+      acceptMessageRequest(id);
+      show('Request accepted', 'success');
+      navigation.navigate('Chat', { conversationId: id });
+    } catch {
+      show('Could not accept this request. Try again.', 'error');
+    } finally {
+      setPendingId(null);
+      setPendingAction(null);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    if (pendingId) return;
     Alert.alert(
-      'Decline request?',
-      'This person will not be able to message you.',
+      'Delete request?',
+      'This removes the request. They can still send another message later.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Decline',
+          text: 'Delete',
           style: 'destructive',
           onPress: () => {
             haptic.heavy();
-            declineMessageRequest(id);
-            show('Request declined', 'info');
+            setPendingId(id);
+            setPendingAction('delete');
+            try {
+              declineMessageRequest(id);
+              show('Request deleted', 'info');
+            } catch {
+              show('Could not delete this request. Try again.', 'error');
+            } finally {
+              setPendingId(null);
+              setPendingAction(null);
+            }
           },
         },
       ]
@@ -74,24 +108,33 @@ export default function MessageRequestsScreen() {
   };
 
   const handleBlock = (id: string, name: string) => {
+    if (pendingId) return;
     Alert.alert(
       `Block ${name}?`,
-      'They will not be able to message you or see your profile.',
+      'They will not be able to message you or see your profile. The request will be removed.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Block',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            declineMessageRequest(id);
-            const counterpartyId = conversations.find((c) => c.id === id)?.participantIds?.find(
-              (pid) => pid !== 'me' && pid !== currentUser?.id
-            );
-            if (counterpartyId) {
-              toggleBlockedUser(counterpartyId);
+            setPendingId(id);
+            setPendingAction('block');
+            const counterpartyId = resolveCounterpartyId(id);
+            try {
+              if (counterpartyId) {
+                await blockUser(counterpartyId);
+                toggleBlockedUser(counterpartyId);
+              }
+              declineMessageRequest(id);
+              show(`${name} blocked`, 'info');
+            } catch {
+              show('Could not block this account. Check your connection and try again.', 'error');
+            } finally {
+              setPendingId(null);
+              setPendingAction(null);
             }
-            show(`${name} blocked`, 'info');
           },
         },
       ]
@@ -99,57 +142,74 @@ export default function MessageRequestsScreen() {
   };
 
   const handleReport = (id: string, name: string) => {
-    Alert.alert(
-      `Report ${name}?`,
-      'Report this user for suspicious or inappropriate behaviour. They will be declined automatically.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: () => {
-            haptic.heavy();
-            declineMessageRequest(id);
-            show('Report submitted. Request declined.', 'info');
-          },
-        },
-      ]
-    );
+    if (pendingId) return;
+    haptic.light();
+    const counterpartyId = resolveCounterpartyId(id);
+    if (!counterpartyId) {
+      show('This account cannot be reported here.', 'error');
+      return;
+    }
+    navigation.navigate('Report', { type: 'user', targetId: counterpartyId });
   };
 
-  const { listings } = useBackendData();
-
-  const renderItem = ({ item, index }: { item: typeof requestConversations[0]; index: number }) => {
-    const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-    const displayTitle = item.title ?? 'Thryft user';
-    const avatarUri = item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
+  const renderItem = ({ item }: { item: typeof requestConversations[0] }) => {
+    const counterpartyId = item.participantIds?.find(
+      (id) => id !== 'me' && id !== currentUser?.id
+    );
+    const counterpartyProfile = counterpartyId
+      ? item.participantProfiles?.find((p) => p.id === counterpartyId)
+      : undefined;
+    const displayTitle = item.title ?? counterpartyProfile?.displayName ?? 'Thryft user';
+    const username = counterpartyProfile?.username;
+    const avatarUri =
+      item.avatar ??
+      (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined);
     const listing = item.itemId ? listings.find((l) => l.id === item.itemId) : undefined;
+    const isPending = pendingId === item.id;
+
+    const renderActionContent = (action: PendingAction, label: string) =>
+      isPending && pendingAction === action ? (
+        <ActivityIndicator size="small" color={action === 'accept' ? colors.textInverse : colors.textPrimary} />
+      ) : (
+        <Text
+          style={[
+            action === 'accept' ? styles.requestAcceptText : styles.requestDeclineText,
+            isPending && styles.actionDisabled,
+          ]}
+        >
+          {label}
+        </Text>
+      );
 
     return (
       <View>
         <View style={styles.requestRow}>
-          {/* Identity section */}
+          {/* Identity */}
           <View style={styles.requestIdentity}>
             <AvatarRing
               uri={avatarUri}
-              size={56}
+              size={52}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
             <View style={styles.requestText}>
-              <View style={styles.requestTop}>
-                <BodyEmphasis numberOfLines={1} style={styles.requestName}>{displayTitle}</BodyEmphasis>
-                {item.lastMessageTime && (
-                  <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
-                )}
-              </View>
-              <Caption color={colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
+              <BodyEmphasisLine
+                title={displayTitle}
+                time={item.lastMessageTime}
+                colors={colors}
+              />
+              {username ? (
+                <Caption color={colors.textMuted} numberOfLines={1} style={styles.requestHandle}>
+                  @{username}
+                </Caption>
+              ) : null}
+              <Caption color={colors.textSecondary} numberOfLines={1} style={styles.requestPreview}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
             </View>
           </View>
 
-          {/* Listing context card */}
+          {/* Listing context */}
           {listing && (
             <View style={styles.listingCard}>
               {listing.images?.[0] ? (
@@ -162,105 +222,83 @@ export default function MessageRequestsScreen() {
               <View style={styles.listingInfo}>
                 <Caption color={colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
                 {listing.price != null && (
-                  <Text style={styles.listingPrice}>
-                    £{listing.price.toFixed(2)}
-                  </Text>
+                  <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
                 )}
               </View>
               <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </View>
           )}
 
-          {/* Safety note — only for non-marketplace requests */}
+          {/* Safety note for non-marketplace requests */}
           {!listing && (
             <View style={styles.safetyNote}>
               <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
               <Text style={styles.safetyNoteText}>
-                If this seems suspicious, decline and block.
+                If this seems suspicious, delete and block.
               </Text>
             </View>
           )}
 
-          {/* Actions */}
+          {/* Primary actions */}
           <View style={styles.requestActions}>
             <AnimatedPressable
               style={styles.requestDecline}
-              onPress={() => handleDecline(item.id)}
+              onPress={() => handleDelete(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
+              disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Decline message request"
+              accessibilityLabel="Delete message request"
+              accessibilityState={{ busy: isPending && pendingAction === 'delete', disabled: isPending }}
             >
-              <Text style={styles.requestDeclineText}>Decline</Text>
+              {renderActionContent('delete', 'Delete')}
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.requestAccept}
+              style={[styles.requestAccept, isPending && pendingAction !== 'accept' && styles.actionDisabledBg]}
               onPress={() => handleAccept(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="medium"
+              disabled={isPending}
               accessibilityRole="button"
               accessibilityLabel="Accept message request"
+              accessibilityState={{ busy: isPending && pendingAction === 'accept', disabled: isPending }}
             >
-              <Text style={styles.requestAcceptText}>Accept</Text>
+              {renderActionContent('accept', 'Accept')}
             </AnimatedPressable>
           </View>
 
-          {/* Progressive disclosure: expanded actions */}
-          {expandedId === item.id ? (
-            <View style={styles.expandedActions}>
-              <AnimatedPressable
-                onPress={() => handleBlock(item.id, displayTitle)}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="medium"
-                accessibilityRole="button"
-                accessibilityLabel={`Block ${displayTitle}`}
-                style={styles.expandedBtn}
-              >
-                <Ionicons name="ban-outline" size={14} color={colors.danger} />
-                <Text style={styles.expandedBtnTextDanger}>Block</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => handleReport(item.id, displayTitle)}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="medium"
-                accessibilityRole="button"
-                accessibilityLabel={`Report ${displayTitle}`}
-                style={styles.expandedBtn}
-              >
-                <Ionicons name="flag-outline" size={14} color={colors.danger} />
-                <Text style={styles.expandedBtnTextDanger}>Report</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => setExpandedId(null)}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel="Hide options"
-                style={styles.expandedBtn}
-              >
-                <Ionicons name="chevron-up-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.expandedBtnTextMuted}>Less</Text>
-              </AnimatedPressable>
-            </View>
-          ) : (
+          {/* Secondary actions: Block + Report */}
+          <View style={styles.secondaryActions}>
             <AnimatedPressable
-              onPress={() => setExpandedId(item.id)}
+              onPress={() => handleBlock(item.id, displayTitle)}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="medium"
+              disabled={isPending}
+              accessibilityRole="button"
+              accessibilityLabel={`Block ${displayTitle}`}
+              accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
+              style={styles.secondaryBtn}
+            >
+              <Ionicons name="ban-outline" size={14} color={colors.danger} />
+              <Text style={styles.secondaryBtnTextDanger}>Block</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={() => handleReport(item.id, displayTitle)}
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
+              disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Show more options"
-              style={styles.moreBtn}
+              accessibilityLabel={`Report ${displayTitle}`}
+              style={styles.secondaryBtn}
             >
-              <Text style={styles.moreBtnText}>Block or report</Text>
-              <Ionicons name="chevron-down-outline" size={12} color={colors.textMuted} />
+              <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.secondaryBtnText}>Report</Text>
             </AnimatedPressable>
-          )}
+          </View>
         </View>
         <View style={styles.requestSeparator} />
       </View>
@@ -282,11 +320,11 @@ export default function MessageRequestsScreen() {
           <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Requests</Text>
+          <Text style={styles.headerTitle}>Message requests</Text>
           <Text style={styles.headerSubtitle}>
             {requestConversations.length > 0
               ? `${requestConversations.length} pending · Accept to chat`
-              : 'People you don\'t follow'}
+              : "People you don't follow"}
           </Text>
         </View>
         <View style={styles.backBtn} />
@@ -294,8 +332,8 @@ export default function MessageRequestsScreen() {
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
-          title="No requests"
-          subtitle="When someone new messages you, they will appear here."
+          title="No message requests"
+          subtitle="When someone you don't follow sends you a message, it will appear here for you to review."
           ctaLabel="Back to Inbox"
           onCtaPress={() => navigation.goBack()}
         />
@@ -311,6 +349,50 @@ export default function MessageRequestsScreen() {
     </SafeAreaView>
   );
 }
+
+function BodyEmphasisLine({
+  title,
+  time,
+  colors,
+}: {
+  title: string;
+  time?: string;
+  colors: ThemeColors;
+}) {
+  return (
+    <View style={styles$inline.requestTop}>
+      <Text
+        numberOfLines={1}
+        style={styles$inline.requestName}
+      >
+        {title}
+      </Text>
+      {time ? (
+        <Text style={[styles$inline.requestTime, { color: colors.textMuted }]}>{time}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const styles$inline = StyleSheet.create({
+  requestTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  requestName: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: undefined,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  requestTime: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
+  },
+});
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -328,8 +410,8 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     backBtn: {
-      width: Space.xl + Space.xs + 4,
-      height: Space.xl + Space.xs + 4,
+      width: Control.hit,
+      height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -356,27 +438,21 @@ function createStyles(colors: ThemeColors) {
     },
     requestRow: {
       paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
+      paddingHorizontal: Space.sm,
       gap: Space.sm,
     },
     requestIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.sm + 6,
+      gap: Space.sm + 4,
     },
     requestText: {
       flex: 1,
       justifyContent: 'center',
       gap: Space.xs / 2,
     },
-    requestTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: Space.sm,
-    },
-    requestName: {
-      flex: 1,
+    requestHandle: {
+      marginTop: -Space.xs / 2,
     },
     requestPreview: {
       lineHeight: Type.caption.lineHeight + 2,
@@ -436,7 +512,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.xs + 3,
+      minHeight: Control.hit,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
@@ -451,7 +527,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.xs + 3,
+      minHeight: Control.hit,
       borderRadius: Radius.md,
       backgroundColor: colors.textPrimary,
     },
@@ -460,50 +536,43 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textInverse,
     },
-    requestSeparator: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginLeft: Space.md,
-      marginRight: Space.md,
+    actionDisabled: {
+      opacity: 0.4,
     },
-    expandedActions: {
+    actionDisabledBg: {
+      opacity: 0.5,
+    },
+    secondaryActions: {
       flexDirection: 'row',
       gap: Space.sm,
-      paddingTop: Space.xs,
     },
-    expandedBtn: {
+    secondaryBtn: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs + 2,
-      paddingVertical: Space.xs + 2,
+      minHeight: Control.hit,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
-    expandedBtnTextDanger: {
+    secondaryBtnTextDanger: {
       fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.danger,
     },
-    expandedBtnTextMuted: {
+    secondaryBtnText: {
       fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textMuted,
+      color: colors.textSecondary,
     },
-    moreBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm,
-    },
-    moreBtnText: {
-      fontSize: Type.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
+    requestSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginLeft: Space.md,
+      marginRight: Space.md,
     },
   });
 }

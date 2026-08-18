@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
@@ -10,7 +9,6 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
 import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -40,7 +38,6 @@ export default function PersonalisationScreen() {
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const handleSelectGender = useCallback(
     (gender: string) => {
@@ -161,11 +158,11 @@ export default function PersonalisationScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — personalisation status */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="sparkles" size={18} color={colors.textInverse} />
+                <Ionicons name="options-outline" size={18} color={colors.textInverse} />
               </View>
               <View style={styles.heroText}>
                 <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
@@ -181,19 +178,19 @@ export default function PersonalisationScreen() {
               </View>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Visual shopping-audience selection */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.section}>
+        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Shop for</Text>
           <AudiencePreferenceGrid
             selectedGenders={genderFilter}
             onSelect={handleSelectGender}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Discovery preference rows */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Discovery preferences</Text>
           <View style={styles.discoveryGroup}>
             <DiscoveryPreferenceRow
@@ -219,10 +216,10 @@ export default function PersonalisationScreen() {
               isLast
             />
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Optional reset action */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <View>
           <Pressable
             style={styles.resetBtn}
             onPress={handleReset}
@@ -233,7 +230,7 @@ export default function PersonalisationScreen() {
             <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>Reset preferences</Text>
           </Pressable>
-        </Reanimated.View>
+        </View>
       </ScrollView>
 
       {/* 7. BottomSheetPicker */}

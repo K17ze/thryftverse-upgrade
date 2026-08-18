@@ -20,7 +20,6 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -35,7 +34,6 @@ import {
   createBuyerProtectionClaim,
   type BuyerProtectionInfo,
 } from '../services/commerceApi';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BuyerProtection'>;
 
@@ -55,7 +53,6 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const reducedMotionEnabled = useReducedMotion();
   const { orderId } = route.params;
 
   const [protection, setProtection] = React.useState<BuyerProtectionInfo | null>(null);
@@ -94,11 +91,11 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
   const handleSubmitClaim = async () => {
     if (reason.trim().length < 2) {
-      show('Please enter a reason', 'error');
+      show('Enter a reason', 'error');
       return;
     }
     if (description.trim().length < 10) {
-      show('Please describe the issue (at least 10 characters)', 'error');
+      show('Describe the issue (at least 10 characters)', 'error');
       return;
     }
 
@@ -170,11 +167,10 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Coverage summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: isCovered ? colors.success + '40' : colors.border }]}>
             <View style={styles.coverageHeader}>
               <View style={[styles.coverageIcon, { backgroundColor: isCovered ? colors.success + '15' : colors.surfaceAlt }]}>
-                <Ionicons name="shield-checkmark" size={24} color={isCovered ? colors.success : colors.textMuted} />
+                <Ionicons name="checkmark-circle" size={24} color={isCovered ? colors.success : colors.textMuted} />
               </View>
               <View style={styles.coverageHeaderText}>
                 <Text style={styles.coverageTitle}>
@@ -203,10 +199,8 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
               </View>
             )}
           </View>
-        </Reanimated.View>
 
         {/* What's covered */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.sectionTitle}>What's covered</Text>
             <View style={styles.coverageList}>
@@ -228,11 +222,9 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
 
         {/* Claims history */}
         {protection && protection.claims.length > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={styles.sectionTitle}>Claims history</Text>
               {protection.claims.map((claim, idx) => (
@@ -250,12 +242,11 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 </View>
               ))}
             </View>
-          </Reanimated.View>
         )}
 
         {/* Claim form */}
         {isCovered && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <>
             {!showClaimForm ? (
               <AppButton
                 title="File a claim"
@@ -316,7 +307,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 </View>
               </View>
             )}
-          </Reanimated.View>
+          </>
         )}
 
         <View style={{ height: 40 }} />

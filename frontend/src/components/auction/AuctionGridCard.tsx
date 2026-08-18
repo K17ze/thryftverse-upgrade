@@ -27,6 +27,12 @@ interface Props {
   cardWidth?: number;
   /** Price label for accessibility only */
   priceLabel?: string;
+  /**
+   * TestID for Maestro/automation semantic selectors. When provided,
+   * passes through to the underlying Pressable so Maestro flows can
+   * tapOn by id instead of brittle coordinate taps (P0.6).
+   */
+  testID?: string;
 }
 
 export function AuctionGridCard({
@@ -44,6 +50,7 @@ export function AuctionGridCard({
   onPress,
   cardWidth,
   priceLabel,
+  testID,
 }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -62,7 +69,8 @@ export function AuctionGridCard({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}, ${bidCount} bids`}
+      accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}${bidCount > 0 ? `, ${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}` : ''}`}
+      testID={testID}
     >
       <View style={styles.imageWrap}>
         <CachedImage
@@ -98,7 +106,9 @@ export function AuctionGridCard({
         />
         <View style={styles.metaRow}>
           <AuctionCountdown text={countdownText} urgent={urgent} compact />
-          <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+          {bidCount > 0 && (
+            <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+          )}
         </View>
       </View>
     </AnimatedPressable>
@@ -133,7 +143,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     backgroundColor: colors.danger,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.35)',
+    borderColor: colors.overlay,
   },
   personalMarker: {
     position: 'absolute',
@@ -143,13 +153,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: `${colors.border}40`,
   },
   personalMarkerOutbid: {
-    backgroundColor: 'rgba(220,38,38,0.92)',
+    backgroundColor: colors.danger,
   },
   personalMarkerLeading: {
-    backgroundColor: 'rgba(22,163,74,0.92)',
+    backgroundColor: colors.success,
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
@@ -184,6 +194,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
 });
 

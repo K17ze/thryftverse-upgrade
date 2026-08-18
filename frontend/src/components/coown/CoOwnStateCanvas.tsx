@@ -38,7 +38,7 @@ export interface CoOwnStateCanvasProps {
 
 const DEFAULTS: Record<CoOwnStateVariant, { title: string; subtitle: string; icon: string; graphic: 'bag' | 'box' | 'search' | 'chat' | 'image' }> = {
   loading: { title: 'Loading', subtitle: 'Preparing the marketplace…', icon: 'sync-outline', graphic: 'bag' },
-  empty: { title: 'Nothing here yet', subtitle: 'When items appear, you will find them here.', icon: 'cube-outline', graphic: 'bag' },
+  empty: { title: 'Nothing here yet', subtitle: 'When items appear, you\'ll find them here.', icon: 'cube-outline', graphic: 'bag' },
   error: { title: 'Could not load', subtitle: 'Tap below to try again.', icon: 'alert-circle-outline', graphic: 'box' },
   offline: { title: 'You are offline', subtitle: 'Check your connection and try again.', icon: 'cloud-offline-outline', graphic: 'search' },
   unavailable: { title: 'Not available', subtitle: 'This feature is not available right now.', icon: 'lock-closed-outline', graphic: 'image' },
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
   },
   primaryBtnText: {
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
     borderWidth: 1,
   },

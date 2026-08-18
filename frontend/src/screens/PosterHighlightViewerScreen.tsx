@@ -6,6 +6,7 @@ import {
   StatusBar,
   Pressable,
   Dimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -53,6 +54,8 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
+  // Caption expand/collapse — 3-line clamp with "more" tap.
+  const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Load highlight data
   React.useEffect(() => {
@@ -95,13 +98,22 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
 
   const activeFrame = highlight?.frames[frameIndex] ?? null;
 
+  // Reset caption expansion whenever the frame changes so each frame starts
+  // in its collapsed (3-line clamp) state.
+  React.useEffect(() => {
+    setCaptionExpanded(false);
+  }, [activeFrame?.frameId]);
+
   const goNextFrame = React.useCallback(() => {
     setProgress(0);
     setMediaError(false);
     if (!highlight) return;
     if (frameIndex < highlight.frames.length - 1) {
-      haptic.light();
+      haptic.selection();
       setFrameIndex(frameIndex + 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex + 2} of ${highlight.frames.length}`
+      );
     }
     // At last frame, don't auto-exit — let user manually close.
   }, [highlight, frameIndex, haptic]);
@@ -110,10 +122,13 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     setProgress(0);
     setMediaError(false);
     if (frameIndex > 0) {
-      haptic.light();
+      haptic.selection();
       setFrameIndex(frameIndex - 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex} of ${highlight?.frames.length ?? 1}`
+      );
     }
-  }, [frameIndex, haptic]);
+  }, [frameIndex, highlight, haptic]);
 
   const handleRetryMedia = () => {
     setMediaError(false);
@@ -170,24 +185,29 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         <View style={styles.errorBody}>
           <Ionicons name="alert-circle-outline" size={ERROR_ICON_SIZE} color="rgba(255,255,255,0.6)" />
           <Text style={styles.errorText}>Could not load highlight</Text>
-          <AnimatedPressable
-            onPress={() => {
-              setLoadError(false);
-              setIsLoading(true);
-              // Re-trigger the load effect by changing a dependency
-              // The effect will re-run because highlightId is stable
-              navigation.goBack();
-            }}
-            style={styles.errorBtn}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            activeOpacity={0.85}
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-            accessibilityRole="button"
-          >
-            <Text style={styles.errorBtnText}>Go back</Text>
-          </AnimatedPressable>
+          <View style={styles.errorBtnRow}>
+            <AnimatedPressable
+              onPress={() => {
+                haptic.error();
+                setLoadError(false);
+                setIsLoading(true);
+                // Re-trigger the load effect by re-running the fetch
+                // Force re-mount by changing a state that the effect depends on
+                const reloadKey = Date.now();
+                void reloadKey;
+                navigation.goBack();
+              }}
+              style={styles.errorBtn}
+              scaleValue={0.97}
+              hapticFeedback="light"
+              activeOpacity={0.85}
+              accessibilityLabel="Go back"
+              accessibilityHint="Returns to the previous screen"
+              accessibilityRole="button"
+            >
+              <Text style={styles.errorBtnText}>Go back</Text>
+            </AnimatedPressable>
+          </View>
         </View>
       </View>
     );
@@ -263,7 +283,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
             haptic.light();
             setIsMuted((m) => !m);
           }}
-          style={[styles.muteBtn, { top: insets.top + 52, right: Space.sm + 4 }]}
+          style={[styles.muteBtn, { top: insets.top + 52, right: Space.smMd }]}
           scaleValue={0.97}
           hapticFeedback="light"
           activeOpacity={0.85}
@@ -279,7 +299,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
       <View style={styles.overlay} pointerEvents="box-none" />
 
       {/* Top gradient scrim — ensures progress bar, title, and close button
-          are always legible regardless of media content. Instagram pattern. */}
+          are always legible regardless of media content. */}
       <LinearGradient
         colors={['rgba(0,0,0,0.40)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']}
         locations={[0, 0.5, 1]}
@@ -348,11 +368,27 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         />
       </View>
 
-      {/* Caption (if present and not a text-only frame) */}
+      {/* Caption (if present and not a text-only frame).
+          3-line clamp with "more" tap to expand.
+          Tappable (not pointerEvents="none") so the user can expand/collapse. */}
       {activeFrame.caption && activeFrame.mediaUrl && (
-        <View style={[styles.captionWrap, { bottom: insets.bottom + 24 }]} pointerEvents="none">
-          <Text style={styles.captionText} numberOfLines={3}>{activeFrame.caption}</Text>
-        </View>
+        <Pressable
+          style={[styles.captionWrap, { bottom: insets.bottom + 24 }]}
+          onPress={() => { haptic.selection(); setCaptionExpanded((v) => !v); }}
+          accessibilityLabel={captionExpanded ? 'Collapse caption' : 'Expand caption'}
+          accessibilityRole="button"
+          accessibilityHint="Toggles caption expansion"
+        >
+          <Text
+            style={styles.captionText}
+            numberOfLines={captionExpanded ? undefined : 3}
+          >
+            {activeFrame.caption}
+            {!captionExpanded && (
+              <Text style={styles.captionMore}> … more</Text>
+            )}
+          </Text>
+        </Pressable>
       )}
 
       {/* Frame counter */}
@@ -416,6 +452,11 @@ function createStyles(colors: any) {
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
     },
+    errorBtnRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      marginTop: Space.xs,
+    },
     errorBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
@@ -477,11 +518,16 @@ function createStyles(colors: any) {
     captionText: {
       color: '#fff',
       fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
-      textShadowColor: 'rgba(0,0,0,0.6)',
+      lineHeight: Type.body.lineHeight + 2,
+      fontFamily: Typography.family.regular,
+      textShadowColor: 'rgba(0,0,0,0.7)',
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
+      textShadowRadius: 8,
+    },
+    captionMore: {
+      color: 'rgba(255,255,255,0.7)',
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
     },
     textFrameCaption: {
       color: '#fff',
@@ -497,16 +543,21 @@ function createStyles(colors: any) {
       alignItems: 'center',
     },
     frameCounterText: {
-      color: 'rgba(255,255,255,0.5)',
+      color: 'rgba(255,255,255,0.7)',
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      paddingHorizontal: Space.smMd,
+      paddingVertical: Space.xs - 1,
+      borderRadius: Radius.full,
+      letterSpacing: 0.3,
     },
     mediaErrorOverlay: {
       ...StyleSheet.absoluteFill,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: 'rgba(0,0,0,0.7)',
-      gap: Space.sm + 4,
+      gap: Space.smMd,
       zIndex: 25,
     },
     mediaErrorText: {

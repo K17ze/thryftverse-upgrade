@@ -81,7 +81,7 @@ export default function LoginScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !password) {
-      setErrorMsg('Please fill in both email and password.');
+      setErrorMsg('Fill in both email and password.');
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');
       setInfoMsg('');
@@ -284,7 +284,7 @@ export default function LoginScreen() {
             accessibilityLabel="Go back"
             accessibilityHint="Returns to the previous screen"
           >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.backBtnSpacer} />
@@ -299,8 +299,21 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Log in to continue buying, selling, and trading.</Text>
+            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Welcome back</Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Log in to continue buying, selling, and trading.</Text>
+
+            {/* Trust reassurance — calm, reflective-level signal (§27.7).
+                A small lock icon + line communicates security without
+                overwhelming the form. Shown only when no 2FA challenge
+                is active to avoid visual noise during recovery. */}
+            {!requiresTwoFactor && !otpChallengeId && (
+              <View style={styles.trustReassure}>
+                <Ionicons name="lock-closed-outline" size={13} color={colors.textMuted} />
+                <Text style={styles.trustReassureText} maxFontSizeMultiplier={1.3}>
+                  Your login is encrypted and secure
+                </Text>
+              </View>
+            )}
 
             <View style={styles.form}>
               <AppInput
@@ -336,6 +349,12 @@ export default function LoginScreen() {
 
               {requiresTwoFactor && (
                 <View style={styles.twoFactorGroup}>
+                  <View style={styles.twoFactorHeader}>
+                    <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+                      <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                    </View>
+                    <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
+                  </View>
                   <AppInput
                     label="Authenticator code"
                     placeholder="123456"
@@ -352,7 +371,9 @@ export default function LoginScreen() {
                     }}
                   />
 
-                  <Text style={styles.twoFactorHint}>If you lost access, use a recovery code below.</Text>
+                  <Text style={styles.twoFactorHint} maxFontSizeMultiplier={1.3}>
+                    Lost access? Use a recovery code below instead.
+                  </Text>
 
                   <AppInput
                     label="Recovery code (optional)"
@@ -402,12 +423,12 @@ export default function LoginScreen() {
                 accessibilityLabel="Forgot password"
                 accessibilityHint="Opens password recovery flow"
               >
-                <Text style={styles.forgotText}>Forgot password?</Text>
+                <Text style={styles.forgotText} maxFontSizeMultiplier={1.3}>Forgot password?</Text>
               </AnimatedPressable>
 
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
+                <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>or</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -476,6 +497,7 @@ export default function LoginScreen() {
                 layout={layoutAnimation}
                 style={styles.infoText}
                 accessibilityLiveRegion="polite"
+                maxFontSizeMultiplier={1.4}
               >
                 {infoMsg}
               </Reanimated.Text>
@@ -488,6 +510,7 @@ export default function LoginScreen() {
                 layout={layoutAnimation}
                 style={styles.errorText}
                 accessibilityLiveRegion="assertive"
+                maxFontSizeMultiplier={1.4}
               >
                 {errorMsg}
               </Reanimated.Text>
@@ -509,7 +532,7 @@ export default function LoginScreen() {
             </Reanimated.View>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchText}>New to Thryftverse?</Text>
+              <Text style={styles.switchText} maxFontSizeMultiplier={1.3}>New to Thryftverse?</Text>
               <AnimatedPressable
                 onPress={() => navigation.navigate('SignUp')}
                 activeOpacity={0.8}
@@ -517,7 +540,7 @@ export default function LoginScreen() {
                 accessibilityLabel="Create account"
                 accessibilityHint="Opens the sign-up screen"
               >
-                <Text style={styles.switchLink}>Create account</Text>
+                <Text style={styles.switchLink} maxFontSizeMultiplier={1.3}>Create account</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -530,7 +553,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xs },
-  backBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: Stroke.standard, borderColor: colors.border },
+  backBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.xxl, alignItems: 'center', justifyContent: 'center' },
   backBtnSpacer: { width: Control.hit, height: Control.hit },
 
   keyboardWrap: { flex: 1 },
@@ -542,8 +565,20 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
-  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
+  title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.md },
+  trustReassure: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.lg,
+  },
+  trustReassureText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+    letterSpacing: 0.1,
+  },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
@@ -552,7 +587,7 @@ function createStyles(colors: ThemeColors) {
   forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   dividerRow: {
     marginTop: Space.md + 2,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
@@ -589,6 +624,25 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
     gap: Space.sm,
   },
+  twoFactorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    marginBottom: Space.xs,
+  },
+  twoFactorIcon: {
+    width: Control.chrome,
+    height: Control.chrome,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoFactorTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
   twoFactorHint: {
     color: colors.textMuted,
     fontSize: Type.caption.size,
@@ -623,9 +677,9 @@ function createStyles(colors: ThemeColors) {
   footer: { paddingTop: Space.sm, position: 'relative' },
   infoText: { color: colors.success, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: colors.textPrimary, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
+  primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+  primaryText: { color: colors.textInverse, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
     marginTop: Space.sm + 6,
     flexDirection: 'row',

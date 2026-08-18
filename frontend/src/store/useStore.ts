@@ -3,9 +3,10 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
-import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
+import type { ChatBot, Conversation, Message as ConversationMessage } from '../domain';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
 import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
@@ -57,6 +58,16 @@ export interface User {
   isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * Quick reply — a reusable message with a separate shortcut title.
+ * The title is shown as the chip label; the message is inserted into the composer.
+ */
+export interface QuickReply {
+  id: string;
+  title: string;
+  message: string;
 }
 
 interface ProfileMediaOverride {
@@ -137,6 +148,9 @@ interface BrowseFilterState {
   condition: BrowseConditionOption;
   /** Client-side filter: only show items with an estimated A/B sustainability grade. */
   sustainableOnly: boolean;
+  /** Price range filter in GBP. null means no constraint on that bound. */
+  priceMin: number | null;
+  priceMax: number | null;
 }
 
 interface SavedSearch {
@@ -157,7 +171,7 @@ interface SavedSearch {
   lastMatchCount?: number;
 }
 
-interface SupportTicket {
+export interface SupportTicket {
   id: string;
   orderId: string;
   topicId: string;
@@ -276,7 +290,7 @@ const makeLedgerEntry = (
   entry: Omit<MarketLedgerEntry, 'id' | 'timestamp'>
 ): MarketLedgerEntry => ({
   ...entry,
-  id: `ml_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  id: makeStableId('ml'),
   timestamp: new Date().toISOString(),
 });
 
@@ -356,6 +370,7 @@ interface StoreState {
   deleteCollection: (id: string) => void;
   deleteCollectionOnApi: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => void;
+  reorderCollections: (fromIndex: number, toIndex: number) => void;
   updateCollectionOnApi: (id: string, fields: { name?: string; description?: string | null; isPrivate?: boolean }) => Promise<void>;
   addToCollection: (collectionId: string, itemId: string) => void;
   addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
@@ -485,13 +500,13 @@ interface StoreState {
   orderUpdatesInChatEnabled: boolean;
   setOrderUpdatesInChatEnabled: (v: boolean) => void;
   // Quick replies (seller-side, locally editable)
-  sellerQuickReplies: string[];
-  addSellerQuickReply: (text: string) => void;
-  updateSellerQuickReply: (index: number, text: string) => void;
+  sellerQuickReplies: QuickReply[];
+  addSellerQuickReply: (reply: QuickReply) => void;
+  updateSellerQuickReply: (index: number, reply: QuickReply) => void;
   removeSellerQuickReply: (index: number) => void;
-  buyerQuickReplies: string[];
-  addBuyerQuickReply: (text: string) => void;
-  updateBuyerQuickReply: (index: number, text: string) => void;
+  buyerQuickReplies: QuickReply[];
+  addBuyerQuickReply: (reply: QuickReply) => void;
+  updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
   // Enabled bots (global)
   enabledBotIds: string[];
@@ -616,7 +631,7 @@ export const useStore = create<StoreState>()(
   isSavedProduct: (id) => get().savedProducts.includes(id),
   collections: [],
   createCollection: (name, description, isPrivate) => {
-    const id = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = makeStableId('collection', 9);
     const now = Date.now();
     set((state) => ({
       collections: [
@@ -668,6 +683,13 @@ export const useStore = create<StoreState>()(
         c.id === id ? { ...c, name, updatedAt: Date.now() } : c
       ),
     })),
+  reorderCollections: (fromIndex, toIndex) =>
+    set((state) => {
+      const next = [...state.collections];
+      const [moved] = next.splice(fromIndex, 1);
+      if (moved) next.splice(toIndex, 0, moved);
+      return { collections: next };
+    }),
   updateCollectionOnApi: async (id, fields) => {
     await updateCollectionOnApi(id, fields);
     set((state) => ({
@@ -1118,6 +1140,8 @@ export const useStore = create<StoreState>()(
     sizes: [],
     condition: 'Any',
     sustainableOnly: false,
+    priceMin: null,
+    priceMax: null,
   },
   updateBrowseFilters: (updates) =>
     set((state) => ({
@@ -1135,6 +1159,8 @@ export const useStore = create<StoreState>()(
         sizes: [],
         condition: 'Any',
         sustainableOnly: false,
+        priceMin: null,
+        priceMax: null,
       },
     }),
 
@@ -1158,7 +1184,7 @@ export const useStore = create<StoreState>()(
       }
       const newSearch: SavedSearch = {
         ...search,
-        id: `saved_search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('saved_search'),
         createdAt: new Date().toISOString(),
       };
       return { savedSearches: [newSearch, ...state.savedSearches] };
@@ -1309,7 +1335,7 @@ export const useStore = create<StoreState>()(
     const creator = creatorId ?? get().currentUser?.id ?? 'me';
     const uniqueMemberIds = [...new Set([creator, ...memberIds])].filter((id) => id.trim().length > 0);
     const groupTitle = title.trim() || 'New Group';
-    const conversationId = `g_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const conversationId = makeStableId('g');
 
     const createdMessage: ConversationMessage = {
       id: `msg_${Date.now()}`,
@@ -1357,13 +1383,13 @@ export const useStore = create<StoreState>()(
         const bot = allBots.find((item) => item.id === botId);
         const deployedText = bot
           ? `${bot.name} deployed. Try ${bot.commandHint}`
-          : 'A bot was deployed to this group.';
+          : 'An agent was connected to this group.';
 
         const deployedMessage: ConversationMessage = {
-          id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          id: makeStableId('msg'),
           senderId: 'system',
           isSystem: true,
-          systemTitle: 'Bot deployed',
+          systemTitle: 'Agent deployed',
           text: deployedText,
           timestamp: 'just now',
           type: 'system',
@@ -1395,13 +1421,13 @@ export const useStore = create<StoreState>()(
         const bot = allBots.find((item) => item.id === botId);
         const removedText = bot
           ? `${bot.name} removed from the group.`
-          : 'A bot was removed from this group.';
+          : 'An agent was removed from this group.';
 
         const removedMessage: ConversationMessage = {
-          id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          id: makeStableId('msg'),
           senderId: 'system',
           isSystem: true,
-          systemTitle: 'Bot removed',
+          systemTitle: 'Agent removed',
           text: removedText,
           timestamp: 'just now',
           type: 'system',
@@ -1529,38 +1555,38 @@ export const useStore = create<StoreState>()(
   orderUpdatesInChatEnabled: true,
   setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
   sellerQuickReplies: [
-    'Yes, still available!',
-    'I can ship this today if you want to go ahead.',
-    'Thanks for your interest! What would you like to know?',
-    'I can do a small discount for a quick sale.',
+    { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
+    { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
+    { id: 'qr-s-3', title: 'Thanks', message: 'Thanks for your interest! What would you like to know?' },
+    { id: 'qr-s-4', title: 'Quick sale', message: 'I can do a small discount for a quick sale.' },
   ],
-  addSellerQuickReply: (text) => set((state) => ({
-    sellerQuickReplies: [...state.sellerQuickReplies, text],
+  addSellerQuickReply: (reply) => set((state) => ({
+    sellerQuickReplies: [...state.sellerQuickReplies, reply],
   })),
-  updateSellerQuickReply: (index, text) => set((state) => ({
-    sellerQuickReplies: state.sellerQuickReplies.map((r, i) => i === index ? text : r),
+  updateSellerQuickReply: (index, reply) => set((state) => ({
+    sellerQuickReplies: state.sellerQuickReplies.map((r, i) => i === index ? reply : r),
   })),
   removeSellerQuickReply: (index) => set((state) => ({
     sellerQuickReplies: state.sellerQuickReplies.filter((_, i) => i !== index),
   })),
   buyerQuickReplies: [
-    'Hi, is this still available?',
-    'Would you consider an offer on this?',
-    'Can I see more photos?',
-    'What\'s your best price?',
+    { id: 'qr-b-1', title: 'Still available?', message: 'Hi, is this still available?' },
+    { id: 'qr-b-2', title: 'Make offer', message: 'Would you consider an offer on this?' },
+    { id: 'qr-b-3', title: 'More photos', message: 'Can I see more photos?' },
+    { id: 'qr-b-4', title: 'Best price', message: 'What\'s your best price?' },
   ],
-  addBuyerQuickReply: (text) => set((state) => ({
-    buyerQuickReplies: [...state.buyerQuickReplies, text],
+  addBuyerQuickReply: (reply) => set((state) => ({
+    buyerQuickReplies: [...state.buyerQuickReplies, reply],
   })),
-  updateBuyerQuickReply: (index, text) => set((state) => ({
-    buyerQuickReplies: state.buyerQuickReplies.map((r, i) => i === index ? text : r),
+  updateBuyerQuickReply: (index, reply) => set((state) => ({
+    buyerQuickReplies: state.buyerQuickReplies.map((r, i) => i === index ? reply : r),
   })),
   removeBuyerQuickReply: (index) => set((state) => ({
     buyerQuickReplies: state.buyerQuickReplies.filter((_, i) => i !== index),
   })),
   supportTickets: [],
   createSupportTicket: (ticket) => {
-    const id = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = makeStableId('ticket', 9);
     const now = Date.now();
     set((state) => ({
       supportTickets: [
@@ -1820,7 +1846,7 @@ export const useStore = create<StoreState>()(
 
   userLooks: [],
   addUserLook: (look) => {
-    const id = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = makeStableId('look');
     const now = Date.now();
     set((state) => ({
       userLooks: [{ ...look, id, createdAt: now }, ...state.userLooks],
@@ -1877,7 +1903,7 @@ export const useStore = create<StoreState>()(
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persistedState, version) => {
         let state = { ...(persistedState as Partial<StoreState>) };
         if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
@@ -1894,6 +1920,23 @@ export const useStore = create<StoreState>()(
         }
         if (version < 3) {
           delete state.savedPaymentMethod;
+        }
+        // v4: migrate quick replies from string[] to QuickReply[]
+        if (version < 4) {
+          const migrateReplies = (replies: unknown): QuickReply[] => {
+            if (!Array.isArray(replies)) return [];
+            return replies.map((item, i) => {
+              if (typeof item === 'string') {
+                return { id: `qr-migrated-${i}-${Date.now()}`, title: item.slice(0, 30), message: item };
+              }
+              return item as QuickReply;
+            });
+          };
+          state = {
+            ...state,
+            sellerQuickReplies: migrateReplies(state.sellerQuickReplies),
+            buyerQuickReplies: migrateReplies(state.buyerQuickReplies),
+          };
         }
         return state;
       },

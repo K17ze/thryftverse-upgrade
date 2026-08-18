@@ -7,10 +7,11 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  Image,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,17 +19,51 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  searchListingsFromApi,
+  fetchUserListingsFromApi,
+  fetchListingByIdFromApi,
+  type ListingSearchResult,
+  type ListingApiItem,
+} from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { CreatorLayer } from './composition';
 import { Canvas, Path, Skia, DashPathEffect } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withSequence,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
+
+// ── Extracted sheet components (Phase 2: Asset Picker Decomposition) ──
+// These replace the monolithic inline pickers with dedicated, reusable
+// sheet components. Each adapter wraps the new sheet to match the
+// AssetPickerContent onAddLayer interface.
+import { TextEditorSheet } from './tools/text/TextEditorSheet';
+import type { TextStyleConfig as NewTextStyleConfig } from './tools/text/textStylePresets';
+import { StickerBrowserSheet } from './tools/stickers/StickerBrowserSheet';
+import type { StickerDef as NewStickerDef } from './tools/stickers/StickerCategories';
+import { DrawingWorkspace } from './tools/drawing/DrawingWorkspace';
+import type { DrawingDocument } from './tools/drawing/DrawingTypes';
+import { AudioBrowserSheet } from './tools/audio/AudioBrowserSheet';
+import type { AudioConfig as NewAudioConfig } from './tools/audio/AudioTypes';
 
 export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown' | 'stickers' | 'link' | 'location' | 'hashtag' | 'time' | 'weather';
 
@@ -49,6 +84,202 @@ export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editing
   );
 }
 
+// ── Phase 2 Adapters: wrap extracted sheets to match onAddLayer interface ──
+
+/** Adapter for TextEditorSheet — converts (text, style) → text layer. */
+function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const isEditing = editingLayer?.type === 'text';
+  const existingPayload = editingLayer?.type === 'text' ? editingLayer.payload : null;
+  const handleConfirm = useCallback((text: string, style: NewTextStyleConfig) => {
+    // The TextStyleConfig fields mirror the text layer payload, but
+    // `textStyle` is typed as `string` in TextStyleConfig while the
+    // composition schema expects a specific union. Cast through unknown
+    // to satisfy the schema — the values are always valid preset IDs.
+    const payload = style as unknown as Record<string, unknown>;
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload,
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('text'), 10),
+        type: 'text' as const,
+        width: 0.6,
+        height: 0.1,
+        payload: payload as never,
+      });
+    }
+    onClose();
+  }, [isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <TextEditorSheet
+      visible={true}
+      onClose={onClose}
+      initialText={existingPayload?.text ?? ''}
+      initialStyle={existingPayload ? {
+        text: existingPayload.text,
+        textStyle: existingPayload.textStyle,
+        textColor: existingPayload.textColor,
+        backgroundColor: existingPayload.backgroundColor,
+        fill: existingPayload.fill,
+        stroke: existingPayload.stroke,
+        shadow: existingPayload.shadow,
+        background: existingPayload.background,
+        alignment: existingPayload.alignment,
+        opacity: 1,
+        textEffect: existingPayload.textEffect,
+        textAnimation: existingPayload.textAnimation,
+      } : undefined}
+      onConfirm={handleConfirm}
+    />
+  );
+}
+
+/** Adapter for StickerBrowserSheet — converts sticker selection → layer. */
+function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
+
+  // If an interactive sticker was selected, route to its configuration picker.
+  if (subMode) {
+    return (
+      <AssetPickerContent
+        mode={subMode}
+        onClose={() => setSubMode(null)}
+        onAddLayer={onAddLayer}
+        editingLayer={null}
+      />
+    );
+  }
+
+  const handleStickerSelect = useCallback((sticker: NewStickerDef) => {
+    if (sticker.interactive && sticker.pickerMode) {
+      // Route to the interactive sticker's configuration picker
+      setSubMode(sticker.pickerMode as AssetPickerMode);
+      return;
+    }
+    // Non-interactive sticker: create a layer directly
+    if (sticker.emoji) {
+      // Emoji sticker → text layer with emoji as content
+      onAddLayer({
+        ...baseLayer(createStableId('text'), 10),
+        type: 'text',
+        width: 0.15,
+        height: 0.15,
+        payload: {
+          text: sticker.emoji,
+          textStyle: 'clean',
+          fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
+          textColor: '#ffffff',
+          alignment: 'center',
+          opacity: 1,
+          textEffect: 'none',
+          textAnimation: 'none',
+        },
+      });
+    } else if (sticker.iconRef) {
+      // Icon-based sticker → decorative layer
+      onAddLayer({
+        ...baseLayer(createStableId('shape'), 5),
+        type: 'decorative',
+        width: 0.15,
+        height: 0.15,
+        payload: { shape: 'star', color: '#ffffff', opacity: 1 },
+      });
+    }
+    onClose();
+  }, [onAddLayer, onClose]);
+
+  return (
+    <StickerBrowserSheet
+      visible={true}
+      onClose={onClose}
+      onStickerSelect={handleStickerSelect}
+    />
+  );
+}
+
+/** Adapter for DrawingWorkspace — converts drawing commit → draw layer. */
+function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const isEditing = editingLayer?.type === 'draw';
+  const existingStrokes = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
+
+  const handleCommit = useCallback((drawing: DrawingDocument) => {
+    // Convert DrawingDocument strokes to composition DrawStroke format
+    const strokes = drawing.strokes.map((s) => ({
+      points: s.points,
+      color: s.color,
+      width: s.size,
+      tool: s.brushType,
+      emoji: s.emojiConfig?.emoji,
+      emojiSize: s.emojiConfig?.size ?? 32,
+      emojiSpacing: s.emojiConfig?.spacing ?? 24,
+      emojiJitter: s.emojiConfig?.jitter ?? 0,
+    }));
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, strokes },
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('draw'), 10),
+        type: 'draw',
+        width: 0.8,
+        height: 0.8,
+        payload: { strokes, opacity: 1 },
+      });
+    }
+    onClose();
+  }, [isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <DrawingWorkspace
+      visible={true}
+      onClose={onClose}
+      onCommit={handleCommit}
+      canvasWidth={320}
+      canvasHeight={400}
+    />
+  );
+}
+
+/** Adapter for AudioBrowserSheet — converts audio config → music layer. */
+function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const handleConfirm = useCallback((config: NewAudioConfig) => {
+    // Create a music layer from the audio config.
+    // When no track is selected (trackId is null), this represents
+    // original-audio-only configuration — we still create the layer so
+    // the volume/offset settings are preserved.
+    onAddLayer({
+      ...baseLayer(createStableId('music'), 10),
+      type: 'music',
+      width: 0.3,
+      height: 0.08,
+      payload: {
+        trackName: config.trackId ? 'Selected track' : 'Original audio',
+        artistName: '',
+        startOffsetMs: config.startOffsetMs,
+        opacity: 1,
+        volume: 1,
+        fadeInMs: 0,
+        fadeOutMs: 0,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose]);
+
+  return (
+    <AudioBrowserSheet
+      visible={true}
+      onClose={onClose}
+      onConfirm={handleConfirm}
+      hasOriginalAudio={true}
+    />
+  );
+}
+
 function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   switch (mode) {
     case 'media':
@@ -60,17 +291,17 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
     case 'look':
       return <LookPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'text':
-      return <TextPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+      return <TextEditorAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'shape':
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'vote':
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'draw':
-      return <DrawPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+      return <DrawingWorkspaceAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'gif':
       return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'music':
-      return <MusicPicker onClose={onClose} onAddLayer={onAddLayer} />;
+      return <AudioBrowserAdapter onClose={onClose} onAddLayer={onAddLayer} />;
     case 'quiz':
       return <QuizPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'question':
@@ -80,7 +311,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
     case 'countdown':
       return <CountdownPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'stickers':
-      return <StickerTray onClose={onClose} onAddLayer={onAddLayer} />;
+      return <StickerBrowserAdapter onClose={onClose} onAddLayer={onAddLayer} />;
     case 'link':
       return <LinkPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'location':
@@ -104,7 +335,7 @@ function PickerShell({ title, onClose, children }: { title: string; onClose: () 
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -160,28 +391,231 @@ interface MediaAsset {
   mediaType: 'image' | 'video';
   width: number;
   height: number;
-  duration?: number;
+  /**
+   * Video duration in milliseconds, normalized at the boundary.
+   * The legacy expo-media-library API returns duration in seconds, while
+   * expo-image-picker returns it in milliseconds. Both are converted to
+   * milliseconds here so all downstream comparisons and display formatting
+   * use one consistent unit.
+   */
+  durationMs?: number;
+}
+
+// Camera roll category tabs
+// Note: "Selfies" was previously inferred from square aspect ratio, which is
+// not truthful (a square image is not necessarily a selfie). Renamed to
+// "Square" so the filter label matches what it actually does. Querying
+// actual smart albums (iOS Selfies album) requires platform-specific APIs
+// not reliably available through expo-media-library.
+type MediaCategory = 'recent' | 'photos' | 'videos' | 'square';
+const MEDIA_CATEGORIES: { key: MediaCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  { key: 'photos', label: 'Photos', icon: 'images-outline' },
+  { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
+  { key: 'square', label: 'Square', icon: 'crop-outline' },
+];
+
+// ── MediaGridItem — spring press feedback + spring scale selection badge ──
+function MediaGridItem({
+  asset,
+  isSelected,
+  selectionOrder,
+  onPress,
+  colors,
+  styles,
+}: {
+  asset: MediaAsset;
+  isSelected: boolean;
+  selectionOrder: number;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const pressedSV = useSharedValue(0);
+  const badgeScaleSV = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    if (isSelected) {
+      if (reduceMotion) {
+        badgeScaleSV.value = 1;
+      } else {
+        badgeScaleSV.value = withSpring(1, spring.success);
+      }
+    } else {
+      badgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
+    }
+  }, [isSelected, reduceMotion, spring, badgeScaleSV]);
+
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScaleSV.value }],
+    opacity: badgeScaleSV.value,
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => { pressedSV.value = withSpring(1, spring.tap); }}
+      onPressOut={() => { pressedSV.value = withSpring(0, spring.tap); }}
+      accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Reanimated.View style={[styles.mediaGridCell, pressStyle]}>
+        <Image
+          source={{ uri: asset.uri }}
+          style={styles.mediaGridThumb}
+          contentFit="cover"
+        />
+        {asset.mediaType === 'video' && (
+          <View style={styles.mediaGridVideoBadge}>
+            <Ionicons name="play" size={14} color="#fff" />
+            {asset.durationMs != null && (
+              <Text style={styles.mediaGridDuration}>
+                {Math.floor(asset.durationMs / 1000)}s
+              </Text>
+            )}
+          </View>
+        )}
+        {isSelected && (
+          <View style={styles.mediaGridSelectedOverlay}>
+            <Reanimated.View style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}>
+              <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>{selectionOrder}</Text>
+            </Reanimated.View>
+          </View>
+        )}
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+// ── StaticStateIcon — replaces the previous infinite breathing animation.
+// Per AGENTS.md §17, continuous pulsing is prohibited. Empty/permission
+// states use a static icon with a restrained one-shot entrance fade instead.
+function StaticStateIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
+  return (
+    <Ionicons name={name} size={size} color={color} />
+  );
+}
+
+// ── PermissionDeniedState — spring entrance with retry CTA ──
+function PermissionDeniedState({
+  icon,
+  title,
+  message,
+  ctaLabel,
+  onCta,
+  colors,
+  styles,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  message: string;
+  ctaLabel: string;
+  onCta: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (!reduceMotion) {
+      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+    }
+  }, [reduceMotion, spring, entranceSV]);
+
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: entranceSV.value,
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
+  }));
+
+  return (
+    <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
+      <StaticStateIcon name={icon} size={40} color={colors.textMuted} />
+      <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+        {title}
+      </Text>
+      <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+        {message}
+      </Text>
+      <PressScale
+        onPress={onCta}
+        style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+        accessibilityLabel={ctaLabel}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>{ctaLabel}</Text>
+      </PressScale>
+    </Reanimated.View>
+  );
 }
 
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { spring } = useMotionConfig();
+  const reduceMotion = useReducedMotion();
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Ordered selection — preserved as an array instead of deriving order
+  // from Set iteration semantics (which is not deterministic across JS
+  // engines). This ensures the selection order matches the user's tap order.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<MediaCategory>('recent');
   const cursorRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
+
+  // ── Album/source model ──
+  // Queries the device's actual photo albums (iOS smart albums, Android
+  // buckets) so the user can browse by source instead of only by media type.
+  // Falls back gracefully to "All Photos" when the platform doesn't expose
+  // albums or the query fails.
+  const [albums, setAlbums] = useState<MediaLibrary.Album[]>([]);
+  const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+
+  useEffect(() => {
+    if (!status?.granted) return;
+    let cancelled = false;
+    MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true })
+      .then((result) => {
+        if (!cancelled && result) {
+          setAlbums(result);
+        }
+      })
+      .catch(() => {
+        // Albums are optional — the grid still works with the default
+        // "all photos" query when album listing is unavailable.
+      });
+    return () => { cancelled = true; };
+  }, [status?.granted]);
+
+  const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null;
+  const albumLabel = activeAlbum?.title ?? 'All Photos';
+
+  // Spring indicator for category tab
+  const tabIndicatorXSV = useSharedValue(0);
+  const tabIndicatorWidthSV = useSharedValue(0);
+  const tabLayoutsRef = useRef<Record<MediaCategory, { x: number; width: number }>>({} as any);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Load recent media when permission is granted
+  // Load media when permission is granted or album changes
   const loadRecentMedia = useCallback(async (reset: boolean) => {
     if (reset) {
       setIsLoading(true);
@@ -200,6 +634,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       if (!reset && cursorRef.current) {
         opts.after = cursorRef.current;
       }
+      // When an album is selected, scope the query to that album's assets.
+      if (activeAlbumId) {
+        opts.album = activeAlbumId;
+      }
 
       const page = await MediaLibrary.getAssetsAsync(opts);
       if (!mountedRef.current) return;
@@ -210,7 +648,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         mediaType: a.mediaType === 'video' ? 'video' : 'image',
         width: a.width,
         height: a.height,
-        duration: a.duration ? Math.round(a.duration) : undefined,
+        // Legacy expo-media-library returns duration in seconds; normalize
+        // to milliseconds at the boundary so all downstream logic uses one
+        // consistent unit.
+        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
       }));
 
       setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
@@ -225,7 +666,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         else setLoadingMore(false);
       }
     }
-  }, [hasMore, loadingMore]);
+  }, [hasMore, loadingMore, activeAlbumId]);
 
   useEffect(() => {
     if (status && status.granted) {
@@ -233,24 +674,65 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     }
   }, [status, loadRecentMedia]);
 
+  // ── Category tab switch with spring indicator ────────────────────
+  const handleCategorySwitch = useCallback((cat: MediaCategory) => {
+    if (cat === activeCategory) return;
+    haptic.selection();
+    setActiveCategory(cat);
+    const layout = tabLayoutsRef.current[cat];
+    if (layout) {
+      if (reduceMotion) {
+        tabIndicatorXSV.value = layout.x;
+        tabIndicatorWidthSV.value = layout.width;
+      } else {
+        tabIndicatorXSV.value = withSpring(layout.x, spring.tap);
+        tabIndicatorWidthSV.value = withSpring(layout.width, spring.tap);
+      }
+    }
+  }, [activeCategory, haptic, reduceMotion, tabIndicatorXSV, tabIndicatorWidthSV, spring]);
+
+  // Filter assets by category
+  const filteredAssets = useMemo(() => {
+    if (activeCategory === 'recent') return assets;
+    if (activeCategory === 'photos') return assets.filter(a => a.mediaType === 'image');
+    if (activeCategory === 'videos') return assets.filter(a => a.mediaType === 'video');
+    if (activeCategory === 'square') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
+    return assets;
+  }, [assets, activeCategory]);
+
+  // ── Video preflight ──
+  // Reject videos exceeding the max supported duration (60s) before they
+  // enter the selection. This prevents the user from building a selection
+  // that will be rejected downstream by the editor or upload pipeline.
+  const MAX_VIDEO_DURATION_MS = 60_000;
+  const videoPreflightError = useRef<string | null>(null);
+
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    if (asset.mediaType === 'video') {
+      if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
+        haptic.medium();
+        videoPreflightError.current = `Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s supported`;
+        return;
+      }
+    }
     haptic.selection();
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(asset.id)) {
-        next.delete(asset.id);
-      } else {
-        if (next.size >= 10) return prev;
-        next.add(asset.id);
+      if (prev.includes(asset.id)) {
+        return prev.filter((id) => id !== asset.id);
       }
-      return next;
+      if (prev.length >= 10) return prev;
+      return [...prev, asset.id];
     });
-  }, []);
+  }, [haptic]);
 
   const handleAddSelected = useCallback(() => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.length === 0) return;
     haptic.light();
-    const selected = assets.filter((a) => selectedIds.has(a.id));
+    // Preserve the user's tap order by mapping over the ordered array
+    // instead of filtering assets (which would preserve library order).
+    const selected = selectedIds
+      .map((id) => assets.find((a) => a.id === id))
+      .filter((a): a is MediaAsset => !!a);
     selected.forEach((asset, i) => {
       onAddLayer({
         ...baseLayer(createStableId('media'), i),
@@ -261,13 +743,29 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: asset.uri,
           mediaType: asset.mediaType,
           contentFit: 'cover',
-          videoDurationMs: asset.duration,
+          videoDurationMs: asset.durationMs,
           opacity: 1,
         },
       });
     });
     onClose();
   }, [selectedIds, assets, onAddLayer, onClose]);
+
+  // ── Reorder selection ──
+  // Move a selected item left or right in the ordered array. This lets the
+  // user correct their tap order before committing to the canvas.
+  const reorderSelection = useCallback((id: string, direction: -1 | 1) => {
+    haptic.selection();
+    setSelectedIds((prev) => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
+  }, [haptic]);
 
   const handleTakePhoto = useCallback(async () => {
     haptic.light();
@@ -310,7 +808,8 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: result.assets[0].uri,
           mediaType: 'video',
           contentFit: 'cover',
-          videoDurationMs: result.assets[0].duration ? Math.round(result.assets[0].duration) : undefined,
+          // ImagePicker returns duration in milliseconds.
+          videoDurationMs: result.assets[0].duration ?? undefined,
           opacity: 1,
         },
       });
@@ -323,76 +822,73 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     Linking.openSettings();
   }, []);
 
-  const selectedCount = selectedIds.size;
+  const selectedCount = selectedIds.length;
 
-  // ── Hooks that must run on every render (before any early returns) ──
-  const renderItem = useCallback(({ item, index }: { item: MediaAsset | 'camera' | 'video'; index: number }) => {
+  // ── Selection count badge with spring scale ──────────────────────
+  const countBadgeScaleSV = useSharedValue(0);
+  useEffect(() => {
+    if (selectedCount > 0) {
+      countBadgeScaleSV.value = reduceMotion ? 1 : withSpring(1, spring.success);
+    } else {
+      countBadgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
+    }
+  }, [selectedCount, reduceMotion, spring, countBadgeScaleSV]);
+
+  const countBadgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: countBadgeScaleSV.value }],
+    opacity: countBadgeScaleSV.value,
+  }));
+
+  // ── Tab indicator animated style ─────────────────────────────────
+  const tabIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tabIndicatorXSV.value }],
+    width: tabIndicatorWidthSV.value,
+  }));
+
+  // ── FlashList renderItem ─────────────────────────────────────────
+  const renderItem: ListRenderItem<MediaAsset | 'camera' | 'video'> = useCallback(({ item }) => {
     if (item === 'camera') {
       return (
-        <Pressable
+        <PressScale
           onPress={handleTakePhoto}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Take photo with camera"
-          accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
-        </Pressable>
+        </PressScale>
       );
     }
     if (item === 'video') {
       return (
-        <Pressable
+        <PressScale
           onPress={handlePickVideo}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Pick video from gallery"
-          accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
-        </Pressable>
+        </PressScale>
       );
     }
     const asset = item as MediaAsset;
-    const isSelected = selectedIds.has(asset.id);
-    const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
+    const isSelected = selectedIds.includes(asset.id);
+    const selectionOrder = isSelected ? selectedIds.indexOf(asset.id) + 1 : 0;
     return (
-      <Pressable
+      <MediaGridItem
+        asset={asset}
+        isSelected={isSelected}
+        selectionOrder={selectionOrder}
         onPress={() => toggleSelect(asset)}
-        style={styles.mediaGridCell}
-        accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
-        accessibilityRole="button"
-        hitSlop={12}
-      >
-        <Image
-          source={{ uri: asset.uri }}
-          style={styles.mediaGridThumb}
-          resizeMode="cover"
-        />
-        {asset.mediaType === 'video' && (
-          <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={14} color="#fff" />
-            {asset.duration && (
-              <Text style={styles.mediaGridDuration}>
-                {Math.floor(asset.duration / 1000)}s
-              </Text>
-            )}
-          </View>
-        )}
-        {isSelected && (
-          <View style={styles.mediaGridSelectedOverlay}>
-            <View style={styles.mediaGridSelectionBadge}>
-              <Text style={styles.mediaGridSelectionText}>{selectionOrder}</Text>
-            </View>
-          </View>
-        )}
-      </Pressable>
+        colors={colors}
+        styles={styles}
+      />
     );
-  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds]);
+  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds, styles]);
 
   const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
-    return ['camera', 'video', ...assets];
-  }, [assets]);
+    return ['camera', 'video', ...filteredAssets];
+  }, [filteredAssets]);
 
   // ── Permission states (after all hooks) ──
   if (!status) {
@@ -408,24 +904,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   if (!status.granted && !status.canAskAgain) {
     return (
       <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Photo access needed
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            Allow access to your photo library to pick media for your creation.
-          </Text>
-          <Pressable
-            onPress={handleOpenSettings}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-            hitSlop={12}
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
-          </Pressable>
-        </View>
+        <PermissionDeniedState
+          icon="lock-closed-outline"
+          title="Photo access needed"
+          message="Allow access to your photo library to pick media for your creation."
+          ctaLabel="Open settings"
+          onCta={handleOpenSettings}
+          colors={colors}
+          styles={styles}
+        />
       </PickerShell>
     );
   }
@@ -433,24 +920,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   if (!status.granted) {
     return (
       <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Access your photos
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            We need access to show your recent photos and videos here.
-          </Text>
-          <Pressable
-            onPress={() => requestPermission()}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Grant access"
-            accessibilityRole="button"
-            hitSlop={12}
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
-          </Pressable>
-        </View>
+        <PermissionDeniedState
+          icon="images-outline"
+          title="Access your photos"
+          message="We need access to show your recent photos and videos here."
+          ctaLabel="Allow access"
+          onCta={() => requestPermission()}
+          colors={colors}
+          styles={styles}
+        />
       </PickerShell>
     );
   }
@@ -458,112 +936,402 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   // ── Media grid with multi-select ──
 
   return (
-    <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds(new Set()); } : onClose} maxHeight={0.9}>
+    <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds([]); } : onClose} maxHeight={0.9}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {selectedCount > 0 ? `${selectedCount} selected` : 'Add Media'}
         </Text>
         <View style={styles.headerRight}>
           {selectedCount > 0 && (
-            <PressScale
-              onPress={handleAddSelected}
-              style={[styles.addBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel="Add selected media"
-              hitSlop={12}
-            >
-              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
-            </PressScale>
+            <Reanimated.View style={countBadgeStyle}>
+              <PressScale
+                onPress={handleAddSelected}
+                style={[styles.addBtn, { backgroundColor: colors.brand }]}
+                accessibilityLabel="Add selected media"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
+              </PressScale>
+            </Reanimated.View>
           )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
+      </View>
+
+      {/* Album/source disclosure — per audit: "album/source disclosure" in
+          the canonical MediaAcquireSheet header. Shows the current album
+          name and opens a dropdown to switch between device albums. */}
+      {albums.length > 0 && (
+        <Pressable
+          style={styles.albumDisclosure}
+          onPress={() => { haptic.light(); setShowAlbumPicker((v) => !v); }}
+          accessibilityLabel={`Current album: ${albumLabel}. Tap to change album.`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showAlbumPicker }}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        >
+          <Ionicons name="folder-open-outline" size={14} color={colors.textSecondary} />
+          <Text style={[styles.albumDisclosureText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {albumLabel}
+          </Text>
+          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+        </Pressable>
+      )}
+
+      {/* Album picker dropdown — flat list of device albums */}
+      {showAlbumPicker && albums.length > 0 && (
+        <View style={[styles.albumPickerDropdown, { borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: `${colors.brand}12` }]}
+            onPress={() => {
+              haptic.selection();
+              setActiveAlbumId(null);
+              setShowAlbumPicker(false);
+            }}
+            accessibilityLabel="All Photos album"
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeAlbumId === null }}
+          >
+            <Ionicons name="images-outline" size={16} color={activeAlbumId === null ? colors.brand : colors.textSecondary} />
+            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]}>
+              All Photos
+            </Text>
+            {activeAlbumId === null && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+          </Pressable>
+          {albums.slice(0, 12).map((album) => (
+            <Pressable
+              key={album.id}
+              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: `${colors.brand}12` }]}
+              onPress={() => {
+                haptic.selection();
+                setActiveAlbumId(album.id);
+                setShowAlbumPicker(false);
+              }}
+              accessibilityLabel={`${album.title} album`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeAlbumId === album.id }}
+            >
+              <Ionicons name="folder-outline" size={16} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} />
+              <Text style={[styles.albumPickerItemText, { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
+                {album.title}
+              </Text>
+              {activeAlbumId === album.id && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Camera roll category tabs with spring indicator */}
+      <View style={styles.categoryTabRow}>
+        <Reanimated.View
+          style={[styles.categoryTabIndicator, { backgroundColor: colors.brand }, tabIndicatorStyle]}
+        />
+        {MEDIA_CATEGORIES.map((cat) => {
+          const active = activeCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => handleCategorySwitch(cat.key)}
+              onLayout={(e) => {
+                tabLayoutsRef.current[cat.key] = {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                };
+                if (cat.key === 'recent' && tabIndicatorWidthSV.value === 0) {
+                  tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
+                }
+              }}
+              style={styles.categoryTab}
+              accessibilityLabel={`Category ${cat.label}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons
+                name={cat.icon}
+                size={16}
+                color={active ? colors.textInverse : colors.textSecondary}
+              />
+              <Text style={[
+                styles.categoryTabLabel,
+                { color: active ? colors.textInverse : colors.textSecondary },
+              ]}>
+                {cat.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {isLoading ? (
         <View style={styles.mediaLoadingState}>
           <ActivityIndicator size="large" color={colors.brand} />
         </View>
-      ) : assets.length === 0 ? (
+      ) : filteredAssets.length === 0 ? (
+        // Empty state
         <View style={styles.mediaEmptyState}>
-          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+          <StaticStateIcon name="images-outline" size={40} color={colors.textMuted} />
           <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
-            No photos found
+            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'square' ? 'No square photos found' : 'No photos found'}
           </Text>
-          <Pressable
+          <PressScale
             onPress={handleTakePhoto}
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Take photo"
-            accessibilityRole="button"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
-          </Pressable>
+          </PressScale>
         </View>
       ) : (
-        <FlatList
-          data={gridData}
-          keyExtractor={(item, index) => typeof item === 'string' ? item : item.id}
-          renderItem={renderItem}
-          numColumns={GRID_COLUMNS}
-          columnWrapperStyle={styles.mediaGridRow}
-          contentContainerStyle={styles.mediaGridContent}
-          onEndReached={() => loadRecentMedia(false)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore ? (
-            <View style={styles.mediaGridFooter}>
-              <ActivityIndicator size="small" color={colors.textMuted} />
+        <>
+          {/* Limited-access banner (iOS 14+ / Android 14+) */}
+          {status.accessPrivileges === 'limited' && (
+            <Pressable
+              style={[styles.limitedAccessBanner, { borderColor: colors.border }]}
+              onPress={async () => {
+                try {
+                  await MediaLibrary.presentPermissionsPickerAsync();
+                  loadRecentMedia(true);
+                } catch {
+                  handleOpenSettings();
+                }
+              }}
+              accessibilityLabel="Limited photo access — tap to select more photos"
+              accessibilityRole="button"
+            >
+              <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+              <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
+                Limited access — tap to add more photos
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+
+          {/* Selection preview rail — ordered thumbnails with reorder support */}
+          {selectedCount > 0 && (
+            <View style={styles.selectionPreviewRail}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.selectionPreviewScroll}
+              >
+                {selectedIds.map((id, index) => {
+                  const asset = assets.find((a) => a.id === id);
+                  if (!asset) return null;
+                  return (
+                    <View key={id} style={styles.selectionPreviewItem}>
+                      <Image
+                        source={{ uri: asset.uri }}
+                        style={styles.selectionPreviewThumb}
+                        contentFit="cover"
+                      />
+                      <View style={[styles.selectionPreviewOrder, { backgroundColor: colors.brand }]}>
+                        <Text style={[styles.selectionPreviewOrderText, { color: colors.textInverse }]}>
+                          {index + 1}
+                        </Text>
+                      </View>
+                      {/* Reorder left — move this item earlier in the sequence */}
+                      {index > 0 && (
+                        <Pressable
+                          style={styles.selectionPreviewReorderLeft}
+                          onPress={() => reorderSelection(id, -1)}
+                          hitSlop={4}
+                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} earlier in selection`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="chevron-back-circle" size={18} color="#fff" />
+                        </Pressable>
+                      )}
+                      {/* Reorder right — move this item later in the sequence */}
+                      {index < selectedIds.length - 1 && (
+                        <Pressable
+                          style={styles.selectionPreviewReorderRight}
+                          onPress={() => reorderSelection(id, 1)}
+                          hitSlop={4}
+                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} later in selection`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="chevron-forward-circle" size={18} color="#fff" />
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={styles.selectionPreviewRemove}
+                        onPress={() => toggleSelect(asset)}
+                        hitSlop={8}
+                        accessibilityLabel={`Remove ${asset.mediaType} ${index + 1} from selection`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
-          ) : null}
-        />
+          )}
+
+          {/* Full grid via FlashList for virtualization */}
+          <FlashList
+            data={gridData}
+            keyExtractor={(item) => typeof item === 'string' ? item : item.id}
+            renderItem={renderItem}
+            numColumns={GRID_COLUMNS}
+            contentContainerStyle={styles.mediaGridContent}
+            onEndReached={() => loadRecentMedia(false)}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={loadingMore ? (
+              <View style={styles.mediaGridFooter}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : null}
+          />
+        </>
       )}
     </SheetContainer>
   );
 }
 
 // ── Product Picker ─────────────────────────────────────────────────
+// Per spec 10 (Look Architecture V3), the Add item drawer sources are:
+//   My closet/listings · Saved · Marketplace search · Recently viewed
+// Selecting an item adds a visual object, not a settings row.
+
+const RECENTLY_VIEWED_KEY = '@thryftverse_recently_viewed_listings';
+const MAX_RECENT = 30;
+
+// Recently-viewed cache entry — stores just enough to reconstruct the
+// listing card without a round-trip. The canonical listing ID is always
+// preserved so the published look can resolve to the live listing.
+interface RecentListingEntry {
+  id: string;
+  sellerId: string;
+  title: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  createdAt: string;
+}
+
+async function getRecentListings(): Promise<RecentListingEntry[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENTLY_VIEWED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function recordRecentListing(item: ListingSearchResult): Promise<void> {
+  try {
+    const existing = await getRecentListings();
+    const entry: RecentListingEntry = {
+      id: item.id,
+      sellerId: item.sellerId,
+      title: item.title,
+      priceGbp: item.priceGbp,
+      imageUrl: item.imageUrl,
+      createdAt: item.createdAt,
+    };
+    const filtered = existing.filter((e) => e.id !== entry.id);
+    const next = [entry, ...filtered].slice(0, MAX_RECENT);
+    await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
+  } catch {
+    // Best-effort — never block the picker.
+  }
+}
+
+// Map a full ListingApiItem (from user listings / fetch-by-id) to the
+// ListingSearchResult shape the picker renders.
+function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult {
+  return {
+    id: item.id,
+    sellerId: item.sellerId,
+    title: item.title,
+    description: item.description,
+    priceGbp: item.priceGbp,
+    imageUrl: item.imageUrl,
+    rank: 0,
+    createdAt: item.createdAt,
+    seller: item.seller ?? null,
+    brand: item.brand,
+    size: item.size,
+    condition: item.condition,
+    category: item.category,
+  };
+}
+
+type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
 
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const currentUserId = useStore((state) => state.currentUser?.id);
+  const savedProductIds = useStore((state) => state.savedProducts);
+  const wishlistIds = useStore((state) => state.wishlist);
+
+  const [activeTab, setActiveTab] = useState<ProductSourceTab>('search');
+
+  // ── Search state (Marketplace search) ──────────────────────────────
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ListingSearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<ListingSearchResult[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-  const reqIdRef = useRef(0);
-  const mountedRef = useRef(true);
+  const searchReqIdRef = useRef(0);
+  const searchMountedRef = useRef(true);
+
+  // ── Closet state (My closet/listings) ──────────────────────────────
+  const [closetResults, setClosetResults] = useState<ListingSearchResult[]>([]);
+  const [isClosetLoading, setIsClosetLoading] = useState(false);
+  const [closetError, setClosetError] = useState<string | null>(null);
+  const closetLoadedRef = useRef(false);
+
+  // ── Saved state (Saved = savedProducts + wishlist) ─────────────────
+  const [savedResults, setSavedResults] = useState<ListingSearchResult[]>([]);
+  const [isSavedLoading, setIsSavedLoading] = useState(false);
+  const [savedError, setSavedError] = useState<string | null>(null);
+  const savedLoadedRef = useRef(false);
+
+  // ── Recent state (Recently viewed) ─────────────────────────────────
+  const [recentResults, setRecentResults] = useState<ListingSearchResult[]>([]);
+  const [isRecentLoading, setIsRecentLoading] = useState(false);
+  const recentLoadedRef = useRef(false);
 
   useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    searchMountedRef.current = true;
+    return () => { searchMountedRef.current = false; };
   }, []);
 
+  // ── Search effect (debounced) ──────────────────────────────────────
   const doSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (trimmed.length < 2) {
-      setResults([]);
+      setSearchResults([]);
       setHasSearched(false);
-      setError(null);
-      setIsLoading(false);
+      setSearchError(null);
+      setIsSearchLoading(false);
       return;
     }
-    const reqId = ++reqIdRef.current;
-    setIsLoading(true);
-    setError(null);
+    const reqId = ++searchReqIdRef.current;
+    setIsSearchLoading(true);
+    setSearchError(null);
     try {
       const res = await searchListingsFromApi(trimmed, 50);
-      if (reqId !== reqIdRef.current || !mountedRef.current) return;
-      setResults(res.items);
+      if (reqId !== searchReqIdRef.current || !searchMountedRef.current) return;
+      setSearchResults(res.items);
       setHasSearched(true);
     } catch (err) {
-      if (reqId !== reqIdRef.current || !mountedRef.current) return;
-      setError((err as Error).message || 'Search failed');
-      setResults([]);
+      if (reqId !== searchReqIdRef.current || !searchMountedRef.current) return;
+      setSearchError((err as Error).message || 'Search failed');
+      setSearchResults([]);
       setHasSearched(true);
     } finally {
-      if (reqId === reqIdRef.current && mountedRef.current) setIsLoading(false);
+      if (reqId === searchReqIdRef.current && searchMountedRef.current) setIsSearchLoading(false);
     }
   }, []);
 
@@ -572,10 +1340,103 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
     return () => clearTimeout(timer);
   }, [query, doSearch]);
 
-  const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
+  // ── Closet: load user's own listings when tab is first opened ──────
+  useEffect(() => {
+    if (activeTab !== 'closet' || closetLoadedRef.current || !currentUserId) return;
+    closetLoadedRef.current = true;
+    let cancelled = false;
+    setIsClosetLoading(true);
+    setClosetError(null);
+    fetchUserListingsFromApi(currentUserId, { status: 'active', limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setClosetResults(res.items.map(listingApiItemToSearchResult));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setClosetError((err as Error).message || 'Could not load your listings');
+        setClosetResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsClosetLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, currentUserId]);
+
+  // ── Saved: load saved + wishlisted listings by ID ──────────────────
+  useEffect(() => {
+    if (activeTab !== 'saved' || savedLoadedRef.current) return;
+    savedLoadedRef.current = true;
+    const ids = Array.from(new Set([...savedProductIds, ...wishlistIds]));
+    if (ids.length === 0) {
+      setSavedResults([]);
+      return;
+    }
+    let cancelled = false;
+    setIsSavedLoading(true);
+    setSavedError(null);
+    // Fetch each listing by ID. The store only retains IDs, so we
+    // resolve them individually. Failures for individual IDs are
+    // silently skipped — partial results are better than blocking.
+    Promise.all(
+      ids.slice(0, 50).map((id) =>
+        fetchListingByIdFromApi(id)
+          .then((res) => (res.ok && res.listing ? listingApiItemToSearchResult(res.listing) : null))
+          .catch(() => null)
+      )
+    )
+      .then((items) => {
+        if (cancelled) return;
+        setSavedResults(items.filter((x): x is ListingSearchResult => x !== null));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSavedError((err as Error).message || 'Could not load saved items');
+        setSavedResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSavedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, savedProductIds, wishlistIds]);
+
+  // ── Recent: load recently viewed listings from AsyncStorage ────────
+  useEffect(() => {
+    if (activeTab !== 'recent' || recentLoadedRef.current) return;
+    recentLoadedRef.current = true;
+    let cancelled = false;
+    setIsRecentLoading(true);
+    getRecentListings()
+      .then((entries) => {
+        if (cancelled) return;
+        // Map RecentListingEntry to ListingSearchResult shape
+        setRecentResults(
+          entries.map((e) => ({
+            id: e.id,
+            sellerId: e.sellerId,
+            title: e.title,
+            description: '',
+            priceGbp: e.priceGbp,
+            imageUrl: e.imageUrl,
+            rank: 0,
+            createdAt: e.createdAt,
+            seller: null,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRecentResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsRecentLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab]);
 
   const handleSelect = useCallback((item: ListingSearchResult) => {
     haptic.selection();
+    // Record in recently viewed for future "Recent" tab population
+    recordRecentListing(item);
     onAddLayer({
       ...baseLayer(createStableId('product'), 10),
       type: 'product',
@@ -590,38 +1451,114 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       },
     });
     onClose();
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, haptic]);
+
+  // ── Active tab data ────────────────────────────────────────────────
+  const activeResults = activeTab === 'search'
+    ? searchResults
+    : activeTab === 'closet'
+      ? closetResults
+      : activeTab === 'saved'
+        ? savedResults
+        : recentResults;
+  const activeLoading = activeTab === 'search'
+    ? isSearchLoading
+    : activeTab === 'closet'
+      ? isClosetLoading
+      : activeTab === 'saved'
+        ? isSavedLoading
+        : isRecentLoading;
+  const activeError = activeTab === 'search'
+    ? searchError
+    : activeTab === 'closet'
+      ? closetError
+      : activeTab === 'saved'
+        ? savedError
+        : null;
+
+  const handleRetry = useCallback(() => {
+    if (activeTab === 'search') {
+      doSearch(query);
+    } else if (activeTab === 'closet') {
+      closetLoadedRef.current = false;
+      // Re-trigger by toggling state — force re-load
+      setActiveTab('search');
+      setTimeout(() => setActiveTab('closet'), 0);
+    } else if (activeTab === 'saved') {
+      savedLoadedRef.current = false;
+      setActiveTab('search');
+      setTimeout(() => setActiveTab('saved'), 0);
+    }
+  }, [activeTab, doSearch, query]);
+
+  const tabs: Array<{ key: ProductSourceTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
+    { key: 'search', label: 'Search', icon: 'search-outline' },
+    { key: 'closet', label: 'My Closet', icon: 'shirt-outline' },
+    { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
+    { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  ];
 
   return (
-    <PickerShell title="Add Product" onClose={onClose}>
-      <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search listings..."
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
-          accessibilityLabel="Search listings"
-        />
-        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
+    <PickerShell title="Add Item" onClose={onClose}>
+      {/* ── Source tabs ─────────────────────────────────────────────── */}
+      <View style={styles.productTabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productTabBarContent}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => { haptic.light(); setActiveTab(tab.key); }}
+                style={[styles.productTab, isActive && styles.productTabActive]}
+                accessibilityLabel={tab.label}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Ionicons name={tab.icon} size={16} color={isActive ? colors.brand : colors.textSecondary} />
+                <Text style={[styles.productTabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>{tab.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
-      {error ? (
+
+      {/* ── Search input (only visible on Search tab) ───────────────── */}
+      {activeTab === 'search' && (
+        <View style={styles.searchRow}>
+          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search listings..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            accessibilityLabel="Search listings"
+          />
+          {isSearchLoading && <ActivityIndicator size="small" color={colors.brand} />}
+        </View>
+      )}
+
+      {/* ── Results / states ────────────────────────────────────────── */}
+      {activeError ? (
         <View style={styles.errorBody}>
-          <Text style={styles.errorText}>Couldn't search listings</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.errorText}>Couldn't load items</Text>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
+      ) : activeLoading ? (
+        <View style={styles.loadingBody}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
       ) : (
         <FlatList
-          data={results}
+          data={activeResults}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultThumb}>
                 {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
               </View>
@@ -633,7 +1570,23 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={hasSearched && !isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View> : null}
+          ListEmptyComponent={
+            activeTab === 'search'
+              ? hasSearched && !isSearchLoading
+                ? <View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View>
+                : null
+              : !activeLoading
+                ? <View style={styles.emptyState}>
+                    <Text style={styles.emptyText}>
+                      {activeTab === 'closet'
+                        ? 'No active listings in your closet'
+                        : activeTab === 'saved'
+                          ? 'No saved items yet'
+                          : 'No recently viewed items'}
+                    </Text>
+                  </View>
+                : null
+          }
         />
       )}
     </PickerShell>
@@ -727,7 +1680,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search users</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -736,7 +1689,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultAvatar}>
                 {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
               </View>
@@ -836,7 +1789,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load looks</Text>
-          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -845,7 +1798,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
@@ -864,7 +1817,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 // ── Text Picker ────────────────────────────────────────────────────
 // Instagram 2025-2026 parity: 10 fonts, text effects, background color,
 // text animations (typewriter, bounce, fade). Each style label renders
-// in its own font (Snapchat pattern).
+// in its own font.
 
 const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'clean', label: 'Clean' },
@@ -935,7 +1888,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [text, setText] = useState(existingPayload?.text ?? '');
   const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
   const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
-  const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
+  const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>(existingPayload?.alignment ?? 'center');
   const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
   const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
   const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');
@@ -976,7 +1929,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   return (
     <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
       <View style={styles.textPickerBody}>
-        {/* Live preview — shows text with selected style + color (Snapchat pattern) */}
+        {/* Live preview — shows text with selected style + color */}
         <View style={styles.textPreview}>
           <Text
             style={[
@@ -1007,7 +1960,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel="Text content"
         />
 
-        {/* Style selector — each label rendered in its own style (Snapchat pattern) */}
+        {/* Style selector — each label rendered in its own style */}
         <Text style={styles.pickerSectionLabel}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
           {TEXT_STYLES.map((s) => (
@@ -1018,7 +1971,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Text style ${s.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textStyle === s.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text
                 style={[
@@ -1050,11 +2003,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textColor === c && !showSpectrum }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
-        {/* Spectrum picker — long-press any swatch to open (Instagram pattern) */}
+        {/* Spectrum picker — long-press any swatch to open */}
         {showSpectrum && (
           <View style={styles.spectrumWrap}>
             <LinearGradient
@@ -1079,7 +2032,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               />
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
-            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
             </PressScale>
           </View>
@@ -1096,7 +2049,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
               accessibilityState={{ selected: alignment === a.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
@@ -1121,7 +2074,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Text effect ${e.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text
                   style={[
@@ -1165,7 +2118,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Text animation ${a.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
                 <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
@@ -1190,7 +2143,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Background ${c === 'transparent' ? 'none' : c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textBgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {c === 'transparent' && (
                 <Ionicons name="close" size={16} color={colors.textSecondary} />
@@ -1199,7 +2152,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           ))}
         </View>
 
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
       </View>
@@ -1229,7 +2182,11 @@ interface DrawStroke {
   points: DrawPoint[];
   color: string;
   width: number;
-  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk';
+  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk' | 'emoji';
+  emoji?: string;
+  emojiSize?: number;
+  emojiSpacing?: number;
+  emojiJitter?: number;
 }
 
 function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): any {
@@ -1414,7 +2371,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 <Text style={styles.drawCanvasHintText}>Draw with your finger</Text>
               </View>
             )}
-            {/* Vertical brush size slider — Instagram pattern (left side, drag up=thicker) */}
+            {/* Vertical brush size slider — left side, drag up=thicker */}
             {activeTool !== 'eraser' && (
               <View style={styles.brushSliderWrap} pointerEvents="box-none">
                 <Pressable
@@ -1457,7 +2414,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Brush ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
               </Pressable>
@@ -1479,7 +2436,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   accessibilityLabel={`Draw color ${c}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: activeColor === c && !showDrawSpectrum }}
-                  hitSlop={12}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 />
               ))}
             </View>
@@ -1505,7 +2462,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   />
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
-                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                   <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
                 </PressScale>
               </View>
@@ -1528,7 +2485,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Brush size ${s}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <View style={[styles.brushSizeDot, { width: dotSize, height: dotSize, backgroundColor: previewColor }]} />
               </Pressable>
@@ -1536,7 +2493,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           })}
         </View>
 
-        {/* Live stroke preview — Instagram pattern: shows actual brush diameter in active color */}
+        {/* Live stroke preview — shows actual brush diameter in active color */}
         <View style={styles.brushPreviewWrap}>
           <View
             style={[
@@ -1554,19 +2511,19 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Actions */}
         <View style={styles.drawActions}>
-          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={12}>
+          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Undo</Text>
           </PressScale>
-          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={12}>
+          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
-          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={12}>
+          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="trash-outline" size={20} color={colors.danger} />
             <Text style={[styles.drawActionLabel, { color: colors.danger }]}>Clear</Text>
           </PressScale>
-          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={12}>
+          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.drawDoneBtnText}>Done</Text>
           </PressScale>
         </View>
@@ -1707,7 +2664,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               accessibilityLabel={`GIF category ${cat.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={[styles.gifCategoryChipText, isActive && { color: colors.textInverse }]}>
                 {cat.label}
@@ -1734,7 +2691,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load GIFs</Text>
-          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -1749,11 +2706,12 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               style={styles.gifCell}
               accessibilityLabel={`Select GIF ${item.altText}`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Image
                 source={{ uri: item.stillUrl || item.gifUrl }}
                 style={styles.gifThumb}
-                resizeMode="cover"
+                contentFit="cover"
               />
             </Pressable>
           )}
@@ -1852,6 +2810,9 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         previewUrl: track.previewUrl,
         trackId: track.trackId,
         opacity: 1,
+        volume: 1,
+        fadeInMs: 0,
+        fadeOutMs: 0,
       },
     });
     onClose();
@@ -1863,7 +2824,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       <View style={styles.musicPreviewCard}>
         {previewTrack ? (
           <>
-            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} resizeMode="cover" />
+            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} contentFit="cover" />
             <View style={styles.musicPreviewInfo}>
               <Text style={styles.musicPreviewTrackName} numberOfLines={1}>{previewTrack.trackName}</Text>
               <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
@@ -1908,7 +2869,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load music</Text>
-          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -1923,8 +2884,9 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
               accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} resizeMode="cover" />
+              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
               <View style={styles.musicInfo}>
                 <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
                 <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
@@ -1976,6 +2938,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const handleAdd = useCallback(() => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
+    haptic.medium();
     const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
     const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
     const payload: any = {
@@ -1997,7 +2960,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       });
     }
     onClose();
-  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
@@ -2042,6 +3005,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.quizCorrectDot, correctIdx === i && { backgroundColor: colors.success }]}
               accessibilityLabel={`Mark option ${i + 1} as correct`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {correctIdx === i && <Ionicons name="checkmark" size={14} color="#fff" />}
             </Pressable>
@@ -2057,13 +3021,14 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             {options.length > 2 && (
               <Pressable
                 onPress={() => {
+                  haptic.warning();
                   setOptions(prev => prev.filter((_, idx) => idx !== i));
                   if (correctIdx >= i && correctIdx > 0) setCorrectIdx(correctIdx - 1);
                 }}
                 style={styles.quizRemoveBtn}
                 accessibilityLabel={`Remove option ${i + 1}`}
                 accessibilityRole="button"
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
               </Pressable>
@@ -2076,7 +3041,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             style={styles.quizAddOptionBtn}
             accessibilityLabel="Add option"
             accessibilityRole="button"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
             <Text style={styles.quizAddOptionText}>Add Option</Text>
@@ -2092,7 +3057,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
               accessibilityState={{ selected: emoji === e }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
@@ -2115,6 +3080,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -2130,6 +3096,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel={isEditing ? 'Update quiz' : 'Add quiz'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !question.trim() || options.filter(o => o.trim()).length < 2 }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Quiz'}</Text>
         </Pressable>
@@ -2143,6 +3110,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
 function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'question';
   const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
@@ -2155,6 +3123,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
 
   const handleAdd = useCallback(() => {
     if (!prompt.trim()) return;
+    haptic.medium();
     const payload: any = {
       prompt: prompt.trim(),
       placeholder: placeholder.trim() || 'Type something...',
@@ -2173,7 +3142,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       });
     }
     onClose();
-  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
@@ -2216,12 +3185,12 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           {QUESTION_BG_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setBgColor(c)}
+              onPress={() => { haptic.selection(); setBgColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Background ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: bgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2232,6 +3201,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           accessibilityLabel={isEditing ? 'Update question' : 'Add question'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !prompt.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Question'}</Text>
         </Pressable>
@@ -2261,6 +3231,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
 
   const handleAdd = useCallback(() => {
     if (!question.trim()) return;
+    haptic.medium();
     const payload: any = {
       question: question.trim(),
       emoji,
@@ -2279,7 +3250,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
       });
     }
     onClose();
-  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
@@ -2328,7 +3299,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
               accessibilityState={{ selected: emoji === e }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
@@ -2339,12 +3310,12 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
           {SLIDER_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setSliderColor(c)}
+              onPress={() => { haptic.selection(); setSliderColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, sliderColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Slider color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: sliderColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2355,6 +3326,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
           accessibilityLabel={isEditing ? 'Update slider' : 'Add slider'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !question.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Slider'}</Text>
         </Pressable>
@@ -2368,6 +3340,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
 
 function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'countdown';
   const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
@@ -2386,6 +3359,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
 
   const handleAdd = useCallback(() => {
     if (!label.trim()) return;
+    haptic.medium();
     const payload: any = {
       label: label.trim(),
       endDateTime: endDate.toISOString(),
@@ -2404,7 +3378,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
       });
     }
     onClose();
-  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   const formatDate = (d: Date) => {
     const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
@@ -2435,6 +3409,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
         <Text style={styles.pickerSectionLabel}>End Date & Time</Text>
         <Pressable
           onPress={() => {
+            haptic.selection();
             // Simple date adjustment: cycle through next 7 days at 6pm
             const d = new Date(endDate);
             d.setDate(d.getDate() + 1);
@@ -2443,7 +3418,9 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           }}
           style={styles.countdownDateBtn}
           accessibilityLabel="Adjust end date"
+          accessibilityHint="Cycles to the next day"
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="calendar-outline" size={20} color={colors.brand} />
           <Text style={styles.countdownDateText}>{formatDate(endDate)}</Text>
@@ -2454,12 +3431,12 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           {COUNTDOWN_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setColor(c)}
+              onPress={() => { haptic.selection(); setColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionActive]}
               accessibilityLabel={`Countdown color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: color === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2470,6 +3447,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           accessibilityLabel={isEditing ? 'Update countdown' : 'Add countdown'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !label.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Countdown'}</Text>
         </Pressable>
@@ -2541,7 +3519,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={({ pressed }) => [styles.shapeOption, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}
             accessibilityLabel={`Add ${s.label}`}
             accessibilityRole="button"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <View style={styles.shapePreviewBox}>
               {renderShapePreview(s.shape)}
@@ -2560,7 +3538,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             accessibilityLabel={`Shape color ${c}`}
             accessibilityRole="button"
             accessibilityState={{ selected: activeColor === c }}
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           />
         ))}
       </View>
@@ -2602,13 +3580,13 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   const removeOption = (index: number) => {
     if (options.length > 2) {
       setOptions(prev => prev.filter((_, i) => i !== index));
-      haptic.light();
+      haptic.warning();
     }
   };
 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
-    haptic.selection();
+    haptic.medium();
     const validOptions = options
       .map(o => o.trim())
       .filter(o => o.length > 0)
@@ -2680,7 +3658,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={styles.sectionLabel}>Option {i + 1}</Text>
               {options.length > 2 && (
-                <Pressable onPress={() => removeOption(i)} hitSlop={14} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
+                <Pressable onPress={() => removeOption(i)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
                   <Ionicons name="close-circle" size={18} color={colors.danger} />
                 </Pressable>
               )}
@@ -2702,6 +3680,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
             accessibilityLabel="Add option"
             accessibilityRole="button"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
             <Text style={styles.addOptionBtnText}>Add Option ({options.length}/4)</Text>
@@ -2724,6 +3703,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -2732,7 +3712,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             );
           })}
         </ScrollView>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
         </Pressable>
       </View>
@@ -2851,7 +3831,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Stickers</Text>
-        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" hitSlop={12}>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" accessibilityHint="Closes the sticker tray" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
       </View>
@@ -2868,7 +3848,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityLabel="Search stickers"
         />
         {search.length > 0 && (
-          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={6}>
+          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </PressScale>
         )}
@@ -2887,6 +3867,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 accessibilityLabel={`Category ${cat.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.stickerCategoryChipText, isActive && { color: colors.textInverse }]}>
                   {cat.label}
@@ -2918,6 +3899,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                     style={({ pressed }) => [styles.stickerCell, pressed && { opacity: 0.7 }]}
                     accessibilityLabel={`Add ${sticker.label} sticker`}
                     accessibilityRole="button"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <View style={styles.stickerCellIcon}>
                       <Ionicons name={sticker.icon} size={28} color={colors.brand} />
@@ -3011,11 +3993,11 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Link color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: bgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Link'}</Text>
         </Pressable>
       </View>
@@ -3073,7 +4055,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           maxLength={80}
           accessibilityLabel="Location name"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Location'}</Text>
         </Pressable>
       </View>
@@ -3136,7 +4118,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
           autoCorrect={false}
           accessibilityLabel="Hashtag"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Hashtag'}</Text>
         </Pressable>
       </View>
@@ -3203,13 +4185,13 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Time format ${f.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: format === f.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
-        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Time'}</Text>
         </Pressable>
       </View>
@@ -3298,7 +4280,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
                 accessibilityLabel={`Weather ${w.condition}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
                 <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
@@ -3332,7 +4314,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
             accessibilityLabel="Weather location"
           />
         </View>
-        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Weather'}</Text>
         </Pressable>
       </View>
@@ -3350,13 +4332,140 @@ function createStyles(colors: ThemeColors) {
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
   mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  // ── Album/source disclosure ──
+  albumDisclosure: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  albumDisclosureText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.captionElevated.size,
+    flex: 1,
+  },
+  albumPickerDropdown: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.xs,
+    overflow: 'hidden',
+  },
+  albumPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.smMd,
+    minHeight: 40,
+  },
+  albumPickerItemText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    flex: 1,
+  },
+  // ── Category tabs ──
+  categoryTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    position: 'relative',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  categoryTabIndicator: {
+    position: 'absolute',
+    top: Space.xs,
+    bottom: 0,
+    borderRadius: Radius.md,
+    height: 36,
+  },
+  categoryTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: Space.sm,
+    zIndex: 1,
+  },
+  categoryTabLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  // ── Limited-access banner ──
+  limitedAccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.sm,
+  },
+  limitedAccessText: {
+    flex: 1,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+  },
+  // ── Selection preview rail ──
+  selectionPreviewRail: {
+    paddingVertical: Space.sm,
+  },
+  selectionPreviewScroll: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+  },
+  selectionPreviewItem: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  selectionPreviewThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  selectionPreviewOrder: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionPreviewOrderText: {
+    fontFamily: Typography.family.bold,
+    fontSize: 10,
+  },
+  selectionPreviewRemove: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  selectionPreviewReorderLeft: {
+    position: 'absolute',
+    left: 2,
+    top: '50%',
+    marginTop: -9,
+  },
+  selectionPreviewReorderRight: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+  },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
   mediaGridCell: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -3367,12 +4476,12 @@ function createStyles(colors: ThemeColors) {
   },
   mediaGridVideoBadge: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
+    bottom: Space.xs,
+    left: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
     borderRadius: Radius.sm,
@@ -3382,9 +4491,14 @@ function createStyles(colors: ThemeColors) {
     fontSize: 10,
     fontFamily: Typography.family.medium,
   },
+  // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
+  // The border communicates selection more clearly than a heavy dark overlay.
   mediaGridSelectedOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 2,
+    borderColor: '#fff',
+    borderRadius: Radius.md,
   },
   mediaGridSelectionBadge: {
     position: 'absolute',
@@ -3396,6 +4510,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   mediaGridSelectionText: {
     color: '#000',
@@ -3468,6 +4587,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
     paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
   },
+  // ── Product picker source tabs ──
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
@@ -3644,7 +4764,7 @@ function createStyles(colors: ThemeColors) {
   spectrumOverlay: { ...StyleSheet.absoluteFill },
   spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
-  // ── Vertical brush size slider (Instagram pattern) ──
+  // ── Vertical brush size slider ──
   brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
@@ -3706,5 +4826,11 @@ function createStyles(colors: ThemeColors) {
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
   sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  // ── Product source tabs ──
+  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
+  productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
+  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brand + '14' },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.captionElevated.size, color: colors.textSecondary },
   });
 }

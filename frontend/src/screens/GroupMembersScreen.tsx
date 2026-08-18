@@ -9,6 +9,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
@@ -129,7 +130,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             {filteredMembers.map((member, index) => (
               <View key={member.id}>
                 <AnimatedPressable
-                  onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
+                  onPress={() => openProfile(navigation, member.id, currentUser?.id)}
                   activeOpacity={0.85}
                   scaleValue={0.98}
                   hapticFeedback="light"
@@ -192,7 +193,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     gap: Space.sm,
   },
   memberAvatar: {
@@ -220,7 +221,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.sm,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
@@ -269,7 +270,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   memberAvatarV2: {
     width: Control.hit,
@@ -295,7 +296,7 @@ function createStyles(colors: ThemeColors) {
   memberDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Space.md + 44 + Space.sm + 4,
+    marginLeft: Space.md + 44 + Space.smMd,
     marginRight: Space.md,
   },
   emptyWrapV2: {

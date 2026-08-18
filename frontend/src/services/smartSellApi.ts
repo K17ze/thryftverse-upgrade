@@ -23,12 +23,14 @@
  * to change.
  */
 
+import { makeStableId } from '../utils/createStableId';
+
 // ---------------------------------------------------------------------------
 // Demo-mode flag — single source of truth
 // ---------------------------------------------------------------------------
 
 /** When true, all data returned by this service is mock/illustrative. */
-export const SMART_SELL_DEMO_MODE = true;
+export const SMART_SELL_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -275,10 +277,10 @@ export function simulateOfferReceived(
   const config = getOrCreateConfig(listingId);
   const action = decideAction(amount, config);
   const offer: SmartSellOffer = {
-    offerId: `demo_offer_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+    offerId: makeStableId('demo_offer'),
     listingId,
     offerAmount: Math.max(0, amount),
-    buyerId: `demo_buyer_${Math.floor(Math.random() * 1000)}`,
+    buyerId: makeStableId('demo_buyer'),
     buyerName: 'Demo buyer',
     status: statusForAction(action),
     receivedAt: new Date().toISOString(),

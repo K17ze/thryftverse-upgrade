@@ -1,0 +1,149 @@
+/**
+ * StickerCategories — sticker category + definition types and curated data.
+ *
+ * Extracted from CreatorAssetPicker's monolithic StickerTray (spec
+ * 07_MEDIA_TOOLCHAIN). Defines the sticker taxonomy used by
+ * StickerBrowserSheet.
+ *
+ * Categories:
+ *   - Emoji:       emoji stickers (rendered as text glyphs)
+ *   - Shapes:      decorative geometric shapes
+ *   - Arrows:      directional arrows
+ *   - Symbols:     punctuation / typographic symbols
+ *   - Decorative:  ornamental stickers (sparkles, stars, hearts)
+ *   - Interactive: poll / quiz / question / mention / location / hashtag / link
+ */
+import type { Ionicons } from '@expo/vector-icons';
+
+// ── Types ─────────────────────────────────────────────────────────────
+export interface StickerDef {
+  id: string;
+  name: string;
+  /** For emoji stickers — rendered as a text glyph. */
+  emoji?: string;
+  /** For icon-based stickers — Ionicons glyph name. */
+  iconRef?: React.ComponentProps<typeof Ionicons>['name'];
+  category: string;
+  /**
+   * Optional description shown in search results / accessibility label.
+   */
+  description?: string;
+  /**
+   * Interactive stickers (poll/quiz/question/mention/location/hashtag/link)
+   * require a configuration step after selection. When `interactive` is true
+   * the browser sheet calls onStickerSelect and expects the caller to open
+   * the relevant configuration picker.
+   */
+  interactive?: boolean;
+  /**
+   * For interactive stickers, the picker mode to route to after selection.
+   * Mirrors AssetPickerMode values used by CreatorAssetPicker.
+   */
+  pickerMode?: string;
+}
+
+export interface StickerCategory {
+  id: string;
+  name: string;
+  /** Ionicons glyph name for the category tab. */
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  stickers: StickerDef[];
+}
+
+// ── Curated sticker catalog ───────────────────────────────────────────
+// The 'auto' category is a placeholder entry — its stickers are populated
+// dynamically at runtime by AutoStickers.ts based on media analysis.
+export const AUTO_STICKER_CATEGORY: StickerCategory = {
+  id: 'auto',
+  name: 'Auto',
+  icon: 'bulb-outline',
+  stickers: [],
+};
+
+export const STICKER_CATEGORIES: StickerCategory[] = [
+  AUTO_STICKER_CATEGORY,
+  {
+    id: 'emoji',
+    name: 'Emoji',
+    icon: 'happy-outline',
+    stickers: [
+      { id: 'emoji-heart-eyes', name: 'Heart Eyes', emoji: '😍', category: 'emoji' },
+      { id: 'emoji-fire', name: 'Fire', emoji: '🔥', category: 'emoji' },
+      { id: 'emoji-sparkle', name: 'Sparkle', emoji: '✨', category: 'emoji' },
+      { id: 'emoji-heart', name: 'Heart', emoji: '❤️', category: 'emoji' },
+      { id: 'emoji-party', name: 'Party', emoji: '🎉', category: 'emoji' },
+      { id: 'emoji-star', name: 'Star', emoji: '⭐', category: 'emoji' },
+      { id: 'emoji-thumbs-up', name: 'Thumbs Up', emoji: '👍', category: 'emoji' },
+      { id: 'emoji-100', name: '100', emoji: '💯', category: 'emoji' },
+      { id: 'emoji-clap', name: 'Clap', emoji: '👏', category: 'emoji' },
+      { id: 'emoji-crown', name: 'Crown', emoji: '👑', category: 'emoji' },
+      { id: 'emoji-rocket', name: 'Rocket', emoji: '🚀', category: 'emoji' },
+      { id: 'emoji-diamond', name: 'Diamond', emoji: '💎', category: 'emoji' },
+    ],
+  },
+  {
+    id: 'shapes',
+    name: 'Shapes',
+    icon: 'shapes-outline',
+    stickers: [
+      { id: 'shape-circle', name: 'Circle', iconRef: 'ellipse-outline', category: 'shapes' },
+      { id: 'shape-square', name: 'Square', iconRef: 'square-outline', category: 'shapes' },
+      { id: 'shape-triangle', name: 'Triangle', iconRef: 'triangle-outline', category: 'shapes' },
+      { id: 'shape-star', name: 'Star', iconRef: 'star-outline', category: 'shapes' },
+      { id: 'shape-heart', name: 'Heart', iconRef: 'heart-outline', category: 'shapes' },
+      { id: 'shape-hexagon', name: 'Hexagon', iconRef: 'stop-outline', category: 'shapes' },
+    ],
+  },
+  {
+    id: 'arrows',
+    name: 'Arrows',
+    icon: 'arrow-up-outline',
+    stickers: [
+      { id: 'arrow-up', name: 'Up', iconRef: 'arrow-up', category: 'arrows' },
+      { id: 'arrow-down', name: 'Down', iconRef: 'arrow-down', category: 'arrows' },
+      { id: 'arrow-left', name: 'Left', iconRef: 'arrow-back', category: 'arrows' },
+      { id: 'arrow-right', name: 'Right', iconRef: 'arrow-forward', category: 'arrows' },
+      { id: 'arrow-up-right', name: 'Up Right', iconRef: 'arrow-up-right-box', category: 'arrows' },
+      { id: 'arrow-down-right', name: 'Down Right', iconRef: 'arrow-down-right-box', category: 'arrows' },
+    ],
+  },
+  {
+    id: 'symbols',
+    name: 'Symbols',
+    icon: 'pricetag-outline',
+    stickers: [
+      { id: 'symbol-check', name: 'Check', iconRef: 'checkmark-circle-outline', category: 'symbols' },
+      { id: 'symbol-cross', name: 'Cross', iconRef: 'close-circle-outline', category: 'symbols' },
+      { id: 'symbol-question', name: 'Question', iconRef: 'help-circle-outline', category: 'symbols' },
+      { id: 'symbol-exclaim', name: 'Exclaim', iconRef: 'alert-circle-outline', category: 'symbols' },
+      { id: 'symbol-info', name: 'Info', iconRef: 'information-circle-outline', category: 'symbols' },
+      { id: 'symbol-at', name: 'At', iconRef: 'at-outline', category: 'symbols' },
+    ],
+  },
+  {
+    id: 'decorative',
+    name: 'Decorative',
+    icon: 'sparkles-outline',
+    stickers: [
+      { id: 'deco-sparkles', name: 'Sparkles', iconRef: 'sparkles', category: 'decorative' },
+      { id: 'deco-flower', name: 'Flower', iconRef: 'flower-outline', category: 'decorative' },
+      { id: 'deco-ribbon', name: 'Ribbon', iconRef: 'gift-outline', category: 'decorative' },
+      { id: 'deco-gem', name: 'Gem', iconRef: 'diamond-outline', category: 'decorative' },
+      { id: 'deco-bow', name: 'Bow', iconRef: 'ribbon-outline', category: 'decorative' },
+    ],
+  },
+  {
+    id: 'interactive',
+    name: 'Interactive',
+    icon: 'stats-chart-outline',
+    stickers: [
+      { id: 'poll', name: 'Poll', iconRef: 'stats-chart-outline', category: 'interactive', description: '2-option vote', interactive: true, pickerMode: 'vote' },
+      { id: 'quiz', name: 'Quiz', iconRef: 'help-circle-outline', category: 'interactive', description: 'Trivia with answer', interactive: true, pickerMode: 'quiz' },
+      { id: 'question', name: 'Ask', iconRef: 'chatbubble-outline', category: 'interactive', description: 'Open Q&A', interactive: true, pickerMode: 'question' },
+      { id: 'mention', name: '@Mention', iconRef: 'at-outline', category: 'interactive', description: 'Tag a user', interactive: true, pickerMode: 'mention' },
+      { id: 'location', name: 'Location', iconRef: 'location-outline', category: 'interactive', description: 'Tag a place', interactive: true, pickerMode: 'location' },
+      { id: 'hashtag', name: 'Hashtag', iconRef: 'pricetag-outline', category: 'interactive', description: 'Topic tag', interactive: true, pickerMode: 'hashtag' },
+      { id: 'link', name: 'Link', iconRef: 'link-outline', category: 'interactive', description: 'Clickable URL', interactive: true, pickerMode: 'link' },
+    ],
+  },
+];

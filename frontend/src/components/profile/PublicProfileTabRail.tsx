@@ -1,7 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface TabItem {
   key: string;
@@ -15,9 +22,68 @@ interface PublicProfileTabRailProps {
   onChange: (key: string) => void;
 }
 
+const TAB_HEIGHT = 44;
+const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
+
+/**
+ * Public profile tab rail with one shared animated underline.
+ * Mirrors the canonical ProfileTabRail pattern — consistent motion language.
+ * Normal motion: timing animation (220ms cubic-out).
+ * Reduced motion: instant assignment — no animation.
+ */
 export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfileTabRailProps) {
   const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const tabWidths = useRef<Record<string, number>>({});
+  const tabOffsets = useRef<Record<string, number>>({});
+  const underlineTranslateX = useSharedValue(0);
+  const underlineWidth = useSharedValue(0);
+
+  const measureTabs = useCallback(() => {
+    let offsetX = 0;
+    for (const tab of tabs) {
+      tabOffsets.current[tab.key] = offsetX;
+      offsetX += tabWidths.current[tab.key] ?? 0;
+    }
+  }, [tabs]);
+
+  const positionUnderline = useCallback((key: string) => {
+    measureTabs();
+    const tabW = tabWidths.current[key] ?? 0;
+    const offsetX = tabOffsets.current[key] ?? 0;
+    const underlineW = tabW * 0.4;
+    const targetX = offsetX + (tabW - underlineW) / 2;
+    if (reducedMotionHook) {
+      underlineTranslateX.value = targetX;
+      underlineWidth.value = underlineW;
+    } else {
+      underlineTranslateX.value = withTiming(targetX, TIMING_CONFIG);
+      underlineWidth.value = withTiming(underlineW, TIMING_CONFIG);
+    }
+  }, [measureTabs, reducedMotionHook, underlineTranslateX, underlineWidth]);
+
+  const onTabLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    tabWidths.current[key] = e.nativeEvent.layout.width;
+    if (key === activeKey) {
+      positionUnderline(key);
+    }
+  }, [activeKey, positionUnderline]);
+
+  const handlePress = useCallback((key: string) => {
+    positionUnderline(key);
+    onChange(key);
+  }, [positionUnderline, onChange]);
+
+  React.useEffect(() => {
+    positionUnderline(activeKey);
+  }, [activeKey, positionUnderline]);
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: underlineTranslateX.value }],
+    width: underlineWidth.value,
+  }));
+
   return (
     <View style={styles.container}>
       {tabs.map((tab) => {
@@ -25,8 +91,9 @@ export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfil
         return (
           <Pressable
             key={tab.key}
-            style={styles.tab}
-            onPress={() => onChange(tab.key)}
+            style={({ pressed }) => [styles.tab, pressed && { opacity: 0.6 }]}
+            onLayout={onTabLayout(tab.key)}
+            onPress={() => handlePress(tab.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={`${tab.label} tab${tab.count !== undefined ? `, ${tab.count} items` : ''}`}
@@ -41,10 +108,11 @@ export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfil
                 </Text>
               ) : null}
             </View>
-            {isActive ? <View style={styles.underline} /> : null}
           </Pressable>
         );
       })}
+      {/* One shared animated underline — no remounting per tab */}
+      <Reanimated.View style={[styles.underline, underlineStyle]} />
     </View>
   );
 }
@@ -56,31 +124,34 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    position: 'relative',
   },
   tab: {
     flex: 1,
-    paddingVertical: Space.sm,
+    height: TAB_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    alignItems: 'baseline',
+    gap: Space.xs + 1,
   },
   label: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    letterSpacing: Type.body.letterSpacing,
   },
   labelActive: {
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
   count: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    minWidth: 14,
   },
   countActive: {
     color: colors.textSecondary,
@@ -88,10 +159,9 @@ function createStyles(colors: ThemeColors) {
   underline: {
     position: 'absolute',
     bottom: 0,
-    left: '25%',
-    right: '25%',
-    height: 2,
+    height: Stroke.emphasis,
     backgroundColor: colors.textPrimary,
+    borderRadius: Radius.sm,
   },
   });
 }

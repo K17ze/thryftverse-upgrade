@@ -9,11 +9,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  interpolateColor,
 } from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -165,7 +163,7 @@ export function SmartSellCard({
         <View style={styles.headerText}>
           <View style={styles.titleRow}>
             <Ionicons
-              name="sparkles"
+              name="trending-up-outline"
               size={20}
               color={colors.brand}
               style={styles.titleIcon}
@@ -185,7 +183,6 @@ export function SmartSellCard({
       {/* Configuration panel */}
       {config.enabled && (
         <Reanimated.View
-          entering={reducedMotion ? undefined : FadeInDown.duration(220)}
           style={panelStyle}
         >
           <View

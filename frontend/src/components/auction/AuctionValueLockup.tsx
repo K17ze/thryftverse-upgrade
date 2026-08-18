@@ -35,7 +35,12 @@ export function AuctionValueLockup({
   const sizes = SCALE_SIZES[scale];
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`${prefix}${izeText}${localText ? `, ${localText}` : ''}`}
+    >
       <Text style={[styles.izeValue, { fontSize: sizes.ize, lineHeight: sizes.izeLineHeight }]} numberOfLines={1}>
         {prefix && <Text style={[styles.prefix, { fontSize: sizes.prefix }]}>{prefix}</Text>}
         {izeText}

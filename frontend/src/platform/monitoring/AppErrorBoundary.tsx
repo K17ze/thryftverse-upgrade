@@ -205,7 +205,7 @@ function CrashRecoveryUI({
         </Reanimated.Text>
 
         <Reanimated.Text entering={enter} style={styles.subtext}>
-          The app encountered an unexpected error. You can try again, go home, or reload the app.
+          The app encountered an unexpected error. Try again, go home, or reload the app.
         </Reanimated.Text>
 
         {__DEV__ && message ? (

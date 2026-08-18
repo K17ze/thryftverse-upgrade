@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../../constants/colors';
-import { Typography, Radius, Space } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Radius, Space, Type } from '../../theme/designTokens';
 
 export type AppStatusTone = 'neutral' | 'accent' | 'positive' | 'negative' | 'warning';
 export type AppStatusSize = 'sm' | 'md';
@@ -16,46 +16,44 @@ interface AppStatusPillProps {
   textStyle?: StyleProp<TextStyle>;
 }
 
-const IS_LIGHT = ActiveTheme === 'light';
-
 type ToneTokens = {
   backgroundColor: string;
   borderColor: string;
   textColor: string;
 };
 
-function resolveTone(tone: AppStatusTone): ToneTokens {
+function resolveTone(tone: AppStatusTone, colors: ThemeColors, isDark: boolean): ToneTokens {
   switch (tone) {
     case 'accent':
       return {
-        backgroundColor: IS_LIGHT ? '#ece4d8' : '#17302b',
-        borderColor: IS_LIGHT ? '#d0c3af' : '#35574d',
-        textColor: IS_LIGHT ? '#7c5f1e' : '#d7b98f',
+        backgroundColor: isDark ? '#17302b' : '#ece4d8',
+        borderColor: isDark ? '#35574d' : '#d0c3af',
+        textColor: isDark ? '#d7b98f' : '#7c5f1e',
       };
     case 'positive':
       return {
-        backgroundColor: IS_LIGHT ? '#efe7d6' : '#142420',
-        borderColor: IS_LIGHT ? '#d9c6a2' : '#2d4a45',
-        textColor: IS_LIGHT ? '#7c5f1e' : '#d7b98f',
+        backgroundColor: isDark ? colors.success + '18' : '#efe7d6',
+        borderColor: isDark ? colors.success + '30' : '#d9c6a2',
+        textColor: isDark ? '#7bc99a' : '#3a6b42',
       };
     case 'negative':
       return {
-        backgroundColor: IS_LIGHT ? '#f6e6e6' : '#231616',
-        borderColor: IS_LIGHT ? '#ddb0b0' : '#4b2c2c',
-        textColor: IS_LIGHT ? '#b64242' : '#ff9d9d',
+        backgroundColor: isDark ? colors.danger + '18' : '#f6e6e6',
+        borderColor: isDark ? colors.danger + '30' : '#ddb0b0',
+        textColor: isDark ? '#ff9d9d' : '#b64242',
       };
     case 'warning':
       return {
-        backgroundColor: IS_LIGHT ? '#f7ecdb' : '#231f16',
-        borderColor: IS_LIGHT ? '#dfc9a5' : '#4a3f2f',
-        textColor: IS_LIGHT ? '#7c5f1e' : '#ffcf8a',
+        backgroundColor: isDark ? colors.warning + '18' : '#f7ecdb',
+        borderColor: isDark ? colors.warning + '30' : '#dfc9a5',
+        textColor: isDark ? '#ffcf8a' : '#8a6a3f',
       };
     case 'neutral':
     default:
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.border,
-        textColor: Colors.textSecondary,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.border,
+        textColor: colors.textSecondary,
       };
   }
 }
@@ -68,7 +66,8 @@ export function AppStatusPill({
   style,
   textStyle,
 }: AppStatusPillProps) {
-  const tokens = resolveTone(tone);
+  const { colors, isDark } = useAppTheme();
+  const tokens = resolveTone(tone, colors, isDark);
   const iconSize = size === 'sm' ? 12 : 14;
 
   return (
@@ -92,7 +91,7 @@ export function AppStatusPill({
 const styles = StyleSheet.create({
   base: {
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -106,11 +105,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   text: {
-    fontSize: Typography.size.micro + 1,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.25,
   },
   textMd: {
-    fontSize: Typography.size.caption,
+    fontSize: Type.caption.size,
   },
 });

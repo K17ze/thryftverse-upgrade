@@ -17,12 +17,13 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeInDown,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +31,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchFollowCounts } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -41,8 +43,7 @@ import { LookPreviewCard } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
-import { useSellerTrust } from '../platform/product';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -52,6 +53,31 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COVER_HEIGHT = 152;
+
+/**
+ * Compact number formatting for social/stats counters.
+ *   999        → "999"
+ *   1200       → "1.2K"
+ *   12500      → "12.5K"
+ *   125000     → "125K"
+ *   1250000    → "1.2M"
+ *   12500000   → "12M"
+ */
+function formatCompact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 100000) {
+    const v = (n / 1000).toFixed(1).replace(/\.0$/, '');
+    return `${v}K`;
+  }
+  if (n < 1000000) {
+    return `${Math.round(n / 1000)}K`;
+  }
+  if (n < 10000000) {
+    const v = (n / 1000000).toFixed(1).replace(/\.0$/, '');
+    return `${v}M`;
+  }
+  return `${Math.round(n / 1000000)}M`;
+}
 
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
@@ -83,6 +109,29 @@ export default function MyProfileScreen() {
     coverEditVisible: { backgroundColor: `${colors.textPrimary}8C`, borderColor: `${colors.textInverse}3D` },
     coverFailure: { backgroundColor: `${colors.textPrimary}B8` },
     soldOverlay: { backgroundColor: `${colors.textPrimary}80` },
+    statsRow: { borderBottomColor: colors.borderSubtle, borderTopColor: colors.borderSubtle },
+    statValue: { color: colors.textPrimary },
+    statLabel: { color: colors.textMuted },
+    statDivider: { backgroundColor: colors.borderSubtle },
+    trustBadgeText: { color: colors.textSecondary },
+    trustBadgeVerified: { color: colors.success },
+    trustBadgeSep: { backgroundColor: colors.borderSubtle },
+    completionCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    completionTrack: { backgroundColor: colors.borderSubtle },
+    completionFill: { backgroundColor: colors.brand },
+    completionTitle: { color: colors.textPrimary },
+    completionPercent: { color: colors.textMuted },
+    completionCta: { backgroundColor: colors.brand },
+    completionCtaText: { color: colors.textInverse },
+    growthCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    growthTitle: { color: colors.textPrimary },
+    growthRow: { borderColor: colors.borderSubtle },
+    growthRowTitle: { color: colors.textPrimary },
+    growthRowSub: { color: colors.textMuted },
+    portfolioPreview: { backgroundColor: colors.surfaceAlt },
+    portfolioLabel: { color: colors.textSecondary },
+    portfolioHoldingTitle: { color: colors.textPrimary },
+    portfolioHoldingUnits: { color: colors.textMuted },
   };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
@@ -92,10 +141,14 @@ export default function MyProfileScreen() {
 
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
-  const reducedMotionEnabled = useReducedMotion();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
+  // 'saved' is retained in the union so a stale value (e.g. from a previous
+  // session) can be guarded against in render, even though the Saved tab is no
+  // longer offered in the identity rail. Saved remains reachable via the
+  // utility rail / Closet navigation.
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'saved' | 'about'>('listings');
+  const tabContentY = React.useRef(0);
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -113,6 +166,17 @@ export default function MyProfileScreen() {
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+
+  // Follow counts — followers/following for the stats row
+  const [followCounts, setFollowCounts] = React.useState<{ followerCount: number; followingCount: number }>({ followerCount: 0, followingCount: 0 });
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    fetchFollowCounts(currentUser.id)
+      .then((counts) => { if (!cancelled) setFollowCounts(counts); })
+      .catch(() => { /* follow counts are non-critical */ });
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
@@ -266,6 +330,61 @@ export default function MyProfileScreen() {
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
 
+  // Profile completion — drives the progress prompt. Completion measures ONLY
+  // identity fields the user can complete directly: display name, bio, profile
+  // photo and cover. Audience growth (followers) and first listing are NOT
+  // profile-completion requirements — they are growth tasks surfaced separately
+  // below the identity hero so a user is never told their profile is
+  // "incomplete" because nobody has followed them or they haven't listed yet.
+  const completion = React.useMemo(() => {
+    const checks = [
+      Boolean(user.displayName?.trim()),
+      Boolean(user.bio?.trim()),
+      Boolean(displayAvatar),
+      Boolean(displayCover),
+    ];
+    const done = checks.filter(Boolean).length;
+    return { percent: Math.round((done / checks.length) * 100), done, total: checks.length };
+  }, [user.displayName, user.bio, displayAvatar, displayCover]);
+
+  // Once every direct identity field is filled the profile is "sufficiently
+  // complete" and the completion card is permanently removed from the ordinary
+  // profile view (it does not reappear on later visits).
+  const profileSufficientlyComplete = completion.percent >= 100;
+
+  // First missing identity facet → the CTA label + EditProfile focus. Every
+  // completion CTA routes to EditProfile because every remaining gap is a
+  // direct profile field. Listing/audience growth CTAs live in the separate
+  // growth-tasks section below the identity hero.
+  const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover' }>(() => {
+    if (!user.displayName?.trim()) return { label: 'Add name' };
+    if (!user.bio?.trim()) return { label: 'Add bio' };
+    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar' };
+    if (!displayCover) return { label: 'Add cover', focus: 'cover' };
+    return { label: 'Edit profile' };
+  }, [user.displayName, user.bio, displayAvatar, displayCover]);
+
+  const [completionDismissed, setCompletionDismissed] = React.useState(false);
+  // Re-show the prompt when completion improves so progress is celebrated once.
+  const prevPercentRef = React.useRef(completion.percent);
+  React.useEffect(() => {
+    if (completion.percent > prevPercentRef.current) {
+      setCompletionDismissed(false);
+    }
+    prevPercentRef.current = completion.percent;
+  }, [completion.percent]);
+  const showCompletionPrompt =
+    !profileSufficientlyComplete && !completionDismissed && completion.percent < 100;
+
+  // Growth tasks — first listing and audience growth are surfaced outside the
+  // identity hero as optional onboarding prompts. They are NOT profile-
+  // completion requirements. Each CTA routes to a truthful destination:
+  // "List your first item" → Sell, "Grow your audience" → creator analytics.
+  const showFirstListingGrowth = allOwnedListings.length === 0;
+  const showAudienceGrowth = followCounts.followerCount === 0;
+  const [growthDismissed, setGrowthDismissed] = React.useState(false);
+  const showGrowthPrompt = !growthDismissed && (showFirstListingGrowth || showAudienceGrowth);
+
   // Parallax scroll for cover
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -318,13 +437,23 @@ export default function MyProfileScreen() {
   });
 
   const handleShare = async () => {
+    haptic.light();
     try {
-      await Share.share({ message: `Check out @${user.username} on Thryftverse!` });
-    } catch { /* ignore */ }
+      await Share.share({
+        message: `Check out @${user.username} on Thryftverse! https://thryftverse.com/@${user.username}`,
+        url: `https://thryftverse.com/@${user.username}`,
+        title: `${user.displayName || user.username} on Thryftverse`,
+      });
+    } catch { /* user cancelled or share unavailable */ }
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
   const savedCount = useStore((state) => state.savedProducts.length);
+  const savedProductIds = useStore((state) => state.savedProducts);
+  const savedListings = React.useMemo(
+    () => listings.filter((item) => savedProductIds.includes(item.id)),
+    [listings, savedProductIds]
+  );
 
   const utilityItems = React.useMemo(
     () => [
@@ -332,26 +461,26 @@ export default function MyProfileScreen() {
         icon: 'bag-handle-outline' as const,
         label: 'Orders',
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: 'View your orders',
+        accessibilityLabel: 'Orders',
       },
       {
         icon: 'pulse-outline' as const,
         label: 'Analytics',
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: 'View your creator analytics',
+        accessibilityLabel: 'Creator analytics',
       },
       {
         icon: 'bookmark-outline' as const,
         label: 'Closet',
         value: `${savedCount + wishlistCount} items`,
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: 'View your closet',
+        accessibilityLabel: 'Closet',
       },
       {
         icon: 'wallet-outline' as const,
         label: 'Wallet',
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: 'View your wallet',
+        accessibilityLabel: 'Wallet',
       },
       {
         icon: 'timer-outline' as const,
@@ -367,11 +496,10 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'Browse co-own market',
       },
       {
-        icon: 'images-outline' as const,
-        label: 'Posters',
-        onPress: () => { haptic.light(); navigation.navigate('PosterArchive'); },
-        accessibilityLabel: 'Poster archive',
-        accessibilityHint: 'View your archived posters',
+        icon: 'storefront-outline' as const,
+        label: 'Seller Hub',
+        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
+        accessibilityLabel: 'Seller Hub',
       },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
@@ -381,8 +509,10 @@ export default function MyProfileScreen() {
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
     : undefined;
 
-  const GRID_GAP = 8;
-  const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
+  const GRID_GAP = 4;
+  const GRID_COLS = 3;
+  const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
 
   return (
     <View style={[styles.container, t.container]}>
@@ -402,12 +532,11 @@ export default function MyProfileScreen() {
         />
       </Reanimated.View>
 
-      {/* ── 2. FLOATING PERSONALISATION AND SETTINGS ── */}
+      {/* ── 2. FLOATING PERSONALISATION, SHARE AND SETTINGS ── */}
       <Reanimated.View pointerEvents="box-none" style={[styles.coverActionLayer, coverActionStyle]}>
         <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
-            activeOpacity={0.9}
             onPress={() => { haptic.light(); navigation.navigate('Personalisation'); }}
             accessibilityLabel="Open personalisation settings"
             accessibilityRole="button"
@@ -418,18 +547,31 @@ export default function MyProfileScreen() {
             </View>
           </AnimatedPressable>
 
-          <AnimatedPressable
-            style={styles.topUtilityIconBtn}
-            activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-            accessibilityHint="Opens account and app settings"
-          >
-            <View style={styles.topUtilityVisible}>
-              <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
-            </View>
-          </AnimatedPressable>
+          <View style={styles.topUtilityRight}>
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              onPress={handleShare}
+              accessibilityLabel="Share profile"
+              accessibilityRole="button"
+              accessibilityHint="Opens the system share sheet to share your profile"
+            >
+              <View style={styles.topUtilityVisible}>
+                <Ionicons name="share-outline" size={18} color={colors.textInverse} />
+              </View>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+              accessibilityLabel="Open settings"
+              accessibilityRole="button"
+              accessibilityHint="Opens account and app settings"
+            >
+              <View style={styles.topUtilityVisible}>
+                <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
+              </View>
+            </AnimatedPressable>
+          </View>
         </Reanimated.View>
 
         {coverState.status === 'failed' ? (
@@ -443,8 +585,6 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={retryCover}
-              activeOpacity={0.75}
-              scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Retry cover upload"
               hitSlop={5}
@@ -454,8 +594,6 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={revertCover}
-              activeOpacity={0.75}
-              scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Cancel cover change"
               hitSlop={5}
@@ -467,8 +605,6 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.coverEditTarget}
             onPress={pickCover}
-            activeOpacity={0.8}
-            scaleValue={0.97}
             hapticFeedback="light"
             disabled={coverState.status === 'uploading'}
             accessibilityRole="button"
@@ -505,7 +641,7 @@ export default function MyProfileScreen() {
         scrollEventThrottle={16}
       >
         {/* ── 3-9: IDENTITY HERO + ACTIONS ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <View>
           <MyProfileIdentityHero
             avatarUri={displayAvatar}
             displayName={user.displayName || user.username}
@@ -517,9 +653,16 @@ export default function MyProfileScreen() {
             lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
+            followerCount={followCounts.followerCount}
+            followingCount={followCounts.followingCount}
             onEditAvatar={pickAvatar}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
+            onPressListings={() => { haptic.light(); navigation.navigate('MyListings'); }}
+            onPressLooks={() => { haptic.light(); setActiveTab('looks'); scrollRef.current?.scrollTo({ y: tabContentY.current, animated: true }); }}
+            onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
+            onPressFollowers={() => { haptic.light(); navigation.navigate('Followers', { userId: currentUser!.id }); }}
+            onPressFollowing={() => { haptic.light(); navigation.navigate('Following', { userId: currentUser!.id }); }}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
@@ -551,12 +694,15 @@ export default function MyProfileScreen() {
               { key: 'looks', label: 'Looks', count: myLooks.length },
               { key: 'about', label: 'About' },
             ]}
-            activeKey={activeTab}
+            activeKey={activeTab === 'saved' ? 'listings' : activeTab}
             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── 10. ACTIVE TAB CONTENT ── */}
+        <View
+          onLayout={(e) => { tabContentY.current = e.nativeEvent.layout.y; }}
+        >
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
@@ -570,8 +716,7 @@ export default function MyProfileScreen() {
                 </Text>
                 <AnimatedPressable
                   style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
-                  onPress={() => navigation.navigate('MainTabs')}
-                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('Sell')}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
                   hitSlop={1}
@@ -597,19 +742,18 @@ export default function MyProfileScreen() {
                     <AnimatedPressable
                       key={item.id}
                       style={[styles.gridCard, { width: CARD_WIDTH }]}
-                      activeOpacity={0.9}
                       onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                       accessibilityRole="button"
                       accessibilityLabel={`Manage ${item.title}`}
                     >
                       <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_WIDTH * 1.25 }]}
+                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
                         sharedTransitionTag={`image-${item.id}-0`}
                       >
                         <CachedImage
                           uri={item.images?.[0] ?? ''}
                           style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
                           contentFit="cover"
                         />
                         {item.isSold ? (
@@ -624,11 +768,6 @@ export default function MyProfileScreen() {
                       {item.brand ? (
                         <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
                       ) : null}
-                      {(item.size || item.condition) ? (
-                        <Text style={[styles.gridMeta, t.gridMeta]} numberOfLines={1}>
-                          {[item.size, item.condition].filter(Boolean).join(' · ')}
-                        </Text>
-                      ) : null}
                     </AnimatedPressable>
                   ))}
                 </View>
@@ -642,12 +781,12 @@ export default function MyProfileScreen() {
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: colors.textMuted, fontSize: Type.body.size }}>Loading looks...</Text>
+                <Text style={{ color: colors.textMuted, fontSize: TypographyV2.body.size }}>Loading looks...</Text>
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
                 density="compact"
-                icon="sparkles-outline"
+                icon="images-outline"
                 title="No Looks yet"
                 subtitle="Create your first Look to showcase your style."
                 ctaLabel="Create Look"
@@ -676,84 +815,68 @@ export default function MyProfileScreen() {
         )}
 
         {/* ABOUT TAB — flat editorial layout */}
+        {/* Bio, location, and member-since are shown in the IdentityHero above.
+            The About tab shows only information NOT already visible: website,
+            shop policies, and Co-Own portfolio (recessed from the hero). */}
         {activeTab === 'about' && (
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
-            <View style={styles.aboutContainer}>
-              {user.bio ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Bio</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.bio}</Text>
+            {/* ── CO-OWN PORTFOLIO PREVIEW — recessed into About tab ── */}
+            {coOwnHoldings.length > 0 ? (
+              <AnimatedPressable
+                style={[styles.portfolioPreview, t.portfolioPreview]}
+                onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
+                accessibilityRole="button"
+                accessibilityLabel="View Co-Own portfolio"
+                accessibilityHint="Opens your Co-Own holdings hub"
+              >
+                <View style={styles.portfolioHeader}>
+                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
+                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                  </View>
                 </View>
-              ) : null}
-              {user.location ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Location</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.location}</Text>
+                <View style={styles.portfolioHoldings}>
+                  {coOwnHoldings.slice(0, 3).map((h) => (
+                    <View key={h.id} style={styles.portfolioHoldingCard}>
+                      {h.image ? (
+                        <CachedImage
+                          uri={h.image}
+                          style={styles.portfolioHoldingImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
+                      )}
+                      <View style={styles.portfolioHoldingInfo}>
+                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
+                          {h.title}
+                        </Text>
+                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
+                          {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              ) : null}
-              {user.website ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.website}</Text>
-                </View>
-              ) : null}
-              {memberSince ? (
-                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Member Since</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{memberSince}</Text>
-                </View>
-              ) : null}
-              {!user.bio && !user.location && !user.website && !memberSince && (
-                <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No profile details added yet.</Text>
-              )}
-            </View>
+              </AnimatedPressable>
+            ) : null}
 
-            {/* Shop stats — derived from seller trust data */}
-            {sellerTrust ? (
+            {user.website ? (
               <View style={styles.aboutContainer}>
-                <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop stats</Text>
-                {sellerTrust.rating !== null && sellerTrust.rating !== undefined && sellerTrust.reviewCount ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Rating</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>
-                      {sellerTrust.rating.toFixed(1)} ★ ({sellerTrust.reviewCount} review{sellerTrust.reviewCount === 1 ? '' : 's'})
-                    </Text>
+                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
+                    <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
+                    <Ionicons name="open-outline" size={13} color={colors.textMuted} />
                   </View>
-                ) : null}
-                {sellerTrust.completedSales !== null && sellerTrust.completedSales !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Completed sales</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.completedSales}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.responseTimeLabel ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response time</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>Replies {sellerTrust.responseTimeLabel}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.dispatchTimeLabel ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Dispatch time</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.dispatchTimeLabel}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.responseRate !== null && sellerTrust.responseRate !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.activeListingCount !== null && sellerTrust.activeListingCount !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Active listings</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.activeListingCount}</Text>
-                  </View>
-                ) : null}
+                </View>
               </View>
             ) : null}
 
-            {/* Shop policies — derived from trust + account data */}
+            {/* Shop policies — canonical home for dispatch/response details.
+                Trust badges above show a compact "Replies Xh" pill; this section
+                provides the full policy context without duplicating the badge. */}
             <View style={styles.aboutContainer}>
               <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
               <View style={[styles.aboutRow, t.aboutRow]}>
@@ -772,6 +895,12 @@ export default function MyProfileScreen() {
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
               </View>
+              {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
+                <View style={[styles.aboutRow, t.aboutRow]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
+                </View>
+              ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
@@ -781,8 +910,105 @@ export default function MyProfileScreen() {
                 </Text>
               </View>
             </View>
+
+            {!user.website && !sellerTrust && (
+              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No additional details available.</Text>
+            )}
           </View>
         )}
+        </View>
+
+        {/* ── COMPLETION & GROWTH PROMPTS — below the fold, not competing with identity ── */}
+        {/* These are optional onboarding prompts that recede below the tab
+            content so identity dominates the first viewport. They are still
+            accessible by scrolling down. */}
+        {showCompletionPrompt ? (
+          <View style={[styles.completionCard, t.completionCard]}>
+            <View style={styles.completionHead}>
+              <View style={styles.completionHeadText}>
+                <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
+                <Text style={[styles.completionPercent, t.completionPercent]}>
+                  {completion.percent}% · {completion.done}/{completion.total}
+                </Text>
+              </View>
+              <AnimatedPressable
+                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                onPress={() => { haptic.light(); setCompletionDismissed(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss profile completion prompt"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </AnimatedPressable>
+            </View>
+            <View style={[styles.completionTrack, t.completionTrack]}>
+              <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
+            </View>
+            <AnimatedPressable
+              style={[styles.completionCta, t.completionCta]}
+              onPress={() => {
+                haptic.light();
+                navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={completionCta.label}
+            >
+              <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
+            </AnimatedPressable>
+          </View>
+        ) : null}
+
+        {showGrowthPrompt ? (
+          <View style={[styles.growthCard, t.growthCard]}>
+            <View style={styles.growthHead}>
+              <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
+              <AnimatedPressable
+                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                onPress={() => { haptic.light(); setGrowthDismissed(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss growth prompts"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </AnimatedPressable>
+            </View>
+
+            {showFirstListingGrowth ? (
+              <AnimatedPressable
+                style={[styles.growthRow, t.growthRow]}
+                onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
+                accessibilityRole="button"
+                accessibilityLabel="List your first item"
+                accessibilityHint="Opens the sell flow to create your first listing"
+              >
+                <View style={styles.growthRowText}>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
+                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                    Photograph and publish an item to start selling.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+            ) : null}
+
+            {showAudienceGrowth ? (
+              <AnimatedPressable
+                style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
+                onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Grow your audience"
+                accessibilityHint="Opens creator analytics with audience growth tools"
+              >
+                <View style={styles.growthRowText}>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
+                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                    Share your profile and create content to attract followers.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+            ) : null}
+          </View>
+        ) : null}
       </Reanimated.ScrollView>
     </View>
   );
@@ -794,10 +1020,10 @@ const myProfileStyles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm + 2,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
+    paddingVertical: Space.md - 2,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
@@ -805,12 +1031,14 @@ const myProfileStyles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   awayBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });
 
@@ -844,16 +1072,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  topUtilityRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
   topUtilityIconBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Co-Own portfolio preview — flagship elevated card ──
+  portfolioPreview: {
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+  },
+  portfolioHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.md,
+  },
+  portfolioLabel: {
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.label.letterSpacing,
+  },
+  portfolioHoldings: {
+    flexDirection: 'row',
+    gap: Space.md,
+  },
+  portfolioHoldingCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  portfolioHoldingImage: {
+    width: 48,
+    height: 48,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    flexShrink: 0,
+  },
+  portfolioHoldingInfo: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  portfolioHoldingTitle: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
+  portfolioHoldingUnits: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
   topUtilityVisible: {
     width: Space.xl - 2,
     height: Space.xl - 2,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -872,7 +1155,7 @@ const styles = StyleSheet.create({
   coverEditVisible: {
     width: Space.xl + 2,
     height: Space.xl + 2,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.24)',
@@ -885,9 +1168,9 @@ const styles = StyleSheet.create({
     right: Space.md - 2,
     bottom: Space.sm,
     minHeight: Control.hit,
-    paddingLeft: Space.sm + 4,
+    paddingLeft: Space.smMd,
     paddingRight: Space.xs + 1,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     backgroundColor: 'rgba(0,0,0,0.72)',
     flexDirection: 'row',
     alignItems: 'center',
@@ -902,8 +1185,8 @@ const styles = StyleSheet.create({
   },
   coverFailureText: {
     flexShrink: 1,
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
   },
   coverFailureAction: {
     minWidth: Space.xxl + 4,
@@ -913,8 +1196,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   coverFailureActionText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
   },
 
   // Collapsed header
@@ -931,9 +1214,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   floatingHeaderTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
 
   // Listings grid
@@ -945,24 +1228,25 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   gridHeaderCount: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridHeaderAction: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 4,
   },
   gridCard: {
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.sm,
   },
   gridImageWrap: {
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -977,90 +1261,263 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    marginTop: Space.xs + 2,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold,
+    marginTop: Space.xs + 1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridBrand: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
-  },
-  gridMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    marginTop: 1,
   },
 
   // Listings empty state — compact in-grid prompt, not full blank page
   listingsEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xl,
+    paddingVertical: Space.xl + Space.sm,
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
   listingsEmptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   listingsEmptyBody: {
     maxWidth: 280,
-    fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     textAlign: 'center',
   },
   listingsEmptyCta: {
     marginTop: Space.xs + 2,
-    minHeight: Control.hit - 2,
+    minHeight: 44,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
   },
   listingsEmptyCtaText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
 
-  // About — flat editorial rows
+  // About — flat editorial rows, flagship elevated
   aboutContainer: {
     paddingHorizontal: Space.md,
   },
   aboutSectionTitle: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.bold,
-    paddingTop: Space.md + 2,
-    paddingBottom: Space.xs,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase',
+    paddingTop: Space.md + 4,
+    paddingBottom: Space.sm,
   },
   aboutRow: {
-    paddingVertical: Space.md - 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.xs,
   },
   aboutRowLast: {
     borderBottomWidth: 0,
   },
   aboutLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
-    marginBottom: Space.xs,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   aboutValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   aboutEmpty: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
-    paddingVertical: Space.xl,
+    paddingVertical: Space.xl + Space.sm,
+  },
+
+  // Stats row — followers / following / listings / sales
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    marginBottom: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xs,
+    gap: Space.xs / 4,
+  },
+  statValue: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+  },
+  statLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.xl - Space.xs,
+  },
+
+  // Seller trust badges — horizontal scroll
+  trustBadgesScroll: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  trustBadgesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs / 2,
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustBadgeText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: 0.1,
+  },
+  trustBadgeSep: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.sm + Space.xxs,
+  },
+
+  // Profile completion prompt — flagship elevated card
+  completionCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
+  },
+  completionHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  completionHeadText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  completionTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+  },
+  completionPercent: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: 0.1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  completionDismiss: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -Space.xs / 2,
+    marginRight: -Space.xs / 2,
+    borderRadius: RadiusRoleValue.pillAvatar,
+  },
+  completionTrack: {
+    height: 4,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    overflow: 'hidden',
+  },
+  completionFill: {
+    height: '100%',
+    borderRadius: RadiusRoleValue.pillAvatar,
+  },
+  completionCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    minHeight: 44,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    paddingHorizontal: Space.md,
+  },
+  completionCtaText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: 0.1,
+  },
+
+  // Growth tasks — optional onboarding prompts (first listing / audience)
+  growthCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
+  },
+  growthHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  growthTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+  },
+  growthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  growthRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  growthRowText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  growthRowTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  growthRowSub: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });

@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   title3: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.title.letterSpacing,
   },
   title2: {

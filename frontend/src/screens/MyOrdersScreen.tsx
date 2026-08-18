@@ -11,12 +11,10 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 import {
@@ -83,7 +81,6 @@ export default function MyOrdersScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
@@ -246,6 +243,8 @@ export default function MyOrdersScreen() {
         shippingProvider: order.shippingProvider,
         role,
         counterpartyUsername,
+        shipByDate: order.shipByDate ?? null,
+        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
       };
     });
   }, [orders, viewerId]);
@@ -304,6 +303,25 @@ export default function MyOrdersScreen() {
 
   const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
 
+  // FlashList v2 performance: memoized outer renderItem prevents full re-render
+  // of all visible order groups on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderGroupItem = useCallback(
+    ({ item: group }: { item: DateGroup }) => (
+      <View>
+        {renderGroupHeader(group.label)}
+        <FlashList
+          data={group.data}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          ItemSeparatorComponent={renderSeparator}
+          scrollEnabled={false}
+        />
+      </View>
+    ),
+    [renderGroupHeader, keyExtractor, renderItem, renderSeparator]
+  );
+
   const renderEmpty = useCallback(() => {
     if (!viewerId) {
       return (
@@ -350,7 +368,7 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="bag-outline"
           title="No purchases yet"
-          subtitle="Your purchases will appear here."
+          subtitle="When you buy something, your orders will show up here."
           ctaLabel="Browse items"
           onCtaPress={() => navigation.navigate('MainTabs')}
         />
@@ -361,7 +379,7 @@ export default function MyOrdersScreen() {
       <EmptyState
         icon="pricetag-outline"
         title="No sales yet"
-        subtitle="Items you sell will appear here."
+        subtitle="When you sell something, your orders will show up here."
         ctaLabel="List an item"
         onCtaPress={() => navigation.navigate('Sell')}
       />
@@ -456,7 +474,7 @@ export default function MyOrdersScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Orders</Text>
         <Pressable
@@ -482,20 +500,18 @@ export default function MyOrdersScreen() {
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <Pressable
-            style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
-            onPress={() => setFilter({ classification: 'needs_action', year: null })}
-            accessibilityRole="button"
-            accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
-          >
-            <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
-            <Text style={[styles.needsActionText, { color: colors.brand }]}>
-              {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-          </Pressable>
-        </Reanimated.View>
+        <Pressable
+          style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
+          onPress={() => setFilter({ classification: 'needs_action', year: null })}
+          accessibilityRole="button"
+          accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
+          <Text style={[styles.needsActionText, { color: colors.brand }]}>
+            {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </Pressable>
       )}
 
       <View style={styles.searchRow}>
@@ -542,18 +558,7 @@ export default function MyOrdersScreen() {
       <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
-        renderItem={({ item: group }) => (
-          <View>
-            {renderGroupHeader(group.label)}
-            <FlashList
-              data={group.data}
-              keyExtractor={keyExtractor}
-              renderItem={renderItem}
-              ItemSeparatorComponent={renderSeparator}
-              scrollEnabled={false}
-            />
-          </View>
-        )}
+        renderItem={renderGroupItem}
         ListEmptyComponent={
           loadError && orders.length === 0
             ? renderError
@@ -611,8 +616,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
     color: colors.textPrimary,
   },
   headerFilterBtn: {
@@ -632,7 +639,9 @@ function createStyles(colors: ThemeColors) {
   needsActionText: {
     flex: 1,
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   searchRow: {
@@ -663,26 +672,31 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   filterSummaryText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   clearFilterText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   groupHeader: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.xs,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xs + 2,
   },
   groupHeaderText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
   },
   listContent: {
     paddingBottom: Space.xl,
@@ -690,7 +704,7 @@ function createStyles(colors: ThemeColors) {
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: Space.xxl * 2 + Space.sm,
+    marginLeft: Space.md + 80 + Space.md,
   },
   errorContainer: {
     alignItems: 'center',
@@ -732,7 +746,9 @@ function createStyles(colors: ThemeColors) {
   },
   footerLoadingText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   footerError: {
@@ -744,12 +760,16 @@ function createStyles(colors: ThemeColors) {
   },
   footerErrorText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   retryLink: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   footerEnd: {
@@ -757,8 +777,10 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerEndText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   });

@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   retryBtn: {
     marginTop: Space.lg,

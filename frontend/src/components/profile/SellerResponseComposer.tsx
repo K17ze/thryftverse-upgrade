@@ -66,8 +66,9 @@ export function SellerResponseComposer({
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <View style={styles.sheet}>
           <View style={styles.handle} />
 
           {/* Header */}
@@ -90,6 +91,7 @@ export function SellerResponseComposer({
               disabled={isSubmitting}
               accessibilityRole="button"
               accessibilityLabel="Close response composer"
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
             >
               <Ionicons name="close" size={22} color={colors.textMuted} />
             </Pressable>
@@ -132,8 +134,8 @@ export function SellerResponseComposer({
               icon={isSubmitting ? undefined : <Ionicons name="send-outline" size={16} color={colors.textInverse} />}
             />
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -196,12 +198,12 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   guidanceBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     backgroundColor: colors.surfaceAlt,
@@ -213,7 +215,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   inputCard: {
     marginHorizontal: Space.md,

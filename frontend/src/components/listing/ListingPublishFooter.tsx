@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 type PublicationStage =
   | 'idle'
@@ -22,6 +22,12 @@ interface ListingPublishFooterProps {
   onPreview: () => void;
   onPublish: () => void;
   bottomInset: number;
+  /** Listing quality score (0-100) for compact readiness indicator. */
+  qualityScore?: number;
+  /** Quality tier label (e.g. "Excellent", "Good", "Basic"). */
+  qualityTierLabel?: string;
+  /** Quality color — communicates tier through color, not chrome. */
+  qualityColor?: string;
 }
 
 function getPublishLabel(mode: string, isPublishing: boolean): string {
@@ -35,14 +41,16 @@ function getPublishLabel(mode: string, isPublishing: boolean): string {
   return 'Publish';
 }
 
+// Per audit 04 publication states: expose only meaningful states.
+//   Uploading photos… → Publishing… → Almost done… → recoverable failure.
 function getStageText(stage: PublicationStage): string | null {
   switch (stage) {
     case 'uploading_media':
-      return 'Uploading media…';
+      return 'Uploading photos…';
     case 'creating_listing':
-      return 'Creating listing…';
+      return 'Publishing…';
     case 'attaching_media':
-      return 'Adding media…';
+      return 'Almost done…';
     case 'completed':
       return 'Listing created. Resuming media attachment.';
     case 'failed_recoverable':
@@ -61,15 +69,23 @@ export function ListingPublishFooter({
   onPreview,
   onPublish,
   bottomInset,
+  qualityScore,
+  qualityTierLabel,
+  qualityColor,
 }: ListingPublishFooterProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const stageText = getStageText(publicationStage);
   const showFeedback = stageText !== null || (errorMsg !== null && publicationStage !== 'idle');
+  // Quality indicator only shows when no active publication feedback.
+  // Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
+  // not a second dashboard." The quality score is a compact inline indicator,
+  // not a duplicate dashboard.
+  const showQuality = qualityScore != null && qualityTierLabel != null && qualityColor != null && !showFeedback;
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(bottomInset, Space.sm) }]}>
-      {/* Publication feedback */}
+      {/* Publication feedback — replaces quality indicator when active */}
       {showFeedback && (
         <View style={styles.feedbackRow}>
           {publicationStage !== 'failed_recoverable' && publicationStage !== 'idle' && (
@@ -91,10 +107,22 @@ export function ListingPublishFooter({
         </View>
       )}
 
-      {/* Action buttons */}
+      {/* Compact quality readiness indicator — flat inline, no panel chrome.
+          Per audit 04 P1 + AGENTS.md §4 surface budget. Color communicates
+          tier, not a card or badge cluster. */}
+      {showQuality && (
+        <View style={styles.qualityRow}>
+          <View style={[styles.qualityDot, { backgroundColor: qualityColor }]} />
+          <Text style={styles.qualityLabel}>Listing quality</Text>
+          <Text style={[styles.qualityScore, { color: qualityColor }]}>{qualityScore}%</Text>
+          <Text style={styles.qualityTier}>{qualityTierLabel}</Text>
+        </View>
+      )}
+
+      {/* Action buttons — per AGENTS.md §13: pressed feedback (scale + opacity) */}
       <View style={styles.actionRow}>
         <Pressable
-          style={styles.previewBtn}
+          style={({ pressed }) => [styles.previewBtn, pressed && styles.previewBtnPressed]}
           onPress={onPreview}
           accessibilityRole="button"
           accessibilityLabel="Preview listing"
@@ -102,9 +130,10 @@ export function ListingPublishFooter({
           <Text style={styles.previewText}>Preview</Text>
         </Pressable>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.publishBtn,
             publishDisabled && styles.publishBtnDisabled,
+            pressed && !publishDisabled && styles.publishBtnPressed,
           ]}
           onPress={onPublish}
           disabled={publishDisabled}
@@ -155,6 +184,34 @@ function createStyles(colors: ThemeColors) {
     color: colors.danger,
     fontFamily: Typography.family.semibold,
   },
+  /* Compact quality indicator — flat, no surface, no border.
+     Per AGENTS.md §4: flat canvas, no card containers. */
+  qualityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingBottom: Space.sm,
+  },
+  qualityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  qualityLabel: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  qualityScore: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  qualityTier: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
+  },
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
@@ -162,12 +219,16 @@ function createStyles(colors: ThemeColors) {
   previewBtn: {
     flex: 1,
     height: 48,
-    borderRadius: Radius.xxl,
+    borderRadius: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  previewBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
   },
   previewText: {
     fontSize: Type.bodyEmphasis.size,
@@ -177,10 +238,14 @@ function createStyles(colors: ThemeColors) {
   publishBtn: {
     flex: 1.5,
     height: 48,
-    borderRadius: Radius.xxl,
+    borderRadius: 12,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  publishBtnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
   },
   publishBtnDisabled: {
     backgroundColor: colors.surfaceAlt,

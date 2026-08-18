@@ -13,6 +13,9 @@
  * genuinely live.
  */
 
+import { formatFiatAmount } from '../utils/currency';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -831,7 +834,7 @@ export async function connectToStream(streamId: string): Promise<LiveStream | nu
             streamId,
             userId: 'system',
             userName: 'ThryftVerse',
-            message: `Sold! ${lot.title} — ${winnerName} at £${lot.currentPrice.toFixed(0)}`,
+            message: `Sold! ${lot.title} — ${winnerName} at ${formatFiatAmount(lot.currentPrice, DEFAULT_CURRENCY_CODE, 0)}`,
             type: 'system',
           });
           emitEvent(connection, 'chat', { message: sysMsg });
@@ -978,7 +981,7 @@ export async function placeStreamBid(
     userId: 'me',
     userName: 'You',
     userAvatar: 'https://ui-avatars.com/api/?name=You&background=4A7AC4&color=fff&size=64',
-    message: `Bid £${amount.toFixed(0)} on ${lot.title}`,
+    message: `Bid ${formatFiatAmount(amount, DEFAULT_CURRENCY_CODE, 0)} on ${lot.title}`,
     type: 'bid',
   });
   emitEvent(conn, 'chat', { message: bidMsg });
@@ -1059,7 +1062,7 @@ export async function buyNowDuringStream(
     streamId,
     userId: 'system',
     userName: 'ThryftVerse',
-    message: `Sold! ${lot.title} — You bought it now at £${finalPrice.toFixed(0)}`,
+    message: `Sold! ${lot.title} — You bought it now at ${formatFiatAmount(finalPrice, DEFAULT_CURRENCY_CODE, 0)}`,
     type: 'purchase',
   });
   emitEvent(conn, 'chat', { message: sysMsg });
@@ -1125,7 +1128,7 @@ export async function advanceToNextLot(
     streamId,
     userId: 'system',
     userName: 'ThryftVerse',
-    message: `Now showing: ${nextLot.title} — Starting at £${nextLot.startingPrice.toFixed(0)}`,
+    message: `Now showing: ${nextLot.title} — Starting at ${formatFiatAmount(nextLot.startingPrice, DEFAULT_CURRENCY_CODE, 0)}`,
     type: 'system',
   });
   emitEvent(conn, 'chat', { message: sysMsg });
@@ -1174,7 +1177,7 @@ export async function endCurrentLot(
     streamId,
     userId: 'system',
     userName: 'ThryftVerse',
-    message: `Sold! ${lot.title} — ${winnerName} at £${lot.currentPrice.toFixed(0)}`,
+    message: `Sold! ${lot.title} — ${winnerName} at ${formatFiatAmount(lot.currentPrice, DEFAULT_CURRENCY_CODE, 0)}`,
     type: 'system',
   });
   emitEvent(conn, 'chat', { message: sysMsg });

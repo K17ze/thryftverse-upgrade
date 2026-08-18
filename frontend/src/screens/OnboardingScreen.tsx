@@ -7,7 +7,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   FadeOutDown,
   SlideInRight,
   useAnimatedStyle,
@@ -23,7 +22,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 
 const ONBOARDING_KEY = '@thryftverse_onboarding_complete';
 
@@ -133,6 +132,11 @@ export default function OnboardingScreen() {
     void finishOnboarding();
   }, [haptic, finishOnboarding]);
 
+  const goBack = useCallback(() => {
+    haptic.patterns.tabSwitch();
+    setCurrentIndex((i) => Math.max(i - 1, 0));
+  }, [haptic]);
+
   // Animated dots indicator — the active dot widens as the user advances.
   // Each dot is a dedicated component so useAnimatedStyle is called once
   // per dot (rules-of-hooks safe), not inside a .map() callback.
@@ -153,29 +157,46 @@ export default function OnboardingScreen() {
     }
   };
 
-  // Keyed Reanimated view re-mounts on slide change so the entering/exit
-  // transitions replay for each slide — FadeInDown for the icon + title,
-  // a slide for the body copy. Reduced-motion users get instant swaps.
-  const enterVariant = reducedMotion
-    ? FadeInDown.duration(0)
-    : FadeInDown.springify().damping(18).stiffness(180);
-  const bodyEnter = reducedMotion
+  // Keyed Reanimated view re-mounts on slide change so the slide transition
+  // replays for each slide. Reduced-motion users get instant swaps.
+  const slideEnter = reducedMotion
     ? SlideInRight.duration(0)
     : SlideInRight.springify().damping(20).stiffness(200);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Skip control — top-right, transparent 44pt target per AGENTS.md §4 */}
+      {/* Top bar — Back control (left, transparent 44pt) + Skip (right).
+          A visible Back control reduces commitment anxiety
+          (§27.1 behavioral). Users know they can revisit previous slides
+          without losing context. The step eyebrow gives immediate
+          position context ("01 / 04") so users know how much remains. */}
       <View style={styles.topBar}>
+        {currentIndex > 0 ? (
+          <Pressable
+            onPress={goBack}
+            hitSlop={Control.hit / 2}
+            accessibilityRole="button"
+            accessibilityLabel="Previous slide"
+            accessibilityHint="Go back to the previous introduction slide"
+            style={styles.backTarget}
+          >
+            <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
+          </Pressable>
+        ) : (
+          <View style={styles.backTarget} />
+        )}
+        <Text style={[styles.stepEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+          {String(currentIndex + 1).padStart(2, '0')} / {String(SLIDES.length).padStart(2, '0')}
+        </Text>
         <Pressable
           onPress={goSkip}
-          hitSlop={12}
+          hitSlop={Control.hit / 2}
           accessibilityRole="button"
           accessibilityLabel="Skip onboarding"
           accessibilityHint="Skip the introduction and continue to the app"
           style={styles.skipTarget}
         >
-          <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
+          <Text style={[styles.skipText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Skip</Text>
         </Pressable>
       </View>
 
@@ -184,29 +205,35 @@ export default function OnboardingScreen() {
             the enter/exit transition on every slide change. */}
         <Reanimated.View
           key={`slide-${currentIndex}`}
-          entering={enterVariant}
+          entering={slideEnter}
           exiting={reducedMotion ? FadeOutDown.duration(0) : FadeOutDown.duration(220)}
           style={styles.slideContent}
         >
           {/* Icon — the dominant visual anchor for each slide.
-              Rendered directly at 56pt with semantic color; no background circle. */}
-          <Ionicons
-            name={slide.icon}
-            size={56}
-            color={resolveAccent(slide.iconBackground)}
-            style={styles.icon}
-          />
+              Rendered inside a subtle tinted panel that uses the slide's
+              semantic color. Color-coded
+              icon panels create immediate visual differentiation between
+              slides, aiding recall and orientation. The panel is
+              restrained — a soft tint, not a heavy container. */}
+          <View style={[styles.iconPanel, { backgroundColor: resolveAccent(slide.iconBackground) + '15' }]}>
+            <Ionicons
+              name={slide.icon}
+              size={56}
+              color={resolveAccent(slide.iconBackground)}
+              style={styles.icon}
+            />
+          </View>
 
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
             {slide.title}
           </Text>
 
-          <Reanimated.Text
-            entering={bodyEnter}
+          <Text
             style={[styles.body, { color: colors.textSecondary }]}
+            maxFontSizeMultiplier={1.4}
           >
             {slide.body}
-          </Reanimated.Text>
+          </Text>
         </Reanimated.View>
       </View>
 
@@ -254,10 +281,23 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
+  },
+  backTarget: {
+    minHeight: Control.hit,
+    minWidth: Control.hit,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingHorizontal: Space.sm,
+  },
+  stepEyebrow: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.caps,
+    textTransform: 'uppercase',
   },
   skipTarget: {
     minHeight: Control.hit,
@@ -282,8 +322,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  icon: {
+  iconPanel: {
+    width: Space.xxl + Space.xxl + Space.lg,
+    height: Space.xxl + Space.xxl + Space.lg,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Space.xl,
+  },
+  icon: {
+    marginBottom: 0,
   },
   title: {
     fontSize: Type.title.size,

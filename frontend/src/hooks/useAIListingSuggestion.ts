@@ -67,7 +67,7 @@ export function useAIListingSuggestion(
         const msg =
           typeof e === 'object' && e !== null && 'message' in e && typeof (e as Error).message === 'string'
             ? (e as Error).message
-            : 'AI analysis failed. Please try again.';
+            : 'AI analysis failed. Try again.';
         setError(msg);
         setSuggestion(null);
       } finally {

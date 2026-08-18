@@ -34,12 +34,12 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
         </View>
       </View>
       <Pressable
-        style={styles.stateContainer}
+        style={({ pressed }) => [styles.stateContainer, pressed && { opacity: 0.6 }]}
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel="Retry loading profile"
@@ -74,7 +74,7 @@ export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
         </View>
       </View>
@@ -112,7 +112,7 @@ export function ProfileBlockedState({
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
           <View style={{ flex: 1 }} />
           <AnimatedPressable
@@ -168,7 +168,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
   stateText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },

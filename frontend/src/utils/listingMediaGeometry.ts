@@ -1,4 +1,4 @@
-import type { Listing } from "../data/mockData";
+import type { Listing } from '../domain';
 import { AspectRatio } from "../theme/designTokens";
 
 /**

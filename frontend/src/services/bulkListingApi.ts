@@ -1,4 +1,7 @@
 import { createListingOnApi } from './listingsApi';
+import { formatFiatAmount } from '../utils/currency';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { makeStableId } from '../utils/createStableId';
 
 // ---------------------------------------------------------------------------
 // Bulk Listing — types and orchestration for batch listing creation.
@@ -59,10 +62,10 @@ export function validateBulkListing(item: BulkListingItem): ValidationResult {
   }
 
   if (!Number.isFinite(item.price) || item.price < MIN_PRICE) {
-    errors.push(`Price must be at least £${MIN_PRICE.toFixed(2)}.`);
+    errors.push(`Price must be at least ${formatFiatAmount(MIN_PRICE, DEFAULT_CURRENCY_CODE, 2)}.`);
   }
   if (item.price > MAX_PRICE) {
-    errors.push(`Price must be £${MAX_PRICE.toLocaleString()} or less.`);
+    errors.push(`Price must be ${formatFiatAmount(MAX_PRICE, DEFAULT_CURRENCY_CODE, 2)} or less.`);
   }
 
   if (!item.category || item.category.trim().length === 0) {
@@ -103,7 +106,7 @@ export async function submitBulkListings(
     const item = items[i];
     try {
       const coverImage = item.images[0];
-      const listingId = `listing_${Date.now()}_${i}_${Math.floor(Math.random() * 10000)}`;
+      const listingId = makeStableId(`listing_${i}`);
       await createListingOnApi({
         id: listingId,
         sellerId,

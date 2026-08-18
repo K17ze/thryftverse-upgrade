@@ -7,19 +7,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Type, FontFamily } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { changePassword } from '../services/authApi';
+import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { FlagshipNavigationRow } from '../components/flagship/FlagshipNavigationRow';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -27,7 +27,6 @@ export default function ChangePasswordScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
-  const reducedMotionEnabled = useReducedMotion();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -40,28 +39,34 @@ export default function ChangePasswordScreen() {
 
   const handleUpdate = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      show('Please fill in all fields', 'error');
+      haptics.error();
+      show('Fill in all fields', 'error');
       return;
     }
     if (newPassword.length < 8) {
+      haptics.error();
       show('New password must be at least 8 characters', 'error');
       return;
     }
     if (currentPassword === newPassword) {
+      haptics.error();
       show('New password must be different from current password', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
+      haptics.error();
       show('New passwords do not match', 'error');
       return;
     }
     setIsUpdating(true);
     try {
       await changePassword({ currentPassword, newPassword });
+      haptics.success();
       show('Password updated successfully', 'success');
       navigation.goBack();
-    } catch (error: any) {
-      show(error.message || 'Unable to change password', 'error');
+    } catch (error: unknown) {
+      haptics.error();
+      show(error instanceof Error ? error.message : 'Unable to change password', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -79,13 +84,13 @@ export default function ChangePasswordScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Change Password" subtitle="Update your security" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Change Password" onBack={() => navigation.goBack()} />}
       keyboardAvoiding
       stickyFooter={
         <FlagshipStickyFooter
           actions={[
             {
-              label: isUpdating ? 'Updating…' : 'Update Password',
+              label: isUpdating ? 'Updating…' : 'Change password',
               onPress: handleUpdate,
               variant: 'primary',
               disabled: isUpdating,
@@ -95,18 +100,23 @@ export default function ChangePasswordScreen() {
         />
       }
     >
-      {/* Security posture hero */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: twoFactorEnabled ? colors.success : colors.bronze }]}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+      {/* Security posture — flat state variant. Surfaces 2FA status before the form. */}
+        <FlagshipFormSection
+          variant="state"
+          tone={twoFactorEnabled ? 'success' : 'warning'}
+          title="Security"
+        >
+          <View style={styles.postureRow}>
+            <Ionicons
+              name={twoFactorEnabled ? 'shield-checkmark' : 'shield-checkmark-outline'}
+              size={22}
+              color={twoFactorEnabled ? colors.success : colors.warning}
+            />
+            <View style={styles.postureText}>
+              <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
                 {twoFactorEnabled ? '2FA enabled' : '2FA not enabled'}
               </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+              <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
                 {twoFactorEnabled
                   ? 'Your account has an extra layer of security'
                   : 'Add two-factor authentication for stronger protection'}
@@ -114,131 +124,156 @@ export default function ChangePasswordScreen() {
             </View>
           </View>
           {!twoFactorEnabled && (
-            <AnimatedPressable
+            <FlagshipNavigationRow
+              title="Set up 2FA"
+              subtitle="Strengthen your account security"
+              icon="lock-closed-outline"
               onPress={() => navigation.navigate('TwoFactorSetup')}
-              style={styles.heroAction}
-              accessibilityRole="button"
               accessibilityLabel="Set up two-factor authentication"
-            >
-              <Text style={[styles.heroActionText, { color: colors.brand }]}>Set up 2FA</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-            </AnimatedPressable>
+              accessibilityHint="Opens the two-factor authentication setup screen"
+            />
           )}
-        </View>
-      </Reanimated.View>
+        </FlagshipFormSection>
 
-      <FlagshipFormSection title="Security" description="Enter your current password to confirm your identity.">
-        <PremiumTextField
-          label="Current Password"
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry={isSecure}
-          placeholder="Enter current password"
-          rightAction={eyeIcon}
+      {/* Flat intro — no hero card. Just a plain description. */}
+      <Text style={[styles.intro, { color: colors.textSecondary }]}>
+        Use a unique password you don't use elsewhere.
+      </Text>
+
+      {/* Flat form — no card wrapper. Fields carry their own boundary. */}
+        <FlagshipFormSection variant="flat">
+          <PremiumTextField
+            label="Current password"
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            secureTextEntry={isSecure}
+            placeholder="Enter current password"
+            rightAction={eyeIcon}
+            appearance="filled"
+            autoComplete="current-password"
+            textContentType="password"
+            onFocus={haptics.tap}
+          />
+          <PremiumTextField
+            label="New password"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry={isSecure}
+            placeholder="Enter new password"
+            appearance="filled"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            onFocus={haptics.tap}
+          />
+          {/* Password requirements appear progressively — only once typing starts */}
+          {newPassword.length > 0 && (
+            <View style={styles.strengthWrap}>
+              <PasswordStrengthBar password={newPassword} />
+            </View>
+          )}
+          <PremiumTextField
+            label="Confirm new password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={isSecure}
+            placeholder="Re-enter new password"
+            errorText={passwordsMismatch ? 'Passwords do not match' : undefined}
+            appearance="filled"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            onFocus={haptics.tap}
+          />
+          {/* Match indicator — flat, no card */}
+          {confirmPassword.length > 0 && (
+            <View style={styles.matchRow}>
+              <View style={[styles.matchDot, { backgroundColor: passwordsMatch ? colors.success : colors.danger }]} />
+              <Text style={[styles.matchText, { color: passwordsMatch ? colors.success : colors.danger }]}>
+                {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+              </Text>
+            </View>
+          )}
+          <AnimatedPressable
+            onPress={() => navigation.navigate('ForgotPassword')}
+            style={styles.forgotPasswordLink}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password"
+          >
+            <Text style={[styles.forgotPasswordText, { color: colors.brand }]}>Forgot password?</Text>
+          </AnimatedPressable>
+        </FlagshipFormSection>
+
+      {/* Other security — flat navigation rows, no bordered sessions card */}
+      <FlagshipFormSection variant="flat" title="Other security">
+        <FlagshipNavigationRow
+          title="Active sessions"
+          subtitle="Review and sign out of other devices"
+          icon="phone-portrait-outline"
+          onPress={() => navigation.navigate('ActiveSessions')}
+          accessibilityLabel="Review active sessions"
+          accessibilityHint="Opens the active sessions screen"
         />
-        <PremiumTextField
-          label="New Password"
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry={isSecure}
-          placeholder="Enter new password"
+        <FlagshipNavigationRow
+          title={twoFactorEnabled ? 'Two-factor authentication' : 'Two-factor authentication'}
+          subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
+          icon="shield-checkmark-outline"
+          iconColor={twoFactorEnabled ? colors.success : undefined}
+          onPress={() => navigation.navigate('TwoFactorSetup')}
+          accessibilityLabel="Two-factor authentication"
+          accessibilityHint={twoFactorEnabled ? 'View two-factor settings' : 'Set up two-factor authentication'}
         />
-        <View style={{ marginTop: Space.xs, marginBottom: Space.sm }}>
-          <PasswordStrengthBar password={newPassword} />
-        </View>
-        <PremiumTextField
-          label="Confirm New Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry={isSecure}
-          placeholder="Re-enter new password"
-          errorText={passwordsMismatch ? 'Passwords do not match' : undefined}
-        />
-        {/* Match indicator */}
-        {confirmPassword.length > 0 && (
-          <View style={styles.matchRow}>
-            <View style={[styles.matchDot, { backgroundColor: passwordsMatch ? colors.success : colors.danger }]} />
-            <Text style={[styles.matchText, { color: passwordsMatch ? colors.success : colors.danger }]}>
-              {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
-            </Text>
-          </View>
-        )}
-        <AnimatedPressable
-          onPress={() => navigation.navigate('ForgotPassword')}
-          style={styles.forgotPasswordLink}
-          accessibilityRole="button"
-          accessibilityLabel="Forgot password"
-        >
-          <Text style={[styles.forgotPasswordText, { color: colors.brand }]}>Forgot Password?</Text>
-        </AnimatedPressable>
       </FlagshipFormSection>
 
-      {/* Sessions warning */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
-        <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.noteText, { color: colors.textSecondary }]}>
+      {/* Sessions note — flat info row, no card, no border. */}
+        <View style={styles.sessionsNote}>
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.textMuted}
+          />
+          <Text style={[styles.sessionsNoteText, { color: colors.textMuted }]}>
             After changing your password, you'll stay signed in on this device. Review your active sessions to sign out of other devices.
           </Text>
         </View>
-        <AnimatedPressable
-          onPress={() => navigation.navigate('ActiveSessions')}
-          style={[styles.sessionsLink, { borderColor: colors.border }]}
-          accessibilityRole="button"
-          accessibilityLabel="Review active sessions"
-        >
-          <Ionicons name="phone-portrait-outline" size={18} color={colors.textPrimary} />
-          <Text style={[styles.sessionsLinkText, { color: colors.textPrimary }]}>Review active sessions</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </AnimatedPressable>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    postureRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
       gap: Space.sm,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.captionElevated.lineHeight,
-      marginTop: Space.xs - 2,
-    },
-    heroAction: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      alignSelf: 'flex-start',
       paddingVertical: Space.xs,
     },
-    heroActionText: {
+    postureText: {
+      flex: 1,
+    },
+    postureTitle: {
       fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontFamily: FontFamily.semibold,
+      lineHeight: Type.body.lineHeight,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    postureSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      marginTop: 2,
+    },
+    intro: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.regular,
+      lineHeight: Type.body.lineHeight,
+      letterSpacing: Type.body.letterSpacing,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.lg,
+    },
+    strengthWrap: {
+      marginTop: Space.xs,
+      marginBottom: Space.sm,
     },
     matchRow: {
       flexDirection: 'row',
@@ -249,51 +284,36 @@ function createStyles(colors: ThemeColors) {
     matchDot: {
       width: Space.sm,
       height: Space.sm,
-      borderRadius: Radius.sm,
+      borderRadius: Space.sm / 2,
     },
     matchText: {
       fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontFamily: FontFamily.medium,
     },
     forgotPasswordLink: {
       marginTop: Space.sm,
       alignItems: 'center',
-      paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
     },
     forgotPasswordText: {
       fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontFamily: FontFamily.medium,
       letterSpacing: Type.body.letterSpacing,
     },
-    noteCard: {
+    sessionsNote: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.sm,
-    },
-    noteText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.captionElevated.lineHeight,
-      flex: 1,
-    },
-    sessionsLink: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.lg,
     },
-    sessionsLinkText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+    sessionsNoteText: {
       flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
     },
   });
 }

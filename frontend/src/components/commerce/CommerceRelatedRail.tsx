@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Space.md,
-    gap: 12,
+    gap: Space.sm + Space.xs,
   },
   card: {
     width: 148,
@@ -193,12 +193,12 @@ const styles = StyleSheet.create({
     minHeight: 36,
     marginBottom: Space.xs,
     fontSize: Type.captionElevated.size,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
   },
   cardPrice: {
     fontSize: Type.bodyEmphasis.size,
-    lineHeight: 20,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   cardIze: {

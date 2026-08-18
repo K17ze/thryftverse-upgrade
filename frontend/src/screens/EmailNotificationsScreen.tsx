@@ -21,7 +21,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -33,7 +32,6 @@ import {
   type EmailPreferences,
 } from '../services/accountApi';
 import { RootStackParamList } from '../navigation/types';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EmailNotifications'>;
 
@@ -137,7 +135,7 @@ const GROUPS: CategoryGroup[] = [
         key: 'marketing',
         label: 'Promotions and offers',
         description: 'Featured collections, seasonal campaigns',
-        icon: 'sparkles',
+        icon: 'pricetag-outline',
         iconColor: 'antiqueGold',
         defaultEnabled: false,
       },
@@ -149,7 +147,6 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [preferences, setPreferences] = React.useState<EmailPreferences | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -218,7 +215,6 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — visual identity */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -232,7 +228,6 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
 
         {error && !preferences ? (
           <EmptyState
@@ -244,9 +239,8 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
           />
         ) : (
           GROUPS.map((group, groupIdx) => (
-            <Reanimated.View
+            <View
               key={group.title}
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay((groupIdx + 1) * 80)}
             >
               {/* Section header */}
               <View style={styles.sectionHeader}>
@@ -298,7 +292,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                   );
                 })}
               </View>
-            </Reanimated.View>
+            </View>
           ))
         )}
 

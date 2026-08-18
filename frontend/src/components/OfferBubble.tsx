@@ -253,14 +253,14 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.sm,
     },
     typeLabel: {
       fontFamily: Typography.family.semibold,
     },
     content: {
-      padding: Space.sm + 4,
+      padding: Space.smMd,
       paddingTop: Space.sm,
     },
     itemRow: {
@@ -270,7 +270,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: `${colors.textPrimary}08`,
       padding: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.sm + 4,
+      marginBottom: Space.smMd,
     },
     itemImage: {
       width: 40,
@@ -316,7 +316,7 @@ function createStyles(colors: ThemeColors) {
     actions: {
       flexDirection: 'row',
       gap: Space.sm + 2,
-      marginTop: Space.sm + 4,
+      marginTop: Space.smMd,
     },
     actionButton: {
       flex: 1,
@@ -335,7 +335,7 @@ function createStyles(colors: ThemeColors) {
     footer: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.sm,
       borderTopWidth: 1,
       borderTopColor: colors.border,

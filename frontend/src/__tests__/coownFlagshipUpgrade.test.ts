@@ -103,9 +103,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('MetricGrid');
     });
 
-    it('SyndicateHubScreen uses CoOwnMarketHeader', () => {
+    it('SyndicateHubScreen uses FlagshipHeader', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('CoOwnMarketHeader');
+      expect(src).toContain('FlagshipHeader');
     });
 
     it('SyndicateHubScreen has search', () => {
@@ -150,9 +150,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain('CoOwnTradeComposer');
     });
 
-    it('TradeScreen uses CoOwnMarketHeader', () => {
+    it('TradeScreen uses FlagshipHeader', () => {
       const src = readSrc('screens/TradeScreen.tsx');
-      expect(src).toContain('CoOwnMarketHeader');
+      expect(src).toContain('FlagshipHeader');
     });
 
     it('TradeScreen uses Review order button', () => {
@@ -217,9 +217,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain('RefreshControl');
     });
 
-    it('SyndicateOrderHistoryScreen uses CoOwnMarketHeader', () => {
+    it('SyndicateOrderHistoryScreen uses FlagshipHeader', () => {
       const src = readSrc('screens/SyndicateOrderHistoryScreen.tsx');
-      expect(src).toContain('CoOwnMarketHeader');
+      expect(src).toContain('FlagshipHeader');
       expect(src).toContain('Activity');
     });
   });
@@ -231,9 +231,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('MetricGrid');
     });
 
-    it('MarketLedgerScreen uses CoOwnMarketHeader', () => {
+    it('MarketLedgerScreen uses FlagshipHeader', () => {
       const src = readSrc('screens/MarketLedgerScreen.tsx');
-      expect(src).toContain('CoOwnMarketHeader');
+      expect(src).toContain('FlagshipHeader');
     });
 
     it('MarketLedgerScreen has summary card', () => {
@@ -241,9 +241,9 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain('summaryCard');
     });
 
-    it('AssetLeaderboardScreen uses CoOwnMarketHeader', () => {
+    it('AssetLeaderboardScreen uses FlagshipHeader', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
-      expect(src).toContain('CoOwnMarketHeader');
+      expect(src).toContain('FlagshipHeader');
       expect(src).toContain('Market overview');
       expect(src).not.toContain('Most co-owners');
     });

@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useAppTheme } from '../theme/ThemeContext';
@@ -30,7 +30,7 @@ import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionH
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { RootStackParamList } from '../navigation/types';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -41,7 +41,6 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 
@@ -62,8 +61,20 @@ const SORT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'Price: Low to High', label: 'Price: Low to High' },
   { value: 'Price: High to Low', label: 'Price: High to Low' },
   { value: 'Most liked', label: 'Most liked' },
-  { value: 'Ending soon', label: 'Ending soon' },
 ];
+
+// Auction-only sort option — only surfaced when the browse context is
+// auction-related (spec §08: "Do not show: Ending soon for fixed-price-only
+// results"). Prevents an irrelevant sort from appearing in normal listing
+// browse where no items have end times.
+const AUCTION_SORT_OPTION = { value: 'Ending soon', label: 'Ending soon' };
+
+function getSortOptions(categoryId: string, searchQuery?: string): Array<{ value: string; label: string }> {
+  const isAuctionContext =
+    categoryId.toLowerCase().includes('auction') ||
+    (searchQuery?.toLowerCase().includes('auction') ?? false);
+  return isAuctionContext ? [...SORT_OPTIONS, AUCTION_SORT_OPTION] : SORT_OPTIONS;
+}
 
 type BrowseRoute = RouteProp<RootStackParamList, 'Browse'>;
 
@@ -131,6 +142,7 @@ export default function BrowseScreen() {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       marginTop: Space.xs + 2,
+      fontVariant: ['tabular-nums'],
     },
 
     filterBar: { paddingBottom: Space.md },
@@ -277,7 +289,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      marginBottom: Space.sm + 4,
+      marginBottom: Space.smMd,
     },
     gridImageContainer: {
       width: '100%',
@@ -306,7 +318,7 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       marginBottom: Space.xs,
     },
-    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold },
+    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
     brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
     sizeText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
     sellerActionRow: {
@@ -369,7 +381,6 @@ export default function BrowseScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
@@ -404,11 +415,11 @@ export default function BrowseScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem(BROWSE_SORT_PREF_KEY).then((stored) => {
-      if (stored && SORT_OPTIONS.some((opt) => opt.value === stored)) {
+      if (stored && getSortOptions(categoryId, searchQuery).some((opt) => opt.value === stored)) {
         updateBrowseFilters({ sort: stored as any });
       }
     }).catch(() => {});
-  }, [updateBrowseFilters]);
+  }, [updateBrowseFilters, categoryId, searchQuery]);
 
   useScrollToTop(scrollRef);
 
@@ -495,7 +506,9 @@ export default function BrowseScreen() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any' ||
-    browseFilters.sustainableOnly;
+    browseFilters.sustainableOnly ||
+    browseFilters.priceMin != null ||
+    browseFilters.priceMax != null;
 
   // Filtered-empty vs. regular empty: user-applied filters (brand, size,
   // condition, sustainable, query, sort) produce a filtered-empty state
@@ -514,6 +527,8 @@ export default function BrowseScreen() {
       sizes: [],
       condition: 'Any',
       sustainableOnly: false,
+      priceMin: null,
+      priceMax: null,
     });
   }, [updateBrowseFilters]);
 
@@ -591,6 +606,10 @@ export default function BrowseScreen() {
         return false;
       }
 
+      // Price range filter (GBP)
+      if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
+      if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
+
       // Sustainable — client-side heuristic: only A/B graded items.
       if (
         browseFilters.sustainableOnly &&
@@ -645,9 +664,9 @@ export default function BrowseScreen() {
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200)} style={styles.loadingStateWrap}>
+    <View style={styles.loadingStateWrap}>
       <MasonrySkeleton numColumns={gridDensity === 'compact' ? 3 : 2} itemCount={gridDensity === 'compact' ? 9 : 6} horizontalPadding={Space.md} gap={3} />
-    </Reanimated.View>
+    </View>
   );
 
   // Sustainability is a client-side heuristic, so it must be applied to both
@@ -676,9 +695,9 @@ export default function BrowseScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)} style={styles.header}>
+      <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -695,14 +714,14 @@ export default function BrowseScreen() {
             <Ionicons name="search" size={20} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
+      <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <Text style={styles.itemCountText} accessibilityLiveRegion="polite">{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
+      <View style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AnimatedPressable
             style={[styles.filterPill, hasActiveFilters && styles.filterPillActive]}
@@ -807,17 +826,18 @@ export default function BrowseScreen() {
             </AnimatedPressable>
           )}
         </ScrollView>
-      </Reanimated.View>
+      </View>
 
       {sortMenuOpen ? (
         <View style={styles.sortMenu}>
-          {SORT_OPTIONS.map((opt, idx) => {
+          {getSortOptions(categoryId, searchQuery).map((opt, idx) => {
+            const sortOpts = getSortOptions(categoryId, searchQuery);
             const isActive = browseFilters.sort === opt.value;
             return (
               <Pressable
                 key={opt.value}
                 onPress={() => handleSortSelect(opt.value)}
-                style={[styles.sortMenuItem, idx === SORT_OPTIONS.length - 1 && { borderBottomWidth: 0 }]}
+                style={[styles.sortMenuItem, idx === sortOpts.length - 1 && { borderBottomWidth: 0 }]}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected: isActive }}
@@ -952,11 +972,20 @@ export default function BrowseScreen() {
             showSaveButton
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
+            testIDPrefix="golden-browse-product-card"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => void handleRefresh()}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
           />
         ) : hasAnyFiltering ? (
           // Filtered-empty — filters returned no results. Friendly, not an
           // error: the user can adjust or clear filters to recover.
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+          <View style={{ flex: 1 }}>
             <EmptyState
               icon="filter-outline"
               title="No items match your filters"
@@ -964,11 +993,11 @@ export default function BrowseScreen() {
               ctaLabel="Clear filters"
               onCtaPress={handleClearFilters}
             />
-          </Reanimated.View>
+          </View>
         ) : (
           // Regular empty — no data at all for this category/search. Distinct
           // from filtered-empty: there is nothing to show regardless of filters.
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+          <View style={{ flex: 1 }}>
             <EmptyState
               icon="pricetag-outline"
               title="No items here yet"
@@ -976,7 +1005,7 @@ export default function BrowseScreen() {
               ctaLabel="Explore all"
               onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
             />
-          </Reanimated.View>
+          </View>
         )}
       </View>
     </SafeAreaView>

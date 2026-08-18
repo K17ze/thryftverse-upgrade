@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withSequence,
   runOnJS,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
@@ -15,6 +16,8 @@ import type { PosterSticker as ApiPosterSticker } from '../../services/postersAp
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { ContextMenu, type ContextMenuAction } from './shared/ContextMenu';
+import { formatFullDate } from '../../utils/dateFormat';
 
 interface PosterStickerLayerProps {
   stickers: ApiPosterSticker[];
@@ -25,6 +28,16 @@ interface PosterStickerLayerProps {
   onStickerTransformChange?: (id: string, updates: { scale?: number; rotation?: number }) => void;
   /** Delete the selected sticker. When provided, a delete button appears on selection. */
   onDeleteSticker?: (id: string) => void;
+  /** Duplicate a sticker. When provided, appears in the long-press context menu. */
+  onDuplicateSticker?: (id: string) => void;
+  /** Reorder sticker z-index. When provided, appears in the long-press context menu. */
+  onReorderSticker?: (id: string, direction: 'front' | 'back') => void;
+  /** Toggle sticker lock state. When provided, appears in the long-press context menu. */
+  onToggleStickerLock?: (id: string) => void;
+  /** Flip sticker horizontally. When provided, appears in the long-press context menu. */
+  onFlipSticker?: (id: string) => void;
+  /** Toggle die-cut white border. When provided, appears in the long-press context menu. */
+  onToggleBorder?: (id: string) => void;
   containerWidth: number;
   containerHeight: number;
   style?: ViewStyle;
@@ -33,10 +46,6 @@ interface PosterStickerLayerProps {
 const CLAMP_MARGIN = 0.05;
 const STICKER_BASE_HALF_W = 22; // half of minWidth 44
 const STICKER_BASE_HALF_H = 22; // half of minHeight 44
-// Offset for the selection handle relative to the sticker base — matches
-// the half-width/half-height so the handle sits at the corner.
-const STICKER_HANDLE_OFFSET = 22;
-const HANDLE_SIZE = 12;
 
 function clampNormalizedScaled(
   value: number,
@@ -61,11 +70,69 @@ export function PosterStickerLayer({
   onStickerPositionChange,
   onStickerTransformChange,
   onDeleteSticker,
+  onDuplicateSticker,
+  onReorderSticker,
+  onToggleStickerLock,
+  onFlipSticker,
+  onToggleBorder,
   containerWidth,
   containerHeight,
   style,
 }: PosterStickerLayerProps) {
   const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const knownIdsRef = React.useRef<Set<string>>(new Set());
+  const mountedRef = React.useRef(false);
+
+  // Context menu state — long-press opens an ActionSheet with sticker actions.
+  // The per-sticker gesture composition calls onContextMenu(sticker) to set
+  // this; the shared <ContextMenu> sheet is then driven by `visible`.
+  const [contextMenuSticker, setContextMenuSticker] = useState<ApiPosterSticker | null>(null);
+
+  // Build the context-menu action list from the active sticker + callbacks.
+  // Mirrors the previous inline StickerContextMenu action set (duplicate,
+  // front/back, lock, flip, border, delete) but via the shared ContextMenu API.
+  const contextMenuActions = useMemo<ContextMenuAction[]>(() => {
+    if (!contextMenuSticker) return [];
+    const id = contextMenuSticker.id;
+    const actions: ContextMenuAction[] = [];
+    if (onDuplicateSticker) {
+      actions.push({ id: 'duplicate', label: 'Duplicate', icon: 'copy-outline', onPress: () => onDuplicateSticker(id) });
+    }
+    if (onReorderSticker) {
+      actions.push({ id: 'front', label: 'Front', icon: 'arrow-up-circle-outline', onPress: () => onReorderSticker(id, 'front') });
+      actions.push({ id: 'back', label: 'Back', icon: 'arrow-down-circle-outline', onPress: () => onReorderSticker(id, 'back') });
+    }
+    if (onToggleStickerLock) {
+      actions.push({ id: 'lock', label: 'Lock', icon: 'lock-closed-outline', onPress: () => onToggleStickerLock(id) });
+    }
+    if (onFlipSticker) {
+      actions.push({ id: 'flip', label: 'Flip', icon: 'swap-horizontal-outline', onPress: () => onFlipSticker(id) });
+    }
+    if (onToggleBorder) {
+      actions.push({ id: 'border', label: 'Border', icon: 'square-outline', onPress: () => onToggleBorder(id) });
+    }
+    if (onDeleteSticker) {
+      actions.push({ id: 'delete', label: 'Delete', icon: 'trash-outline', onPress: () => onDeleteSticker(id), danger: true });
+    }
+    return actions;
+  }, [contextMenuSticker, onDuplicateSticker, onReorderSticker, onToggleStickerLock, onFlipSticker, onToggleBorder, onDeleteSticker]);
+
+  const isFirstRender = !mountedRef.current;
+  const spawnSet = React.useMemo(() => {
+    const set = new Set<string>();
+    if (isFirstRender) return set;
+    for (const s of stickers) {
+      if (!knownIdsRef.current.has(s.id)) set.add(s.id);
+    }
+    return set;
+  }, [stickers, isFirstRender]);
+
+  useEffect(() => {
+    stickers.forEach((s) => knownIdsRef.current.add(s.id));
+    mountedRef.current = true;
+  }, [stickers]);
+
   return (
     <View style={[StyleSheet.absoluteFill, style]} pointerEvents="box-none">
       {stickers.map((sticker) => (
@@ -80,9 +147,34 @@ export function PosterStickerLayer({
           onPositionChange={onStickerPositionChange}
           onTransformChange={onStickerTransformChange}
           onDelete={onDeleteSticker}
+          onDuplicate={onDuplicateSticker}
+          onReorder={onReorderSticker}
+          onToggleLock={onToggleStickerLock}
+          onFlip={onFlipSticker}
+          onToggleBorder={onToggleBorder}
+          onContextMenu={(s) => setContextMenuSticker(s)}
           reducedMotion={reducedMotion}
+          shouldSpawn={spawnSet.has(sticker.id)}
         />
       ))}
+
+      {/* Long-press context menu — shared ContextMenu sheet with sticker actions.
+          The per-sticker gesture composition sets contextMenuSticker on long-press;
+          the shared <ContextMenu> renders the spring-entrance sheet driven by
+          `visible`. `enabled={false}` disables the wrapper's own long-press
+          (each DraggableSticker manages its own long-press inside its gesture race). */}
+      {editable && (
+        <ContextMenu
+          actions={contextMenuActions}
+          visible={!!contextMenuSticker}
+          onDismiss={() => setContextMenuSticker(null)}
+          onOpen={() => setContextMenuSticker(contextMenuSticker)}
+          enabled={false}
+          title="Sticker Options"
+        >
+          <View />
+        </ContextMenu>
+      )}
     </View>
   );
 }
@@ -97,7 +189,14 @@ interface DraggableStickerProps {
   onPositionChange?: (id: string, x: number, y: number) => void;
   onTransformChange?: (id: string, updates: { scale?: number; rotation?: number }) => void;
   onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
+  onReorder?: (id: string, direction: 'front' | 'back') => void;
+  onToggleLock?: (id: string) => void;
+  onFlip?: (id: string) => void;
+  onToggleBorder?: (id: string) => void;
+  onContextMenu?: (sticker: ApiPosterSticker) => void;
   reducedMotion?: boolean;
+  shouldSpawn?: boolean;
 }
 
 const SCALE_MIN = 0.4;
@@ -113,7 +212,14 @@ function DraggableSticker({
   onPositionChange,
   onTransformChange,
   onDelete,
+  onDuplicate,
+  onReorder,
+  onToggleLock,
+  onFlip,
+  onToggleBorder,
+  onContextMenu,
   reducedMotion = false,
+  shouldSpawn = false,
 }: DraggableStickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -122,33 +228,91 @@ function DraggableSticker({
   const translateY = useSharedValue(sticker.y * containerHeight);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  // Scale and rotation shared values for pinch/rotate gestures
   const scale = useSharedValue(sticker.scale);
   const rotation = useSharedValue(sticker.rotation);
   const startScale = useSharedValue(sticker.scale);
   const startRotation = useSharedValue(sticker.rotation);
 
-  // Selection appearance — spring-animated opacity for the border and
-  // spring-animated scale for the corner handle.
+  // Selection visuals — spring appearance (scale 0.8→1.0)
   const selectionOpacity = useSharedValue(0);
   const handleScale = useSharedValue(0);
 
-  // Stable haptic triggers for use inside gesture worklets (runOnJS).
+  // Spawn animation — scale 0.8→1.0 with bouncy spring, rotation wobble ±5°
+  const spawnScale = useSharedValue(reducedMotion ? 1 : 0.8);
+  const spawnRotation = useSharedValue(0);
+  const spawnShadow = useSharedValue(reducedMotion ? 1 : 0);
+
+  // Peel-off effect on grab — scale up to 1.1, shadow grows
+  const grabScale = useSharedValue(1);
+  const grabShadowOpacity = useSharedValue(0);
+  const grabShadowRadius = useSharedValue(5);
+
+  // Die-cut white border toggle
+  const [hasBorder, setHasBorder] = useState(false);
+  const borderOpacity = useSharedValue(0);
+
   const hapticLight = useCallback(() => haptic.light(), [haptic]);
   const hapticSelection = useCallback(() => haptic.selection(), [haptic]);
+  const hapticMedium = useCallback(() => haptic.medium(), [haptic]);
 
+  // ── Spring spawn animation ──────────────────────────────────────────
+  // Scale 0.8→1.0 with bouncy spring, rotation wobble ±5°, shadow grows
+  useEffect(() => {
+    if (shouldSpawn) {
+      if (reducedMotion) {
+        spawnScale.value = 1;
+        spawnRotation.value = 0;
+        spawnShadow.value = 1;
+      } else {
+        spawnScale.value = 0.8;
+        spawnRotation.value = 0;
+        spawnShadow.value = 0;
+        // Bouncy scale entrance
+        spawnScale.value = withSpring(1, Motion.spring.lift);
+        // Rotation wobble: +5° → -5° → 0°
+        spawnRotation.value = withSequence(
+          withSpring(5, Motion.spring.lift),
+          withSpring(-5, Motion.spring.lift),
+          withSpring(0, Motion.spring.entrance)
+        );
+        // Shadow grows during spawn then settles
+        spawnShadow.value = withSequence(
+          withSpring(1.3, Motion.spring.success),
+          withSpring(1, Motion.spring.entrance)
+        );
+      }
+      runOnJS(hapticMedium)();
+    }
+  }, [shouldSpawn, reducedMotion, spawnScale, spawnRotation, spawnShadow, hapticMedium]);
+
+  // ── Selection spring appearance ─────────────────────────────────────
   useEffect(() => {
     if (reducedMotion) {
       selectionOpacity.value = isSelected ? 1 : 0;
       handleScale.value = isSelected ? 1 : 0;
     } else if (isSelected) {
       selectionOpacity.value = withSpring(1, Motion.spring.entrance);
-      handleScale.value = withSpring(1, Motion.spring.entrance);
+      // Spring appearance scale 0.8→1.0
+      handleScale.value = 0.8;
+      handleScale.value = withSpring(1, Motion.spring.success);
     } else {
       selectionOpacity.value = withSpring(0, Motion.spring.entrance);
       handleScale.value = withSpring(0, Motion.spring.entrance);
     }
-  }, [isSelected, reducedMotion, selectionOpacity, handleScale]);
+    if (isSelected) {
+      runOnJS(hapticLight)();
+      AccessibilityInfo.announceForAccessibility('Sticker selected');
+    }
+  }, [isSelected, reducedMotion, selectionOpacity, handleScale, hapticLight]);
+
+  // ── Die-cut border toggle ───────────────────────────────────────────
+  useEffect(() => {
+    if (reducedMotion) {
+      borderOpacity.value = hasBorder ? 1 : 0;
+    } else {
+      borderOpacity.value = withSpring(hasBorder ? 1 : 0, Motion.spring.tap);
+    }
+  }, [hasBorder, reducedMotion, borderOpacity]);
 
   const selectionBorderStyle = useAnimatedStyle(() => ({
     opacity: selectionOpacity.value,
@@ -157,6 +321,26 @@ function DraggableSticker({
   const handleAnimatedStyle = useAnimatedStyle(() => ({
     opacity: selectionOpacity.value,
     transform: [{ scale: handleScale.value }],
+  }));
+
+  // Combined animated style: spawn + grab + user transforms
+  const animatedStyle = useAnimatedStyle(() => {
+    const combinedScale = scale.value * spawnScale.value * grabScale.value;
+    const combinedRotation = rotation.value + spawnRotation.value;
+    return {
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { scale: combinedScale },
+        { rotate: `${combinedRotation}deg` },
+      ],
+      shadowOpacity: 0.25 * spawnShadow.value + grabShadowOpacity.value,
+      shadowRadius: 6 * spawnShadow.value + grabShadowRadius.value,
+    };
+  });
+
+  const borderAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: borderOpacity.value,
   }));
 
   const handlePositionCommit = useCallback(
@@ -175,6 +359,9 @@ function DraggableSticker({
     [containerWidth, containerHeight, onPositionChange, sticker.id, translateX, translateY, reducedMotion]
   );
 
+  // ── Pan gesture with peel-off effect on grab ────────────────────────
+  // On grab: scale up to 1.1, shadow opacity 0→0.3, radius 5→15, haptic medium
+  // On release: scale back to 1.0, shadow fades
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
@@ -183,7 +370,12 @@ function DraggableSticker({
         .onStart(() => {
           startX.value = translateX.value;
           startY.value = translateY.value;
-          runOnJS(hapticLight)();
+          if (!reducedMotion) {
+            grabScale.value = withSpring(1.1, Motion.spring.press);
+            grabShadowOpacity.value = withSpring(0.3, Motion.spring.press);
+            grabShadowRadius.value = withSpring(15, Motion.spring.press);
+          }
+          runOnJS(hapticMedium)();
         })
         .onUpdate((e) => {
           translateX.value = startX.value + e.translationX;
@@ -192,9 +384,14 @@ function DraggableSticker({
         .onEnd((e) => {
           const finalX = startX.value + e.translationX;
           const finalY = startY.value + e.translationY;
+          if (!reducedMotion) {
+            grabScale.value = withSpring(1, Motion.spring.press);
+            grabShadowOpacity.value = withSpring(0, Motion.spring.press);
+            grabShadowRadius.value = withSpring(5, Motion.spring.press);
+          }
           runOnJS(handlePositionCommit)(finalX, finalY);
         }),
-    [editable, translateX, translateY, startX, startY, handlePositionCommit, hapticLight]
+    [editable, translateX, translateY, startX, startY, handlePositionCommit, hapticMedium, reducedMotion, grabScale, grabShadowOpacity, grabShadowRadius]
   );
 
   const tapGesture = useMemo(
@@ -208,6 +405,53 @@ function DraggableSticker({
           }
         }),
     [editable, onPress, sticker, hapticLight]
+  );
+
+  // ── Double-tap to reset ─────────────────────────────────────────────
+  // Resets position to center, scale to 1.0, rotation to 0 with spring
+  const doubleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(editable)
+        .numberOfTaps(2)
+        .onEnd(() => {
+          if (reducedMotion) {
+            translateX.value = 0.5 * containerWidth;
+            translateY.value = 0.5 * containerHeight;
+            scale.value = 1;
+            rotation.value = 0;
+          } else {
+            translateX.value = withSpring(0.5 * containerWidth, Motion.spring.entrance);
+            translateY.value = withSpring(0.5 * containerHeight, Motion.spring.entrance);
+            scale.value = withSpring(1, Motion.spring.success);
+            rotation.value = withSpring(0, Motion.spring.entrance);
+          }
+          if (onPositionChange) {
+            runOnJS(onPositionChange)(sticker.id, 0.5, 0.5);
+          }
+          if (onTransformChange) {
+            runOnJS(onTransformChange)(sticker.id, { scale: 1, rotation: 0 });
+          }
+          runOnJS(hapticMedium)();
+          AccessibilityInfo.announceForAccessibility('Sticker reset to center');
+        }),
+    [editable, containerWidth, containerHeight, translateX, translateY, scale, rotation, onPositionChange, onTransformChange, sticker.id, hapticMedium, reducedMotion]
+  );
+
+  // ── Long-press context menu ─────────────────────────────────────────
+  // Opens ActionSheet with sticker actions. Haptic: medium on long-press.
+  const longPressGesture = useMemo(
+    () =>
+      Gesture.LongPress()
+        .enabled(editable && !!onContextMenu)
+        .minDuration(400)
+        .onStart(() => {
+          runOnJS(hapticMedium)();
+          if (onContextMenu) {
+            runOnJS(onContextMenu)(sticker);
+          }
+        }),
+    [editable, onContextMenu, sticker, hapticMedium]
   );
 
   // Pinch-to-resize gesture — Instagram/Snapchat core sticker manipulation.
@@ -256,20 +500,29 @@ function DraggableSticker({
     [editable, rotation, startRotation, onTransformChange, sticker.id, hapticSelection]
   );
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-      { rotate: `${rotation.value}deg` },
-    ],
-  }));
-
-  // Compose pan + pinch + rotation + tap — all simultaneous for natural manipulation.
+  // Compose pan + pinch + rotation + tap + double-tap + long-press
+  // Tap and double-tap are exclusive; long-press runs simultaneous with pan.
   const composedGesture = useMemo(
-    () => Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture, tapGesture),
-    [panGesture, pinchGesture, rotationGesture, tapGesture]
+    () =>
+      Gesture.Simultaneous(
+        Gesture.Exclusive(doubleTapGesture, tapGesture),
+        panGesture,
+        pinchGesture,
+        rotationGesture,
+        longPressGesture
+      ),
+    [panGesture, pinchGesture, rotationGesture, tapGesture, doubleTapGesture, longPressGesture]
   );
+
+  // ── Context menu border toggle handler ──────────────────────────────
+  const handleToggleBorder = useCallback(() => {
+    haptic.light();
+    setHasBorder((prev) => {
+      const next = !prev;
+      if (onToggleBorder) onToggleBorder(sticker.id);
+      return next;
+    });
+  }, [haptic, onToggleBorder, sticker.id]);
 
   if (editable) {
     return (
@@ -284,36 +537,66 @@ function DraggableSticker({
           ]}
           pointerEvents="auto"
           accessibilityLabel="Sticker"
-          accessibilityHint="Drag to move, pinch to resize, rotate to rotate"
+          accessibilityHint="Drag to move, pinch to resize, rotate to rotate, double-tap to reset, long-press for options"
           accessibilityRole="adjustable"
         >
           <View style={styles.stickerInner}>
             <StickerContent sticker={sticker} />
           </View>
+
+          {/* Die-cut white border — 2pt white stroke, spring toggle */}
+          <Reanimated.View
+            style={[StyleSheet.absoluteFill, styles.dieCutBorder, borderAnimatedStyle]}
+            pointerEvents="none"
+          />
+
           {isSelected && (
             <>
-              {/* Spring-animated selection border overlay */}
+              {/* Bounding box — 1pt blue dashed border */}
               <Reanimated.View
                 style={[StyleSheet.absoluteFill, styles.selectedWrap, selectionBorderStyle]}
                 pointerEvents="none"
               />
-              {/* Spring scale-in corner handle */}
-              <Reanimated.View style={[styles.selectionHandle, handleAnimatedStyle]} pointerEvents="none">
-                <View style={styles.handleDot} />
+
+              {/* Corner handles — blue accent dots at 4 corners (8pt circles) */}
+              <Reanimated.View style={[styles.selectionHandle, styles.handleTopLeft, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.cornerDot} />
               </Reanimated.View>
-              {/* Delete button — medium haptic (delete is a meaningful action) */}
+              <Reanimated.View style={[styles.selectionHandle, styles.handleTopRight, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.cornerDot} />
+              </Reanimated.View>
+              <Reanimated.View style={[styles.selectionHandle, styles.handleBottomLeft, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.cornerDot} />
+              </Reanimated.View>
+              <Reanimated.View style={[styles.selectionHandle, styles.handleBottomRight, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.cornerDot} />
+              </Reanimated.View>
+
+              {/* Rotation handle above top-center (24pt with connecting line) */}
+              <Reanimated.View style={[styles.rotationHandleWrap, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.rotationConnectLine} />
+                <View style={styles.rotationHandleDot}>
+                  <Ionicons name="refresh" size={12} color={colors.textInverse} />
+                </View>
+              </Reanimated.View>
+
+              {/* Delete handle below bottom-center (24pt trash icon) */}
               {onDelete && (
                 <AnimatedPressable
-                  style={styles.deleteButton}
+                  style={styles.deleteHandle}
                   scaleValue={0.97}
                   activeOpacity={0.85}
                   hapticFeedback="medium"
-                  onPress={() => onDelete(sticker.id)}
+                  onPress={() => {
+                    hapticMedium();
+                    onDelete(sticker.id);
+                    AccessibilityInfo.announceForAccessibility('Sticker deleted');
+                  }}
                   accessibilityLabel="Delete sticker"
                   accessibilityHint="Removes this sticker from the frame"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={Control.iconCompact} color="#fff" />
+                  <Ionicons name="trash" size={12} color={colors.textInverse} />
                 </AnimatedPressable>
               )}
             </>
@@ -337,6 +620,11 @@ function DraggableSticker({
       <View style={styles.stickerInner}>
         <StickerContent sticker={sticker} />
       </View>
+      {/* Die-cut white border in view mode too */}
+      <Reanimated.View
+        style={[StyleSheet.absoluteFill, styles.dieCutBorder, borderAnimatedStyle]}
+        pointerEvents="none"
+      />
     </Reanimated.View>
   );
 }
@@ -470,7 +758,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
           <Text style={styles.countdownLabel}>{sticker.payload.endLabel ?? 'Countdown'}</Text>
           {sticker.payload.targetDate && (
             <Text style={styles.countdownTime}>
-              {new Date(sticker.payload.targetDate).toLocaleDateString()}
+              {formatFullDate(sticker.payload.targetDate)}
             </Text>
           )}
         </View>
@@ -498,42 +786,94 @@ function createStyles(colors: any) {
     shadowRadius: 6,
     elevation: 4,
   },
+  // Bounding box — 1pt blue dashed border (enhanced selection visual)
   selectedWrap: {
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: '#3B82F6',
+    borderRadius: Radius.sm,
+    borderStyle: 'dashed',
+  },
+  // Die-cut white border — 2pt white stroke around sticker
+  dieCutBorder: {
+    borderWidth: Stroke.emphasis,
+    borderColor: '#FFFFFF',
     borderRadius: Radius.sm,
   },
   selectionHandle: {
     position: 'absolute',
-    top: -8,
-    right: -8,
     width: 16,
     height: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  handleDot: {
-    width: HANDLE_SIZE,
-    height: HANDLE_SIZE,
-    borderRadius: HANDLE_SIZE / 2,
-    backgroundColor: '#fff',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.2)',
-  },
-  // Delete button — positioned at the top-left corner of the selection,
-  // opposite the selection handle (top-right). Uses Space.xs padding and
-  // Control.iconCompact for the glyph.
-  deleteButton: {
-    position: 'absolute',
+  handleTopLeft: {
     top: -8,
     left: -8,
-    width: 28,
-    height: 28,
+  },
+  handleTopRight: {
+    top: -8,
+    right: -8,
+  },
+  handleBottomLeft: {
+    bottom: -8,
+    left: -8,
+  },
+  handleBottomRight: {
+    bottom: -8,
+    right: -8,
+  },
+  // Corner dots — 8pt blue accent circles
+  cornerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3B82F6',
+    borderWidth: Stroke.standard,
+    borderColor: '#FFFFFF',
+  },
+  // Rotation handle above top-center (24pt with connecting line)
+  rotationHandleWrap: {
+    position: 'absolute',
+    top: -32,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  rotationConnectLine: {
+    width: Stroke.standard,
+    height: 12,
+    backgroundColor: '#3B82F6',
+  },
+  rotationHandleDot: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: Stroke.standard,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  // Delete handle below bottom-center (24pt trash icon)
+  deleteHandle: {
+    position: 'absolute',
+    bottom: -32,
+    left: 0,
+    right: 0,
+    width: 24,
+    height: 24,
     borderRadius: Radius.full,
     backgroundColor: colors.danger,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Space.xs,
+    alignSelf: 'center',
+    marginLeft: 'auto',
+    marginRight: 'auto',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -559,7 +899,7 @@ function createStyles(colors: any) {
   mentionWrap: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs,
   },
   mentionText: {

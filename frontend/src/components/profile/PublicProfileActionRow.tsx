@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PublicProfileActionRowProps {
@@ -12,6 +12,15 @@ interface PublicProfileActionRowProps {
   messageLabel?: string;
 }
 
+/**
+ * Public profile action row — Follow/Message primary, Share/More secondary.
+ *
+ * 2026 flagship pattern:
+ *   primary action: brand-filled, full-pill, dominant
+ *   secondary actions: quiet, hairline-bordered, restrained
+ *   one radius family (full-pill) for all actions — coherent
+ *   44pt hit targets with 36pt visible chrome on secondary
+ */
 export function PublicProfileActionRow({
   onMessage,
   onShare,
@@ -25,7 +34,9 @@ export function PublicProfileActionRow({
       <AnimatedPressable
         style={styles.messageBtn}
         onPress={onMessage}
-        activeOpacity={0.85}
+        activeOpacity={0.88}
+        scaleValue={0.97}
+        hapticFeedback="light"
         accessibilityRole="button"
         accessibilityLabel="Send message to seller"
       >
@@ -37,7 +48,9 @@ export function PublicProfileActionRow({
         <AnimatedPressable
           style={styles.secondaryBtn}
           onPress={onShare}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
+          scaleValue={0.97}
+          hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel="Share profile"
         >
@@ -47,7 +60,9 @@ export function PublicProfileActionRow({
         <AnimatedPressable
           style={styles.secondaryBtn}
           onPress={onMore}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
+          scaleValue={0.97}
+          hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel="More options"
         >
@@ -74,7 +89,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     gap: Space.sm,
     height: Control.hit,
-    borderRadius: Radius.xxl,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   messageBtnText: {
@@ -87,10 +102,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   secondaryBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.xxl,
-    borderWidth: StyleSheet.hairlineWidth,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.background,
     alignItems: 'center',

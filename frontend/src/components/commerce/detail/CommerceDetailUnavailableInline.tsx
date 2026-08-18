@@ -100,11 +100,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   icon: {
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   copy: {
     flexShrink: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
     fontSize: Type.body.size,

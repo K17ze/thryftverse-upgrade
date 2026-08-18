@@ -57,7 +57,7 @@ export function ProfileLooksGrid({
         <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
         <Text style={styles.stateTitle}>Looks could not be loaded</Text>
         <Pressable
-          style={styles.retryBtn}
+          style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.6 }]}
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Retry loading looks"
@@ -77,7 +77,7 @@ export function ProfileLooksGrid({
           <>
             <Text style={styles.stateSubtitle}>Share your first outfit.</Text>
             <Pressable
-              style={styles.createBtn}
+              style={({ pressed }) => [styles.createBtn, pressed && { opacity: 0.6 }]}
               onPress={onCreateLook}
               accessibilityRole="button"
               accessibilityLabel="Create look"
@@ -149,7 +149,7 @@ function createStyles(colors: ThemeColors) {
     gap: GRID_GAP,
   },
   tile: {
-    marginBottom: 12,
+    marginBottom: Space.sm + Space.xs,
   },
   tileImageWrap: {
     width: '100%',
@@ -166,7 +166,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
-    marginTop: 6,
+    marginTop: Space.xs + 2,
   },
   tileMeta: {
     flexDirection: 'row',
@@ -176,7 +176,7 @@ function createStyles(colors: ThemeColors) {
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   metaText: {
     fontSize: Type.meta.size,
@@ -187,8 +187,8 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl * 2,
-    gap: 10,
     paddingHorizontal: Space.md,
+    gap: Space.sm + 2,
   },
   stateTitle: {
     fontSize: Type.bodyEmphasis.size,

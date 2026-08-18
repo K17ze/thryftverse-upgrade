@@ -1,32 +1,45 @@
+/**
+ * @deprecated Use `theme/motionTokens.ts` (Motion) directly.
+ * This file is a compatibility shim that re-exports Motion values
+ * under the legacy naming convention. Do not add new configs here.
+ *
+ * Legacy → Canonical mapping:
+ *   spring.pressRelease  → Motion.spring.press
+ *   spring.flagship      → Motion.spring.entrance
+ *   spring.flagshipPop   → Motion.spring.lift
+ *   timing.pressIn       → Motion.duration.fast (120ms)
+ *   timing.pressOut      → Motion.duration.fast (120ms)
+ *   timing.focus         → Motion.duration.normal (180ms)
+ *   list.enterDuration   → Motion.duration.slow (280ms)
+ *   list.staggerStep     → Motion.stagger.normal (60ms)
+ *   list.maxStaggerItems → 10 (no canonical equivalent)
+ *   navigation.pushOpenDuration   → Motion.duration.normal (180ms)
+ *   navigation.pushCloseDuration  → Motion.duration.fast (120ms)
+ *   navigation.modalOpenDuration  → Motion.duration.normal (180ms)
+ *   navigation.modalCloseDuration → Motion.duration.normal (180ms)
+ */
+import { Motion as MotionTokens } from '../theme/motionTokens';
+
 export const Motion = {
   spring: {
-    pressRelease: {
-      damping: 18,
-      stiffness: 420,
-    },
-    flagship: {
-      damping: 16,
-      stiffness: 260,
-    },
-    flagshipPop: {
-      damping: 14,
-      stiffness: 300,
-    },
+    pressRelease: MotionTokens.spring.press,
+    flagship: MotionTokens.spring.entrance,
+    flagshipPop: MotionTokens.spring.lift,
   },
   timing: {
-    pressIn: 85,
-    pressOut: 110,
-    focus: 180,
+    pressIn: MotionTokens.duration.fast,
+    pressOut: MotionTokens.duration.fast,
+    focus: MotionTokens.duration.normal,
   },
   list: {
-    enterDuration: 360,
-    staggerStep: 45,
+    enterDuration: MotionTokens.duration.slow,
+    staggerStep: MotionTokens.stagger.normal,
     maxStaggerItems: 10,
   },
   navigation: {
-    pushOpenDuration: 220,
-    pushCloseDuration: 180,
-    modalOpenDuration: 220,
-    modalCloseDuration: 180,
+    pushOpenDuration: MotionTokens.duration.normal,
+    pushCloseDuration: MotionTokens.duration.fast,
+    modalOpenDuration: MotionTokens.duration.normal,
+    modalCloseDuration: MotionTokens.duration.normal,
   },
 } as const;

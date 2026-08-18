@@ -210,13 +210,16 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     });
   });
 
-  // ── Discovery density: max three modules ──
+  // ── Discovery density: consolidated modules per spec 12 ──
   describe('discovery density', () => {
-    it('item screen has at most three discovery modules', () => {
-      // Per Pass 4: BundleUpsell, More like this, Seen in Looks
+    it('item screen has consolidated discovery modules', () => {
+      // Per spec 12: "One high-quality continuation section is better than
+      // 3 repetitive rails." Phase 2 consolidated to BundleUpsell + More
+      // like this. SeenInLooksRail removed — look context available via
+      // seller profile Looks tab.
       expect(itemScreen).toContain('BundleUpsellRow');
       expect(itemScreen).toContain('More like this');
-      expect(itemScreen).toContain('SeenInLooksRail');
+      expect(itemScreen).not.toContain('<SeenInLooksRail');
       // Should NOT have the generic rail mapping or DiscoveryGrid
       expect(itemScreen).not.toContain('railSections.map');
     });

@@ -4,36 +4,39 @@ import {
   Text,
   SectionList,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Pressable,
-  ScrollView,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { BottomSheet } from '../components/BottomSheet';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import {
   NotificationEvent,
   NotificationEventType,
+  NotificationEventV2,
+  NotificationObjectRef,
+  NotificationAttentionLevel,
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
+  upgradeToV2,
 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../constants/motion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
@@ -61,16 +64,28 @@ type NotificationCard = {
   actorDisplayName: string | null;
   actorAvatar: string | null;
   route: { screen: string; params?: Record<string, unknown> } | null;
+  /** Whether this event requires user action (outbid, ship order, dispute). */
+  requiresAction: boolean;
+  /** Structured aggregation key from the V2 registry (e.g. "social.look_liked:look123"). */
+  aggregationKey: string | null;
+  /** V2 attention priority — critical/action/important/info. */
+  attention: NotificationAttentionLevel;
+  /** Structured object reference from the V2 registry (label used for aggregation text). */
+  objectRef?: NotificationObjectRef;
   /** Aggregated notification count — when >1, this card represents N similar events. */
   aggregatedCount?: number;
   /** Actor names for aggregated notifications (first few). */
   aggregatedActors?: string[];
 };
 
-type NotificationFilter = 'all' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
+type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
-const FILTER_TABS: { key: NotificationFilter; label: string }[] = [
+// All filters live behind a single overflow funnel icon — no primary tab row.
+// This keeps the screen's information hierarchy attention-first (Needs attention,
+// Today, Yesterday, Earlier) rather than split across pseudo-tabs.
+const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
   { key: 'order', label: 'Orders' },
   { key: 'new_item', label: 'Items' },
   { key: 'review', label: 'Reviews' },
@@ -78,9 +93,8 @@ const FILTER_TABS: { key: NotificationFilter; label: string }[] = [
   { key: 'auction', label: 'Auctions' },
 ];
 
-function parsePayloadEvent(payload: Record<string, unknown>): string {
-  const candidate = payload.event;
-  return typeof candidate === 'string' ? candidate.toLowerCase() : '';
+function filterLabelForKey(key: NotificationFilter): string {
+  return OVERFLOW_FILTERS.find((f) => f.key === key)?.label ?? 'All';
 }
 
 function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
@@ -94,25 +108,67 @@ function getPayloadString(payload: Record<string, unknown>, keys: string[]): str
   return null;
 }
 
-function deriveCardType(event: NotificationEvent): NotificationCardType {
-  const eventType = event.eventType;
-  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'resolution';
-  if (eventType === 'review_received') return 'review';
-  if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'order';
-  if (eventType.startsWith('auction_')) return 'auction';
+/**
+ * Direct mapping from known NotificationEventType → NotificationCardType.
+ * This is the structured contract: category is NEVER derived from title/body text.
+ * All event types in the V2 registry are covered here.
+ */
+const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> = {
+  order_created: 'order',
+  order_paid: 'order',
+  order_cancelled: 'order',
+  order_dispatched: 'order',
+  order_in_transit: 'order',
+  order_out_for_delivery: 'order',
+  order_delivered: 'order',
+  order_refunded: 'order',
+  resolution_opened: 'resolution',
+  resolution_status_changed: 'resolution',
+  review_received: 'review',
+  chat_message: 'generic',
+  payout_processed: 'order',
+  refund_completed: 'order',
+  auction_outbid: 'auction',
+  auction_won: 'auction',
+  auction_ending_soon: 'auction',
+  generic: 'generic', // resolved further by objectRef below
+};
 
-  const payloadEvent = parsePayloadEvent(event.payload);
-  const mergedText = `${event.title} ${event.body}`.toLowerCase();
-
-  if (payloadEvent.includes('shipment') || payloadEvent.includes('order') || payloadEvent.includes('deliver')) {
-    return 'order';
+/**
+ * For generic events (which don't have a specific event type in the registry),
+ * infer the card type from the structured object reference — never from text.
+ */
+function cardTypeFromObjectRef(objectRef: NotificationObjectRef | undefined): NotificationCardType {
+  if (!objectRef) return 'generic';
+  switch (objectRef.type) {
+    case 'listing':
+      return 'new_item';
+    case 'order':
+      return 'order';
+    case 'auction':
+      return 'auction';
+    case 'look':
+      return 'like';
+    case 'poster':
+      return 'new_item';
+    case 'conversation':
+      return 'generic';
+    case 'wallet':
+      return 'order';
+    default:
+      return 'generic';
   }
-  if (payloadEvent.includes('review') || mergedText.includes('review')) return 'review';
-  if (payloadEvent.includes('price') || mergedText.includes('price')) return 'price';
-  if (payloadEvent.includes('like') || mergedText.includes('like')) return 'like';
-  if (mergedText.includes('listing') || mergedText.includes('new item')) return 'new_item';
+}
 
-  return 'generic';
+/**
+ * Resolve the notification card type using the V2 registry — never from title/body text.
+ * Known event types use a direct mapping; generic events fall back to objectRef shape.
+ */
+function resolveCardType(v2Event: NotificationEventV2): NotificationCardType {
+  if (v2Event.eventType !== 'generic') {
+    return EVENT_TYPE_CARD_MAP[v2Event.eventType] ?? 'generic';
+  }
+  return cardTypeFromObjectRef(v2Event.objectRef);
 }
 
 function formatRelativeTime(value: string): string {
@@ -150,6 +206,7 @@ function formatRelativeTime(value: string): string {
 function mapEventToCard(event: NotificationEvent): NotificationCard {
   const title = event.title.trim();
   const body = event.body.trim();
+  const v2 = upgradeToV2(event);
   return {
     id: event.id,
     itemImage: event.imageUrl ?? '',
@@ -157,7 +214,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     body,
     text: `${title} ${body}`.trim(),
     time: formatRelativeTime(event.createdAt),
-    type: deriveCardType(event),
+    type: resolveCardType(v2),
     read: !!event.readAt,
     createdAt: event.createdAt,
     payload: event.payload,
@@ -167,6 +224,10 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     actorDisplayName: event.actorDisplayName,
     actorAvatar: event.actorAvatar,
     route: event.route,
+    requiresAction: v2.requiresAction,
+    aggregationKey: v2.aggregationKey,
+    attention: v2.attention,
+    objectRef: v2.objectRef,
   };
 }
 
@@ -193,8 +254,9 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       continue;
     }
 
-    const listingId = typeof notif.payload.listingId === 'string' ? notif.payload.listingId : '';
-    const groupKey = `${notif.type}:${listingId}`;
+    // Use the V2 registry's structured aggregation key when available.
+    // Falls back to type+listingId for legacy events without a registry entry.
+    const groupKey = notif.aggregationKey ?? `${notif.type}:${typeof notif.payload.listingId === 'string' ? notif.payload.listingId : ''}`;
 
     const existing = groups.get(groupKey);
     if (existing) {
@@ -224,7 +286,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     const firstActor = uniqueActorNames[0] || 'Someone';
 
     // Build clean aggregated text using the notification type — not regex parsing.
-    // Instagram pattern: "username and N others liked your item"
+    // "username and N others liked your item"
     const actionVerbByType: Record<string, string> = {
       like: 'liked',
       price: 'dropped the price on',
@@ -232,9 +294,8 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     };
     const action = actionVerbByType[primary.type] ?? 'interacted with';
 
-    // Extract the object from the original text — try to find "your X" or "a X"
-    const objectMatch = primary.text.match(/(?:your|a)\s+(.+)/i);
-    const object = objectMatch ? objectMatch[1].trim() : 'your item';
+    // Use the V2 registry's structured object label — never regex-parse body text.
+    const object = primary.objectRef?.label ?? 'your item';
 
     const aggregatedText = `${firstActor} and ${othersCount} other${othersCount === 1 ? '' : 's'} ${action} ${object}`;
 
@@ -253,31 +314,46 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
   return result;
 }
 
-type NotificationGroupKey = 'orders' | 'social' | 'system';
+type NotificationGroupKey = 'attention' | 'today' | 'yesterday' | 'earlier';
 
-const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['orders', 'social', 'system'];
+const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['attention', 'today', 'yesterday', 'earlier'];
 
 const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
-  orders: 'Orders',
-  social: 'Social',
-  system: 'System',
+  attention: 'Needs attention',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  earlier: 'Earlier',
 };
 
-function getNotificationGroupKey(type: NotificationCardType): NotificationGroupKey {
-  if (type === 'order' || type === 'resolution') return 'orders';
-  if (type === 'like' || type === 'review' || type === 'new_item') return 'social';
-  return 'system';
+function getNotificationGroupKey(createdAt: string): NotificationGroupKey {
+  const now = new Date();
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return 'earlier';
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+
+  if (created >= startOfToday) return 'today';
+  if (created >= startOfYesterday) return 'yesterday';
+  return 'earlier';
 }
 
 function groupNotifications(notifications: NotificationCard[]) {
   const buckets: Record<NotificationGroupKey, NotificationCard[]> = {
-    orders: [],
-    social: [],
-    system: [],
+    attention: [],
+    today: [],
+    yesterday: [],
+    earlier: [],
   };
 
   notifications.forEach((notification) => {
-    const groupKey = getNotificationGroupKey(notification.type);
+    // Action-required events go into the "Needs attention" section,
+    // separated from the time-based sections so they are obvious.
+    if (notification.requiresAction) {
+      buckets.attention.push(notification);
+      return;
+    }
+    const groupKey = getNotificationGroupKey(notification.createdAt);
     buckets[groupKey].push(notification);
   });
 
@@ -285,12 +361,12 @@ function groupNotifications(notifications: NotificationCard[]) {
     buckets[key].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  const sections: Array<{ title: string; data: NotificationCard[]; unreadCount: number }> = [];
+  const sections: Array<{ title: string; data: NotificationCard[]; unreadCount: number; isAttention?: boolean }> = [];
   for (const key of NOTIFICATION_GROUP_ORDER) {
     const data = buckets[key];
     if (data.length === 0) continue;
     const unreadCount = data.filter((n) => !n.read).length;
-    sections.push({ title: NOTIFICATION_GROUP_LABELS[key], data, unreadCount });
+    sections.push({ title: NOTIFICATION_GROUP_LABELS[key], data, unreadCount, isAttention: key === 'attention' });
   }
 
   return sections;
@@ -300,7 +376,7 @@ export default function NotificationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const { quietHours } = useSettingsPreferences();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -311,6 +387,7 @@ export default function NotificationsScreen() {
   const [hasMore, setHasMore] = React.useState(false);
   const hasShownSyncErrorRef = React.useRef(false);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
+  const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
 
   const quietActive = isQuietHoursActive(quietHours);
@@ -386,6 +463,7 @@ export default function NotificationsScreen() {
 
   const filteredNotifications = React.useMemo(() => {
     if (activeFilter === 'all') return notifications;
+    if (activeFilter === 'unread') return notifications.filter((n) => !n.read);
     return notifications.filter((n) => n.type === activeFilter);
   }, [notifications, activeFilter]);
 
@@ -396,9 +474,10 @@ export default function NotificationsScreen() {
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
   const filterCounts = React.useMemo(() => {
-    const counts: Record<NotificationFilter, number> = { all: 0, order: 0, new_item: 0, review: 0, price: 0, auction: 0 };
+    const counts: Record<NotificationFilter, number> = { all: 0, unread: 0, order: 0, new_item: 0, review: 0, price: 0, auction: 0 };
     for (const n of notifications) {
       counts.all++;
+      if (!n.read) counts.unread++;
       if (n.type === 'order') counts.order++;
       else if (n.type === 'new_item') counts.new_item++;
       else if (n.type === 'review') counts.review++;
@@ -513,22 +592,13 @@ export default function NotificationsScreen() {
     [navigation, show]
   );
 
-  const renderNotificationCard = useCallback(({ item, index }: { item: NotificationCard; index: number }) => {
+  const renderNotificationCard = useCallback(({ item }: { item: NotificationCard; index: number }) => {
     const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
     const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
     const actorHandle = item.actorUsername ?? actorUserId ?? null;
     const visualUri = item.itemImage || item.actorAvatar || '';
 
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                .duration(Motion.list.enterDuration)
-        }
-      >
         <Swipeable
           ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
           renderRightActions={() => renderSwipeRightAction(item)}
@@ -546,8 +616,17 @@ export default function NotificationsScreen() {
           overshootRight={false}
           overshootLeft={false}
         >
-        <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
-          {!item.read ? <View style={styles.unreadDot} /> : null}
+        <View
+          style={[
+            styles.notifCard,
+            !item.read && styles.notifCardUnread,
+            item.attention === 'critical' && styles.notifCardCritical,
+            item.attention === 'action' && !item.read && styles.notifCardAction,
+          ]}
+        >
+          {item.attention === 'critical' ? <View style={styles.notifAccentCritical} /> : null}
+          {item.attention === 'action' && !item.read ? <View style={styles.notifAccentAction} /> : null}
+          {!item.read && item.attention !== 'critical' && item.attention !== 'action' ? <View style={styles.unreadDot} /> : null}
           <AnimatedPressable
             style={styles.notifMainTap}
             activeOpacity={0.8}
@@ -609,7 +688,7 @@ export default function NotificationsScreen() {
             <View style={styles.notifActionRow}>
               <AnimatedPressable
                 style={styles.notifActorChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: actorUserId })}
+                onPress={() => openProfile(navigation, actorUserId, currentUser?.id)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Open @${actorHandle} profile`}
@@ -643,10 +722,8 @@ export default function NotificationsScreen() {
           ) : null}
         </View>
         </Swipeable>
-      </Reanimated.View>
     );
   }, [
-    reducedMotionEnabled,
     swipeableRefs,
     renderSwipeRightAction,
     renderSwipeLeftAction,
@@ -668,6 +745,19 @@ export default function NotificationsScreen() {
             <View style={styles.headerActions}>
               <AnimatedPressable
                 style={styles.headerAction}
+                onPress={() => { haptics.tap(); setOverflowVisible(true); }}
+                accessibilityLabel="Filter notifications"
+                accessibilityRole="button"
+                hapticFeedback="light"
+              >
+                <Ionicons
+                  name={activeFilter !== 'all' ? 'filter' : 'filter-outline'}
+                  size={20}
+                  color={activeFilter !== 'all' ? colors.brand : colors.textSecondary}
+                />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.headerAction}
                 onPress={() => navigation.navigate('NotificationPreferences')}
                 accessibilityLabel="Manage notification preferences"
                 accessibilityRole="button"
@@ -680,7 +770,7 @@ export default function NotificationsScreen() {
                   style={styles.headerAction}
                   onPress={handleMarkAllAsRead}
                   accessibilityRole="button"
-                  accessibilityLabel="Mark all notifications as read"
+                  accessibilityLabel={`Mark all ${unreadCount} notifications as read`}
                   hapticFeedback="light"
                 >
                   <Ionicons name="checkmark-done-outline" size={22} color={colors.textPrimary} />
@@ -694,49 +784,22 @@ export default function NotificationsScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
 
-      {/* Filter tabs */}
-      <View style={styles.filterTabsRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterTabsContent}
-        >
-          {FILTER_TABS.map((tab) => {
-            const isActive = activeFilter === tab.key;
-            const count = filterCounts[tab.key] ?? 0;
-            return (
-              <Pressable
-                key={tab.key}
-                style={[styles.filterTab, isActive && styles.filterTabActive]}
-                onPress={() => {
-                  haptics.tap();
-                  setActiveFilter(tab.key);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter: ${tab.label}${count > 0 ? `, ${count} items` : ''}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <View style={styles.filterTabContent}>
-                  <Text
-                    style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
-                    numberOfLines={1}
-                  >
-                    {tab.label}
-                  </Text>
-                  {count > 0 ? (
-                    <View style={[styles.filterTabCount, isActive && styles.filterTabCountActive]}>
-                      <Text style={[styles.filterTabCountText, isActive && styles.filterTabCountTextActive]}>
-                        {count}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {isActive ? <View style={styles.filterTabIndicator} /> : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {/* Active filter chip — shown only when a filter is applied (attention-first hierarchy) */}
+      {activeFilter !== 'all' ? (
+        <View style={styles.activeFilterChipRow}>
+          <Pressable
+            style={styles.activeFilterChip}
+            onPress={() => { haptics.tap(); setActiveFilter('all'); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear filter: ${filterLabelForKey(activeFilter)}`}
+          >
+            <Text style={styles.activeFilterChipText} numberOfLines={1}>
+              {filterLabelForKey(activeFilter)}
+            </Text>
+            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Unread summary + quiet hours indicator */}
       {unreadCount > 0 || quietActive ? (
@@ -763,6 +826,10 @@ export default function NotificationsScreen() {
         </View>
       ) : null}
 
+      {isOffline ? (
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+      ) : null}
+
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -779,11 +846,14 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title, unreadCount } }) => (
+        renderSectionHeader={({ section: { title, unreadCount, isAttention } }) => (
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>{title}</Text>
+            {isAttention ? (
+              <Ionicons name="alert-circle" size={14} color={colors.danger} style={styles.sectionAttentionIcon} />
+            ) : null}
+            <Text style={[styles.sectionTitle, isAttention && styles.sectionTitleAttention]}>{title}</Text>
             {unreadCount > 0 ? (
-              <View style={styles.sectionCountBadge}>
+              <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
                 <Text style={styles.sectionCountText}>{unreadCount}</Text>
               </View>
             ) : null}
@@ -824,28 +894,90 @@ export default function NotificationsScreen() {
             <EmptyState
               density="compact"
               icon="notifications-outline"
-              title={`No ${FILTER_TABS.find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
+              title={`No ${filterLabelForKey(activeFilter).toLowerCase()} yet`}
               subtitle="Switch to 'All' to see everything."
               iconColor={colors.textMuted}
             />
           ) : (
             <EmptyState
               density="compact"
-              icon="notifications-outline"
-              title="No notifications yet"
-              subtitle="We'll notify you about new items, price drops, and order updates."
+              icon="checkmark-done-outline"
+              title="You're all caught up"
+              subtitle="We'll let you know when there's something new."
               iconColor={colors.textMuted}
             />
           )
         }
         ListFooterComponent={
           isLoadingMore ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator color={colors.brand} size="small" />
+            <View accessibilityLabel="Loading more notifications">
+              {[0, 1].map((index) => (
+                <View key={index} style={styles.notificationSkeletonRow}>
+                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <View style={styles.notificationSkeletonCopy}>
+                    <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
+                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                    <SkeletonLoader width="30%" height={9} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                  </View>
+                </View>
+              ))}
             </View>
           ) : null
         }
       />
+
+      {/* Filter sheet — all filters behind a single overflow funnel icon */}
+      <BottomSheet
+        visible={overflowVisible}
+        onDismiss={() => setOverflowVisible(false)}
+        snapPoint={0.5}
+      >
+        <View style={styles.overflowSheetContent}>
+          <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
+          {OVERFLOW_FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.key;
+            const count = filterCounts[filter.key] ?? 0;
+            return (
+              <Pressable
+                key={filter.key}
+                style={({ pressed }) => [
+                  styles.overflowRow,
+                  isActive && { backgroundColor: `${colors.brand}0A` },
+                  pressed && { opacity: 0.6 },
+                ]}
+                onPress={() => {
+                  haptics.tap();
+                  setActiveFilter(filter.key);
+                  setOverflowVisible(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.overflowRowText,
+                    { color: isActive ? colors.brand : colors.textPrimary },
+                    isActive && { fontFamily: Typography.family.semibold },
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+                <View style={styles.overflowRowRight}>
+                  {count > 0 ? (
+                    <Text style={[styles.overflowRowCount, { color: colors.textMuted }]}>
+                      {count}
+                    </Text>
+                  ) : null}
+                  {isActive ? (
+                    <Ionicons name="checkmark" size={18} color={colors.brand} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
     </FlagshipScreen>
   );
 }
@@ -870,8 +1002,10 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   filterTabsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
-    gap: Space.xl,
+    gap: Space.lg,
   },
   filterTab: {
     alignItems: 'center',
@@ -928,6 +1062,30 @@ function createStyles(colors: ThemeColors) {
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
+  },
+
+  activeFilterChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm + 2,
+    paddingBottom: Space.xs,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  activeFilterChipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
   },
 
   swipeActionContainer: {
@@ -1017,11 +1175,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     marginLeft: Space.xs,
   },
+  sectionAttentionIcon: {
+    marginRight: -Space.xs / 2,
+  },
   sectionTitle: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     letterSpacing: Type.captionElevated.letterSpacing,
+  },
+  sectionTitleAttention: {
+    color: colors.danger,
   },
   sectionCountBadge: {
     minWidth: Space.md + 4,
@@ -1031,6 +1195,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionCountBadgeAttention: {
+    backgroundColor: colors.danger,
   },
   sectionCountText: {
     fontSize: Type.meta.size - 2,
@@ -1045,6 +1212,28 @@ function createStyles(colors: ThemeColors) {
   },
   notifCardUnread: {
     backgroundColor: colors.surfaceAlt,
+  },
+  notifCardCritical: {
+    backgroundColor: `${colors.danger}0A`,
+  },
+  notifCardAction: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  notifAccentCritical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Stroke.emphasis,
+    backgroundColor: colors.danger,
+  },
+  notifAccentAction: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Stroke.emphasis,
+    backgroundColor: colors.brand,
   },
   notifMainTap: {
     padding: Space.md,
@@ -1151,25 +1340,6 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
     paddingHorizontal: 0,
   },
-  notifActorAvatarWrap: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
-  notifActorAvatar: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
-  notifActorAvatarFallback: {
-    minWidth: Space.md + 4,
-    height: Space.md + 4,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Space.sm,
-  },
   notifActorText: {
     flex: 1,
     color: colors.textSecondary,
@@ -1198,17 +1368,36 @@ function createStyles(colors: ThemeColors) {
   notificationSkeletonCopy: {
     flex: 1,
   },
-
-  loadingState: {
-    marginTop: Space.xl + Space.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm + 2,
+  overflowSheetContent: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
-  loadingText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
+  overflowSheetTitle: {
+    fontSize: Type.title.size,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: Space.sm,
+  },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  overflowRowText: {
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
+  },
+  overflowRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  overflowRowCount: {
+    fontSize: Type.meta.size,
     color: colors.textMuted,
+    marginRight: Space.sm,
   },
   });
 }

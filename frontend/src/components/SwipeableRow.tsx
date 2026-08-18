@@ -294,7 +294,7 @@ export function SwipeableRow({
     <View
       style={[styles.container, style]}
       accessible
-      accessibilityRole="button"
+      accessibilityRole={onPress || onLongPress ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={
         accessibilityHint

@@ -8,11 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import Reanimated, {
-  FadeInDown,
-  FadeIn,
-  FadeInUp,
-} from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,13 +15,12 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Typography, Radius, Type, Space, FontSize, Stroke, Elevation } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, FontSize, Stroke, Elevation, Control } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
+import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword } from '../services/authApi';
 
 const { width, height } = Dimensions.get('window');
 
@@ -50,9 +44,10 @@ export default function AuthLandingScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
-  const reducedMotionEnabled = useReducedMotion();
+  const fetchMyProfile = useStore((state) => state.fetchMyProfile);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
+  const [isDevBypassLoading, setIsDevBypassLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // UI-21P: Prevent crash when OAuth client IDs are not configured in dev builds
@@ -227,81 +222,84 @@ export default function AuthLandingScreen() {
 
       <SafeAreaView style={styles.safeArea}>
         {/* Top - animated brand wordmark */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeIn.delay(200).duration(600)}
+        <View
           style={styles.topSection}
         >
-          <Text style={styles.logo}>entry 01</Text>
-        </Reanimated.View>
+          <Text style={styles.logo} maxFontSizeMultiplier={1.3}>entry 01</Text>
+        </View>
 
         {/* Middle - main copy */}
         <View style={styles.content}>
-          <Reanimated.Text
-            entering={
-              reducedMotionEnabled
-                ? undefined
-                : FadeInDown.delay(400).duration(600).springify()
-            }
+          <Text
             style={styles.title}
+            maxFontSizeMultiplier={1.2}
           >
             THRYFT
-          </Reanimated.Text>
+          </Text>
 
-          <Reanimated.Text
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(600).duration(500)}
+          <Text
             style={styles.subtitle}
+            maxFontSizeMultiplier={1.3}
           >
             buy, sell, trade. no noise.
-          </Reanimated.Text>
+          </Text>
 
-          {/* Trust signals — compact value props */}
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(750).duration(500)}
+          {/* Trust signals — compact value props with refined icon treatment.
+              Trust signals at the entry
+              point reduce anxiety and communicate competence before the user
+              commits to an action. Icons at 18pt sit above the reading flow
+              without competing with the primary CTA. */}
+          <View
             style={styles.trustRow}
+            accessibilityRole="text"
+            accessibilityLabel="Buyer protection, make offers, and co-own trading"
           >
             <View style={styles.trustItem}>
-              <Ionicons name="shield-checkmark-outline" size={16} color="rgba(245,239,230,0.6)" />
-              <Text style={styles.trustText}>Buyer protection</Text>
+              <Ionicons name="checkmark-circle-outline" size={18} color="rgba(245,239,230,0.65)" />
+              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Buyer protection</Text>
             </View>
             <View style={styles.trustDot} />
             <View style={styles.trustItem}>
-              <Ionicons name="pricetag-outline" size={16} color="rgba(245,239,230,0.6)" />
-              <Text style={styles.trustText}>Make offers</Text>
+              <Ionicons name="pricetag-outline" size={18} color="rgba(245,239,230,0.65)" />
+              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Make offers</Text>
             </View>
             <View style={styles.trustDot} />
             <View style={styles.trustItem}>
-              <Ionicons name="swap-horizontal-outline" size={16} color="rgba(245,239,230,0.6)" />
-              <Text style={styles.trustText}>Co-Own trading</Text>
+              <Ionicons name="swap-horizontal-outline" size={18} color="rgba(245,239,230,0.65)" />
+              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Co-Own trading</Text>
             </View>
-          </Reanimated.View>
+          </View>
         </View>
 
-        {/* Inline auth error banner */}
+        {/* Inline auth error banner — accessible, recoverable.
+            A calm error banner with a clear dismiss control
+            communicates competence. The danger-tinted surface is restrained
+            so it informs without alarming. */}
         {authError ? (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
+          <View
             style={styles.errorBanner}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
           >
-            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
-            <Text style={styles.errorBannerText}>{authError}</Text>
+            <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.errorBannerText} maxFontSizeMultiplier={1.3}>{authError}</Text>
             <Pressable
               onPress={() => setAuthError(null)}
-              hitSlop={8}
+              hitSlop={Control.hit / 2}
               accessibilityRole="button"
               accessibilityLabel="Dismiss error"
             >
-              <Ionicons name="close" size={16} color="rgba(245,239,230,0.6)" />
+              <Ionicons name="close" size={18} color="rgba(245,239,230,0.65)" />
             </Pressable>
-          </Reanimated.View>
+          </View>
         ) : null}
 
-        {/* Bottom - CTAs in glass cards */}
-        <Reanimated.View
-          entering={
-            reducedMotionEnabled
-              ? undefined
-              : FadeInUp.delay(700).duration(500).springify()
-          }
+        {/* Bottom — CTAs. Primary action is visually dominant; secondary is
+            restrained. Social auth sits below a subtle divider so the email
+            path remains the clear primary. Placing
+            social below the primary CTA signals that email signup is the
+            recommended path while still offering convenience. */}
+        <View
           style={styles.footer}
         >
           <View>
@@ -309,8 +307,11 @@ export default function AuthLandingScreen() {
               style={styles.primaryBtn}
               activeOpacity={0.9}
               onPress={() => navigation.navigate('SignUp')}
+              accessibilityRole="button"
+              accessibilityLabel="Create account"
+              accessibilityHint="Opens the sign-up screen"
             >
-              <Text style={styles.primaryText}>create account</Text>
+              <Text style={styles.primaryText} maxFontSizeMultiplier={1.2}>create account</Text>
             </AnimatedPressable>
           </View>
 
@@ -319,23 +320,36 @@ export default function AuthLandingScreen() {
               style={styles.secondaryBtnGlass}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('Login')}
+              accessibilityRole="button"
+              accessibilityLabel="I already have an account"
+              accessibilityHint="Opens the login screen"
             >
-              <Text style={styles.secondaryText}>i already have an account</Text>
+              <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>i already have an account</Text>
             </AnimatedPressable>
           </View>
 
-          {/* Social login row */}
+          {/* Divider — separates email path from social auth */}
+          <View style={styles.socialDivider}>
+            <View style={styles.socialDividerLine} />
+            <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with</Text>
+            <View style={styles.socialDividerLine} />
+          </View>
+
+          {/* Social login row — Apple first (platform native), Google second */}
           <View style={styles.socialRow}>
             <AnimatedPressable
               style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
               activeOpacity={0.8}
               onPress={handleAppleSignIn}
               disabled={!!socialLoading || isMagicLinkLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with Apple"
+              accessibilityHint="Authenticate using your Apple ID"
             >
               {socialLoading === 'apple' ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Ionicons name="logo-apple" size={20} color="#fff" />
+                <Ionicons name="logo-apple" size={22} color="#fff" />
               )}
             </AnimatedPressable>
             {hasGoogleOAuth ? (
@@ -346,47 +360,76 @@ export default function AuthLandingScreen() {
                 disabled={!!socialLoading || isMagicLinkLoading}
                 accessibilityRole="button"
                 accessibilityLabel="Sign in with Google"
+                accessibilityHint="Authenticate using your Google account"
               >
                 {socialLoading === 'google' ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Ionicons name="logo-google" size={18} color="#fff" />
+                  <Ionicons name="logo-google" size={20} color="#fff" />
                 )}
               </AnimatedPressable>
             ) : null}
           </View>
 
           {isMagicLinkLoading && (
-            <Text style={styles.magicLinkLoadingText}>Signing you in from your email link...</Text>
+            <Text style={styles.magicLinkLoadingText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.3}>
+              Signing you in from your email link...
+            </Text>
           )}
 
-          <Text style={styles.termsText}>
+          <Text style={styles.termsText} maxFontSizeMultiplier={1.3}>
             by continuing, you agree to our terms of service and privacy policy.
           </Text>
 
           {__DEV__ && (
             <AnimatedPressable
-              style={styles.devBypassBtn}
+              style={[styles.devBypassBtn, isDevBypassLoading && { opacity: 0.6 }]}
               activeOpacity={0.8}
-              onPress={() => {
-                login({
-                  id: 'dev-user-1',
-                  username: 'devuser',
-                  displayName: 'Dev User',
-                  email: 'dev@thryftverse.app',
-                  avatar: '',
-                  coverPhoto: '',
-                  bio: '',
-                  emailVerified: true,
-                  createdAt: new Date().toISOString(),
-                });
-                navigation.replace('MainTabs');
+              disabled={isDevBypassLoading}
+              onPress={async () => {
+                setIsDevBypassLoading(true);
+                setAuthError(null);
+                try {
+                  // Authenticate as seed_u1 (marie@seed.test) through the real
+                  // backend so the full personalised auction experience —
+                  // watchlist, attention strip, bid states, seller auctions —
+                  // renders with backend data. Without a real auth session the
+                  // backend treats every request as anonymous and the auction
+                  // home degrades to an unpersonalised, structurally different
+                  // composition.
+                  const result = await loginWithPassword({
+                    email: 'marie@seed.test',
+                    password: 'seed12345',
+                  });
+                  login(result.storeUser);
+                  setTwoFactorEnabled(result.user.twoFactorEnabled);
+                  // Hydrate the full profile (avatar, displayName, bio, …)
+                  // so downstream screens that read currentUser look correct.
+                  void fetchMyProfile();
+                  navigation.replace('MainTabs');
+                } catch (err) {
+                  // Backend not running or DB not seeded. Stay on the auth
+                  // screen with a clear, actionable error so the user knows
+                  // exactly what to do — navigating into an unpersonalised
+                  // empty auction home would reproduce the original bug.
+                  setAuthError(
+                    'Dev login failed — backend unreachable or DB not seeded. ' +
+                    'Start the backend, run seed-dev-data.ts, then try again. ' +
+                    '(seed_u1 / marie@seed.test / seed12345)'
+                  );
+                } finally {
+                  setIsDevBypassLoading(false);
+                }
               }}
             >
-              <Text style={styles.devBypassText}>Dev Bypass (UI Testing)</Text>
+              {isDevBypassLoading ? (
+                <ActivityIndicator size="small" color={colors.success} />
+              ) : (
+                <Text style={styles.devBypassText} maxFontSizeMultiplier={1.3}>Dev Bypass (UI Testing)</Text>
+              )}
             </AnimatedPressable>
           )}
-        </Reanimated.View>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -404,7 +447,7 @@ function createStyles(colors: ThemeColors) {
   },
   topSection: {
     paddingHorizontal: Space.lg - 2,
-    paddingTop: Space.sm + 4,
+    paddingTop: Space.smMd,
   },
   logo: {
     fontSize: Type.meta.size,
@@ -423,7 +466,7 @@ function createStyles(colors: ThemeColors) {
     color: '#f6f2ea',
     lineHeight: FontSize.giant + 2,
     letterSpacing: -2,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
   },
   subtitle: {
     fontSize: Type.captionElevated.size,
@@ -447,19 +490,19 @@ function createStyles(colors: ThemeColors) {
   trustText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(245,239,230,0.6)',
+    color: 'rgba(245,239,230,0.65)',
     letterSpacing: 0.2,
   },
   trustDot: {
     width: Space.xs - 1,
     height: Space.xs - 1,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(245,239,230,0.25)',
+    backgroundColor: 'rgba(245,239,230,0.3)',
   },
   footer: {
     paddingHorizontal: Space.lg + 4,
     paddingBottom: Space.sm + 6,
-    gap: Space.xs + 2,
+    gap: Space.sm,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -530,11 +573,28 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
+  socialDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: Stroke.hairline,
+    backgroundColor: 'rgba(245,239,230,0.15)',
+  },
+  socialDividerText: {
+    color: 'rgba(245,239,230,0.45)',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   socialRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: Space.md,
-    marginTop: Space.xs,
   },
   socialBtn: {
     width: Space.xl + Space.xl + 2,
@@ -557,7 +617,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
   },
   termsText: {
-    color: 'rgba(255,255,255,0.3)',
+    color: 'rgba(255,255,255,0.5)',
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -565,7 +625,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   devBypassBtn: {
-    marginTop: Space.sm + 4,
+    marginTop: Space.smMd,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,

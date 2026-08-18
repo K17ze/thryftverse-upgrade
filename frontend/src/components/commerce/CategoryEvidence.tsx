@@ -49,7 +49,7 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
         return (
           <View key={group.title} style={styles.groupGap}>
             <Pressable
-              style={styles.expandableHeader}
+              style={({ pressed }) => [styles.expandableHeader, pressed && { opacity: 0.6 }]}
               onPress={() => setExpandedGroup(isExpanded ? null : group.title)}
               accessibilityRole="button"
               accessibilityLabel={isExpanded ? `Collapse ${group.title}` : `Expand ${group.title}`}
@@ -90,17 +90,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
     marginBottom: Space.xs,
   },
   factsList: {
-    gap: 6,
+    gap: Space.xs,
   },
   factRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: 2,
+    paddingVertical: Space.xs,
   },
   factLabel: {
     fontSize: Type.captionElevated.size,

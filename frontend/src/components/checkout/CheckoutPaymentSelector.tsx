@@ -122,7 +122,7 @@ export function CheckoutPaymentSelector({
 
       {/* Secure payment trust indicator */}
       <View style={styles.trustFooter}>
-        <Ionicons name="shield-checkmark-outline" size={12} color={colors.textMuted} />
+        <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
         <Text style={styles.trustText}>Card details are collected securely</Text>
       </View>
     </BottomSheet>

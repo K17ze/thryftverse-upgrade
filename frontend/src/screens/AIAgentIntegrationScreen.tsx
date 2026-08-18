@@ -6,12 +6,11 @@
  * Codex / Claude Code let users supply their own AI credentials.
  *
  * Per AGENTS.md §11 (Truthful UI):
- *  - "Test connection" validates the key FORMAT only (prefix + length). It
- *    does not make a real network call. The result is labelled "Valid format.
- *    Key saved locally — no live request was sent." — never "Connected to
- *    provider".
- *  - Status badges are truthful: "Connected" (a key is stored), "Not
- *    connected" (no key), "Invalid format" (failed validation).
+ *  - "Verify connection" performs a real provider round-trip (GET /models
+ *    or equivalent). The result is labelled "Connected" only after the
+ *    provider confirms the key is authorised.
+ *  - Status badges are truthful: "Connected" (key verified by provider),
+ *    "Not connected" (no key), "Invalid" (failed verification).
  *  - A security note makes clear keys are stored locally on-device only.
  *
  * Design (per AGENTS.md §4):
@@ -40,11 +39,9 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
@@ -59,14 +56,22 @@ import {
   removeApiKey,
   getApiKey,
   getConnectedProviders,
+  testApiKey,
+  discoverModels,
   type ConnectedProvider,
+  type DiscoveredModel,
   type TestResult,
 } from '../services/aiProviderApi';
+import {
+  pauseAllAgents,
+  getActiveAgentSessionCount,
+} from '../services/chatAgentsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
 
-// Demo mode flag — key validation is format-only; no live API calls.
-const AI_PROVIDER_DEMO_MODE = true;
+// Demo mode is no longer needed — testApiKey now performs a real provider
+// round-trip. This flag is kept for backward-compatible UI gating only.
+const AI_PROVIDER_DEMO_MODE = false;
 
 type ConnectionStatus = 'connected' | 'not_connected' | 'invalid';
 
@@ -77,11 +82,14 @@ interface ProviderState {
   baseUrlInput: string;
   testing: boolean;
   testResult: TestResult | null;
+  /** Provider-authoritative models discovered via the /models endpoint.
+   *  Null = not yet discovered; empty array = discovered but none found. */
+  discoveredModels: DiscoveredModel[] | null;
+  discovering: boolean;
 }
 
 export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -92,8 +100,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     gemini: emptyProviderState(),
     custom: emptyProviderState(),
   });
+  const [activeAgentSessions, setActiveAgentSessions] = React.useState(0);
 
-  // Load stored keys on mount.
+  // Load stored keys on mount, then discover models for connected providers.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -109,15 +118,34 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             baseUrlInput: c.baseUrl ?? '',
             testing: false,
             testResult: null,
+            discoveredModels: null,
+            discovering: true,
           };
         }
         setProviders(next);
+        setLoading(false);
+
+        // Discover models for each connected provider (spec 04: dynamic
+        // model discovery — provider-authoritative, not hardcoded).
+        for (const c of connected) {
+          const models = await discoverModels(c.provider);
+          if (!mounted) return;
+          setProviders((prev) => ({
+            ...prev,
+            [c.provider]: {
+              ...prev[c.provider],
+              discoveredModels: models,
+              discovering: false,
+            },
+          }));
+        }
       } catch {
         // Storage read failure — leave all providers not-connected.
-      } finally {
         if (mounted) setLoading(false);
       }
     })();
+    // Refresh active agent session count on mount.
+    setActiveAgentSessions(getActiveAgentSessionCount());
     return () => {
       mounted = false;
     };
@@ -161,40 +189,24 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
     setProviders((prev) => ({ ...prev, [provider]: { ...prev[provider], testing: true, testResult: null } }));
 
-    // Simulate a brief async check (format validation only — AGENTS.md §11).
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    // Perform a real provider round-trip to verify the key is authorised.
+    const result = await testApiKey(provider, state.keyInput, state.baseUrlInput.trim() || undefined, true);
 
-    if (config.supportsBaseUrl && state.baseUrlInput.trim() && !validateBaseUrl(state.baseUrlInput)) {
-      const result: TestResult = { status: 'invalid', message: 'Base URL must be a valid http(s) URL.' };
+    if (result.status === 'invalid') {
       setProviders((prev) => ({
         ...prev,
         [provider]: { ...prev[provider], testing: false, testResult: result },
       }));
+      haptic.medium();
       return;
     }
 
-    if (!validateKeyFormat(provider, state.keyInput)) {
-      const result: TestResult = config.keyPrefixes.length > 0 && provider !== 'gemini'
-        ? { status: 'invalid', message: `Key must start with "${config.keyPrefixes[0]}" and be at least ${config.minKeyLength} characters.` }
-        : { status: 'invalid', message: `Key must be at least ${config.minKeyLength} characters.` };
-      setProviders((prev) => ({
-        ...prev,
-        [provider]: { ...prev[provider], testing: false, testResult: result },
-      }));
-      return;
-    }
-
-    // Valid format — persist locally (no live request sent).
-    const stored = await saveApiKey(provider, state.keyInput, state.baseUrlInput.trim() || undefined);
+    // Key verified by provider — refresh stored state.
     const refreshed = await getApiKey(provider);
     const connected: ConnectedProvider | null = refreshed
       ? { ...refreshed, config }
-      : { ...stored, config };
+      : null;
 
-    const result: TestResult = {
-      status: 'valid',
-      message: 'Valid format. Key saved locally — no live request was sent.',
-    };
     setProviders((prev) => ({
       ...prev,
       [provider]: {
@@ -204,6 +216,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         baseUrlInput: connected?.baseUrl ?? '',
         testing: false,
         testResult: result,
+        // Store the models discovered during the probe (spec 04).
+        discoveredModels: result.models ?? prev[provider].discoveredModels,
+        discovering: false,
       },
     }));
     haptic.selection();
@@ -219,12 +234,20 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     haptic.selection();
   };
 
+  const handlePauseAllAgents = () => {
+    if (activeAgentSessions === 0) return;
+    haptic.medium();
+    pauseAllAgents();
+    setActiveAgentSessions(0);
+    haptic.selection();
+  };
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="AI API Integration"
-          subtitle="Bring your own AI provider keys"
+          title="Connections"
+          subtitle="Connect your own provider keys"
           onBack={() => navigation.goBack()}
         />
       }
@@ -243,37 +266,81 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Hero summary — connected count ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View
+      {/* ── Summary — connected count as typography, no card ── */}
+        <View style={styles.summaryWrap}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {connectedCount > 0
+              ? `${connectedCount} of ${PROVIDER_ORDER.length} providers connected`
+              : 'No providers connected'}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {connectedCount > 0
+              ? 'Your keys are stored on this device only'
+              : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
+          </Text>
+        </View>
+
+      {/* ── Agent management — flat rows, no card ── */}
+        <View style={styles.sectionLabelWrap}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.flatRow,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+          onPress={handlePauseAllAgents}
+          disabled={activeAgentSessions === 0}
+          accessibilityRole="button"
+          accessibilityLabel={
+            activeAgentSessions === 0
+              ? 'Pause all agents — none running'
+              : `Pause all agents — ${activeAgentSessions} running`
+          }
+        >
+          <Ionicons
+            name="pause-circle-outline"
+            size={20}
+            color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
+          />
+          <View style={styles.flatRowText}>
+            <Text
               style={[
-                styles.heroIcon,
-                { backgroundColor: connectedCount > 0 ? colors.brand : colors.surfaceAlt },
+                styles.flatRowTitle,
+                { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
               ]}
             >
-              <Ionicons
-                name="key"
-                size={20}
-                color={connectedCount > 0 ? colors.textInverse : colors.textMuted}
-              />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {connectedCount > 0
-                  ? `${connectedCount} of ${PROVIDER_ORDER.length} providers connected`
-                  : 'No providers connected'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {connectedCount > 0
-                  ? 'Your keys are stored on this device only'
-                  : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
-              </Text>
-            </View>
+              Pause all agents
+            </Text>
+            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              {activeAgentSessions > 0
+                ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
+                : 'No agent sessions running'}
+            </Text>
           </View>
-        </View>
-      </Reanimated.View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
+        <Pressable
+          style={({ pressed }) => [
+            styles.flatRow,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+          onPress={() => navigation.navigate('AgentActivity')}
+          accessibilityRole="button"
+          accessibilityLabel="View agent activity ledger"
+        >
+          <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
+          <View style={styles.flatRowText}>
+            <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
+              Agent activity
+            </Text>
+            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              Record of agent actions and approvals
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
 
       {/* ── Provider list ── */}
       {loading ? (
@@ -281,7 +348,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       ) : (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <View>
           <View style={styles.sectionLabelWrap}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROVIDERS</Text>
           </View>
@@ -307,7 +374,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {/* Provider header row */}
                 <View style={styles.providerHeader}>
                   <View style={styles.providerIdentity}>
-                    <Ionicons name={config.icon as any} size={22} color={colors.textPrimary} />
+                    <Ionicons name={config.icon as any} size={20} color={colors.textPrimary} />
                     <View style={styles.providerNameWrap}>
                       <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {config.name}
@@ -320,7 +387,26 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                  <StatusBadge status={status} colors={colors} styles={styles} />
+                  <Text
+                    style={[
+                      styles.providerStatus,
+                      {
+                        color:
+                          status === 'connected'
+                            ? colors.success
+                            : status === 'invalid'
+                              ? colors.danger
+                              : colors.textMuted,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {status === 'connected'
+                      ? 'Connected'
+                      : status === 'invalid'
+                        ? 'Invalid'
+                        : 'Not connected'}
+                  </Text>
                 </View>
 
                 {/* Connected state — masked key + actions */}
@@ -341,6 +427,27 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       <Text style={[styles.validNote, { color: colors.success }]}>
                         {state.testResult.message}
                       </Text>
+                    ) : null}
+                    {/* Discovered models (provider-authoritative) — text, not chips */}
+                    {state.discoveredModels && state.discoveredModels.length > 0 ? (
+                      <View style={styles.modelsWrap}>
+                        <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
+                          {state.discoveredModels.length} model{state.discoveredModels.length === 1 ? '' : 's'} available
+                        </Text>
+                        <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={3}>
+                          {state.discoveredModels.slice(0, 8).map((m) => m.displayName).join(', ')}
+                          {state.discoveredModels.length > 8
+                            ? `, +${state.discoveredModels.length - 8} more`
+                            : ''}
+                        </Text>
+                      </View>
+                    ) : state.discovering ? (
+                      <View style={styles.modelDiscovering}>
+                        <ActivityIndicator size="small" color={colors.textMuted} />
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          Discovering models…
+                        </Text>
+                      </View>
                     ) : null}
                     <Text style={[styles.storageNote, { color: colors.textMuted }]}>
                       Stored locally · {state.stored.storageClass === 'secure' ? 'Secure storage' : 'Device storage'}
@@ -422,23 +529,35 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       />
                     </View>
 
-                    {/* Available models (informational) */}
+                    {/* Available models — provider-authoritative (spec 04).
+                        Discovered dynamically from the provider's /models
+                        endpoint after a successful connection. Before the
+                        first connection, we show a truthful placeholder
+                        instead of a hardcoded catalogue. */}
                     <View style={styles.modelsWrap}>
                       <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
                         Available models
                       </Text>
-                      <View style={styles.modelChips}>
-                        {config.models.map((model) => (
-                          <View
-                            key={model}
-                            style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
-                          >
-                            <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                              {model}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
+                      {state.discoveredModels && state.discoveredModels.length > 0 ? (
+                        <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={4}>
+                          {state.discoveredModels.map((m) => m.displayName).join(', ')}
+                        </Text>
+                      ) : state.discovering ? (
+                        <View style={styles.modelDiscovering}>
+                          <ActivityIndicator size="small" color={colors.textMuted} />
+                          <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                            Discovering models from {config.name}…
+                          </Text>
+                        </View>
+                      ) : state.discoveredModels && state.discoveredModels.length === 0 ? (
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          No models returned by {config.name}.
+                        </Text>
+                      ) : (
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          Models are discovered from {config.name} after you connect.
+                        </Text>
+                      )}
                     </View>
 
                     {state.testResult ? (
@@ -476,21 +595,19 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               </View>
             );
           })}
-        </Reanimated.View>
+        </View>
       )}
 
       {/* ── Security note (truthful) ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.textSecondary} />
             <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>How your keys are stored</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>
-            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they fall back to on-device AsyncStorage. Removing a key permanently deletes it from this device. No live request is sent to any provider when testing — only the key format is validated.
+            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they are held in process memory only for the current session and never written to plaintext app storage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it, and the returned model list is cached so it stays current as the provider updates it.
           </Text>
         </View>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }
@@ -498,42 +615,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function StatusBadge({
-  status,
-  colors,
-  styles,
-}: {
-  status: ConnectionStatus;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}) {
-  const label =
-    status === 'connected' ? 'Connected' : status === 'invalid' ? 'Invalid format' : 'Not connected';
-  const color = status === 'connected' ? colors.success : status === 'invalid' ? colors.danger : colors.textMuted;
-  return (
-    <View
-      style={[
-        styles.statusBadge,
-        {
-          backgroundColor:
-            status === 'connected'
-              ? withAlpha(colors.success, 0.14)
-              : status === 'invalid'
-                ? withAlpha(colors.danger, 0.14)
-                : colors.surfaceAlt,
-        },
-      ]}
-      accessibilityRole="text"
-      accessibilityLabel={label}
-    >
-      <View style={[styles.statusDot, { backgroundColor: color }]} />
-      <Text style={[styles.statusText, { color }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 function PrimaryButton({
   label,
@@ -625,17 +706,9 @@ function emptyProviderState(): ProviderState {
     baseUrlInput: '',
     testing: false,
     testResult: null,
+    discoveredModels: null,
+    discovering: false,
   };
-}
-
-/** Approximate alpha blend for badge backgrounds (hex + alpha percentage). */
-function withAlpha(hex: string, alpha: number): string {
-  // Only handle #RRGGBB inputs; fall back to the raw colour otherwise.
-  if (!hex.startsWith('#') || hex.length !== 7) return hex;
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return `${hex}${a}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -661,34 +734,50 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.lg,
+    summaryWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
     },
-    heroRow: {
+    summaryTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.subtitle.letterSpacing,
+      lineHeight: Type.subtitle.lineHeight,
+    },
+    summarySubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+      marginTop: Space.xs / 2,
+    },
+    flatRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.md,
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + Space.xs,
+      minHeight: Control.hit,
     },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
+    flatRowText: {
+      flex: 1,
+      minWidth: 0,
     },
-    heroText: { flex: 1 },
-    heroTitle: {
+    flatRowTitle: {
       fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    heroSubtitle: {
+    flatRowSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
       marginTop: Space.xs / 2,
+    },
+    flatRowSeparator: {
+      height: StyleSheet.hairlineWidth,
+      marginLeft: Space.md + Control.icon + Space.sm,
     },
     loadingWrap: {
       paddingVertical: Space.xl,
@@ -735,24 +824,12 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
-    statusBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-      flexShrink: 0,
-    },
-    statusDot: {
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.full,
-    },
-    statusText: {
+    providerStatus: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.caption.letterSpacing,
+      flexShrink: 0,
+      textAlign: 'right',
     },
     connectedBody: {
       marginTop: Space.sm,
@@ -826,20 +903,22 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       letterSpacing: Type.meta.letterSpacing,
     },
-    modelChips: {
+    modelDiscovering: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
+      alignItems: 'center',
       gap: Space.xs,
-    },
-    modelChip: {
-      paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.md,
     },
-    modelChipText: {
+    modelHint: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       letterSpacing: Type.caption.letterSpacing,
+    },
+    modelsList: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight + 2,
     },
     testResult: {
       fontSize: Type.caption.size,

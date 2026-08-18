@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 /**
  * Sold comparables for pricing guidance.

@@ -1,4 +1,4 @@
-import type { Message } from '../data/mockData';
+import type { Message } from '../domain';
 
 /**
  * Known system sender IDs that are authorised to display trusted system styling.

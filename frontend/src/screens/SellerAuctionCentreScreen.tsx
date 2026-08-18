@@ -689,7 +689,7 @@ export default function SellerAuctionCentreScreen() {
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {stats.total > 0 ? `${stats.total} auctions` : 'Manage your auctions'}
+              {stats.total > 0 ? `${stats.total} auctions` : 'Auction listings'}
             </Text>
           </View>
           <Pressable
@@ -812,10 +812,10 @@ function createStyles(colors: ThemeColors) {
   },
   headerTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceLarge.size - 2,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     color: colors.textPrimary,
-    letterSpacing: -0.6,
-    lineHeight: Type.priceLarge.size - 2 + 4,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   headerSubtitle: {
     fontFamily: Typography.family.regular,
@@ -827,8 +827,8 @@ function createStyles(colors: ThemeColors) {
   // ── Seller summary — one integrated surface ──
   summary: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
+    paddingTop: Space.lg,
+    paddingBottom: Space.md,
   },
   summaryContext: {
     marginTop: Space.sm,
@@ -842,11 +842,12 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   summaryContextText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   summaryPrimary: {
     alignItems: 'flex-start',
@@ -854,15 +855,16 @@ function createStyles(colors: ThemeColors) {
   summaryPrimaryValue: {
     fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.8,
+    letterSpacing: Type.display.letterSpacing,
     fontVariant: ['tabular-nums'],
-    lineHeight: Type.display.size + 2,
+    lineHeight: Type.display.lineHeight,
   },
   summaryPrimaryLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
     marginTop: Space.xs / 2 + 1,
-    letterSpacing: 0.1,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   summaryPrimaryDivider: {
     width: StyleSheet.hairlineWidth,
@@ -880,18 +882,20 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   summarySecondaryValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   summarySecondaryLabel: {
-    fontSize: Type.meta.size - 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
     marginTop: Space.xs / 2 + 1,
-    letterSpacing: 0.1,
+    letterSpacing: Type.meta.letterSpacing,
   },
   // ── Tab bar — text-first, underline indicator, sticky container ──
   tabBarContainer: {
@@ -929,7 +933,7 @@ function createStyles(colors: ThemeColors) {
   tabCount: {
     fontSize: Type.caption.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   tabCountActive: {
@@ -1002,15 +1006,16 @@ function createStyles(colors: ThemeColors) {
   rowTitle: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyEmphasis.size + 4,
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   rowStateText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     paddingTop: Space.xs / 2 + 1,
   },
   rowBrand: {
@@ -1035,26 +1040,28 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 4,
   },
   rowIze: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.4,
-    lineHeight: Type.subtitle.size - 3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   rowValuePrefix: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: 0.1,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   rowLocal: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   rowActionCol: {
     flexDirection: 'row',
@@ -1080,15 +1087,17 @@ function createStyles(colors: ThemeColors) {
   },
   rowLeading: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   rowBidCount: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   rowSeparator: {

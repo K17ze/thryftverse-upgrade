@@ -6,7 +6,6 @@ import {
   RefreshControl,
   Pressable,
   Text,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -16,9 +15,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -26,7 +28,9 @@ import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius, Typography, Type, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   getAuctionDetail,
   placeAuctionBid,
@@ -47,12 +51,11 @@ import { FullscreenMediaViewer } from '../components/product/FullscreenMediaView
 import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
+import { CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
 import {
   CommerceDetailHeader,
   CommerceDetailIdentity,
   CommerceDetailTransactionSurface,
-  CommerceDetailMetricRow,
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
   CommerceDetailSellerRow,
@@ -61,7 +64,6 @@ import {
   CommerceDetailOfflineBanner,
   CommerceDetailFreshnessBanner,
   CommerceDetailUnavailableInline,
-  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
@@ -86,9 +88,7 @@ import {
   resolveDetailPriceLabel,
   resolveDetailPriceAmount,
   resolveDetailCountdown,
-  resolveViewerContextMessage,
   isBuyNowAvailable,
-  areBidControlsRemoved,
   buildDetailAccessibilityLabel,
   formatBidActivityRow,
   detectLifecycleTransition,
@@ -96,8 +96,6 @@ import {
   resolveReserveStatus,
 } from '../utils/auctionDetailLogic';
 import {
-  AuctionStateBadge,
-  AuctionCountdown,
   ReserveStatusBadge,
 } from '../components/auction';
 
@@ -148,14 +146,15 @@ export default function AuctionDetailScreen() {
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+  const [lastFetchAt, setLastFetchAt] = React.useState<number | null>(null);
 
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
 
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
+  const { isCommerceCompact: isCompact } = useBreakpoint();
   const { isOffline } = useConnectivity();
+  const reducedMotion = useReducedMotion();
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -173,7 +172,19 @@ export default function AuctionDetailScreen() {
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // ── Refresh-in-progress guard ────────────────────────────────────
+  // Prevents race conditions between 5 independent refresh sources:
+  // polling, manual pull-to-refresh, lifecycle transitions, server clock
+  // resync, and post-bid refresh. Without this guard, concurrent
+  // fetchDetail() calls cause UI flickering, state thrashing, and
+  // excessive API load — the root cause of the "worse" auction experience.
+  const isFetchingRef = React.useRef(false);
+
   const fetchDetail = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
+    // Block concurrent calls — the most recent caller will get null.
+    // This is safe because the next polling tick or user action will retry.
+    if (isFetchingRef.current) return null;
+    isFetchingRef.current = true;
     try {
       const res = await getAuctionDetail(auctionId);
       if (!isMountedRef.current) return null;
@@ -182,6 +193,7 @@ export default function AuctionDetailScreen() {
       setBidActivity(res.bidActivity);
       setBidActivityError(false);
       setError(null);
+      setLastFetchAt(Date.now());
       resync(res.serverNow);
       clearResyncFailed();
       return res;
@@ -192,6 +204,7 @@ export default function AuctionDetailScreen() {
       markResyncFailed();
       return null;
     } finally {
+      isFetchingRef.current = false;
       if (isMountedRef.current) {
         setLoading(false);
         setRefreshing(false);
@@ -268,7 +281,14 @@ export default function AuctionDetailScreen() {
         show('Removed from watchlist', 'info');
       } else {
         await addToWatchlist(auctionId);
-        show('Added to watchlist', 'info');
+        // Upcoming auctions: make the notification intent explicit so the
+        // user understands watching = "notify me when this goes live."
+        // (audit 08 P1: upcoming notification toggle)
+        const isUpcomingAuction = effectiveState === 'upcoming';
+        show(
+          isUpcomingAuction ? 'Watching · we’ll notify you when it goes live' : 'Added to watchlist',
+          'info',
+        );
         // Contextual push permission prompt — ask once after the user adds an
         // item to their watchlist. Best-effort; never blocks the watch flow.
         if (!favoritePushAskedRef.current) {
@@ -350,7 +370,7 @@ export default function AuctionDetailScreen() {
       });
       // Verify the response explicitly confirms Buy Now
       if (!result.isBuyNow) {
-        throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
+        throw new Error('The response did not confirm the Buy Now winning bid. Try again.');
       }
       // Post-success refresh — do not convert to error if refresh fails
       try {
@@ -394,6 +414,7 @@ export default function AuctionDetailScreen() {
       winnerBidderId: auction.winnerBidderId,
       lifecycle: auction.lifecycle,
       terminalReason: auction.terminalReason,
+      fulfilment: auction.fulfilment ?? null,
     };
   }, [auction]);
 
@@ -432,14 +453,6 @@ export default function AuctionDetailScreen() {
     return resolveDetailCountdown(timing, secondClock, minuteClock);
   }, [timing, secondClock, minuteClock]);
 
-  const countdownProgress = React.useMemo(() => {
-    if (!auction || !timing) return undefined;
-    const totalMs = new Date(auction.endsAt).getTime() - new Date(auction.startsAt).getTime();
-    if (totalMs <= 0) return undefined;
-    const elapsedMs = minuteClock - new Date(auction.startsAt).getTime();
-    return Math.max(0, Math.min(1, elapsedMs / totalMs));
-  }, [auction, timing, minuteClock]);
-
   const accessibilityLabel = React.useMemo(() => {
     if (!detailInput || !timing) return '';
     return buildDetailAccessibilityLabel(
@@ -452,17 +465,31 @@ export default function AuctionDetailScreen() {
     );
   }, [detailInput, timing, priceLabel, priceText, countdown.text]);
 
-  const viewerContext = React.useMemo(() => {
-    if (!detailInput || !timing) return null;
-    return resolveViewerContextMessage(timing.effectiveState, detailInput.viewerState, detailInput, formatFromFiat);
-  }, [detailInput, timing, formatFromFiat]);
-
   const isLive = effectiveState === 'live';
   const isUpcoming = effectiveState === 'upcoming';
   const isEnded = effectiveState === 'ended';
   const isCancelled = effectiveState === 'cancelled';
   const isSettled = effectiveState === 'settled';
   const isTerminal = isEnded || isCancelled || isSettled;
+
+  // ── Real-time polling for live auctions ──────────────────────────
+  // During a live auction, poll the backend every 10s so competing bids,
+  // outbid status, and bid activity update without manual refresh.
+  // Upcoming auctions poll every 45s (price changes are unlikely but
+  // the auction may transition to live). Terminal auctions stop polling.
+  // The isFetchingRef guard inside fetchDetail prevents overlapping calls.
+  const pollIntervalMs = isLive ? 10_000 : isUpcoming ? 45_000 : 0;
+
+  React.useEffect(() => {
+    if (pollIntervalMs === 0) return;
+    if (isSubmittingBid || isBuyNowLoading) return;
+    const interval = setInterval(() => {
+      if (isMountedRef.current && !isSubmittingBid && !isBuyNowLoading && !isFetchingRef.current) {
+        void fetchDetail();
+      }
+    }, pollIntervalMs);
+    return () => clearInterval(interval);
+  }, [pollIntervalMs, isLive, isUpcoming, fetchDetail, isSubmittingBid, isBuyNowLoading]);
   const viewerState = auction?.viewerState ?? 'not_participating';
 
   // Compound haptic feedback when the viewer's auction outcome transitions
@@ -484,7 +511,6 @@ export default function AuctionDetailScreen() {
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
   const showBidControls = !isTerminal && !isSeller;
-  const treatmentStyle = stateAction?.viewerTreatment ?? 'none';
 
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
@@ -532,10 +558,6 @@ export default function AuctionDetailScreen() {
     navigation.push('AuctionDetail', { auctionId: id });
   }, [navigation]);
 
-  // Family badge state accent
-  const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
-    : isSettled ? 'Settled' : isEnded ? 'Ended' : null;
-
   // ── Canonical media array ──
   // Per spec 02_AUCTION §7: render the canonical media array through
   // CommerceMediaStage. Maintain imageUrl as a temporary compatibility
@@ -582,6 +604,125 @@ export default function AuctionDetailScreen() {
     terminalAmountGbp != null
       ? formatFromFiat(terminalAmountGbp, 'GBP')
       : 'Amount unavailable';
+
+  // ── Truthful terminal sale-state labels (audit P0.5) ──
+  // `ended` is not `settled`. Derive the sale title from the authoritative
+  // effective state + backend payment status so the body never says "Sold"
+  // (implying settlement) for an auction that has only ended.
+  const isPaymentConfirmed = auctionFulfilment?.paymentStatus === 'paid';
+  const hasValidWinner = auction != null && auction.winnerBidderId != null && auction.bidCount > 0;
+  const sellerSaleTitle = !hasValidWinner
+    ? 'Ended without bids'
+    : isSettled
+      ? 'Sold'
+      : isPaymentConfirmed
+        ? 'Sold · settlement pending'
+        : 'Sold · awaiting payment';
+  const winnerSubtitle = isSettled
+    ? (auctionFulfilment?.buyerNextAction
+        ? auctionFulfilment.buyerNextAction
+        : auctionFulfilment?.fulfilmentStatus
+          ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+          : 'Fulfilment details are not available yet.')
+    : isPaymentConfirmed
+      ? 'Payment confirmed · settlement pending'
+      : (auctionFulfilment?.buyerNextAction
+          ? auctionFulfilment.buyerNextAction
+          : 'Complete payment to secure your win.');
+  const sellerSubtitle = !hasValidWinner
+    ? 'No bids were received.'
+    : (auctionFulfilment?.sellerNextAction
+        ? auctionFulfilment.sellerNextAction
+        : isSettled
+          ? (auctionFulfilment?.fulfilmentStatus
+              ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+              : 'Fulfilment details are not available yet.')
+          : isPaymentConfirmed
+            ? 'Payment confirmed · settlement pending.'
+            : 'Awaiting buyer payment.');
+
+  // ── One primary state sentence (audit: reduce simultaneous state cues) ──
+  // Above the fold, show ONE dominant sentence that communicates the most
+  // important state. All other cues (auction state badge, live indicator,
+  // urgency color, viewer signals) demote to subordinate metadata so the
+  // page reads like precise instrumentation, not a casino dashboard.
+  const liveMsToEnd = React.useMemo(() => {
+    if (!auction) return 0;
+    return Math.max(0, new Date(auction.endsAt).getTime() - secondClock);
+  }, [auction, secondClock]);
+
+  const liveMsToStart = React.useMemo(() => {
+    if (!auction) return 0;
+    return Math.max(0, new Date(auction.startsAt).getTime() - secondClock);
+  }, [auction, secondClock]);
+
+  // Countdown color changes only at meaningful thresholds.
+  // < 10 seconds = danger, < 1 minute = warning, otherwise neutral.
+  // This is the single accent for urgency — not every element is red.
+  const countdownColor = React.useMemo(() => {
+    if (!isLive) return colors.textPrimary;
+    if (liveMsToEnd <= 10_000) return colors.danger;
+    if (liveMsToEnd <= 60_000) return colors.warning;
+    return colors.textPrimary;
+  }, [isLive, liveMsToEnd, colors]);
+
+  // Primary state sentence — one dominant line above the fold.
+  // Priority: outbid > leading > reserve not met > countdown > ended.
+  // Do NOT infer winner until server result — terminal sentences are
+  // derived from the authoritative effectiveState + fulfilment contract.
+  const primaryState = React.useMemo<{
+    text: string;
+    color: string;
+  } | null>(() => {
+    if (!timing || !detailInput || !auction) return null;
+
+    // Terminal states — server-confirmed end
+    if (isEnded || isSettled) {
+      if (viewerState === 'won' && !isPaymentConfirmed && !isSettled) {
+        return { text: 'Payment required', color: colors.warning };
+      }
+      return { text: 'Ended', color: colors.textMuted };
+    }
+    if (isCancelled) {
+      return { text: 'Cancelled', color: colors.textMuted };
+    }
+
+    // Live — viewer-state sentences dominate over countdown
+    if (isLive) {
+      if (viewerState === 'outbid') {
+        return { text: 'Outbid', color: colors.warning };
+      }
+      if (viewerState === 'leading') {
+        return { text: "You're highest bidder", color: colors.success };
+      }
+      if (reserveStatus === 'not-met') {
+        return { text: 'Reserve not met', color: colors.textPrimary };
+      }
+      // Default — countdown is the primary sentence
+      return { text: `Ends in ${formatCountdownSentence(liveMsToEnd)}`, color: countdownColor };
+    }
+
+    // Upcoming
+    if (isUpcoming) {
+      return { text: `Starts in ${formatCountdownSentence(liveMsToStart)}`, color: colors.brand };
+    }
+
+    return null;
+  }, [timing, detailInput, auction, isEnded, isSettled, isCancelled, isLive, isUpcoming, viewerState, isPaymentConfirmed, reserveStatus, liveMsToEnd, liveMsToStart, countdownColor, colors]);
+
+  // Subordinate metadata — countdown demotes here when viewer state
+  // dominates the primary sentence. Kept small and neutral so it never
+  // competes with the primary state sentence.
+  const subordinateStateText = React.useMemo<string | null>(() => {
+    if (!isLive || !auction) return null;
+    // Only show subordinate countdown when the primary sentence is NOT
+    // the countdown itself (i.e., viewer state or reserve dominates).
+    const primaryIsCountdown =
+      primaryState?.text.startsWith('Ends in') || primaryState?.text.startsWith('Starts in');
+    if (primaryIsCountdown) return null;
+    if (liveMsToEnd <= 0) return null;
+    return `Ends in ${formatCountdownSentence(liveMsToEnd)}`;
+  }, [isLive, auction, primaryState, liveMsToEnd]);
 
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
@@ -704,13 +845,6 @@ export default function AuctionDetailScreen() {
             setFullscreenMediaIndex(index);
             setMediaViewerVisible(true);
           }}
-          overlayTopContent={
-            <View style={styles.stateBadgeOverlay}>
-              <AuctionStateBadge
-                state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
-              />
-            </View>
-          }
           overlayBottomContent={
             <View accessible accessibilityLabel={accessibilityLabel}>
               <CommerceDetailIdentity
@@ -763,18 +897,13 @@ export default function AuctionDetailScreen() {
           onRetry={handleRefresh}
         />
 
-        {/* ── Zone B — Identity seam ──
-            One compact identity composition: eyebrow + title + condition.
-            Per spec 02 §B + spec 05 §3: auction identity must NOT show
-            price (the transaction surface owns the current bid) and
-            must NOT show a second family/state chip (the media overlay
-            already carries AuctionStateBadge). */}
         {/* ── Zone C — Auction transaction surface ──
-            One strong contained module: current bid + bid count + reserve
-            + countdown + viewer state. Replaces the stacked
-            transactionModule + outbid/leading/watching blocks. Spec 02 §C
-            + spec 04 §3/§4: "Integrate viewer state into the transaction
-            surface rather than adding another full-width block." */}
+            One primary state sentence above the fold. The countdown,
+            viewer signals, and reserve status demote to subordinate
+            metadata so only one state element has primary visual weight.
+            Reserve status is factual only — no persuasive gap copy.
+            Urgency chrome is reduced: the countdown owns the single
+            accent colour, applied only at meaningful thresholds. */}
         {!isTerminal && (
           <CommerceDetailTransactionSurface
             family="auction"
@@ -783,49 +912,39 @@ export default function AuctionDetailScreen() {
             primaryLabel={priceLabel}
             primaryValue={priceText}
             headlineAside={
-              <AuctionCountdown
-                text={countdown.text}
-                urgent={countdown.isFinalMinutes}
-                stage={countdown.stage}
-                progress={isLive ? countdownProgress : undefined}
-                showProgress={isLive}
-                prominent
-              />
-            }
-            viewerState={
-              viewerContext ? (
+              primaryState ? (
                 <Text
                   style={[
-                    styles.viewerStateLine,
-                    viewerContext.treatment === 'warning' && { color: colors.danger },
-                    viewerContext.treatment === 'calm' && { color: colors.success },
-                    viewerContext.treatment === 'seller' && { color: colors.brand },
-                    viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
+                    styles.primaryStateSentence,
+                    { color: primaryState.color },
                   ]}
-                  numberOfLines={2}
+                  numberOfLines={1}
                   accessibilityLiveRegion="polite"
                 >
-                  {viewerContext.title}
-                  {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
+                  {primaryState.text}
                 </Text>
               ) : undefined
             }
             statusRow={reserveStatus !== 'none' ? (
               <View style={styles.transactionStatusRow}>
-                <View style={styles.transactionReserveRow}>
-                  <ReserveStatusBadge status={reserveStatus} showExplanation />
-                  {reserveStatus === 'not-met' && isLive && (
-                    <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
-                      Bidding continues until reserve is met
-                    </Text>
-                  )}
-                </View>
+                <ReserveStatusBadge status={reserveStatus} />
               </View>
             ) : undefined}
           >
+            {/* Subordinate metadata — countdown demotes here when the
+                viewer-state sentence dominates so only one state element
+                has primary visual weight. */}
+            {subordinateStateText ? (
+              <Text
+                style={[styles.subordinateMetadata, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {subordinateStateText}
+              </Text>
+            ) : null}
             <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
               <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
-                Bid activity
+                {isLive ? 'Live bids' : 'Bid activity'}
               </Text>
               <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
                 {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
@@ -854,22 +973,28 @@ export default function AuctionDetailScreen() {
           <View style={styles.terminalResultModule}>
             {viewerState === 'won' && (
               <>
-                <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
+                <Text
+                  style={[
+                    styles.terminalResultTitleWon,
+                    { color: isPaymentConfirmed || isSettled ? colors.success : colors.warning },
+                  ]}
+                >
+                  {isPaymentConfirmed || isSettled ? 'You won' : 'Payment required'}
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.buyerNextAction
-                    ? auctionFulfilment.buyerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Fulfilment details are not available yet.'}
+                  {winnerSubtitle}
                 </Text>
               </>
             )}
             {viewerState === 'lost' && (
               <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction ended</Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  You didn't win this time
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>
@@ -885,22 +1010,25 @@ export default function AuctionDetailScreen() {
                 </Pressable>
               </>
             )}
-            {viewerState === 'seller' && auction.bidCount > 0 && (
+            {viewerState === 'seller' && hasValidWinner && (
               <>
-                <Text style={[styles.terminalResultTitleSold, { color: colors.success }]}>Sold</Text>
+                <Text
+                  style={[
+                    styles.terminalResultTitleSold,
+                    { color: isSettled ? colors.success : isPaymentConfirmed ? colors.brand : colors.warning },
+                  ]}
+                >
+                  {sellerSaleTitle}
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.sellerNextAction
-                    ? auctionFulfilment.sellerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Fulfilment details are not available yet.'}
+                  {sellerSubtitle}
                 </Text>
               </>
             )}
-            {viewerState === 'seller' && auction.bidCount === 0 && (
+            {viewerState === 'seller' && !hasValidWinner && (
               <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
             )}
             {viewerState === 'not_participating' && (
@@ -933,7 +1061,7 @@ export default function AuctionDetailScreen() {
                 ? `${sellerTrustData.rating.toFixed(1)}${sellerTrustData?.reviewCount != null ? ` · ${sellerTrustData.reviewCount} reviews` : ''}`
                 : undefined
             }
-            onPress={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
+            onPress={() => openProfile(navigation, auction.seller.id, currentUser?.id)}
             primaryAction={
               !isSeller
                 ? {
@@ -955,7 +1083,7 @@ export default function AuctionDetailScreen() {
                           partnerUserId: auction.seller.id,
                         });
                       } catch {
-                        show('Could not start conversation. Please try again.', 'error');
+                        show('Could not start conversation. Try again.', 'error');
                       } finally {
                         setIsResolvingConversation(false);
                       }
@@ -977,7 +1105,7 @@ export default function AuctionDetailScreen() {
                           show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
                         },
                         onError: () => {
-                          show('Could not follow seller. Please try again.', 'error');
+                          show('Could not follow seller. Try again.', 'error');
                         },
                       });
                     },
@@ -1172,7 +1300,7 @@ export default function AuctionDetailScreen() {
               : {
                   label: 'View purchases',
                   onPress: () => navigation.navigate('MyOrders'),
-                  accessibilityLabel: 'View your purchases',
+                  accessibilityLabel: 'Purchases',
                 };
           } else if (viewerState === 'lost' || (isSeller && auction.bidCount === 0)) {
             terminalAction = {
@@ -1246,15 +1374,19 @@ export default function AuctionDetailScreen() {
             : priceLabel;
           // Show countdown as subtitle when live so urgency follows the
           // user as they scroll — they don't need to scroll up to see
-          // time remaining.
-          const dockSubtitle = isLive && countdown.text
-            ? countdown.isFinalMinutes
-              ? `Ends in ${countdown.text}`
-              : countdown.text
-            : isUpcoming && countdown.text
-              ? countdown.text
+          // time remaining. Uses the same per-second format as the
+          // primary state sentence for consistency.
+          const dockSubtitle = isLive && liveMsToEnd > 0
+            ? `Ends in ${formatCountdownSentence(liveMsToEnd)}`
+            : isUpcoming && liveMsToStart > 0
+              ? `Starts in ${formatCountdownSentence(liveMsToStart)}`
               : undefined;
           const primaryType = stateAction.primary.type;
+          // For upcoming state, use "Notify me" as the primary label to
+          // make the notification intent explicit (P4-10 spec).
+          const primaryLabel = isUpcoming && primaryType === 'watchAuction'
+            ? (auction.isWatched ? 'Watching' : 'Notify me')
+            : stateAction.primary.label;
           return (
             <CommerceDetailStateDock
               value={dockValue}
@@ -1263,7 +1395,7 @@ export default function AuctionDetailScreen() {
               thumbnailUri={auctionMediaItems[0]?.uri}
               showProtectionStrip={auction.buyerProtection ?? false}
               primaryAction={{
-                label: stateAction.primary.label,
+                label: primaryLabel,
                 onPress: () => {
                   if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
                     HapticPatterns.bidPlaced();
@@ -1274,11 +1406,26 @@ export default function AuctionDetailScreen() {
                   } else if (primaryType === 'viewSimilar') {
                     haptics.tap();
                     navigation.navigate('MainTabs', { screen: 'Explore' });
+                  } else if (primaryType === 'viewResult') {
+                    // Result continuation: won auction → navigate to checkout
+                    // to complete payment, or to order detail if already paid.
+                    haptics.tap();
+                    if (auction.listingId) {
+                      navigation.navigate('Checkout', { itemId: auction.listingId });
+                    }
+                  } else if (primaryType === 'viewOutcome') {
+                    // Seller result continuation: navigate to seller auction
+                    // centre to view sale outcome and arrange shipping.
+                    haptics.tap();
+                    navigation.navigate('SellerAuctionCentre');
+                  } else if (primaryType === 'viewPerformance') {
+                    haptics.tap();
+                    navigation.navigate('SellerAuctionCentre');
                   }
                 },
                 loading: isSubmittingBid || watchToggling,
                 disabled: isSubmittingBid || watchToggling,
-                accessibilityLabel: stateAction.primary.label,
+                accessibilityLabel: primaryLabel,
               }}
               secondaryAction={
                 buyNowAvailable && stateAction.secondary.type === 'buyNow'
@@ -1319,7 +1466,7 @@ export default function AuctionDetailScreen() {
             handleToggleWatch();
           }}
           accessibilityRole="button"
-          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when this goes live' : 'Add to watchlist')}
           accessibilityState={{ selected: auction.isWatched }}
         >
           <Ionicons
@@ -1328,7 +1475,7 @@ export default function AuctionDetailScreen() {
             color={auction.isWatched ? colors.brand : colors.textPrimary}
           />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-            {auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+            {auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when live' : 'Add to watchlist')}
           </Text>
         </Pressable>
         <Pressable
@@ -1399,7 +1546,11 @@ export default function AuctionDetailScreen() {
             sellerName: auction.seller.displayName ?? auction.seller.username,
             effectiveState: effectiveState ?? 'upcoming',
             isSeller,
-            countdownText: countdown.text,
+            countdownText: isLive && liveMsToEnd > 0
+              ? `Ends in ${formatCountdownSentence(liveMsToEnd)}`
+              : isUpcoming && liveMsToStart > 0
+                ? `Starts in ${formatCountdownSentence(liveMsToStart)}`
+                : countdown.text,
           }}
           currencyCode={currencyCode}
           goldRates={goldRates}
@@ -1469,13 +1620,13 @@ export default function AuctionDetailScreen() {
 
         {!bidActivityError && bidActivity.length > 0 && (
           <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-            <View style={[styles.bidList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <View style={styles.bidList}>
               {bidActivity.map((bid, index) => {
                 const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
                 return (
                   <View
                     key={bid.id}
-                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: colors.surfaceAlt }]}
+                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: `${colors.success}08` }]}
                   >
                     <View style={styles.bidRowLeft}>
                       {row.isViewer && (
@@ -1644,6 +1795,22 @@ function resolveEffectiveState(
   return 'upcoming';
 }
 
+// ── Countdown sentence formatter ──
+// Produces a compact "12m 08s" / "3h 15m" / "2d 5h" string for the
+// primary state sentence and dock subtitle. Uses tabular-friendly
+// zero-padded seconds to prevent per-second layout shift.
+function formatCountdownSentence(ms: number): string {
+  if (ms <= 0) return 'Ended';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
 // Viewer-state treatment and title colour maps were dead code from the
 // pre-reconstruction implementation. The shared CommerceDetailTransactionSurface
 // and inline viewer-state rendering now own this logic.
@@ -1651,19 +1818,6 @@ function resolveEffectiveState(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-  },
-  backBtn: {
-    marginTop: Space.md,
-    minWidth: 120,
   },
   recommendationSection: {
     marginTop: Space.md,
@@ -1682,26 +1836,22 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   bidActivityLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   bidActivityBidder: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  bidActivityAmount: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
     fontVariant: ['tabular-nums'],
   },
-  bidActivityEmpty: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    paddingVertical: Space.sm,
+  bidActivityAmount: {
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   bidActivityViewAll: {
     flexDirection: 'row',
@@ -1710,9 +1860,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   bidActivityViewAllText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   // ── Item details rows (per spec 02_AUCTION §5) ──
   itemDetailRow: {
@@ -1723,20 +1873,20 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   itemDetailLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   itemDetailValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   descriptionText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    fontFamily: FontFamily.regular,
   },
   // ── Terminal result — one compact module ──
   // Per Design.md between-group spacing: 24px after media for a
@@ -1744,61 +1894,82 @@ const styles = StyleSheet.create({
   // content module after media in terminal states.
   terminalResultModule: {
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
+    marginTop: Space.lg,
+    paddingVertical: Space.md,
+    gap: Space.sm,
   },
   terminalResultTitleWon: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultTitleLost: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultTitleSold: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Transaction surface internal rows ──
+  // Primary state sentence — one dominant line in the headline aside.
+  // Uses tabular numerals so per-second countdown updates don't cause
+  // layout shift. Color is applied inline from the primaryState memo
+  // so only one accent communicates urgency.
+  primaryStateSentence: {
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  // Subordinate metadata — countdown demotes here when the viewer-state
+  // sentence dominates. Kept small and neutral so it never competes
+  // with the primary state sentence.
+  subordinateMetadata: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
+    marginTop: Space.sm,
+  },
   transactionBidActivityRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
     marginTop: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionBidActivityLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   transactionBidActivityValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   transactionMinRow: {
@@ -1809,29 +1980,17 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionMinLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   transactionMinValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-  },
-  transactionReserveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flexWrap: 'wrap',
-  },
-  transactionReserveHint: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    flexShrink: 1,
   },
   transactionStatusRow: {
     gap: Space.xs,
@@ -1844,10 +2003,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   sheetSubtitle: {},
   sheetScroll: {
@@ -1859,41 +2018,36 @@ const styles = StyleSheet.create({
   ruleItem: {
     flexDirection: 'row',
     gap: Space.md,
+    alignItems: 'flex-start',
   },
   ruleNumber: {
-    width: Space.lg + Space.xs,
-    height: Space.lg + Space.xs,
-    borderRadius: Radius.full,
+    width: Space.xl,
+    height: Space.xl,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 2,
   },
   ruleNumberText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
   },
   ruleContent: {
     flex: 1,
     gap: Space.xs,
   },
   ruleTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   ruleDescription: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  // ── Shared-shell reconstruction styles ──
-  stateBadgeOverlay: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    flexDirection: 'row',
-    gap: Space.xs,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface
@@ -1906,20 +2060,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
   },
-  viewerStateLine: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
   descriptionBlock: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   dockStateBadge: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
     letterSpacing: LetterSpacing.normal,
+    fontVariant: ['tabular-nums'],
   },
   overflowRow: {
     flexDirection: 'row',
@@ -1930,8 +2080,8 @@ const styles = StyleSheet.create({
     minHeight: Space.xxl,
   },
   overflowRowText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   discoverLinkInline: {
     flexDirection: 'row',
@@ -1939,24 +2089,27 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     alignSelf: 'center',
   },
   discoverLinkInlineText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   // ── Bid history sheet rows ──
+  // Per 2026 Apple HIG: compact flat rows, not cards. No outer
+  // container border or background — just hairline-separated rows
+  // on the sheet's own surface. The top bid gets a subtle tint.
   bidList: {
-    overflow: 'hidden',
+    // No card container — flat rows on the sheet surface.
   },
   bidRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   bidRowLeft: {
@@ -1966,20 +2119,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   viewerBadge: {
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
   },
   viewerBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   bidderName: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   bidRowInfo: {
     flexDirection: 'column',
@@ -1991,9 +2144,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   bidRelativeTime: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   bidRowRight: {
     flexDirection: 'row',
@@ -2001,21 +2155,21 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   bidAmount: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   topBidLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   noBidsText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   subSectionError: {
     flexDirection: 'row',
@@ -2023,12 +2177,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
   },
   subSectionErrorText: {},
   retryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
 });

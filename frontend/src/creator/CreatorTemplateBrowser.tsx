@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   getTemplatesByCategory,
@@ -25,6 +26,68 @@ import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+// ── Underline tab for category filtering ────────────────────────────
+// Replaces pill-background chips with text-only tabs + 2pt spring-animated
+// underline indicator (brand color, Stroke.emphasis).
+interface CategoryTabProps {
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+}
+
+function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
+  const underlineOpacity = useSharedValue(isActive ? 1 : 0);
+
+  useEffect(() => {
+    underlineOpacity.value = withSpring(isActive ? 1 : 0, { damping: 20, stiffness: 300 });
+  }, [isActive, underlineOpacity]);
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    opacity: underlineOpacity.value,
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          alignItems: 'center',
+          marginRight: Space.xs,
+        },
+        pressed && { opacity: 0.7 },
+      ]}
+      accessibilityLabel={`Filter by ${label}`}
+      accessibilityHint={`Shows ${label} templates`}
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Text
+        style={{
+          fontFamily: Typography.family.semibold,
+          fontSize: Type.body.size,
+          color: isActive ? colors.textPrimary : colors.textSecondary,
+        }}
+      >
+        {label}
+      </Text>
+      <Reanimated.View
+        style={[
+          {
+            height: Stroke.emphasis,
+            backgroundColor: colors.brand,
+            width: '100%',
+            marginTop: Space.xxs,
+          },
+          underlineStyle,
+        ]}
+      />
+    </Pressable>
+  );
+}
 
 export interface CreatorTemplateBrowserProps {
   visible: boolean;
@@ -83,6 +146,7 @@ export function CreatorTemplateBrowser({
 
   const handleApply = useCallback(
     (template: CreatorTemplate) => {
+      haptic.medium();
       if (hasExistingWork) {
         Alert.alert(
           'Replace current work?',
@@ -93,6 +157,7 @@ export function CreatorTemplateBrowser({
               text: 'Replace',
               style: 'destructive',
               onPress: () => {
+                haptic.warning();
                 onApply(template);
                 onClose();
               },
@@ -104,7 +169,7 @@ export function CreatorTemplateBrowser({
         onClose();
       }
     },
-    [hasExistingWork, onApply, onClose],
+    [hasExistingWork, onApply, onClose, haptic],
   );
 
   const handleCategoryChange = useCallback((cat: TemplateCategory | 'all') => {
@@ -113,9 +178,10 @@ export function CreatorTemplateBrowser({
   }, [haptic]);
 
   const handleClearSearch = useCallback(() => {
+    haptic.selection();
     setSearchQuery('');
     searchInputRef.current?.focus();
-  }, []);
+  }, [haptic]);
 
   const renderFeaturedItem = useCallback(
     ({ item }: { item: CreatorTemplate }) => {
@@ -128,7 +194,9 @@ export function CreatorTemplateBrowser({
           onPress={() => handleApply(item)}
           style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply featured template ${item.name}`}
+          accessibilityHint={`Replaces the current canvas with the ${item.name} template`}
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <View style={styles.featuredPreviewWrap}>
             <CreatorCanvas
@@ -139,15 +207,12 @@ export function CreatorTemplateBrowser({
               mode="preview"
             />
             <View style={styles.featuredBadge}>
-              <Ionicons name="star" size={10} color="#1a1a1a" />
+              <Ionicons name="star" size={10} color={colors.textPrimary} />
               <Text style={styles.featuredBadgeText}>Featured</Text>
             </View>
           </View>
           <View style={styles.featuredInfo}>
             <Text style={styles.featuredName} numberOfLines={1}>{item.name}</Text>
-            <View style={styles.featuredCategoryBadge}>
-              <Text style={styles.featuredCategoryText}>Featured</Text>
-            </View>
           </View>
           <Text style={styles.featuredDesc} numberOfLines={1}>{item.description}</Text>
         </Pressable>
@@ -167,7 +232,9 @@ export function CreatorTemplateBrowser({
           onPress={() => handleApply(item)}
           style={({ pressed }) => [styles.templateCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply template ${item.name}`}
+          accessibilityHint={`Replaces the current canvas with the ${item.name} template`}
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <View style={styles.previewContainer}>
             <CreatorCanvas
@@ -194,6 +261,8 @@ export function CreatorTemplateBrowser({
           onPress={onClose}
           style={styles.closeBtn}
           accessibilityLabel="Close templates"
+          accessibilityHint="Closes the template browser"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
@@ -218,8 +287,9 @@ export function CreatorTemplateBrowser({
               onPress={handleClearSearch}
               style={styles.searchClearBtn}
               accessibilityLabel="Clear search"
+              accessibilityHint="Clears the search query"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
@@ -227,33 +297,21 @@ export function CreatorTemplateBrowser({
         </View>
       </View>
 
-      {/* Category filter chips */}
+      {/* Category filter tabs */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryScroll}
       >
-        {TEMPLATE_CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat.key;
-          return (
-            <Pressable
-              key={cat.key}
-              onPress={() => handleCategoryChange(cat.key)}
-              style={({ pressed }) => [
-                styles.categoryChip,
-                isActive ? styles.categoryChipActive : styles.categoryChipInactive,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-              ]}
-              accessibilityLabel={`Filter by ${cat.label}`}
-              accessibilityRole="button"
-              hitSlop={8}
-            >
-              <Text style={[styles.categoryChipText, isActive ? styles.categoryChipTextActive : styles.categoryChipTextInactive]}>
-                {cat.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {TEMPLATE_CATEGORIES.map((cat) => (
+          <CategoryTab
+            key={cat.key}
+            label={cat.label}
+            isActive={activeCategory === cat.key}
+            onPress={() => handleCategoryChange(cat.key)}
+            colors={colors}
+          />
+        ))}
       </ScrollView>
 
       <FlatList
@@ -281,7 +339,6 @@ export function CreatorTemplateBrowser({
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="grid-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyText}>
               {searchQuery.trim() ? 'No templates match your search' : 'No templates in this category'}
             </Text>
@@ -307,8 +364,8 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
@@ -340,33 +397,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // ── Category chips ──
+  // ── Category tabs ──
   categoryScroll: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
-  categoryChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.xl,
-    marginRight: Space.xs,
-  },
-  categoryChipActive: {
-    backgroundColor: colors.brand,
-  },
-  categoryChipInactive: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  categoryChipText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-  categoryChipTextActive: {
-    color: colors.textInverse,
-  },
-  categoryChipTextInactive: {
-    color: colors.textSecondary,
   },
   // ── Featured section ──
   featuredSection: {
@@ -387,14 +421,6 @@ function createStyles(colors: ThemeColors) {
   },
   featuredCard: {
     width: SCREEN_W * 0.42,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.xl,
-    padding: Space.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   featuredPreviewWrap: {
     borderRadius: Radius.lg,
@@ -404,28 +430,24 @@ function createStyles(colors: ThemeColors) {
   },
   featuredBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: Space.sm,
+    left: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(201,164,106,0.95)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    gap: Space.xxs,
+    backgroundColor: `${colors.antiqueGold}F2`,
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
   },
   featuredBadgeText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 9,
-    color: '#1a1a1a',
+    fontSize: Type.meta.size,
+    color: colors.textPrimary,
     letterSpacing: 0.3,
   },
   featuredInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-    gap: Space.xs,
+    marginBottom: Space.xxs,
   },
   featuredName: {
     flex: 1,
@@ -433,21 +455,9 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
   },
-  featuredCategoryBadge: {
-    backgroundColor: colors.brand,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  featuredCategoryText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
-    color: colors.textInverse,
-    letterSpacing: Type.meta.letterSpacing,
-  },
   featuredDesc: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size - 1,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
   },
   // ── Standard grid ──
@@ -461,11 +471,7 @@ function createStyles(colors: ThemeColors) {
   },
   templateCard: {
     flex: 1,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: Space.xs,
-    backgroundColor: colors.surface,
   },
   previewContainer: {
     alignItems: 'center',
@@ -477,12 +483,12 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
     color: colors.textPrimary,
-    marginBottom: 1,
+    marginBottom: Space.xxs,
     paddingHorizontal: Space.xs,
   },
   templateDesc: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size - 1,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     lineHeight: 14,
     paddingHorizontal: Space.xs,

@@ -27,6 +27,68 @@ export type NativeStackScreenProps<ParamList extends Record<string, any | undefi
 export type NativeStackNavigationProp<ParamList extends Record<string, any | undefined>, RouteName extends keyof ParamList = keyof ParamList> =
   RNNativeStackNavigationProp<ParamList, RouteName>;
 
+// ---------------------------------------------------------------------------
+// Creator initial media acquisition payload (P0.1)
+// ---------------------------------------------------------------------------
+// A typed, source-agnostic description of media acquired at the entry point
+// (camera capture, ImagePicker multi-select, etc.) and passed into the
+// CreatorStudio route. Every selected asset is preserved in deterministic
+// order with its kind, dimensions and (for video) duration in milliseconds.
+export type CreatorInitialMedia = {
+  id: string;
+  uri: string;
+  kind: 'image' | 'video';
+  width?: number;
+  height?: number;
+  /** Video duration in milliseconds (normalized at the boundary). */
+  durationMs?: number;
+  mimeType?: string;
+  /**
+   * Playback speed multiplier captured with the camera speed-mode selector.
+   * expo-camera 57 does not support native slow/fast-motion recording, so
+   * the video is always recorded at 1× and the speed is applied at playback
+   * time by the timeline/export engine. Values: 0.3 (slow), 1, 2, 3 (fast).
+   * @default 1
+   */
+  speed?: number;
+  /**
+   * Green-screen metadata. When present, the clip was captured with a
+   * background-replacement intent. Real-time chroma keying is not feasible
+   * with expo-camera alone (no frame-processor API), so the effect is
+   * applied in post-production via Skia. The background image URI and key
+   * parameters are preserved so the timeline can re-render the composite.
+   */
+  greenScreen?: {
+    backgroundUri: string;
+    /** Key color as a hex string (e.g. '#00ff00' for green). */
+    keyColor: string;
+    /** Chroma key tolerance 0–1 (how far from the key color to mask). */
+    tolerance: number;
+    /** Edge feather 0–1 (softness of the mask boundary). */
+    feather: number;
+  };
+  /**
+   * Camera effect selected at capture time. expo-camera does not support
+   * real-time color matrix filters, so the effect is applied post-capture
+   * by the composer when seeding the media layer. Values match the
+   * CameraEffectId type: 'vintage', 'noir', 'vivid', 'warm', 'cool',
+   * 'fade'. Absent when 'none' (no effect).
+   */
+  cameraEffect?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Creator acquisition result (Phase 2 — Poster vs Look semantic model)
+// ---------------------------------------------------------------------------
+// A typed, semantic description of what the user acquired at the entry point.
+// Poster multi-selection creates pages (frames), not layers. Look
+// multi-selection creates layers on one page (collage). Single media is the
+// backward-compatible path for camera capture and legacy callers.
+export type CreatorAcquisitionResult =
+  | { mode: 'poster_frames'; media: CreatorInitialMedia[] }
+  | { mode: 'look_layers'; media: CreatorInitialMedia[] }
+  | { mode: 'single_media'; media: CreatorInitialMedia };
+
 export type RootStackParamList = {
   // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
   AgeVerification: undefined;
@@ -75,6 +137,7 @@ export type RootStackParamList = {
     initialSegment?: 'active' | 'new_issues' | 'watchlist';
   } | undefined;
   AssetDetail: { assetId: string };
+  AssetDueDiligence: { assetId: string };
   Trade: { assetId: string; side: 'buy' | 'sell'; limitPrice?: number };
   Portfolio: undefined;
   CoOwnOrderHistory: undefined;
@@ -93,6 +156,7 @@ export type RootStackParamList = {
     actionId?: string;
   };
   DistributionHistory: { assetId?: string } | undefined;
+  Inbox: undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;
@@ -118,9 +182,16 @@ export type RootStackParamList = {
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
-  UserProfile: { userId: string; isMe?: boolean };
+  UserProfile: { userId: string };
+  // Followers / following — full-screen people lists (spec 50)
+  Followers: { userId: string };
+  Following: { userId: string };
   // Profile sub-screens
   Wallet: undefined;
+  // Wallet V3 — focused money-movement destinations (spec 17)
+  SellerEarnings: undefined;
+  WalletConvert: undefined;
+  WalletActivity: undefined;
   MyOrders: undefined;
   Personalisation: undefined;
   Settings: undefined;
@@ -196,9 +267,26 @@ export type RootStackParamList = {
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
+    /**
+     * Backward-compatible single-asset entry point (camera capture, legacy
+     * callers). Prefer `initialMedia` for multi-asset acquisition.
+     */
     initialMediaUri?: string;
+    /**
+     * Typed multi-asset acquisition payload. When present, every asset is
+     * seeded as a media layer in deterministic order, preserving kind,
+     * dimensions and video duration.
+     */
+    initialMedia?: CreatorInitialMedia[];
     startBlank?: boolean;
     openTemplates?: boolean;
+    /**
+     * Signal to show the CreatorEntryScreen (camera/gallery) overlay on
+     * open. Used by the Create tab action and the CreateCamera redirect so
+     * the user lands in the in-studio capture surface instead of a blank
+     * composer.
+     */
+    openEntry?: boolean;
   };
   VisualSearch: { initialImageUri?: string } | undefined;
   CreatorDraftList: undefined;
@@ -302,6 +390,8 @@ export type RootStackParamList = {
   VerificationStatus: undefined;
   // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
+  // Seller Hub — unified seller management dashboard
+  SellerHub: undefined;
   // Creator analytics — creator-side performance insights (views, engagement, timeline)
   CreatorAnalyticsDashboard: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;
@@ -314,7 +404,6 @@ export type RootStackParamList = {
   LiveStreamViewer: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
-  // AI-powered listing creation
   AIPoweredListing: undefined;
   // Pro seller tools
   BulkListing: undefined;
@@ -341,6 +430,8 @@ export type RootStackParamList = {
   NotificationPreferences: undefined;
   // AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom
   AIAgentIntegration: undefined;
+  // Agent activity ledger — transparent record of agent actions and approvals
+  AgentActivity: undefined;
 };
 
 export type TabParamList = {

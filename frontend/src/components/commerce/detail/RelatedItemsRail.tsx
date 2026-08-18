@@ -47,7 +47,7 @@ export function RelatedItemsRail({
   loading = false,
   onSeeAll,
   onPressItem,
-  headerLabel = 'You may also like',
+  headerLabel = 'More like this',
 }: RelatedItemsRailProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -79,6 +79,7 @@ export function RelatedItemsRail({
                 style={styles.cardImage}
                 containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
                 contentFit="cover"
+                downscaleWidth={Math.round(cardWidth)}
               />
             ) : (
               <ImageEmptyGraphic
@@ -157,7 +158,7 @@ export function RelatedItemsRail({
           <Pressable
             onPress={onSeeAll}
             hitSlop={8}
-            style={styles.seeAllHitTarget}
+            style={({ pressed }) => [styles.seeAllHitTarget, pressed && { opacity: 0.6 }]}
             accessibilityLabel={`See all ${headerLabel.toLowerCase()}`}
             accessibilityRole="button"
           >

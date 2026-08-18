@@ -12,11 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -37,7 +35,6 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
-  const reducedMotionEnabled = useReducedMotion();
 
   const listingId = route.params?.listingId;
   const routeTitle = route.params?.title;
@@ -139,7 +136,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Celebration Header */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(0)} style={styles.heroSection}>
+        <View style={styles.heroSection}>
           <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={64} color={colors.brand} />
           </View>
@@ -150,20 +147,20 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           {listingPrice ? (
             <Text style={styles.heroMicroCopy}>{listingPrice}</Text>
           ) : null}
-        </Reanimated.View>
+        </View>
 
         {/* Published status */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
+        <View style={styles.statusRow}>
           <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}
             </Text>
           ) : null}
-        </Reanimated.View>
+        </View>
 
         {/* Product preview card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}>
+        <View>
           <ElevatedSurface variant="elevated" style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
@@ -194,13 +191,13 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </ElevatedSurface>
-        </Reanimated.View>
+        </View>
 
         {/* Smart Sell demo banner (truthful UI) */}
         {smartSellEnabled && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(200)}>
+          <View>
             <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
-              <Ionicons name="sparkles" size={18} color={colors.brand} />
+              <Ionicons name="trending-up-outline" size={18} color={colors.brand} />
               <View style={styles.smartSellBannerBody}>
                 <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
                 <Text style={styles.smartSellBannerText}>
@@ -208,11 +205,11 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             </ElevatedSurface>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Actions */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)}>
+        <View>
         <ElevatedSurface variant="surface" style={{ marginBottom: Space.xl }}>
         {listingId ? (
           <AnimatedPressable
@@ -327,10 +324,10 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         </ElevatedSurface>
-        </Reanimated.View>
+        </View>
 
         {/* Tips for selling — first-listing guidance */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(320)} style={styles.tipsCard}>
+        <View style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="bulb-outline" size={14} color={colors.brand} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
@@ -351,10 +348,10 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons name="share-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Support link */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(380)}>
+        <View>
           <AnimatedPressable
             style={styles.supportLink}
             activeOpacity={0.8}
@@ -369,7 +366,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               Need help? Visit the Help Centre
             </Text>
           </AnimatedPressable>
-        </Reanimated.View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -390,8 +387,6 @@ function createStyles(colors: ThemeColors) {
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -526,9 +521,6 @@ function createStyles(colors: ThemeColors) {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

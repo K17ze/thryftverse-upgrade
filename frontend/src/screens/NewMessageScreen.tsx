@@ -73,8 +73,8 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       gap: Space.xs / 4,
     },
     quickActionBadge: {
-      minWidth: Space.sm + 4,
-      height: Space.sm + 4,
+      minWidth: Space.smMd,
+      height: Space.smMd,
       borderRadius: Radius.lg,
       backgroundColor: colors.brand,
       justifyContent: 'center',
@@ -303,7 +303,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: preselectedUserId });
         })
         .catch(() => {
-          show(`Could not start a conversation with ${preselectedDisplayName}. Please try again.`, 'error');
+          show(`Could not start a conversation with ${preselectedDisplayName}. Try again.`, 'error');
         });
     }
   }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
@@ -321,7 +321,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       });
       navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: contact.userId });
     } catch {
-      show('Could not start conversation. Please try again.', 'error');
+      show('Could not start conversation. Try again.', 'error');
     }
   };
 
@@ -417,7 +417,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityRole="button"
           >
             <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
-              <Ionicons name="sparkles-outline" size={20} color={colors.brand} />
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>

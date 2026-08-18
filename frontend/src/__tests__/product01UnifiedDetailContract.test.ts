@@ -24,7 +24,7 @@ import {
   type ProductDetailViewModel,
   type ListingFamily,
 } from '../platform/product/productDetailViewModel';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 import type {
   AuctionDetail,
   MarketCoOwnAsset,

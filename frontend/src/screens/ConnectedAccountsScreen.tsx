@@ -18,16 +18,13 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { ConnectedAccountsSkeleton } from '../components/skeletons/ConnectedAccountsSkeleton';
 import { EmptyState } from '../components/EmptyState';
@@ -55,11 +52,10 @@ function formatDate(iso: string): string {
 }
 
 export default function ConnectedAccountsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [accounts, setAccounts] = React.useState<ConnectedAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -88,7 +84,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     const meta = PROVIDER_META[account.provider] ?? { label: account.provider };
     Alert.alert(
       `Unlink ${meta.label}?`,
-      `You'll no longer be able to sign in with ${meta.label}. Make sure you have another way to access your account.`,
+      `You'll no longer be able to sign in with ${meta.label}. Ensure you have another way to access your account.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -115,25 +111,28 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Connected Accounts" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Connected Accounts" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <ConnectedAccountsSkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Connected Accounts" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Connected Accounts" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — visual identity for the screen */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -149,10 +148,9 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
 
         <Text style={styles.introText}>
-          Manage the third-party accounts you use to sign in. You can unlink an account as long as you have another way to access your ThryftVerse account.
+          Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.
         </Text>
 
         {error ? (
@@ -164,7 +162,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : accounts.length === 0 ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="link-outline" size={36} color={colors.textMuted} />
@@ -174,7 +171,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                 You sign in with your email and password. Connect Google or Apple from the sign-in screen for faster access.
               </Text>
             </View>
-          </Reanimated.View>
         ) : (
           <View style={styles.accountsList}>
             {accounts.map((account, idx) => {
@@ -186,9 +182,8 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               };
               const isUnlinking = unlinkingId === account.id;
               return (
-                <Reanimated.View
+                <View
                   key={account.id}
-                  entering={FadeInDown.duration(300).delay(idx * 60)}
                 >
                   <View style={styles.accountCard}>
                     <View style={styles.accountHeader}>
@@ -215,36 +210,33 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                       disabled={isUnlinking}
                     />
                   </View>
-                </Reanimated.View>
+                </View>
               );
             })}
           </View>
         )}
 
         {/* Security note — elevated with icon and card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
           <View style={styles.securityNote}>
             <View style={styles.securityIconWrap}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+              <Ionicons name="checkmark-done" size={20} color={colors.success} />
             </View>
             <View style={styles.securityTextWrap}>
               <Text style={styles.securityTitle}>Account safety</Text>
               <Text style={styles.securityNoteText}>
-                For your security, you must keep at least one way to sign in. If you unlink your only connected account, make sure you have a password set.
+                For your security, you must keep at least one way to sign in. If you unlink your only connected account, ensure you have a password set.
               </Text>
             </View>
           </View>
-        </Reanimated.View>
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 

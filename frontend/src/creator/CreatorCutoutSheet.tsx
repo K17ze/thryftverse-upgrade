@@ -1,22 +1,46 @@
-import React, { useState, useCallback, useRef } from 'react';
+// NOTE: This component performs manual rectangular cropping, NOT transparent
+// subject extraction. The user-facing label is "Crop" until true segmentation
+// (alpha mask) is implemented. See THRYFTVERSE_CREATOR_FLAGSHIP_RECONSTRUCTION
+// Phase 8 for the true cutout contract.
+//
+// Manual trace-and-crop tool. The user traces around a subject with
+// their finger and the tool crops to the bounding box of the traced
+// region. This is NOT background removal/subject segmentation — it
+// produces a rectangular crop, not a transparent cutout.
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  Image,
   Dimensions,
-  Animated,
-  PanResponder,
+  Image as RNImage,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { PressScale } from './CreatorAnimations';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withSequence,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -32,12 +56,19 @@ interface CreatorCutoutSheetProps {
 }
 
 /**
- * Snapchat-style cutout tool.
- * - Scissors mode: trace around the subject with your finger to create a cutout
+ * Manual trace-and-crop tool.
+ *
+ * The user traces around a subject with their finger and the tool crops
+ * to the bounding box of the traced region, exporting the crop as a PNG.
+ * This is NOT background removal / subject segmentation — it produces a
+ * rectangular crop, not a transparent cutout. For true subject cutout
+ * (background transparency), an on-device ML segmentation model or
+ * backend service would be required.
+ *
+ * - Scissors mode: trace around the subject with your finger
  * - Eraser mode: erase regions by painting over them
  *
- * The result is a PNG with transparent background that can be placed as a
- * sticker-style layer.
+ * The result is a PNG crop of the traced bounding box.
  */
 export function CreatorCutoutSheet({
   visible,
@@ -49,6 +80,8 @@ export function CreatorCutoutSheet({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { spring } = useMotionConfig();
+  const reduceMotion = useReducedMotion();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -56,12 +89,28 @@ export function CreatorCutoutSheet({
   const [paths, setPaths] = useState<Point[][]>([]);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const translateY = useRef(new Animated.Value(SCREEN_W * 1.2)).current;
+  const [previewCrop, setPreviewCrop] = useState(false);
+  const mountedRef = useRef(false);
+
+  // ── Spring-driven shared values ──────────────────────────────────
+  const sheetYSV = useSharedValue(SCREEN_W * 1.2);
+  const backdropOpacitySV = useSharedValue(0);
+  const toolHighlightSV = useSharedValue(0); // 0 = scissors, 1 = eraser
+  const cutoutScaleSV = useSharedValue(1);
+  const cutoutXSV = useSharedValue(0);
+  const cutoutYSV = useSharedValue(0);
+  const subjectHighlightSV = useSharedValue(0);
+
+  // ── Tool tab underline indicator (spring-animated, brand color) ──
+  const toolTabLayouts = useRef<Map<Tool, { x: number; width: number }>>(new Map());
+  const toolUnderlineXSV = useSharedValue(0);
+  const toolUnderlineWSV = useSharedValue(0);
+  const TOOL_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Load image dimensions ────────────────────────────────────────
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible && imageUri) {
-      Image.getSize(imageUri, (w, h) => {
+      RNImage.getSize(imageUri, (w: number, h: number) => {
         setImageSize({ width: w, height: h });
         // Fit within display area
         const maxW = SCREEN_W - 32;
@@ -74,64 +123,159 @@ export function CreatorCutoutSheet({
     }
   }, [visible, imageUri, show]);
 
-  // ── Sheet animation ──────────────────────────────────────────────
-  React.useEffect(() => {
+  // ── Sheet spring entrance/exit ───────────────────────────────────
+  useEffect(() => {
     if (visible) {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        friction: 8,
-      }).start();
-    } else {
-      Animated.timing(translateY, {
-        toValue: SCREEN_W * 1.2,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      mountedRef.current = true;
+      if (reduceMotion) {
+        sheetYSV.value = 0;
+        backdropOpacitySV.value = 1;
+      } else {
+        sheetYSV.value = withSpring(0, spring.entrance);
+        backdropOpacitySV.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+      }
+    } else if (mountedRef.current) {
+      if (reduceMotion) {
+        sheetYSV.value = SCREEN_W * 1.2;
+        backdropOpacitySV.value = 0;
+      } else {
+        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: 180, easing: Easing.in(Easing.ease) });
+        backdropOpacitySV.value = withTiming(0, { duration: 160 });
+      }
     }
-  }, [visible, translateY]);
+  }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, spring]);
 
-  // ── Drawing pan responder ────────────────────────────────────────
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        haptic.selection();
-        setCurrentPath([]);
-      },
-      onPanResponderMove: (_evt, gestureState) => {
-        setCurrentPath((prev) => [
-          ...prev,
-          { x: gestureState.moveX, y: gestureState.moveY },
-        ]);
-      },
-      onPanResponderRelease: () => {
-        if (currentPath.length > 2) {
-          setPaths((prev) => [...prev, currentPath]);
-        }
-        setCurrentPath([]);
-        haptic.light();
-      },
+  // ── Tool switch with spring highlight ────────────────────────────
+  const handleToolSwitch = useCallback((nextTool: Tool) => {
+    if (nextTool === tool) return;
+    haptic.selection();
+    setTool(nextTool);
+    if (reduceMotion) {
+      toolHighlightSV.value = nextTool === 'eraser' ? 1 : 0;
+    } else {
+      toolHighlightSV.value = withSpring(nextTool === 'eraser' ? 1 : 0, spring.tap);
+    }
+    // Animate underline to the selected tab.
+    const layout = toolTabLayouts.current.get(nextTool);
+    if (layout) {
+      if (reduceMotion) {
+        toolUnderlineXSV.value = layout.x;
+        toolUnderlineWSV.value = layout.width;
+      } else {
+        toolUnderlineXSV.value = withSpring(layout.x, TOOL_UNDERLINE_SPRING);
+        toolUnderlineWSV.value = withSpring(layout.width, TOOL_UNDERLINE_SPRING);
+      }
+    }
+  }, [tool, haptic, toolHighlightSV, reduceMotion, spring, toolUnderlineXSV, toolUnderlineWSV]);
+
+  // ── Drawing gesture (trace path) ─────────────────────────────────
+  const panGesture = Gesture.Pan()
+    .onBegin(() => {
+      runOnJS(haptic.selection)();
+      runOnJS(startPath)();
     })
-  ).current;
+    .onUpdate((e) => {
+      runOnJS(addPoint)(e.absoluteX, e.absoluteY);
+    })
+    .onEnd(() => {
+      runOnJS(finishPath)();
+    });
+
+  const startPath = useCallback(() => {
+    setCurrentPath([]);
+  }, []);
+
+  const addPoint = useCallback((x: number, y: number) => {
+    setCurrentPath((prev) => [...prev, { x, y }]);
+  }, []);
+
+  const finishPath = useCallback(() => {
+    setCurrentPath((curr) => {
+      if (curr.length > 2) {
+        setPaths((prev) => [...prev, curr]);
+      }
+      return [];
+    });
+    haptic.light();
+  }, [haptic]);
+
+  // ── Pinch to scale cutout preview ────────────────────────────────
+  const pinchStartScale = useSharedValue(1);
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      runOnJS(haptic.selection)();
+      pinchStartScale.value = cutoutScaleSV.value;
+    })
+    .onUpdate((e) => {
+      cutoutScaleSV.value = Math.max(0.5, Math.min(3, pinchStartScale.value * e.scale));
+    })
+    .onEnd(() => {
+      runOnJS(haptic.light)();
+    });
+
+  // ── Drag to position cutout with spring follow ───────────────────
+  const dragStartX = useSharedValue(0);
+  const dragStartY = useSharedValue(0);
+
+  const dragGesture = Gesture.Pan()
+    .onStart(() => {
+      runOnJS(haptic.selection)();
+      dragStartX.value = cutoutXSV.value;
+      dragStartY.value = cutoutYSV.value;
+      cancelAnimation(cutoutXSV);
+      cancelAnimation(cutoutYSV);
+    })
+    .onUpdate((e) => {
+      cutoutXSV.value = dragStartX.value + e.translationX;
+      cutoutYSV.value = dragStartY.value + e.translationY;
+    })
+    .onEnd(() => {
+      // Spring back toward center with slight offset for natural feel
+      if (!reduceMotion) {
+        cutoutXSV.value = withSpring(cutoutXSV.value * 0.3, spring.entrance);
+        cutoutYSV.value = withSpring(cutoutYSV.value * 0.3, spring.entrance);
+      }
+      runOnJS(haptic.light)();
+    });
+
+  // ── Subject selection highlight (spring pulse) ───────────────────
+  const triggerSubjectHighlight = useCallback(() => {
+    haptic.selection();
+    if (reduceMotion) {
+      subjectHighlightSV.value = 1;
+    } else {
+      subjectHighlightSV.value = withSequence(
+        withTiming(1, { duration: 150 }),
+        withSpring(0, spring.tap),
+      );
+    }
+  }, [haptic, reduceMotion, subjectHighlightSV, spring]);
 
   // ── Undo last path ───────────────────────────────────────────────
   const handleUndo = useCallback(() => {
     haptic.selection();
     setPaths((prev) => prev.slice(0, -1));
-  }, [haptic]);
+    if (paths.length <= 1) setPreviewCrop(false);
+  }, [haptic, paths]);
 
   // ── Clear all paths ──────────────────────────────────────────────
   const handleClear = useCallback(() => {
     haptic.medium();
     setPaths([]);
+    setPreviewCrop(false);
   }, [haptic]);
 
-  // ── Apply cutout ─────────────────────────────────────────────────
-  // Since we can't do true AI background removal on-device without ML,
-  // we use the traced path to create a crop bounding box and export as PNG.
-  // The user traces around the subject, and we crop to that bounding box.
-  // For a true pixel-level cutout, a backend ML service would be needed.
+  // ── Preview crop bounding box ─────────────────────────────────────
+  const handlePreviewCrop = useCallback(() => {
+    haptic.medium();
+    setPreviewCrop((prev) => !prev);
+    triggerSubjectHighlight();
+  }, [haptic, triggerSubjectHighlight]);
+
+  // ── Apply crop ────────────────────────────────────────────────────
+  // The traced path defines a bounding box. We crop to that bounding box
+  // and export as PNG. This is a rectangular crop, not background removal.
   const handleApply = useCallback(async () => {
     if (paths.length === 0) {
       show('Trace around your subject first', 'error');
@@ -178,23 +322,71 @@ export function CreatorCutoutSheet({
       onCutoutComplete(result.uri);
       onClose();
     } catch {
-      show('Cutout failed. Please try again.', 'error');
+      show('Crop failed. Try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
   }, [paths, imageSize, displaySize, onCutoutComplete, onClose, show, haptic]);
 
-  if (!visible) return null;
+  // ── Animated styles ──────────────────────────────────────────────
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetYSV.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacitySV.value,
+  }));
+
+  const cutoutTransformStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: cutoutXSV.value },
+      { translateY: cutoutYSV.value },
+      { scale: cutoutScaleSV.value },
+    ],
+  }));
+
+  const subjectHighlightStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      subjectHighlightSV.value,
+      [0, 1],
+      [0, 0.4],
+      Extrapolation.CLAMP
+    ),
+    transform: [{ scale: interpolate(subjectHighlightSV.value, [0, 1], [1, 1.05], Extrapolation.CLAMP) }],
+  }));
+
+  // Tool tab underline indicator (spring-animated, brand color).
+  const toolUnderlineStyle = useAnimatedStyle(() => ({
+    left: toolUnderlineXSV.value,
+    width: toolUnderlineWSV.value,
+  }));
+
+  // ── Bounding box of all traced paths (for preview crop overlay) ───
+  const cropBBox = useMemo(() => {
+    if (paths.length === 0) return null;
+    const allPoints = paths.flat();
+    if (allPoints.length === 0) return null;
+    const minX = Math.min(...allPoints.map(p => p.x));
+    const maxX = Math.max(...allPoints.map(p => p.x));
+    const minY = Math.min(...allPoints.map(p => p.y));
+    const maxY = Math.max(...allPoints.map(p => p.y));
+    return { minX, maxX, minY, maxY };
+  }, [paths]);
+
+  if (!visible && !mountedRef.current) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay, zIndex: 300 }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close manual crop" accessibilityRole="button" />
+      </Reanimated.View>
 
-      <Animated.View
+      <Reanimated.View
         style={[
           styles.sheet,
-          { transform: [{ translateY }], paddingBottom: insets.bottom + 16 },
+          { paddingBottom: insets.bottom + 16, backgroundColor: colors.background },
+          sheetStyle,
         ]}
       >
         {/* Handle */}
@@ -204,66 +396,166 @@ export function CreatorCutoutSheet({
 
         {/* Title row */}
         <View style={styles.titleRow}>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Cancel cutout">
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-          </Pressable>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Cutout</Text>
-          <Pressable
-            onPress={handleApply}
-            disabled={isProcessing || paths.length === 0}
-            hitSlop={12}
-            accessibilityLabel="Apply cutout"
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Crop</Text>
+          <PressScale
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityLabel="Close manual crop"
+            accessibilityRole="button"
           >
-            <Text style={[
-              styles.applyText,
-              {
-                color: colors.brand,
-                opacity: isProcessing || paths.length === 0 ? 0.4 : 1,
-              },
-            ]}>
-              {isProcessing ? 'Processing…' : 'Cut'}
-            </Text>
-          </Pressable>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         {/* Instructions */}
-        <Text style={styles.instructions}>
-          Trace around your subject to cut it out
+        <Text style={[styles.instructions, { color: colors.textMuted }]}>
+          {previewCrop && cropBBox ? 'Crop region shown — tap Crop to save' : 'Trace around your subject, then crop to that region'}
+        </Text>
+        <Text style={[styles.note, { color: colors.textMuted }]}>
+          For automatic background removal, use a subject with a clean background.
         </Text>
 
-        {/* Drawing canvas */}
-        <View style={styles.canvasArea}>
-          <View
-            style={[styles.canvasFrame, {
-              width: displaySize.width,
-              height: displaySize.height,
-            }]}
-            {...panResponder.panHandlers}
-          >
-            <Image
-              source={{ uri: imageUri }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-            />
-            {/* Dim overlay to show what's being cut away */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              {paths.map((path, i) => (
-                <PathOverlay key={i} path={path} color="#E06666" opacity={0.3} />
-              ))}
-              {currentPath.length > 1 && (
-                <PathOverlay path={currentPath} color="#E06666" opacity={0.5} />
+        {/* Drawing canvas with drag/pinch for cutout positioning */}
+        <GestureHandlerRootView style={styles.canvasArea}>
+          <GestureDetector gesture={Gesture.Race(dragGesture, pinchGesture)}>
+            <Reanimated.View
+              style={[
+                styles.canvasFrame,
+                {
+                  width: displaySize.width,
+                  height: displaySize.height,
+                },
+                cutoutTransformStyle,
+              ]}
+            >
+              {/* Original image */}
+              <Image
+                source={{ uri: imageUri }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+              />
+              {/* Crop bounding box preview overlay */}
+              {previewCrop && cropBBox && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: Math.max(0, cropBBox.minX - 16),
+                    top: Math.max(0, cropBBox.minY),
+                    width: Math.min(displaySize.width, cropBBox.maxX - cropBBox.minX),
+                    height: Math.min(displaySize.height, cropBBox.maxY - cropBBox.minY),
+                    borderWidth: 2,
+                    borderColor: colors.brand,
+                    backgroundColor: 'transparent',
+                  }}
+                  pointerEvents="none"
+                />
               )}
-            </View>
-          </View>
+              {/* Subject selection highlight pulse */}
+              <Reanimated.View style={[StyleSheet.absoluteFill, subjectHighlightStyle, { backgroundColor: colors.brand }]} pointerEvents="none" />
+
+              {/* Drawing layer for traced paths */}
+              <GestureDetector gesture={panGesture}>
+                <View style={StyleSheet.absoluteFill}>
+                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    {paths.map((path, i) => (
+                      <PathOverlay key={i} path={path} color="#E06666" opacity={0.3} />
+                    ))}
+                    {currentPath.length > 1 && (
+                      <PathOverlay path={currentPath} color="#E06666" opacity={0.5} />
+                    )}
+                  </View>
+                </View>
+              </GestureDetector>
+            </Reanimated.View>
+          </GestureDetector>
+        </GestureHandlerRootView>
+
+        {/* Tool selector — text-only tabs with spring underline */}
+        <View style={styles.toolSelectorRow}>
+          <PressScale
+            onPress={() => handleToolSwitch('scissors')}
+            onLayout={(e) => {
+              toolTabLayouts.current.set('scissors', {
+                x: e.nativeEvent.layout.x,
+                width: e.nativeEvent.layout.width,
+              });
+              if (tool === 'scissors') {
+                toolUnderlineXSV.value = e.nativeEvent.layout.x;
+                toolUnderlineWSV.value = e.nativeEvent.layout.width;
+              }
+            }}
+            style={styles.toolSelectorBtn}
+            accessibilityLabel="Scissors tool"
+            accessibilityRole="button"
+            accessibilityState={{ selected: tool === 'scissors' }}
+          >
+            <Ionicons
+              name="cut-outline"
+              size={20}
+              color={tool === 'scissors' ? colors.brand : colors.textSecondary}
+            />
+            <Text style={[styles.toolSelectorLabel, { color: tool === 'scissors' ? colors.brand : colors.textSecondary }]}>
+              Trace
+            </Text>
+          </PressScale>
+          <PressScale
+            onPress={() => handleToolSwitch('eraser')}
+            onLayout={(e) => {
+              toolTabLayouts.current.set('eraser', {
+                x: e.nativeEvent.layout.x,
+                width: e.nativeEvent.layout.width,
+              });
+              if (tool === 'eraser') {
+                toolUnderlineXSV.value = e.nativeEvent.layout.x;
+                toolUnderlineWSV.value = e.nativeEvent.layout.width;
+              }
+            }}
+            style={styles.toolSelectorBtn}
+            accessibilityLabel="Eraser tool"
+            accessibilityRole="button"
+            accessibilityState={{ selected: tool === 'eraser' }}
+          >
+            <Ionicons
+              name="brush-outline"
+              size={20}
+              color={tool === 'eraser' ? colors.brand : colors.textSecondary}
+            />
+            <Text style={[styles.toolSelectorLabel, { color: tool === 'eraser' ? colors.brand : colors.textSecondary }]}>
+              Erase
+            </Text>
+          </PressScale>
+          {/* Spring-animated underline indicator (brand color, 2pt) */}
+          <Reanimated.View
+            style={[styles.toolUnderline, toolUnderlineStyle, { backgroundColor: colors.brand }]}
+            pointerEvents="none"
+          />
         </View>
 
-        {/* Tool controls */}
+        {/* Tool controls — flattened, no card containers */}
         <View style={styles.toolRow}>
           <PressScale
+            onPress={handlePreviewCrop}
+            style={styles.toolBtn}
+            disabled={paths.length === 0}
+            accessibilityLabel="Preview crop"
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name="eye-outline"
+              size={22}
+              color={paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textPrimary)}
+            />
+            <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textSecondary) }]}>
+              Preview
+            </Text>
+          </PressScale>
+
+          <PressScale
             onPress={handleUndo}
-            style={[styles.toolBtn, { borderColor: colors.border }]}
+            style={styles.toolBtn}
             disabled={paths.length === 0}
             accessibilityLabel="Undo last trace"
+            accessibilityRole="button"
           >
             <Ionicons
               name="arrow-undo-outline"
@@ -274,12 +566,12 @@ export function CreatorCutoutSheet({
               Undo
             </Text>
           </PressScale>
-
           <PressScale
             onPress={handleClear}
-            style={[styles.toolBtn, { borderColor: colors.border }]}
+            style={styles.toolBtn}
             disabled={paths.length === 0}
             accessibilityLabel="Clear all traces"
+            accessibilityRole="button"
           >
             <Ionicons
               name="trash-outline"
@@ -291,7 +583,39 @@ export function CreatorCutoutSheet({
             </Text>
           </PressScale>
         </View>
-      </Animated.View>
+
+        {/* ── Footer — premium Cancel / Crop buttons ── */}
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <PressScale
+            onPress={onClose}
+            style={[styles.footerBtn, styles.footerCancel]}
+            accessibilityLabel="Cancel manual crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerCancelText, { color: colors.textSecondary }]}>
+              Cancel
+            </Text>
+          </PressScale>
+          <PressScale
+            onPress={handleApply}
+            disabled={isProcessing || paths.length === 0}
+            style={[
+              styles.footerBtn,
+              styles.footerConfirm,
+              {
+                backgroundColor: colors.brand,
+                opacity: isProcessing || paths.length === 0 ? 0.4 : 1,
+              },
+            ]}
+            accessibilityLabel="Apply crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
+              {isProcessing ? 'Processing…' : 'Crop'}
+            </Text>
+          </PressScale>
+        </View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -324,7 +648,6 @@ function PathOverlay({ path, color, opacity }: { path: Point[]; color: string; o
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     zIndex: 300,
   },
   sheet: {
@@ -332,7 +655,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#0A0A0A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: Space.sm,
@@ -356,24 +678,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
-  cancelText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.regular,
-  },
   title: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
-  applyText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+  closeBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
   instructions: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    paddingBottom: 4,
+  },
+  note: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingBottom: 12,
+    fontStyle: 'italic',
   },
   canvasArea: {
     alignItems: 'center',
@@ -383,6 +710,31 @@ const styles = StyleSheet.create({
   canvasFrame: {
     overflow: 'hidden',
     backgroundColor: '#111',
+  },
+  toolSelectorRow: {
+    flexDirection: 'row',
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    position: 'relative',
+  },
+  toolUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    height: Stroke.emphasis,
+    borderRadius: 1,
+  },
+  toolSelectorBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    zIndex: 1,
+  },
+  toolSelectorLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
   toolRow: {
     flexDirection: 'row',
@@ -395,11 +747,38 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: Radius.md,
-    borderWidth: 1,
   },
   toolLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+  },
+  // ── Footer — premium Cancel / Crop buttons ──
+  footer: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerCancel: {
+    backgroundColor: 'transparent',
+  },
+  footerCancelText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  footerConfirm: {
+    // backgroundColor set inline
+  },
+  footerConfirmText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
 });

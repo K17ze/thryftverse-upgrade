@@ -1,54 +1,84 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  FlatList,
   ScrollView,
-  Image,
-  ActivityIndicator,
-  useWindowDimensions,
-  Linking,
+  Image as RNImage,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import * as MediaLibrary from 'expo-media-library/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
-import { createStableId } from '../utils/createStableId';
-import type { CreatorLayer } from './composition';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
+import { PressScale, SheetContainer } from './CreatorAnimations';
+import { MediaBrowserSheet, type SelectedAsset } from './tools/MediaBrowser';
+import { CreatorDraftService, type DraftMeta } from './drafts';
 import { useHaptic } from '../hooks/useHaptic';
 
-// ── Creator Entry Screen ───────────────────────────────────────────
-// Camera-first entry for the creator. Modeled on VisualSearchScreen:
-//   - When opened, the camera viewfinder is shown immediately
-//   - Gallery thumbnail in bottom-left switches to gallery grid
-//   - Capture → creates a media layer → enters the editor
-//   - Gallery selection → creates media layers → enters the editor
-//
-// The camera is a dedicated CreatorCamera component (like
-// VisualSearchCamera), not inline code. This keeps the entry screen
-// thin and the camera component reusable.
-
-const GRID_COLUMNS = 4;
-
-interface MediaAsset {
-  id: string;
-  uri: string;
-  mediaType: 'image' | 'video';
-  width: number;
-  height: number;
-  duration?: number;
+// ── Relative time formatter for draft "Last edited" timestamps ────────
+// Compact, human wording. Falls back to a localized date for old entries.
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const now = Date.now();
+  const diffMs = now - then;
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.round(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  return new Date(iso).toLocaleDateString();
 }
+
+// ── Creator Entry Screen (camera-root) ────────────────────────────────
+// Per the human-flow reconstruction spec: "Creation is a continuous state,
+// not a wizard." The camera is the ROOT creator state — the first and only
+// thing the user sees when opening the creator. There is no dashboard, no
+// 2×2 tile grid, no intent classification.
+//
+// From the camera the user can:
+//   - capture (photo / video) → enters the editor directly
+//   - open the gallery (MediaBrowserSheet) → selects media → editor
+//   - switch capture mode (Look / Poster / Search) via the in-camera mode
+//     switch — no route transition, just a reframing
+//   - open Drafts (small affordance in the camera top bar)
+//   - start a blank text poster ("Aa" button, top-right)
+//
+// Items (ProductBrowserSheet) and Templates (CreatorTemplateBrowser) are
+// accessible from inside the editor, NOT from the entry screen.
 
 export interface CreatorEntryScreenProps {
   documentType: 'look' | 'poster';
   onClose: () => void;
-  onMediaSelected: (layers: CreatorLayer[]) => void;
+  /**
+   * Returns the selected media in tap/selection order as a typed
+   * CreatorInitialMedia[] payload. The caller (CreatorStudioShell) is
+   * responsible for deciding how to seed the document — Poster creates
+   * one page per asset, Look creates stacked layers on one page.
+   */
+  onMediaSelected: (media: CreatorInitialMedia[]) => void;
   onBlankStart: () => void;
+  /**
+   * Optional: apply a template selected from inside the editor. Kept on the
+   * props for contract parity but the entry screen no longer hosts the
+   * template browser — it lives in the composer chrome.
+   */
+  onApplyTemplate?: (template: import('./templates').CreatorTemplate) => void;
+  /**
+   * Optional: resume a draft from the Drafts affordance in the camera top
+   * bar. When not provided, the Drafts button is hidden (truthful UI — no
+   * tappable control without a handler).
+   */
+  onOpenDraft?: (draftId: string) => void;
 }
 
 export function CreatorEntryScreen({
@@ -56,363 +86,222 @@ export function CreatorEntryScreen({
   onClose,
   onMediaSelected,
   onBlankStart,
+  onOpenDraft,
 }: CreatorEntryScreenProps) {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
   const isPoster = documentType === 'poster';
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
 
-  // ── View state: 'camera' (default) or 'gallery' ──
-  const [view, setView] = useState<'camera' | 'gallery'>('camera');
+  // ── Sheet visibility ──
+  const [showPhotos, setShowPhotos] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
 
-  // ── Gallery state ──
-  const [mediaPerm, requestMediaPerm] = MediaLibrary.usePermissions();
-  const [assets, setAssets] = useState<MediaAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // ── Drafts for the Drafts affordance ──
+  const [drafts, setDrafts] = useState<DraftMeta[]>([]);
   const mountedRef = useRef(true);
-
-  const thumbSize = useMemo(
-    () => Math.floor((screenWidth - 2 * (GRID_COLUMNS - 1)) / GRID_COLUMNS),
-    [screenWidth],
-  );
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
-  // ── Gallery: load recent media ──
-  const loadRecentMedia = useCallback(async (reset: boolean) => {
-    if (reset) {
-      setIsLoading(true);
-      setCursor(undefined);
-    } else {
-      if (!hasMore || loadingMore) return;
-      setLoadingMore(true);
-    }
-
-    try {
-      const opts: any = {
-        first: 60,
-        mediaType: ['photo', 'video'],
-        sortBy: [['creationTime', false]],
-      };
-      if (!reset && cursor) opts.after = cursor;
-
-      const page = await MediaLibrary.getAssetsAsync(opts);
-      if (!mountedRef.current) return;
-
-      const mapped: MediaAsset[] = page.assets.map((a) => ({
-        id: a.id,
-        uri: a.uri,
-        mediaType: a.mediaType === 'video' ? 'video' : 'image',
-        width: a.width,
-        height: a.height,
-        duration: a.duration ? Math.round(a.duration) : undefined,
-      }));
-
-      setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
-      setCursor(page.endCursor);
-      setHasMore(page.hasNextPage);
-    } catch {
-      if (reset) setAssets([]);
-      setHasMore(false);
-    } finally {
-      if (mountedRef.current) {
-        if (reset) setIsLoading(false);
-        else setLoadingMore(false);
-      }
-    }
-  }, [hasMore, loadingMore, cursor]);
-
-  // Load gallery when switching to gallery view
+  // Load drafts (only if resumable). Filtered to the current document type
+  // so the Drafts list is contextually relevant.
   useEffect(() => {
-    if (view === 'gallery' && mediaPerm?.granted && assets.length === 0) {
-      loadRecentMedia(true);
-    }
-  }, [view, mediaPerm, assets.length, loadRecentMedia]);
+    if (!onOpenDraft) return;
+    let cancelled = false;
+    CreatorDraftService.listDrafts().then((all) => {
+      if (cancelled || !mountedRef.current) return;
+      const filtered = all.filter((d) => d.type === documentType);
+      setDrafts(filtered);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [documentType, onOpenDraft]);
 
-  // Request media permission when switching to gallery
-  useEffect(() => {
-    if (view === 'gallery' && !mediaPerm?.granted && mediaPerm?.canAskAgain) {
-      requestMediaPerm().catch(() => {});
-    }
-  }, [view, mediaPerm, requestMediaPerm]);
-
-  // ── Camera capture → create media layer → enter editor ──
+  // ── Camera capture → typed media payload → enter editor ──
+  // Legacy single-URI path (visual search, backward-compatible callers).
+  // For poster/look modes, the camera sends a typed batch via
+  // onCaptureBatch instead, preserving the correct kind (image/video).
   const handleCapture = useCallback((uri: string) => {
-    // Get image dimensions to preserve aspect ratio
-    Image.getSize(uri, (imgW, imgH) => {
-      const imgRatio = imgW / imgH;
-      // Fit within canvas while preserving aspect ratio
-      const layer: CreatorLayer = {
-        id: createStableId('media'),
-        type: 'media',
-        x: 0.5,
-        y: 0.5,
-        width: 1,
-        height: 1 / imgRatio,
-        scale: 1,
-        rotation: 0,
-        zIndex: 0,
-        locked: false,
-        hidden: false,
-        opacity: 1,
-        payload: {
-          mediaUri: uri,
-          mediaType: 'image',
-          contentFit: 'cover',
-          opacity: 1,
-        },
+    RNImage.getSize(uri, (imgW: number, imgH: number) => {
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}`,
+        uri,
+        kind: 'image',
+        width: imgW,
+        height: imgH,
       };
-      onMediaSelected([layer]);
+      onMediaSelected([media]);
     }, () => {
-      // Fallback: full-bleed if we can't get dimensions
-      const layer: CreatorLayer = {
-        id: createStableId('media'),
-        type: 'media',
-        x: 0.5,
-        y: 0.5,
-        width: 1,
-        height: 1,
-        scale: 1,
-        rotation: 0,
-        zIndex: 0,
-        locked: false,
-        hidden: false,
-        opacity: 1,
-        payload: {
-          mediaUri: uri,
-          mediaType: 'image',
-          contentFit: 'cover',
-          opacity: 1,
-        },
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}`,
+        uri,
+        kind: 'image',
       };
-      onMediaSelected([layer]);
+      onMediaSelected([media]);
     });
   }, [onMediaSelected]);
 
-  // ── Gallery selection → create media layers → enter editor ──
-  const toggleSelect = useCallback((asset: MediaAsset) => {
-    haptic.selection();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(asset.id)) {
-        next.delete(asset.id);
-      } else {
-        const maxSelect = isPoster ? 10 : 6;
-        if (next.size >= maxSelect) return prev;
-        next.add(asset.id);
-      }
-      return next;
-    });
-  }, [isPoster]);
+  // ── Camera batch capture → typed media payload → enter editor ──
+  // Direct capture → editor: a single capture is sent as a single-element
+  // array. No review page, no intermediate action page.
+  const handleCaptureBatch = useCallback((captures: CreatorInitialMedia[]) => {
+    if (captures.length === 0) return;
+    onMediaSelected(captures);
+  }, [onMediaSelected]);
 
-  const handleAddSelected = useCallback(() => {
-    if (selectedIds.size === 0) return;
-    const selected = assets.filter((a) => selectedIds.has(a.id));
-    const layers: CreatorLayer[] = selected.map((asset, i) => ({
-      id: createStableId('media'),
-      type: 'media',
-      x: 0.5,
-      y: 0.5,
-      width: 1,
-      height: 1,
-      scale: 1,
-      rotation: 0,
-      zIndex: i,
-      locked: false,
-      hidden: false,
-      opacity: 1,
-      payload: {
-        mediaUri: asset.uri,
-        mediaType: asset.mediaType,
-        contentFit: 'cover',
-        videoDurationMs: asset.duration,
-        opacity: 1,
-      },
+  // ── Photos: MediaBrowserSheet confirm → typed media payload ──
+  // Direct gallery → editor: the selected assets are converted to
+  // CreatorInitialMedia[] and handed to onMediaSelected. No intermediate
+  // action page.
+  const handlePhotosConfirm = useCallback((assets: SelectedAsset[]) => {
+    setShowPhotos(false);
+    if (assets.length === 0) return;
+    const media: CreatorInitialMedia[] = assets.map((a, i) => ({
+      id: `entry_${i}_${a.uri}`,
+      uri: a.uri,
+      kind: a.mediaType,
+      width: a.width,
+      height: a.height,
+      durationMs: a.durationMs,
     }));
     haptic.light();
-    onMediaSelected(layers);
-  }, [selectedIds, assets, onMediaSelected]);
+    onMediaSelected(media);
+  }, [onMediaSelected, haptic]);
 
-  const selectedCount = selectedIds.size;
+  // ── Drafts: open a draft in the composer ──
+  const handleOpenDraft = useCallback((draftId: string) => {
+    setShowDrafts(false);
+    haptic.selection();
+    onOpenDraft?.(draftId);
+  }, [onOpenDraft, haptic]);
 
-  // ═══════════════════════════════════════════════════════════════
-  // CAMERA VIEW — the default, shown immediately on open
-  // Uses the dedicated CreatorCamera component (like VisualSearchCamera)
-  // ═══════════════════════════════════════════════════════════════
-  if (view === 'camera') {
-    return (
-      <View style={styles.container}>
-        <CreatorCamera
-          mode={documentType}
-          onCapture={handleCapture}
-          onGallery={() => setView('gallery')}
-          onClose={onClose}
-        />
-        {/* "Aa" text-mode button — Instagram "Create" pattern, top-right */}
-        <Pressable
-          style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
-          hitSlop={8}
-          onPress={() => { haptic.light(); onBlankStart(); }}
-          accessibilityLabel="Create text poster"
-          accessibilityHint="Starts a blank text poster"
-          accessibilityRole="button"
-        >
-          <Text style={styles.textModeBtnLabel}>Aa</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const hasDrafts = onOpenDraft && drafts.length > 0;
 
-  // ═══════════════════════════════════════════════════════════════
-  // GALLERY VIEW — secondary, accessed via gallery thumbnail
-  // ═══════════════════════════════════════════════════════════════
   return (
     <View style={styles.container}>
-      {/* Top bar with back to camera */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
-        style={[styles.galleryTopBar, { paddingTop: insets.top + 8 }]}
+      {/* ═══════════════════════════════════════════════════════════════
+          CAMERA — the root creator state. Full-screen viewfinder.
+          The user lands here immediately — no dashboard, no tiles. ═════ */}
+      <CreatorCamera
+        mode={documentType}
+        onCapture={handleCapture}
+        onCaptureBatch={handleCaptureBatch}
+        onGallery={() => { haptic.selection(); setShowPhotos(true); }}
+        onClose={onClose}
+      />
+
+      {/* "Aa" text-mode button — Instagram "Create" pattern, top-right.
+          Stays as a small top-right button on the camera. Refined chrome:
+          subtle dark fill + hairline border for definition over bright
+          previews, semibold "Aa" glyph for a premium affordance. */}
+      <Pressable
+        style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        onPress={() => { haptic.light(); onBlankStart(); }}
+        accessibilityLabel="Create text poster"
+        accessibilityHint="Starts a blank text poster"
+        accessibilityRole="button"
       >
+        <Text style={styles.textModeBtnLabel}>Aa</Text>
+      </Pressable>
+
+      {/* Drafts button — small affordance in the camera top bar, next to
+          close (top-left). Only shown when draft resumption is supported
+          and drafts exist. Not a prominent section. A subtle brand-color
+          dot signals there is something to resume. */}
+      {hasDrafts && (
         <Pressable
-          style={styles.galleryBackBtn}
-          hitSlop={12}
-          onPress={() => { haptic.selection(); setView('camera'); }}
-          accessibilityLabel="Back to camera"
+          style={[styles.draftsBtn, { top: insets.top + 8, left: 60 }]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={() => { haptic.light(); setShowDrafts(true); }}
+          accessibilityLabel="Open drafts"
+          accessibilityHint="Shows your saved creator drafts"
+          accessibilityRole="button"
         >
-          <Ionicons name="camera" size={22} color="#fff" />
+          <Ionicons name="documents-outline" size={22} color="#fff" />
+          <View style={styles.draftsBadge} />
         </Pressable>
-        <Text style={styles.galleryTitle}>
-          {selectedCount > 0
-            ? `${selectedCount} ${isPoster ? 'pages' : 'photos'}`
-            : isPoster ? 'Your Roll' : 'Gallery'}
-        </Text>
-        <View style={styles.topRightRow}>
-          {selectedCount > 0 && (
-            <Pressable
-              style={styles.addBtn}
-              hitSlop={12}
-              onPress={handleAddSelected}
-              accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}
-            >
-              <Text style={styles.addBtnText}>
-                {isPoster ? 'Create Story' : 'Create Look'}
-              </Text>
-            </Pressable>
-          )}
-          <Pressable style={styles.topIconBtn} hitSlop={12} onPress={() => { haptic.light(); onClose(); }} accessibilityLabel="Close">
-            <Ionicons name="close" size={26} color="#fff" />
-          </Pressable>
-        </View>
-      </LinearGradient>
-
-      {/* Gallery grid */}
-      {isLoading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      ) : !mediaPerm?.granted ? (
-        <View style={styles.centerState}>
-          <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
-          <Text style={styles.permissionTitle}>Access your photos</Text>
-          <Text style={styles.permissionText}>
-            Select photos from your library for your {isPoster ? 'story' : 'collage'}.
-          </Text>
-          <Pressable style={styles.permissionBtn} hitSlop={12} onPress={() => { haptic.light(); requestMediaPerm(); }}>
-            <Text style={styles.permissionBtnText}>Allow access</Text>
-          </Pressable>
-        </View>
-      ) : assets.length === 0 ? (
-        <View style={styles.centerState}>
-          <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
-          <Text style={styles.permissionText}>No photos found</Text>
-          <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.selection(); setView('camera'); }}>
-            <Text style={styles.blankBtnText}>Use camera instead</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={assets}
-          keyExtractor={(item) => item.id}
-          numColumns={GRID_COLUMNS}
-          onEndReached={() => loadRecentMedia(false)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color="rgba(255,255,255,0.4)" /> : null}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => {
-            const isSelected = selectedIds.has(item.id);
-            return (
-              <Pressable
-                style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
-                hitSlop={12}
-                onPress={() => toggleSelect(item)}
-                accessibilityLabel={`Select ${item.mediaType}${isSelected ? ', selected' : ''}`}
-              >
-                <Image source={{ uri: item.uri }} style={styles.thumbImage} resizeMode="cover" />
-                {item.mediaType === 'video' && (
-                  <View style={styles.videoBadge}>
-                    <Ionicons name="play" size={12} color="#fff" />
-                    {item.duration && (
-                      <Text style={styles.videoDuration}>
-                        {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
-                      </Text>
-                    )}
-                  </View>
-                )}
-                {isSelected && (
-                  <View style={styles.thumbOverlay}>
-                    <View style={styles.selectionBadge}>
-                      <Ionicons name="checkmark" size={16} color="#1a1a1a" />
-                    </View>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }}
-        />
       )}
 
-      {/* Bottom bar — selected preview (premium floating bar with blur) */}
-      {selectedCount > 0 && (
-        <BlurView
-          intensity={25}
-          tint="dark"
-          style={[styles.selectedBottomBar, { paddingBottom: insets.bottom + Space.sm }]}
+      {/* ── Photos: MediaBrowserSheet (gallery) ──
+          Accessible from the camera's gallery button. Confirms selection
+          → onMediaSelected directly (no intermediate action page). */}
+      <MediaBrowserSheet
+        visible={showPhotos}
+        onClose={() => setShowPhotos(false)}
+        onConfirm={handlePhotosConfirm}
+        maxSelections={isPoster ? 10 : 6}
+        title="Select photos"
+        showCameraTile={false}
+        allowVideos
+      />
+
+      {/* ── Drafts sheet — simple list of resumable drafts ── */}
+      <SheetContainer
+        visible={showDrafts}
+        onClose={() => setShowDrafts(false)}
+        maxHeight={0.7}
+      >
+        <View style={styles.draftsSheetHeader}>
+          <Text style={styles.draftsSheetTitle}>Drafts</Text>
+          <Pressable
+            style={styles.draftsCloseBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={() => setShowDrafts(false)}
+            accessibilityLabel="Close drafts"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+        <ScrollView
+          style={styles.draftsList}
+          contentContainerStyle={{ paddingBottom: insets.bottom + Space.lg }}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.selectedPreviewBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedPreviewScroll}>
-              {assets.filter(a => selectedIds.has(a.id)).map((asset) => (
-                <View key={asset.id} style={styles.selectedThumbWrap}>
-                  <Image source={{ uri: asset.uri }} style={styles.selectedThumb} resizeMode="cover" />
-                  <Pressable
-                    style={styles.selectedThumbRemove}
-                    onPress={() => { haptic.selection(); toggleSelect(asset); }}
-                    accessibilityLabel="Remove from selection"
-                    hitSlop={8}
-                  >
-                    <Ionicons name="close" size={12} color="#fff" />
-                  </Pressable>
-                </View>
+          {drafts.length === 0 ? (
+            <Text style={styles.draftsEmpty}>No drafts yet</Text>
+          ) : (
+            <View style={styles.draftsGrid}>
+              {drafts.map((draft) => (
+                <PressScale
+                  key={draft.id}
+                  style={styles.draftCard}
+                  accessibilityLabel={`Resume ${draft.title}`}
+                  accessibilityHint="Opens this draft in the composer"
+                  onPress={() => handleOpenDraft(draft.id)}
+                >
+                  {draft.thumbnailUri ? (
+                    <Image
+                      source={{ uri: draft.thumbnailUri }}
+                      style={styles.draftThumb}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.draftThumb, styles.draftThumbPlaceholder]}>
+                      <Ionicons
+                        name={draft.type === 'poster' ? 'film-outline' : 'square-outline'}
+                        size={32}
+                        color="rgba(255,255,255,0.2)"
+                      />
+                    </View>
+                  )}
+                  <Text style={styles.draftTitle} numberOfLines={1}>
+                    {draft.title}
+                  </Text>
+                  {draft.updatedAt ? (
+                    <Text style={styles.draftTimestamp} numberOfLines={1}>
+                      Last edited {formatRelativeTime(draft.updatedAt)}
+                    </Text>
+                  ) : null}
+                </PressScale>
               ))}
-            </ScrollView>
-            <Text style={styles.selectedCountText}>
-              {selectedCount} of {isPoster ? 10 : 6} selected
-            </Text>
-          </View>
-          <Pressable style={styles.addBtn} hitSlop={12} onPress={handleAddSelected} accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}>
-            <Text style={styles.addBtnText}>
-              {isPoster ? 'Create Story' : 'Create Look'}
-            </Text>
-          </Pressable>
-        </BlurView>
-      )}
+            </View>
+          )}
+        </ScrollView>
+      </SheetContainer>
     </View>
   );
 }
@@ -424,223 +313,120 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  // Gallery top bar
-  galleryTopBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingBottom: Space.sm,
-    zIndex: 10,
-  },
-  galleryBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  galleryTitle: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  topRightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  topIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Center states
-  centerState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  permissionTitle: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-    marginTop: 12,
-  },
-  permissionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  permissionBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: Space.lg,
-    paddingVertical: 12,
-    borderRadius: Radius.xxl,
-    marginTop: 12,
-  },
-  permissionBtnText: {
-    color: '#000',
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-  },
-  blankBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  blankBtnText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
-  // Camera view — "Aa" text-mode button (Instagram "Create" pattern)
+
+  // Camera view — "Aa" text-mode button (Instagram "Create" pattern).
+  // Refined chrome: subtle dark fill + hairline white/10 border for
+  // definition over bright previews. 44pt hit target, visible glyph only.
   textModeBtn: {
     position: 'absolute',
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
   },
   textModeBtnLabel: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
+  },
+
+  // Drafts button — small affordance in the camera top bar.
+  // Same chrome treatment as the Aa button for consistent overlay controls.
+  draftsBtn: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  // Subtle brand-color dot — signals "there is something to resume".
+  draftsBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+    backgroundColor: '#F4F0E8',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.4)',
+  },
+
+  // Drafts sheet
+  draftsSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  draftsSheetTitle: {
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
     fontFamily: Typography.family.bold,
   },
-  // Gallery grid — edge-to-edge, 2px gap
-  grid: {
-    paddingHorizontal: 0,
-    paddingTop: 60,
-  },
-  gridRow: {
-    gap: 2,
-  },
-  thumb: {
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  thumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  videoBadge: {
-    position: 'absolute',
-    bottom: 4,
-    left: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  videoDuration: {
-    color: '#fff',
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-  },
-  thumbOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  selectionBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
+  draftsCloseBtn: {
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
-    backgroundColor: '#C9A46A',
-    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'center',
   },
-  // Gallery add button — premium pill
-  addBtn: {
-    backgroundColor: '#C9A46A',
+  draftsList: {
+    flex: 1,
+  },
+  draftsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.md,
     paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.full,
-    shadowColor: '#C9A46A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  addBtnText: {
-    color: '#1a1a1a',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+  draftCard: {
+    width: 140,
+    gap: Space.xs,
   },
-  // Selected bottom bar — premium floating bar with blur
-  selectedBottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    paddingTop: Space.md,
-    paddingHorizontal: 12,
-    overflow: 'hidden',
-  },
-  // Selected preview bar
-  selectedPreviewBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    paddingHorizontal: 12,
-  },
-  selectedPreviewScroll: {
-    gap: 6,
-    alignItems: 'center',
-  },
-  selectedThumbWrap: {
-    position: 'relative',
-    width: 48,
-    height: 48,
-  },
-  selectedThumb: {
-    width: 48,
-    height: 48,
+  draftThumb: {
+    width: 140,
+    height: 175,
     borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  selectedThumbRemove: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
+  draftThumbPlaceholder: {
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0,
   },
-  selectedCountText: {
-    color: 'rgba(255,255,255,0.7)',
+  draftTitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    marginLeft: 'auto',
+    color: 'rgba(255,255,255,0.85)',
+  },
+  draftTimestamp: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  draftsEmpty: {
+    textAlign: 'center',
+    paddingTop: Space.xl,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: 'rgba(255,255,255,0.5)',
   },
 });

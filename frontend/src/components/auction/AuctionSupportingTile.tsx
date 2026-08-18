@@ -9,6 +9,8 @@ import { AuctionValueLockup } from './AuctionValueLockup';
 interface Props {
   title: string;
   imageUrl: string | null;
+  /** Brand name shown above the title for card hierarchy completeness */
+  brand?: string | null;
   /** 1ZE primary text e.g. "24.60 1ZE" */
   izeText: string;
   /** Local currency e.g. "£123.00" */
@@ -26,6 +28,7 @@ interface Props {
 export function AuctionSupportingTile({
   title,
   imageUrl,
+  brand,
   izeText,
   localText,
   valueState = 'current',
@@ -44,7 +47,7 @@ export function AuctionSupportingTile({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${izeText}, ${timeText}`}
+      accessibilityLabel={`${brand ? brand + ', ' : ''}${title}, ${izeText}, ${timeText}`}
     >
       <View style={styles.imageWrap}>
         <CachedImage
@@ -63,6 +66,7 @@ export function AuctionSupportingTile({
         )}
       </View>
       <View style={styles.body}>
+        {brand && <Text style={styles.brand} numberOfLines={1}>{brand}</Text>}
         <Text style={styles.title} numberOfLines={1}>{title}</Text>
         <AuctionValueLockup
           izeText={izeText}
@@ -119,6 +123,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingTop: Space.xs,
     gap: 1,
   },
+  brand: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
+    letterSpacing: 0.2,
+  },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
@@ -130,5 +140,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size,
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
 });

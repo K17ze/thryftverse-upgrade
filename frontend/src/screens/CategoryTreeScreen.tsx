@@ -10,11 +10,9 @@ import { View,
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography, Space, Radius, Type, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
@@ -45,7 +43,6 @@ export default function CategoryTreeScreen() {
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { categoryPrefix } = route.params;
 
@@ -67,7 +64,7 @@ export default function CategoryTreeScreen() {
         </View>
 
         {/* Premium full-width View All */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
+        <View>
           <AnimatedPressable
             style={styles.viewAllRow}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
@@ -76,10 +73,10 @@ export default function CategoryTreeScreen() {
             <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
             <Ionicons name="arrow-forward" size={20} color={colors.background} />
           </AnimatedPressable>
-        </Reanimated.View>
+        </View>
 
         {/* 2-column VisualCategoryTile grid */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
+        <View style={styles.gridWrap}>
           <View style={styles.grid}>
             {sections.map((section, index) => (
               <VisualCategoryTile
@@ -94,13 +91,12 @@ export default function CategoryTreeScreen() {
               />
             ))}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Sections with DiscoverySectionHeader and refined pills */}
         {sections.map((section, index) => (
-          <Reanimated.View
+          <View
             key={section.title}
-            entering={FadeInDown.duration(350).delay(200 + index * 80)}
             style={styles.section}
           >
             <DiscoverySectionHeader
@@ -128,7 +124,7 @@ export default function CategoryTreeScreen() {
                 </AnimatedPressable>
               ))}
             </ScrollView>
-          </Reanimated.View>
+          </View>
         ))}
 
         <View style={{ height: 60 }} />

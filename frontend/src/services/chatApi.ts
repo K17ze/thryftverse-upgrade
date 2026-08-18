@@ -1,4 +1,4 @@
-import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../domain';
 import { fetchJson } from '../lib/apiClient';
 
 type ApiConversationType = 'dm' | 'group';
@@ -22,6 +22,7 @@ interface ApiConversationPayload {
   lastMessage: string;
   lastMessageTime: string;
   unread: boolean;
+  memberRoles?: Record<string, string>;
 }
 
 interface ApiMessagePayload {
@@ -75,6 +76,21 @@ export interface GroupInviteLink {
   expiresAt: string;
   maxUses: number;
   useCount: number;
+}
+
+function normalizeMemberRoles(
+  raw?: Record<string, string>
+): Record<string, 'owner' | 'admin' | 'member'> | undefined {
+  if (!raw) return undefined;
+  const result: Record<string, 'owner' | 'admin' | 'member'> = {};
+  for (const [userId, role] of Object.entries(raw)) {
+    if (role === 'owner' || role === 'admin' || role === 'member') {
+      result[userId] = role;
+    } else {
+      result[userId] = 'member';
+    }
+  }
+  return result;
 }
 
 function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
@@ -136,6 +152,7 @@ function mapApiConversationToApp(
     lastMessageTime: latestMessageTime,
     unread: payload.unread,
     messages: resolvedMessages,
+    memberRoles: normalizeMemberRoles(payload.memberRoles),
   };
 }
 
@@ -520,6 +537,65 @@ export async function upsertComposerStateOnApi(
 export async function clearComposerStateOnApi(conversationId: string): Promise<void> {
   await fetchJson<{ ok: true }>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/composer-state`,
+    { method: 'DELETE' }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Group member management — add and remove members via backend API.
+// ---------------------------------------------------------------------------
+
+export async function addConversationMembersOnApi(
+  conversationId: string,
+  memberIds: string[]
+): Promise<{ addedMemberIds: string[]; participantIds: string[] }> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversationId: string;
+    addedMemberIds: string[];
+    participantIds: string[];
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberIds }),
+  });
+
+  return {
+    addedMemberIds: payload.addedMemberIds,
+    participantIds: payload.participantIds,
+  };
+}
+
+export async function removeConversationMemberOnApi(
+  conversationId: string,
+  userId: string
+): Promise<{ removed: boolean; participantIds: string[] }> {
+  const payload = await fetchJson<{
+    ok: true;
+    removed: boolean;
+    participantIds: string[];
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  });
+
+  return {
+    removed: payload.removed,
+    participantIds: payload.participantIds,
+  };
+}
+
+/**
+ * Leave a group conversation by removing the current user's own membership.
+ * Uses the same member-removal endpoint as `removeConversationMemberOnApi`
+ * but is semantically named for the "leave group" user action and returns
+ * void — callers only need to know whether the leave succeeded.
+ */
+export async function leaveGroupOnApi(
+  conversationId: string,
+  memberUserId: string
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(memberUserId)}`,
     { method: 'DELETE' }
   );
 }

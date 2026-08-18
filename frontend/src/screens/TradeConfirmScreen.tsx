@@ -1,23 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Numeric } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnTradeReceipt,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
@@ -48,13 +47,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     maxReserved1ze,
     marketDataTimestamp,
   } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const isCompactDock = width < 360;
+  const { isVeryCompact: isCompactDock } = useBreakpoint();
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +66,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   // re-confirms, which mounts a fresh instance of this screen (fresh key).
   const idempotencyKeyRef = React.useRef<string | null>(null);
   if (!idempotencyKeyRef.current) {
-    idempotencyKeyRef.current = `${currentUser?.id ?? 'anon'}-${assetId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    idempotencyKeyRef.current = `${currentUser?.id ?? 'anon'}-${assetId}-${side}-${makeStableId('key')}`;
   }
 
   const isBuy = side === 'buy';
@@ -174,7 +171,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         // by the backend's own idempotency dedup; keep the key so a user retry
         // after fixing the cause (e.g. re-authenticating) still dedupes correctly.
       } else {
-        show('Trading engine unavailable. Please retry once connection is restored.', 'error');
+        show('Trading engine unavailable. Retry once connection is restored.', 'error');
         // Network error: the request may or may not have reached the server.
         // Keep the same key so retry is a safe no-op/duplicate-return, not a new order.
       }
@@ -194,15 +191,17 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const handleBack = handleCancel;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Confirm order"
-        subtitle={isBuy ? 'Review your buy' : 'Review your sell'}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title="Confirm order"
+          subtitle={isBuy ? 'Review your buy' : 'Review your sell'}
+          onBack={handleBack}
+        />
+      }
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -211,35 +210,33 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         ]}
       >
         {/* Trade receipt — product identity, order details, totals */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
-          <CoOwnTradeReceipt
-            imageUri={assetImageUrl}
-            title={assetTitle ?? 'Co-Own asset'}
-            side={side}
-            orderType={ticketOrderType}
-            units={quantity}
-            filledUnits={estimatedFilledUnits}
-            remainingUnits={estimatedRemainingUnits}
-            unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
-            limitPriceLabel={format1ze(limitPriceGbp)}
-            avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
-            worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
-            grossLabel={format1ze(totalValue)}
-            feeLabel={format1ze(fee)}
-            totalLabel={format1ze(netValue)}
-            totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
-            settlementLabel={settlementLabel}
-            status="pending"
-            timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
-            maxReservedLabel={maxReservedLabel}
-            marketWarning={marketWarning}
-          />
-        </Reanimated.View>
+        <CoOwnTradeReceipt
+          imageUri={assetImageUrl}
+          title={assetTitle ?? 'Co-Own asset'}
+          side={side}
+          orderType={ticketOrderType}
+          units={quantity}
+          filledUnits={estimatedFilledUnits}
+          remainingUnits={estimatedRemainingUnits}
+          unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
+          limitPriceLabel={format1ze(limitPriceGbp)}
+          avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
+          worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
+          grossLabel={format1ze(totalValue)}
+          feeLabel={format1ze(fee)}
+          totalLabel={format1ze(netValue)}
+          totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
+          settlementLabel={settlementLabel}
+          status="pending"
+          timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+          maxReservedLabel={maxReservedLabel}
+          marketWarning={marketWarning}
+        />
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
+        <View style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
-        </Reanimated.View>
+        </View>
       </ScrollView>
 
       {/* Sticky action dock — confirm / cancel */}
@@ -266,21 +263,29 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           />
         </View>
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  // ── Content padding — 24pt top for calm breathing room ──
+  // Per spec 11_COOWN: "24pt between sections." The confirmation surface
+  // should feel calm and deliberate — this is the final decision point.
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
   },
+  // ── Risk disclosure — 32pt from the receipt for clear separation ──
+  // Per spec 11_COOWN: "Financial disclosures should be reachable before
+  // order confirmation." The risk disclosure is visually separated from
+  // the receipt to ensure the user reviews it before confirming.
   riskWrap: {
-    marginTop: Space.lg,
+    marginTop: Space.xl,
   },
+  // ── Dock row — calm, professional confirm/cancel actions ──
+  // Per spec 11_COOWN: "Buy/sell action is impossible to confuse."
+  // Cancel is secondary (quiet), Confirm is primary (dominant).
+  // 8pt gap between buttons. Compact mode stacks vertically.
   dockRow: {
     width: '100%',
     minWidth: 0,

@@ -8,6 +8,7 @@ import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
+import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
 const AVATAR_SIZE = 84;
 
@@ -25,9 +26,16 @@ interface MyProfileIdentityHeroProps {
   ratingAverage?: number | null;
   reviewCount?: number;
   soldCount?: number;
+  followerCount?: number;
+  followingCount?: number;
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
+  onPressListings?: () => void;
+  onPressLooks?: () => void;
+  onPressSold?: () => void;
+  onPressFollowers?: () => void;
+  onPressFollowing?: () => void;
 }
 
 export function MyProfileIdentityHero({
@@ -44,9 +52,16 @@ export function MyProfileIdentityHero({
   ratingAverage,
   reviewCount,
   soldCount,
+  followerCount = 0,
+  followingCount = 0,
   onEditAvatar,
   onEditProfile,
   onShare,
+  onPressListings,
+  onPressLooks,
+  onPressSold,
+  onPressFollowers,
+  onPressFollowing,
 }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -77,7 +92,7 @@ export function MyProfileIdentityHero({
             </View>
           )}
           <Pressable
-            style={styles.editAvatarHit}
+            style={({ pressed }) => [styles.editAvatarHit, pressed && { opacity: 0.6 }]}
             onPress={onEditAvatar}
             accessibilityLabel="Edit profile photo"
             accessibilityRole="button"
@@ -89,9 +104,9 @@ export function MyProfileIdentityHero({
         </View>
 
         <View style={styles.stats}>
-          <ProfileStat value={listingCount} label="Listings" styles={styles} />
-          <ProfileStat value={lookCount} label="Looks" styles={styles} />
-          <ProfileStat value={completedSales} label="Sold" styles={styles} />
+          <ProfileStat value={listingCount} label="Listings" styles={styles} onPress={onPressListings} a11yLabel={`${formatFullCount(listingCount)} listings`} />
+          <ProfileStat value={lookCount} label="Looks" styles={styles} onPress={onPressLooks} a11yLabel={`${formatFullCount(lookCount)} looks`} />
+          <ProfileStat value={completedSales} label="Sold" styles={styles} onPress={onPressSold} a11yLabel={`${formatFullCount(completedSales)} sold`} />
         </View>
       </View>
 
@@ -133,7 +148,49 @@ export function MyProfileIdentityHero({
         reviewCount={reviewCount}
         soldCount={soldCount}
         align="left"
+        hideSoldChip
       />
+
+      {/* ── SOCIAL INLINE — followers / following ──
+          Flat inline row, no bordered container. Matches the public profile's
+          restrained trust-line pattern: spacing and a dot separator, not a
+          boxed surface. Compact count notation for scannability; accessibility
+          labels carry the full count for screen readers. */}
+      <View style={styles.socialInline}>
+        {onPressFollowers ? (
+          <Pressable
+            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
+            onPress={onPressFollowers}
+            accessibilityRole="button"
+            accessibilityLabel={`${formatFullCount(followerCount)} followers`}
+          >
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
+            <Text style={styles.socialInlineLabel}> followers</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followerCount)} followers`}>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
+            <Text style={styles.socialInlineLabel}> followers</Text>
+          </View>
+        )}
+        <Text style={styles.socialInlineDot}>·</Text>
+        {onPressFollowing ? (
+          <Pressable
+            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
+            onPress={onPressFollowing}
+            accessibilityRole="button"
+            accessibilityLabel={`${formatFullCount(followingCount)} following`}
+          >
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
+            <Text style={styles.socialInlineLabel}> following</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followingCount)} following`}>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
+            <Text style={styles.socialInlineLabel}> following</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.actions}>
         <AnimatedPressable
@@ -164,10 +221,31 @@ export function MyProfileIdentityHero({
   );
 }
 
-function ProfileStat({ value, label, styles }: { value: number; label: string; styles: ReturnType<typeof createStyles> }) {
+function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
+  value: number;
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+  onPress?: () => void;
+  a11yLabel?: string;
+}) {
+  const displayValue = formatCompactCount(value);
+  if (onPress) {
+    return (
+      <Pressable
+        style={styles.stat}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}
+        hitSlop={4}
+      >
+        <Text style={styles.statValue}>{displayValue}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </Pressable>
+    );
+  }
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={styles.stat} accessible accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}>
+      <Text style={styles.statValue}>{displayValue}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -238,6 +316,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   statLabel: {
     color: colors.textSecondary,
@@ -266,7 +345,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
-    lineHeight: 19,
+    lineHeight: Type.body.lineHeight,
     marginTop: Space.sm,
   },
   context: {
@@ -274,6 +353,35 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     marginTop: 5,
+  },
+  // Social inline — flat followers/following row, no bordered container.
+  // Matches the public profile's restrained pattern: spacing + dot separator,
+  // not a boxed surface. Removes a non-media panel from the surface budget.
+  socialInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.sm + 2,
+  },
+  socialInlineItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  socialInlineValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  socialInlineLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  socialInlineDot: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
   },
   actions: {
     flexDirection: 'row',

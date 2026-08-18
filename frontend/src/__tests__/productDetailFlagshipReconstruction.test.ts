@@ -28,6 +28,10 @@ function readBackend(relativePath: string): string {
 // All three product-detail screens and the shared dock must switch
 // behaviour at the same breakpoint so a compact-width device sees
 // consistent identity, media and dock behaviour.
+//
+// The breakpoint logic is now centralized in hooks/useBreakpoint.ts.
+// Screens consume the hook instead of referencing the threshold constant
+// or useWindowDimensions directly.
 // ───────────────────────────────────────────────────────────────────────────
 describe('product-detail-flagship-reconstruction: shared compact width', () => {
   const itemSrc = readScreen('ItemDetailScreen.tsx');
@@ -35,6 +39,8 @@ describe('product-detail-flagship-reconstruction: shared compact width', () => {
   const assetSrc = readScreen('AssetDetailScreen.tsx');
   const dockSrc = readComponent('commerce/detail/CommerceDetailStateDock.tsx');
   const typesSrc = readComponent('commerce/detail/types.ts');
+  const hooksDir = resolve(__dirname, '../hooks');
+  const breakpointSrc = readFileSync(resolve(hooksDir, 'useBreakpoint.ts'), 'utf-8');
 
   it('defines a single COMMERCE_DETAIL_COMPACT_WIDTH constant', () => {
     expect(typesSrc).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
@@ -46,25 +52,31 @@ describe('product-detail-flagship-reconstruction: shared compact width', () => {
     expect(barrel).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
   });
 
-  it('ItemDetailScreen uses the shared constant, not a hardcoded 390', () => {
-    expect(itemSrc).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
+  it('useBreakpoint hook owns the 390 commerce-compact threshold', () => {
+    expect(breakpointSrc).toContain('COMMERCE_COMPACT_WIDTH');
+    expect(breakpointSrc).toMatch(/COMMERCE_COMPACT_WIDTH\s*=\s*390/);
+    expect(breakpointSrc).toContain('isCommerceCompact');
+  });
+
+  it('ItemDetailScreen uses useBreakpoint, not a hardcoded 390', () => {
+    expect(itemSrc).toContain('useBreakpoint');
     // The old hardcoded threshold should not appear in the isCompact
     // declaration.
     expect(itemSrc).not.toMatch(/isCompactScreen\s*=\s*screenWidth\s*<\s*390/);
   });
 
-  it('AuctionDetailScreen uses the shared constant, not a hardcoded 390', () => {
-    expect(auctionSrc).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
+  it('AuctionDetailScreen uses useBreakpoint, not a hardcoded 390', () => {
+    expect(auctionSrc).toContain('useBreakpoint');
     expect(auctionSrc).not.toMatch(/isCompact\s*=\s*screenWidth\s*<\s*390/);
   });
 
-  it('AssetDetailScreen uses the shared constant, not a hardcoded 390', () => {
-    expect(assetSrc).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
+  it('AssetDetailScreen uses useBreakpoint, not a hardcoded 390', () => {
+    expect(assetSrc).toContain('useBreakpoint');
     expect(assetSrc).not.toMatch(/isCompact\s*=\s*screenWidth\s*<\s*390/);
   });
 
-  it('CommerceDetailStateDock uses the shared constant for its stack threshold', () => {
-    expect(dockSrc).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
+  it('CommerceDetailStateDock uses useBreakpoint for its stack threshold', () => {
+    expect(dockSrc).toContain('useBreakpoint');
     // The old hardcoded 360 threshold should not appear.
     expect(dockSrc).not.toMatch(/COMPACT_STACK_THRESHOLD\s*=\s*360/);
   });

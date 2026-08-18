@@ -27,7 +27,12 @@ export function AuctionPriceBlock({ primary, secondary, label, size = 'card', do
   const s = sizes[size];
 
   return (
-    <View style={styles.block}>
+    <View
+      style={styles.block}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`${label}: ${primary}${secondary ? `, ${secondary}` : ''}`}
+    >
       <Text style={[styles.label, { fontSize: s.label }]}>{label}</Text>
       <View style={styles.priceRow}>
         <Text

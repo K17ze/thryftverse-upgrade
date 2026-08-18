@@ -1,0 +1,194 @@
+# Maestro flow — dual-mode golden screenshot suite
+#
+# Phase 5 WP9/P5-19: Dual-mode golden suite
+#
+# This flow runs the golden-route screenshot capture in TWO modes:
+#   1. fixture-design  — EXPO_PUBLIC_MOCK_MODE=fixture-design
+#      Captures the design-truth baseline using fixture data. This is the
+#      "what the screen should look like with ideal data" baseline.
+#   2. integration-truth — EXPO_PUBLIC_MOCK_MODE=integration-truth
+#      Captures the backend-truth baseline using seeded backend data.
+#      Differences between fixture and integration baselines are either
+#      contract bugs (backend missing fields) or design bugs (UI assumes
+#      fields that the backend doesn't guarantee).
+#
+# Parity contract:
+#   The fixture and integration screenshots should be visually equivalent
+#   for screens that don't depend on backend-specific data shapes. Where
+#   they differ, the diff must be explained by:
+#     - Real backend data having fewer fields (contract gap → backend fix)
+#     - Real backend data having different image URLs (acceptable)
+#     - Real backend data being empty (seeding gap → seed script fix)
+#     - UI fabricating data that the backend doesn't provide (UI fix)
+#
+# Device matrix (per mode):
+#   iOS:  iPhone 15 (regular), iPhone SE 3rd gen (compact), iPhone 15 Pro Max (large)
+#   Android: Pixel 7 (mid-range), Pixel 5 (lower-memory)
+#   Each in: light, dark
+#
+# Usage:
+#   # Fixture mode
+#   EXPO_PUBLIC_MOCK_MODE=fixture-design \
+#     maestro test .maestro/dual-mode-golden-suite.yml \
+#       --output .maestro/screenshots/fixture
+#
+#   # Integration mode (requires seeded backend running)
+#   EXPO_PUBLIC_MOCK_MODE=integration-truth \
+#     maestro test .maestro/dual-mode-golden-suite.yml \
+#       --output .maestro/screenshots/integration
+#
+#   # Promote to baselines
+#   cp -r .maestro/screenshots/fixture src/__tests__/__screenshots__/fixture
+#   cp -r .maestro/screenshots/integration src/__tests__/__screenshots__/integration
+#
+#   # Run parity check
+#   node scripts/check-golden-parity.mjs
+
+appId: ${MAESTRO_APP_ID}
+---
+# ── Core: Home ──
+- launchApp:
+    clearState: false
+- assertVisible:
+    label: "Home"
+    timeout: 5000
+- takeScreenshot: golden-home-populated
+
+# ── Core: Search ──
+- tapOn:
+    label: "Search listings"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-search-idle
+- inputText: "vintage denim"
+- takeScreenshot: golden-search-results
+- clearText
+- back
+
+# ── Core: PDP (fixed price) ──
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 5000
+- takeScreenshot: golden-browse-populated
+- tapOn:
+    point: "50%, 40%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-pdp-fixed
+- back
+
+# ── Core: Sell ──
+- tapOn:
+    label: "List an item"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-sell-empty
+- back
+
+# ── Core: Profile (self) ──
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 5000
+- takeScreenshot: golden-profile-self
+
+# ── Core: Settings ──
+- tapOn:
+    text: "Settings"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-settings-root
+- back
+
+# ── Core: Inbox ──
+- tapOn:
+    label: "Inbox"
+- assertVisible:
+    label: "Inbox"
+    timeout: 5000
+- takeScreenshot: golden-inbox-populated
+
+# ── Core: Chat ──
+- tapOn:
+    point: "50%, 30%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-chat-populated
+- back
+
+# ── Auctions ──
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 3000
+- takeScreenshot: golden-auction-home
+- tapOn:
+    point: "50%, 50%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-auction-detail
+- back
+
+# ── Co-Own Hub ──
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 3000
+- takeScreenshot: golden-coown-hub
+- tapOn:
+    point: "50%, 40%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-coown-asset-detail
+- back
+
+# ── Portfolio ──
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 3000
+- tapOn:
+    text: "Portfolio"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-coown-portfolio
+- back
+
+# ── Poster / Create ──
+- tapOn:
+    label: "Create"
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-poster-camera
+- back
+
+# ── Notifications ──
+- tapOn:
+    label: "Inbox"
+- assertVisible:
+    label: "Inbox"
+    timeout: 3000
+- takeScreenshot: golden-notifications
+
+# ── Done ──
+- takeScreenshot: golden-final-state

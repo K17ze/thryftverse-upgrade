@@ -74,14 +74,14 @@ function createStyles(colors: ThemeColors) {
   },
   content: {
     paddingHorizontal: Space.md,
-    gap: Space.xs,
+    gap: Space.sm,
   },
   item: {
     width: Space.xxl + Space.xxl + Space.xs,
-    minHeight: Space.xxl + Space.xxl + Space.xs - Space.xs,
+    minHeight: Space.xxl + Space.xxl - Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
   label: {
     color: colors.textPrimary,
@@ -92,7 +92,7 @@ function createStyles(colors: ThemeColors) {
   value: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size - 2,
+    fontSize: Type.meta.size - 1,
     lineHeight: Type.meta.lineHeight,
   },
   valuePlaceholder: {

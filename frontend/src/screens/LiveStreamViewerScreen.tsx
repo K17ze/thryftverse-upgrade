@@ -32,14 +32,18 @@ import {
   LayoutAnimation,
   Platform,
   KeyboardAvoidingView,
+  Share,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList, NativeStackNavigationProp } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Space, Radius, Type, Elevation, Control, Typography, Stroke } from '../theme/designTokens';
+import { useToast } from '../context/ToastContext';
+import { useFollowMutation } from '../platform/server';
+import { Space, Radius, Type, Elevation, Control, Typography, Stroke, FontFamily } from '../theme/designTokens';
 import {
   LiveSession,
   LiveChatMessage,
@@ -102,11 +106,12 @@ const DEMO_CHAT_RESPONSES = [
 type LiveStreamViewerRoute = RouteProp<RootStackParamList, 'LiveStreamViewer'>;
 
 export function LiveStreamViewerScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<LiveStreamViewerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
+  const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [session, setSession] = useState<LiveSession>(DEMO_SESSION);
@@ -118,9 +123,16 @@ export function LiveStreamViewerScreen() {
   const [viewerCount, setViewerCount] = useState(DEMO_SESSION.viewerCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(DEMO_SESSION.likeCount);
+  const [isFollowing, setIsFollowing] = useState(DEMO_SESSION.isFollowing);
 
   const chatListRef = useRef<FlatList<LiveChatMessage>>(null);
   const isDemo = session.isDemo || LIVE_SHOPPING_DEMO_MODE;
+
+  // Follow / unfollow — wired to the real profile social API. In demo mode the
+  // session carries a placeholder sellerId ('seller_demo'), not a real user, so
+  // we truthfully surface that the action is unavailable rather than firing a
+  // request against a non-existent user.
+  const followMutation = useFollowMutation(session.sellerId);
 
   // Timer for auction countdown
   useEffect(() => {
@@ -209,8 +221,42 @@ export function LiveStreamViewerScreen() {
 
   const handleBuyNow = useCallback(() => {
     haptic.medium();
-    // Navigate to checkout (future)
-  }, [haptic]);
+    if (session.currentItemId) {
+      navigation.navigate('Checkout', { itemId: session.currentItemId });
+    } else {
+      show('No item available to purchase', 'info');
+    }
+  }, [haptic, session.currentItemId, navigation, show]);
+
+  const handleShare = useCallback(async () => {
+    haptic.light();
+    try {
+      await Share.share({
+        message: `Watch ${session.sellerName}'s live stream on ThryftVerse`,
+      });
+    } catch {
+      // User cancelled the share sheet — no error toast needed.
+    }
+  }, [haptic, session.sellerName]);
+
+  const handleFollowToggle = useCallback(() => {
+    haptic.light();
+    if (isDemo) {
+      // Demo session uses a placeholder sellerId, not a real user record.
+      // Following would call the API against a non-existent user; be truthful.
+      show('Follow unavailable in demo mode', 'info');
+      return;
+    }
+    followMutation.mutate(!isFollowing, {
+      onSuccess: () => {
+        setIsFollowing((prev) => !prev);
+        show(isFollowing ? 'Unfollowed' : 'Following', 'success');
+      },
+      onError: () => {
+        show('Could not update follow status', 'error');
+      },
+    });
+  }, [haptic, isDemo, followMutation, isFollowing, show]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -289,6 +335,7 @@ export function LiveStreamViewerScreen() {
                 <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.textPrimary} />
               </Pressable>
               <Pressable
+                onPress={handleShare}
                 style={({ pressed }) => [styles.overlayBtn, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
                 accessibilityLabel="Share stream"
@@ -320,11 +367,22 @@ export function LiveStreamViewerScreen() {
             <Text style={styles.streamTitle} numberOfLines={1}>{session.title}</Text>
           </View>
           <Pressable
-            style={({ pressed }) => [styles.followBtn, pressed && { opacity: 0.7 }]}
+            onPress={handleFollowToggle}
+            disabled={followMutation.isPending}
+            style={({ pressed }) => [
+              styles.followBtn,
+              pressed && { opacity: 0.7 },
+              followMutation.isPending && { opacity: 0.6 },
+            ]}
             accessibilityRole="button"
-            accessibilityLabel="Follow seller"
+            accessibilityLabel={isFollowing ? 'Unfollow seller' : 'Follow seller'}
+            accessibilityState={{ busy: followMutation.isPending }}
           >
-            <Text style={styles.followBtnText}>Follow</Text>
+            {followMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.followBtnText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -422,8 +480,14 @@ export function LiveStreamViewerScreen() {
           >
             <View style={styles.bidSheetHandle} />
             <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>Place a Bid</Text>
-            <Text style={[styles.bidSheetCurrent, { color: colors.textSecondary }]}>
-              Current bid: £{currentBid}
+            <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>
+              Current bid
+            </Text>
+            <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>
+              £{currentBid}
+            </Text>
+            <Text style={[styles.bidSheetMinLabel, { color: colors.textMuted }]}>
+              Minimum next bid £{minNextBid}
             </Text>
             <View style={styles.quickBidRow}>
               {[minNextBid, minNextBid + 5, minNextBid + 10, minNextBid + 20].map((amount) => (
@@ -529,7 +593,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.textPrimary,
   },
   liveBadgeText: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.metaElevated.letterSpacing,
@@ -547,6 +612,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   videoOverlayRight: {
     flex: 1,
@@ -587,13 +653,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   sellerName: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
   },
   streamTitle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.6)',
   },
@@ -612,23 +680,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   productPlane: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     backgroundColor: '#161616',
   },
   productImage: {
-    width: Space.xxl + Space.xl,
-    height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
+    width: Space.xxl + Space.xl + Space.sm,
+    height: Space.xxl + Space.xl + Space.sm,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
   },
   productInfo: {
     flex: 1,
-    gap: Space.xs / 2,
+    gap: Space.xs,
   },
   productTitle: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -643,9 +712,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   priceValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   bidCountBadge: {
     flexDirection: 'row',
@@ -660,6 +732,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.7)',
+    fontVariant: ['tabular-nums'],
   },
   timeRow: {
     flexDirection: 'row',
@@ -667,8 +740,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs / 2,
   },
   timeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   productActions: {
     flexDirection: 'row',
@@ -687,6 +762,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   buyNowBtn: {
     paddingHorizontal: Space.md + 2,
@@ -701,6 +777,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   // ── Chat plane ──
   chatPlane: {
@@ -765,6 +842,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
+    paddingTop: (Space.xl + Space.xs + 4 - Type.body.lineHeight) / 2,
   },
   chatSendBtn: {
     width: Control.hit,
@@ -790,7 +868,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
-    gap: Space.md,
+    gap: Space.sm,
   },
   bidSheetHandle: {
     width: Space.xxl + Space.xs,
@@ -800,14 +878,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'center',
   },
   bidSheetTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
+    textAlign: 'center',
+  },
+  bidSheetCurrentLabel: {
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
     textAlign: 'center',
   },
   bidSheetCurrent: {
-    fontSize: Type.body.size,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceLarge.letterSpacing,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  bidSheetMinLabel: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   quickBidRow: {
     flexDirection: 'row',
@@ -826,6 +924,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   quickBidText: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   cancelBidBtn: {
     paddingVertical: Space.sm,

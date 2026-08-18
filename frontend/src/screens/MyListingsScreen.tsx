@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -13,7 +12,6 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
@@ -83,7 +81,6 @@ export default function MyListingsScreen() {
   const { show } = useToast();
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
-  const reducedMotionEnabled = useReducedMotion();
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
@@ -144,6 +141,19 @@ export default function MyListingsScreen() {
     };
   }, [listings]);
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible listing rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderListingItem = useCallback(
+    ({ item }: { item: ListingApiItem }) => (
+      <ListingRow
+        item={item}
+        onPress={() => navigation.push('ManageListing', { itemId: item.id })}
+      />
+    ),
+    [navigation],
+  );
+
   if (isLoading) {
     return (
       <FlagshipScreen header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}>
@@ -155,7 +165,7 @@ export default function MyListingsScreen() {
   const renderHeader = () => {
     if (listings.length === 0) return null;
     return (
-      <Reanimated.View style={styles.headerSection} entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View style={styles.headerSection}>
         {/* Analytics summary */}
         <View style={styles.statsGrid}>
           <StatCard
@@ -237,7 +247,7 @@ export default function MyListingsScreen() {
               accessibilityLabel="View verification requests"
               accessibilityRole="button"
             >
-              <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand} />
               <Text style={styles.quickActionText}>Verification</Text>
             </AnimatedPressable>
           )}
@@ -249,7 +259,7 @@ export default function MyListingsScreen() {
             {analytics.total} {analytics.total === 1 ? 'listing' : 'listings'}
           </Text>
         </View>
-      </Reanimated.View>
+      </View>
     );
   };
 
@@ -276,12 +286,7 @@ export default function MyListingsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => (
-            <ListingRow
-              item={item}
-              onPress={() => navigation.push('ManageListing', { itemId: item.id })}
-            />
-          )}
+          renderItem={renderListingItem}
           // Performance: long seller lists; FlashList v2 handles recycling
           // automatically.
         />

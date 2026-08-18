@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -8,7 +8,7 @@ import { Meta, Caption } from './ui/Text';
 interface FinancialDisclosureProps {
   title?: string;
   items?: string[];
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }
 
 const DEFAULT_ITEMS = [

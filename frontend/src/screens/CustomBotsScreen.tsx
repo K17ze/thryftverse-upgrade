@@ -5,17 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
@@ -24,7 +22,7 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -55,8 +53,9 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const handleDelete = (bot: { id: string; name: string }) => {
     Alert.alert(
-      'Delete bot?',
+      'Delete agent?',
       `${bot.name} will be permanently deleted and removed from all groups.`,
+
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -69,7 +68,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
               await deleteCustomBot(bot.id);
               show(`${bot.name} deleted`, 'info');
             } catch {
-              show('Failed to delete bot', 'error');
+              show('Failed to delete agent', 'error');
             } finally {
               setDeletingId(null);
             }
@@ -80,27 +79,29 @@ export default function CustomBotsScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="My agents"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={() => navigation.navigate('BotBuilder', {})}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Create bot"
-          >
-            <View style={styles.createBtn}>
-              <Ionicons name="add" size={22} color={colors.textPrimary} />
-            </View>
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Your agents"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('BotBuilder', {})}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Create agent"
+            >
+              <View style={styles.createBtn}>
+                <Ionicons name="add" size={22} color={colors.textPrimary} />
+              </View>
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Active bots */}
         {active.length > 0 && (
@@ -188,7 +189,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -266,7 +267,7 @@ function BotRow({
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Edit bot"
+            accessibilityLabel="Edit agent"
           >
             <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
@@ -278,7 +279,7 @@ function BotRow({
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Delete bot"
+            accessibilityLabel="Delete agent"
           >
             <Ionicons name="trash-outline" size={20} color={colors.danger} />
           </AnimatedPressable>
@@ -290,10 +291,6 @@ function BotRow({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -378,7 +375,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingTop: Space.xxl + Space.xxl + Space.xxl - 24,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   emptyMark: {
     width: Space.xl + Space.xl - 4,
@@ -404,7 +401,7 @@ function createStyles(colors: ThemeColors) {
   createEmptyBtn: {
     backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {

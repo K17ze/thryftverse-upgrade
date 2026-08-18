@@ -1,15 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -17,12 +13,12 @@ import { listCoOwnAssets } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import {
-  CoOwnMarketHeader,
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
@@ -43,10 +39,9 @@ interface LeaderboardAsset {
 
 export default function AssetLeaderboardScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const [assets, setAssets] = React.useState<LeaderboardAsset[]>([]);
@@ -148,97 +143,105 @@ export default function AssetLeaderboardScreen() {
     metric: (asset: LeaderboardAsset & { allocatedPct?: number }) => { primary: string; secondary: string },
     sectionIndex: number
   ) => data.length > 0 ? (
-    <Reanimated.View
-      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(sectionIndex * 60)}
-    >
-      <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name={icon} size={15} color={colors.textSecondary} />
-          </View>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
+    <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
+          <Ionicons name={icon} size={15} color={colors.textSecondary} />
         </View>
-
-        {data.map((asset, idx) => {
-          const metricValue = metric(asset);
-          return (
-            <AnimatedPressable
-              key={`${title}_${asset.id}`}
-              style={[styles.row, { borderColor: colors.border }, idx === data.length - 1 && styles.lastRow]}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-              scaleValue={0.985}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={`${title}, rank ${idx + 1}, ${asset.title}, ${metricValue.primary}, ${metricValue.secondary}`}
-            >
-              <Text style={[styles.rank, { color: colors.textMuted }]} maxFontSizeMultiplier={1.2}>{idx + 1}</Text>
-              <CachedImage
-                uri={asset.image}
-                style={styles.thumb}
-                containerStyle={styles.thumbContainer}
-                contentFit="cover"
-                emptyLabel={asset.title}
-                emptyIcon="diamond-outline"
-              />
-              <View style={styles.rowBody}>
-                <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
-                <View style={styles.priceRow}>
-                  <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
-                  <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-                </View>
-              </View>
-              <View style={styles.metricGroup}>
-                <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
-                <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
-              </View>
-            </AnimatedPressable>
-          );
-        })}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
       </View>
-    </Reanimated.View>
+
+      {data.map((asset, idx) => {
+        const metricValue = metric(asset);
+        return (
+          <AnimatedPressable
+            key={`${title}_${asset.id}`}
+            style={[styles.row, { borderColor: colors.border }, idx === data.length - 1 && styles.lastRow]}
+            onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+            scaleValue={0.985}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={`${title}, rank ${idx + 1}, ${asset.title}, ${metricValue.primary}, ${metricValue.secondary}`}
+          >
+            <Text style={[styles.rank, { color: colors.textMuted }]} maxFontSizeMultiplier={1.2}>{idx + 1}</Text>
+            <CachedImage
+              uri={asset.image}
+              style={styles.thumb}
+              containerStyle={styles.thumbContainer}
+              contentFit="cover"
+              emptyLabel={asset.title}
+              emptyIcon="diamond-outline"
+            />
+            <View style={styles.rowBody}>
+              <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
+              <View style={styles.priceRow}>
+                <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
+                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
+              </View>
+            </View>
+            <View style={styles.metricGroup}>
+              <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
+            </View>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
   ) : null;
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnLeaderboardSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (isError && assets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
           onAction={() => loadLeaderboard()}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (assets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No market overview yet"
@@ -246,24 +249,27 @@ export default function AssetLeaderboardScreen() {
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Market overview"
-        subtitle="Issued supply and recency"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Market overview"
+          subtitle="Issued supply and recency"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -302,14 +308,11 @@ export default function AssetLeaderboardScreen() {
         )}
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,

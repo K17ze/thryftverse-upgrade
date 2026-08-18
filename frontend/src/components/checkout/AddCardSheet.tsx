@@ -144,7 +144,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     } catch (error) {
       const parsed = parseApiError(
         error,
-        'Unable to open card entry right now. Please try again.'
+        'Unable to open card entry right now. Try again.'
       );
       await Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Error
@@ -172,7 +172,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
       <View style={styles.boundary}>
         <View style={styles.boundaryRow}>
           <Ionicons
-            name="shield-checkmark-outline"
+            name="lock-closed-outline"
             size={19}
             color={themed.success}
           />

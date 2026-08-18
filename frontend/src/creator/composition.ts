@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
 import type { PosterStickerType } from '../services/postersApi';
+import { makeStableId } from '../utils/createStableId';
 
 // ── Legacy poster frame type (migrated from PosterFrameStrip.tsx) ──
 export interface ComposerFrame {
@@ -26,16 +27,125 @@ export interface ComposerFrame {
 
 // ── Layer payload schemas ──────────────────────────────────────────
 
+// Effect node — a single adjustment/filter step in a media layer's effect stack.
+// Used by the media layer `effects` field (Phase 8 render pipeline).
+export const EffectNodeSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('filter'),
+    id: z.string(),
+    amount: z.number(),
+  }),
+  z.object({
+    type: z.literal('adjust'),
+    exposure: z.number().optional(),
+    contrast: z.number().optional(),
+    highlights: z.number().optional(),
+    shadows: z.number().optional(),
+    saturation: z.number().optional(),
+    temperature: z.number().optional(),
+    tint: z.number().optional(),
+    fade: z.number().optional(),
+    vignette: z.number().optional(),
+    sharpness: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal('blur'),
+    radius: z.number(),
+  }),
+  z.object({
+    type: z.literal('vignette'),
+    amount: z.number(),
+  }),
+]);
+
+export type EffectNode = z.infer<typeof EffectNodeSchema>;
+
+// Mask ref — alpha mask for true cutout (Phase 8 segmentation).
+// Stored by ID in the document's asset registry; layers reference it via `maskRef`.
+export type MaskRef = {
+  type: 'alpha-mask';
+  uri: string;            // local mask URI
+  sourceAssetId: string;  // original asset
+  modelVersion?: string;  // segmentation model version
+  featherPx?: number;     // edge feathering
+  invert?: boolean;       // invert mask
+};
+
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
   textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
-  textColor: z.string().default('#ffffff'),
+  // Canonical fill as structured RGBA (CreatorColor). Source of truth for
+  // text color (spec 06_TEXT_TYPOGRAPHY §1). Optional — the migration
+  // function and renderer default to white when absent, preserving
+  // backward compat with legacy text layers that only have textColor.
+  fill: z.object({
+    space: z.literal('srgb'),
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+    a: z.number().min(0).max(1).default(1),
+  }).optional(),
+  // Backward compat: legacy textColor string. Migrated to `fill` on load
+  // by migrateTextLayerPayload. Kept optional so old documents validate.
+  textColor: z.string().optional(),
+  // Background/pill with real color + padding + radius (spec §1).
+  background: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    radius: z.number().min(0).default(4),
+    paddingX: z.number().min(0).default(8),
+    paddingY: z.number().min(0).default(4),
+  }).optional(),
+  // Backward compat: legacy backgroundColor string.
   backgroundColor: z.string().optional(),
-  alignment: z.enum(['left', 'center', 'right']).default('center'),
-  lineHeight: z.number().min(0.8).max(3).optional(),
-  opacity: z.number().min(0).max(1).default(1),
+  // Stroke (outline) with real width + color (spec §1).
+  stroke: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    width: z.number().min(0).max(20).default(2),
+  }).optional(),
+  // Shadow with real blur + offset + color (spec §1).
+  shadow: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    blur: z.number().min(0).max(30).default(4),
+    offsetX: z.number().default(0),
+    offsetY: z.number().default(2),
+  }).optional(),
+  // Backward compat: legacy textEffect enum. Migrated to stroke/shadow
+  // on load by migrateTextLayerPayload.
   textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
+  // Typography
+  fontFamilyId: z.string().optional(),
+  fontWeight: z.union([z.string(), z.number()]).optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  letterSpacing: z.number().optional(),
+  lineHeight: z.number().min(0.8).max(3).optional(),
+  alignment: z.enum(['left', 'center', 'right', 'justify']).default('center'),
+  opacity: z.number().min(0).max(1).default(1),
   textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
+  // Animation timing for text layer entrance (Phase 8 motion)
+  animation: z.object({
+    type: z.enum(['fade', 'rise', 'type', 'pop', 'slide']),
+    durationMs: z.number().min(0),
+    delayMs: z.number().min(0).optional(),
+  }).optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
@@ -48,6 +158,30 @@ const MediaLayerPayloadSchema = z.object({
   trimStartMs: z.number().min(0).optional(),
   trimEndMs: z.number().min(0).optional(),
   opacity: z.number().min(0).max(1).default(1),
+  // Timeline operations (speed/volume) — Phase 8 timeline foundation
+  speed: z.number().min(0.25).max(4).optional(),      // playback speed 0.25-4.0, default 1.0
+  volume: z.number().min(0).max(1).optional(),         // audio volume 0.0-1.0, default 1.0
+  // Variable speed curve — precise, dynamic speed ramping along a
+  // customizable curve (Instagram Edits parity, August 2026). When present,
+  // the renderer samples the curve to compute instantaneous speed at each
+  // timeline position. Optional — absent on clips with a single constant speed.
+  speedCurve: z.object({
+    points: z.array(z.object({
+      id: z.string(),
+      position: z.number().min(0).max(1),
+      speed: z.number().min(0.01).max(4),
+    })),
+    easing: z.enum(['linear', 'smooth', 'hold']),
+  }).optional(),
+  // Reverse playback (P1). When true, the clip plays from end to start.
+  reversed: z.boolean().optional(),
+  // Freeze frame (P1). When set, the clip holds on this timestamp (ms from
+  // clip start) for `freezeDurationMs` before continuing playback. Used for
+  // dramatic emphasis (Snapchat/Instagram Edits parity).
+  freezeFrameMs: z.number().min(0).optional(),
+  freezeDurationMs: z.number().min(0).max(10000).optional(),
+  // Effect stack — ordered list of adjustments/filters applied to the media
+  effects: z.array(EffectNodeSchema).optional(),
 });
 
 const ProductLayerPayloadSchema = z.object({
@@ -160,12 +294,17 @@ const DecorativeLayerPayloadSchema = z.object({
 });
 
 // Draw layer — freehand strokes (Instagram/Snapchat parity: pen, marker,
-// highlighter, neon, eraser). Points are normalized 0-1 relative to layer bounds.
+// highlighter, neon, eraser, emoji). Points are normalized 0-1 relative to layer bounds.
 const DrawStrokeSchema = z.object({
   points: z.array(z.object({ x: z.number(), y: z.number() })),
   color: z.string().default('#ffffff'),
   width: z.number().min(1).max(50).default(4),
-  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser']).default('pen'),
+  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser', 'emoji']).default('pen'),
+  // Emoji brush config — present only when tool === 'emoji'.
+  emoji: z.string().optional(),
+  emojiSize: z.number().min(8).max(120).default(32),
+  emojiSpacing: z.number().min(4).max(100).default(24),
+  emojiJitter: z.number().min(0).max(1).default(0),
 });
 
 const DrawLayerPayloadSchema = z.object({
@@ -182,7 +321,11 @@ const GifLayerPayloadSchema = z.object({
   opacity: z.number().min(0).max(1).default(1),
 });
 
-// Music layer — track sticker (Instagram-style music sticker)
+// Music layer — track sticker (Instagram-style music sticker) and
+// timeline audio citizen (spec 09_POSTER_TIMELINE_CAMERA_AUDIO §10).
+// Extended for timeline integration: volume, fades, trim, and a
+// timeRange so the music track is a real timeline citizen rather than
+// just a sticker.
 const MusicLayerPayloadSchema = z.object({
   trackName: z.string().min(1).max(120),
   artistName: z.string().max(120).default(''),
@@ -193,6 +336,22 @@ const MusicLayerPayloadSchema = z.object({
   durationMs: z.number().min(1000).optional(),
   isExplicit: z.boolean().optional(),
   opacity: z.number().min(0).max(1).default(1),
+  // ── Timeline integration (spec 09 §10 P0) ──
+  // Volume for the music track, separate from the original video audio.
+  volume: z.number().min(0).max(1).default(1),
+  // Fade in/out (linear ramp) in milliseconds.
+  fadeInMs: z.number().min(0).default(0),
+  fadeOutMs: z.number().min(0).default(0),
+  // Trim: where in the source track playback starts/ends.
+  trimStartMs: z.number().min(0).optional(),
+  trimEndMs: z.number().min(0).optional(),
+  // Timeline time range — when the music track is visible/audible
+  // within the composition. Inherits from BaseLayerSchema.timeRange
+  // but duplicated here for explicit music-layer access.
+  timeRange: z.object({
+    startMs: z.number(),
+    endMs: z.number(),
+  }).optional(),
 });
 
 // ── Base layer schema ──────────────────────────────────────────────
@@ -208,6 +367,61 @@ const BaseLayerSchema = z.object({
   zIndex: z.number().int().default(0),
   locked: z.boolean().default(false),
   hidden: z.boolean().default(false),
+  opacity: z.number().min(0).max(1).default(1),
+  // Timed overlay range for Poster timeline (Phase 8). When present, the layer
+  // is only visible during this time window within the page's clip.
+  timeRange: z.object({
+    startMs: z.number(),
+    endMs: z.number(),
+  }).optional(),
+  // Reference to a MaskRef (alpha mask) stored in the document's asset
+  // registry, enabling true cutout via segmentation (Phase 8).
+  maskRef: z.string().optional(),
+  // Per-layer animation keyframes (Phase 9). When present, the composer
+  // interpolates the keyed properties between keyframes over the layer's
+  // timeline. Optional — absent on layers without keyframe animation.
+  keyframes: z.array(z.object({
+    id: z.string(),
+    layerId: z.string(),
+    property: z.enum(['position', 'scale', 'rotation', 'opacity']),
+    timeMs: z.number().min(0),
+    value: z.number(),
+    easing: z.enum(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'spring']),
+  })).optional(),
+  // Object pin — binds this layer to a normalized anchor point on another
+  // (typically media) layer so it follows that point as the target layer
+  // moves/scales/rotates over time via keyframes. Optional — absent on
+  // layers that are not pinned. See StickerPinTracker for the transform
+  // computation that resolves a pin into a concrete position each frame.
+  pin: z.object({
+    layerId: z.string().min(1),
+    anchor: z.object({
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    }),
+  }).optional(),
+});
+
+// Adjustment layer payload — applies an effect stack as an adjustment
+// layer across the whole timeline (Meta Edits August 2026 feature).
+// Unlike visible layers, an adjustment layer is not rendered directly;
+// instead, its effects are merged with each clip's own effects during
+// playback. The `scope` field controls which clips the adjustment
+// applies to: 'all' for every clip, or an explicit list of clip IDs.
+const AdjustmentLayerPayloadSchema = z.object({
+  // The ordered effect stack to apply to targeted clips.
+  effects: z.array(EffectNodeSchema).default([]),
+  // Which clips this adjustment layer applies to.
+  // 'all' = every clip in the timeline; { clipIds } = only the listed clips.
+  scope: z.union([
+    z.literal('all'),
+    z.object({ clipIds: z.array(z.string()) }),
+  ]).default('all'),
+  // Whether the adjustment layer is active.
+  enabled: z.boolean().default(true),
+  // Blend opacity for the effect (0..1). At 1, the full effect is
+  // applied; at 0, no effect is applied. Intermediate values blend
+  // the effect with the original via intensity interpolation.
   opacity: z.number().min(0).max(1).default(1),
 });
 
@@ -233,11 +447,17 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('time'), payload: TimeLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('weather'), payload: WeatherLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('adjustment'), payload: AdjustmentLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;
 
 export type LayerType = CreatorLayer['type'];
+
+// ── Adjustment layer (Meta Edits August 2026) ───────────────────────
+// Convenience type for the adjustment layer payload and the layer itself.
+export type AdjustmentLayerPayload = z.infer<typeof AdjustmentLayerPayloadSchema>;
+export type AdjustmentLayer = Extract<CreatorLayer, { type: 'adjustment' }>;
 
 // ── Page schema ────────────────────────────────────────────────────
 
@@ -245,6 +465,9 @@ export const CreatorPageSchema = z.object({
   id: z.string().min(1),
   durationMs: z.number().int().min(500).max(60000).optional(),
   layers: z.array(CreatorLayerSchema).default([]),
+  // Transition applied between this page and the next (Phase 9).
+  // References a TransitionPreset id from TransitionPresets.ts.
+  transitionId: z.string().optional(),
 });
 
 export type CreatorPage = z.infer<typeof CreatorPageSchema>;
@@ -252,9 +475,26 @@ export type CreatorPage = z.infer<typeof CreatorPageSchema>;
 // ── Background schema ──────────────────────────────────────────────
 
 export const CreatorBackgroundSchema = z.object({
-  type: z.enum(['color', 'gradient', 'image']).default('color'),
+  type: z.enum(['color', 'gradient', 'image', 'blur']).default('color'),
   value: z.string().default('#1a1a1a'),
   secondaryValue: z.string().optional(),
+  // Custom gradient stops — when type='gradient' and the user has edited
+  // stops via the GradientEditor. Each stop has a 0..1 position and a hex
+  // color string (#RRGGBB or #RRGGBBAA). When absent, the renderer falls
+  // back to value/secondaryValue (two-stop preset gradient).
+  gradientStops: z.array(z.object({
+    position: z.number().min(0).max(1),
+    color: z.string(),
+  })).optional(),
+  // Gradient angle in degrees (0..360). Used when type='gradient'.
+  gradientAngle: z.number().min(0).max(360).optional(),
+  // For 'blur' type — the asset ID of the source image to blur.
+  // The renderer blurs this image and uses it as the canvas background.
+  blurAssetId: z.string().optional(),
+  blurRadius: z.number().min(0).max(50).optional(),
+  // For 'image' type — optional blur intensity (0–20) applied to the
+  // background image via expo-image's blurRadius. 0 = no blur.
+  imageBlur: z.number().min(0).max(20).optional(),
 });
 
 export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;
@@ -283,6 +523,9 @@ export const CreatorDocumentSchema = z.object({
   id: z.string().min(1),
   type: z.enum(['look', 'poster']),
   version: z.number().int().min(1).default(1),
+  // WYSIWYG render contract version — identifies the render pipeline revision
+  // the authored document targets (Phase 8). Optional; absent on legacy docs.
+  renderVersion: z.string().optional(),
   canvas: z.object({
     aspectRatio: z.number().min(0.3).max(3).default(0.8),
     background: CreatorBackgroundSchema,
@@ -306,6 +549,91 @@ export function safeValidateDocument(doc: unknown): { success: boolean; data?: C
     return { success: true, data: result.data };
   }
   return { success: false, error: result.error.message };
+}
+
+// ── Text layer migration (spec 06_TEXT_TYPOGRAPHY §1) ───────────────
+
+/**
+ * Convert a hex color string (#RRGGBB or #RRGGBBAA) to a CreatorColor
+ * object. Returns white if the string is invalid.
+ */
+function hexToCreatorColor(hex: string): { space: 'srgb'; r: number; g: number; b: number; a: number } {
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) {
+    return { space: 'srgb', r: 1, g: 1, b: 1, a: 1 };
+  }
+  let r = 1, g = 1, b = 1, a = 1;
+  if (cleaned.length === 3) {
+    r = parseInt(cleaned[0]! + cleaned[0]!, 16) / 255;
+    g = parseInt(cleaned[1]! + cleaned[1]!, 16) / 255;
+    b = parseInt(cleaned[2]! + cleaned[2]!, 16) / 255;
+  } else if (cleaned.length === 6) {
+    r = parseInt(cleaned.slice(0, 2), 16) / 255;
+    g = parseInt(cleaned.slice(2, 4), 16) / 255;
+    b = parseInt(cleaned.slice(4, 6), 16) / 255;
+  } else if (cleaned.length === 8) {
+    r = parseInt(cleaned.slice(0, 2), 16) / 255;
+    g = parseInt(cleaned.slice(2, 4), 16) / 255;
+    b = parseInt(cleaned.slice(4, 6), 16) / 255;
+    a = parseInt(cleaned.slice(6, 8), 16) / 255;
+  }
+  return { space: 'srgb', r, g, b, a };
+}
+
+/**
+ * Migrate a legacy text layer payload to the new schema format.
+ *
+ * Converts:
+ *  - `textColor` (hex string) → `fill` (CreatorColor)
+ *  - `backgroundColor` (hex string) → `background` (with color, radius, padding)
+ *  - `textEffect` ('shadow' | 'outline' | 'neon' | 'glow') → `shadow` / `stroke`
+ *
+ * If the payload already has the new fields (`fill`, `stroke`, `shadow`,
+ * `background`), they are preserved. The legacy fields are kept for
+ * backward compatibility but the new fields take precedence.
+ *
+ * @returns A new payload object with the new fields populated.
+ */
+export function migrateTextLayerPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...payload };
+
+  // Migrate textColor → fill (only if fill is not already set)
+  if (!result['fill'] && typeof result['textColor'] === 'string') {
+    result['fill'] = hexToCreatorColor(result['textColor']);
+  }
+
+  // Migrate backgroundColor → background (only if background is not already set)
+  if (!result['background'] && typeof result['backgroundColor'] === 'string') {
+    result['background'] = {
+      color: hexToCreatorColor(result['backgroundColor']),
+      radius: 4,
+      paddingX: 8,
+      paddingY: 4,
+    };
+  }
+
+  // Migrate textEffect → stroke / shadow (only if not already set)
+  if (result['textEffect'] && typeof result['textEffect'] === 'string') {
+    const effect = result['textEffect'];
+    if ((effect === 'outline' || effect === 'glow') && !result['stroke']) {
+      result['stroke'] = {
+        color: { space: 'srgb', r: 0, g: 0, b: 0, a: 1 },
+        width: effect === 'glow' ? 4 : 2,
+      };
+    }
+    if ((effect === 'shadow' || effect === 'neon') && !result['shadow']) {
+      result['shadow'] = {
+        color: effect === 'neon'
+          ? { space: 'srgb', r: 1, g: 1, b: 1, a: 0.8 }
+          : { space: 'srgb', r: 0, g: 0, b: 0, a: 0.8 },
+        blur: effect === 'neon' ? 12 : 4,
+        offsetX: 0,
+        offsetY: 2,
+      };
+    }
+  }
+
+  return result;
 }
 
 // ── Migration helpers ──────────────────────────────────────────────
@@ -465,6 +793,7 @@ export function migratePosterFramesToDocument(params: {
         payload: {
           text: frame.caption,
           textStyle: 'clean',
+          fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
           textColor: '#ffffff',
           alignment: 'center',
           opacity: 1,
@@ -495,6 +824,7 @@ export function migratePosterFramesToDocument(params: {
             payload: {
               text: pStr(sticker.payload, 'text'),
               textStyle: mapTextStyle(pStrOpt(sticker.payload, 'textStyle')),
+              fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
               textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
               backgroundColor: pStrOpt(sticker.payload, 'backgroundColor'),
               alignment: pStr(sticker.payload, 'alignment', 'center') as 'left' | 'center' | 'right',
@@ -588,6 +918,60 @@ function mapTextStyle(old: string | undefined): 'headline' | 'editorial' | 'clea
   }
 }
 
+// ── Look layout helper ──────────────────────────────────────────────
+// Computes initial positions/sizes for N media layers on a Look canvas
+// so that multi-select never produces N identical full-bleed overlaps.
+// Mirrors the layout logic in CreatorContext.autoArrangeLook but is a
+// pure function usable during document seeding (before state settles).
+
+export function computeLookLayout(layers: CreatorLayer[]): CreatorLayer[] {
+  const mediaLayers = layers.filter((l) => l.type === 'media');
+  const otherLayers = layers.filter((l) => l.type !== 'media');
+  if (mediaLayers.length === 0) return layers;
+
+  let arranged: CreatorLayer[];
+  const n = mediaLayers.length;
+
+  if (n === 1) {
+    // 1 → hero composition
+    arranged = [{ ...mediaLayers[0], x: 0.5, y: 0.5, width: 0.9, height: 0.9, scale: 1, rotation: 0 }];
+  } else if (n === 2) {
+    // 2 → balanced editorial pairing
+    arranged = [
+      { ...mediaLayers[0], x: 0.27, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+      { ...mediaLayers[1], x: 0.73, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+    ];
+  } else if (n === 3) {
+    // 3 → dominant + two supporting
+    arranged = [
+      { ...mediaLayers[0], x: 0.5, y: 0.42, width: 0.7, height: 0.7, scale: 1, rotation: 0 },
+      { ...mediaLayers[1], x: 0.22, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+      { ...mediaLayers[2], x: 0.78, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+    ];
+  } else {
+    // 4+ → scattered collage with collision avoidance
+    arranged = mediaLayers.map((layer, i) => {
+      const angle = (i / n) * Math.PI * 2;
+      const radius = 0.28;
+      const cx = 0.5 + Math.cos(angle) * radius;
+      const cy = 0.5 + Math.sin(angle) * radius;
+      const size = 0.34;
+      return {
+        ...layer,
+        x: Math.max(0.18, Math.min(0.82, cx)),
+        y: Math.max(0.18, Math.min(0.82, cy)),
+        width: size,
+        height: size,
+        scale: 1,
+        rotation: (i % 2 === 0 ? 1 : -1) * 4,
+      };
+    });
+  }
+
+  // Reassign zIndex in order, preserve non-media layers
+  return [...arranged, ...otherLayers].map((l, i) => ({ ...l, zIndex: i }));
+}
+
 // ── Canonical aspect-ratio constants ───────────────────────────────
 // aspectRatio is ALWAYS width / height.
 // Poster (Stories) default: 9:16 portrait → 9 / 16 = 0.5625
@@ -603,7 +987,7 @@ export const LEGACY_POSTER_LANDSCAPE_RATIO = 16 / 9; // 1.777…
 
 export function createEmptyDocument(type: 'look' | 'poster'): CreatorDocument {
   return {
-    id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: makeStableId('doc'),
     type,
     version: 1,
     canvas: {
@@ -708,7 +1092,7 @@ export function duplicateLayerInPage(doc: CreatorDocument, pageIndex: number, la
   const maxZ = page.layers.reduce((max, l) => Math.max(max, l.zIndex), 0);
   const newLayer: CreatorLayer = {
     ...layer,
-    id: `layer_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: makeStableId('layer', 6),
     x: Math.min(layer.x + 0.05, 0.95),
     y: Math.min(layer.y + 0.05, 0.95),
     zIndex: maxZ + 1,
@@ -835,6 +1219,7 @@ export function goldenLookFixture(): CreatorDocument {
           payload: {
             text: 'Summer Edit',
             textStyle: 'editorial',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 1,
@@ -914,6 +1299,7 @@ export function goldenPosterFixture(): CreatorDocument {
           payload: {
             text: 'New Drop',
             textStyle: 'headline',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 0.9,
@@ -930,6 +1316,7 @@ export function goldenPosterFixture(): CreatorDocument {
           payload: {
             text: 'Available now — link in bio',
             textStyle: 'clean',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 1,

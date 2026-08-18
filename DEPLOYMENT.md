@@ -1,12 +1,15 @@
-# Thryftverse — Production Deployment Guide
+# Thryftverse — Production Deployment & Jurisdictional Resilience Guide
 
-> **Audience:** DevOps / backend team responsible for provisioning and deploying the production environment.  
-> **Last updated:** May 2026  
+> **Audience:** DevOps / backend team responsible for provisioning and deploying the production environment, plus founders/legal counsel advising on jurisdictional structure.
+> **Last updated:** August 2026
 > **Stack:** Node.js API (Fastify) · Key Service (Node.js) · ML Service (Python/FastAPI) · PostgreSQL · Redis · S3-compatible object storage · Expo React Native mobile app
+> **Resilience posture:** This guide now covers both *how to deploy* (§§1–18) and *how to deploy so no single government or entity can seize, block, or compel the entire platform* (§§19–25). The latter is the "Telegram playbook" — studied, adapted, and honestly assessed for what it can and cannot achieve.
 
 ---
 
 ## Table of Contents
+
+**Operational deployment (existing):**
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [Prerequisites & Accounts](#2-prerequisites--accounts)
@@ -24,21 +27,41 @@
 14. [DNS & Domain Setup](#14-dns--domain-setup)
 15. [Post-Deploy Checklist](#15-post-deploy-checklist)
 16. [Cost Summary](#16-cost-summary)
+17. [Rollback Runbook](#17-rollback-runbook)
+18. [Incident Response Runbook](#18-incident-response-runbook)
+
+**Jurisdictional resilience & scalable sovereignty (new, August 2026):**
+
+19. [Jurisdictional Resilience Strategy — The Telegram Playbook, Honestly Assessed](#19-jurisdictional-resilience-strategy--the-telegram-playbook-honestly-assessed)
+20. [Multi-Region Scaling Path](#20-multi-region-scaling-path)
+21. [Legal Structure Layering](#21-legal-structure-layering)
+22. [Data Residency & Sovereign Hosting](#22-data-residency--sovereign-hosting)
+23. [Alternative App Distribution for Blocked Regions](#23-alternative-app-distribution-for-blocked-regions)
+24. [The Psychology of Each Jurisdictional Decision](#24-the-psychology-of-each-jurisdictional-decision)
+25. [Threat Model & Honest Limits](#25-threat-model--honest-limits)
+26. [Sources & Citations (August 2026)](#26-sources--citations-august-2026)
 
 ---
 
 ## 1. Architecture Overview
 
+### 1.1 Day-1 launch configuration (EU-jurisdiction, §§2–18 + §20)
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                      Mobile App                          │
-│              (iOS App Store / Google Play)               │
+│   iOS App Store · Google Play · Direct APK · Self-OTA    │
 │               Expo React Native — EAS Build              │
 └────────────────────────┬─────────────────────────────────┘
-                         │ HTTPS
+                         │ HTTPS + Cloudflare Anycast
                          ▼
 ┌──────────────────────────────────────────────────────────┐
-│                   Railway (Backend)                      │
+│              Cloudflare (global anycast)                 │
+│   DNS · WAF · R2 (EU jurisdiction bucket) · CDN          │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+┌────────────────────────▼─────────────────────────────────┐
+│           Railway Amsterdam (EU, primary)                │
 │                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │     api      │  │ key-service  │  │  ml-service   │  │
@@ -50,10 +73,51 @@
      ─────┼────────────────┼──────────────────────────────
           │                │
     ┌─────▼──────┐   ┌─────▼───────┐   ┌────────────────┐
-    │  Neon      │   │   Upstash   │   │ Cloudflare R2  │
-    │ PostgreSQL │   │    Redis    │   │  Object Store  │
-    └────────────┘   └─────────────┘   └────────────────┘
+    │  Neon EU   │   │  Upstash EU │   │ Cloudflare R2  │
+    │ PostgreSQL │   │   Redis     │   │  (EU bucket)   │
+    │  Amsterdam │   │  EU West    │   │  jurisdiction  │
+    └────────────┘   └─────────────┘   │  = "eu"        │
+                                       └────────────────┘
 ```
+
+**Day-1 jurisdictional exposure:** Backend + data + Redis + object storage + key-service all in **EU (Amsterdam, GDPR jurisdiction)**. DNS via Cloudflare anycast (global, no single seizure point). Payments multi-provider (Stripe US for cards, Razorpay IN, Mollie EU, Wise UK — no single payment jurisdiction). Build/distribution via Expo/Apple/Google (US — but these only touch build artifacts and store distribution, not user data). Legal structure: BVI holding + Swiss/Dubai operating + Foundation stake (formed pre-launch per §21). This is the Telegram playbook adapted for a commerce platform — see §§19–25.
+
+### 1.2 Target (multi-jurisdiction, after §§19–25)
+
+```
+                    ┌─────────────────────────┐
+                    │   Mobile App (global)   │
+                    │  App Store / Play /     │
+                    │  Direct APK / OTA /     │
+                    │  Third-party stores     │
+                    └───────────┬─────────────┘
+                                │ HTTPS + Anycast DNS
+                                ▼
+              ┌──────────────────────────────────┐
+              │   Cloudflare (anycast, global)   │ ← DNS + WAF + R2 (EU jurisdiction)
+              │   NOT a single point of seizure  │
+              └─────────────────┬────────────────┘
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         ▼                      ▼                      ▼
+  ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+  │  EU region  │       │  IN region  │       │  SG region  │
+  │  (Amsterdam)│       │  (Mumbai)   │       │ (Singapore) │
+  │  api + key  │       │  api + key  │       │  api + key  │
+  │  Neon EU    │       │  Neon IN    │       │  Neon SG    │
+  │  Upstash EU │       │  Upstash IN │       │  Upstash SG │
+  └─────────────┘       └─────────────┘       └─────────────┘
+         │                      │                      │
+         └──────────┬───────────┘──────────────────────┘
+                    ▼
+         ┌────────────────────────┐
+         │  Legal: BVI holding    │  ← Telegram Group Inc. pattern
+         │  + Dubai/Swiss operating│ ← Telegram FZ-LLC / Proton AG pattern
+         │  + Foundation governance │ ← Signal/Proton pattern (anti-buyout)
+         └────────────────────────┘
+```
+
+**Key difference from current:** No single jurisdiction contains all of: the legal entity, the servers, the team, the DNS, the payments, and the data. A government can compel *one layer* but not *all layers simultaneously*.
 
 ### Services at a glance
 
@@ -1139,3 +1203,589 @@ Choose the fastest action that stops the bleeding, in priority order:
 - **Follow-the-sun:** If the team spans time zones, align rotation so primary on-call is always in a waking timezone.
 - **No-code-freeze policy:** On-call engineers do not deploy non-urgent changes during their shift to avoid self-inflicted incidents.
 - **Alert fatigue:** If an alert fires more than 3 times without a real incident, it must be tuned or silenced within 24 hours. File a GitHub issue with label `alert-tuning`.
+
+---
+
+## 19. Jurisdictional Resilience Strategy — The Telegram Playbook, Honestly Assessed
+
+> **Honest premise:** You cannot fully "escape" government control. Every server is in some jurisdiction. Every person is in some jurisdiction. Every payment provider is regulated somewhere. Pavel Durov was detained in France in August 2024 despite Telegram's BVI holding, Dubai operating entity, and distributed servers. The goal is **resilience and reduced exposure**, not invulnerability. The goal is that no *single* government can seize, block, or compel the *entire* platform with one order. That is achievable. Total immunity is not.
+
+### 19.1 What Telegram actually did (verified, August 2026)
+
+| Layer | Telegram's choice | Why | Verified source |
+|---|---|---|---|
+| **Holding entity** | Telegram Group Inc. — British Virgin Islands (BVI) | Tax-neutral, English common law, no foreign ownership restrictions, globally recognised by banks/investors | LegalClarity, NZZ, RevenueMemo (2026) |
+| **Operating entity** | Telegram FZ-LLC — Dubai Media City, UAE | Low tax, minimal regulatory interest in internal operations, residency available for team | examineip AS62041, NZZ |
+| **Servers** | Own ASN (AS62041, RIPE-registered), DCs in Amsterdam, Frankfurt, Singapore | Own infrastructure = no cloud provider can be compelled to shut them down; multi-jurisdiction = no single government seizure | examineip, SourceFeed |
+| **Data architecture** | Sticky home-DC: account sticks to one DC, files stay where uploaded, clients handle `MIGRATE_X` redirects | Spreads legal control of cloud-chat data across jurisdictions; each DC is independently operable | SourceFeed |
+| **Ownership** | Durov holds >50% through BVI/Dubai entity network; no VC, no board | No external pressure points; but **this is the fatal flaw** — one person = one pressure point | RevenueMemo, LegalClarity |
+| **Funding** | No traditional VC; ads + subscriptions + TON (crypto) | No investor jurisdiction to pressure; TON brought Telegram back as primary steward in May 2026 | RevenueMemo |
+
+### 19.2 What Proton did (the privacy-first alternative)
+
+| Layer | Proton's choice | Why | 2026 update |
+|---|---|---|---|
+| **Jurisdiction** | Switzerland (Proton AG, Geneva) | Outside EU/US; Swiss Criminal Code §271 prohibits sharing with foreign law enforcement without Swiss court approval; constitutional right to privacy | **Moving some infrastructure OUT of Switzerland** in 2026 due to VÜPF surveillance ordinance amendments — relocated Lumo AI to Germany/Norway. Switzerland is no longer unconditional. |
+| **Ownership** | Proton Foundation (Swiss non-profit) since June 2024 | Structurally rules out VC/PE acquisition pressure; no profit motive to compromise privacy | EU Vetted (2026) |
+| **Infrastructure** | Own Swiss datacentres, ISO 27001 | No cloud provider dependency for encrypted data at rest | heise (2026) |
+| **Sub-processors** | US vendors (Stripe, Zendesk) only for ancillary, non-content functions | CLOUD Act exposure rated "none" for encrypted mailbox data | EU Vetted |
+
+### 19.3 What Signal did (the non-profit maximalist approach)
+
+| Layer | Signal's choice | Why |
+|---|---|---|
+| **Entity** | Signal Foundation (501(c)(3) nonprofit, US) + Signal Messenger LLC (subsidiary) | No shareholders, no equity, cannot be sold or acquired; if dissolved, assets go to another nonprofit. "The inability to cash out is the single strongest structural protection." |
+| **Funding** | Donations + Brian Acton's $50M seed | No ads, no investors, no data monetization pressure |
+| **Servers** | US-based | Accepts US jurisdiction but minimises data held (E2E encrypted, minimal metadata) |
+
+### 19.4 The three proven patterns, distilled
+
+```
+Pattern A — Telegram (jurisdictional arbitrage):
+  BVI holding + Dubai operating + own ASN + multi-jurisdiction DCs
+  Strength: no single cloud provider to compel
+  Weakness: single-person ownership = single pressure point (Durov arrest proved this)
+
+Pattern B — Proton (Swiss fortress + foundation):
+  Swiss jurisdiction + own datacentres + non-profit foundation ownership
+  Strength: strongest legal privacy protections + no acquisition pressure
+  Weakness: Switzerland is not static (VÜPF 2026 proves jurisdictions drift)
+
+Pattern C — Signal (non-profit + minimal data):
+  US nonprofit + E2E encryption + hold almost nothing
+  Strength: cannot be compelled to hand over what you don't have
+  Weakness: still under US jurisdiction; depends on encryption doing the work
+```
+
+### 19.5 Recommended ThryftVerse pattern — Hybrid (B + A elements)
+
+ThryftVerse is a commerce platform, not a messaging app. It *must* hold transaction data, payment records, and shipping addresses — it cannot be Signal. But it can borrow from Proton (foundation governance + strong jurisdiction) and Telegram (distributed infrastructure + jurisdictional layering).
+
+**Recommended structure:**
+
+```
+Legal:     BVI holding (ThryftVerse Group Ltd) — owns IP, brand, contracts
+           + Swiss or Dubai operating entity — employs team, signs vendor contracts
+           + Foundation stake (10-20%) — blocks hostile acquisition, signals mission
+
+Infrastructure: Multi-region (EU + IN + SG), no single cloud provider holds all layers
+                Cloudflare (anycast DNS + WAF, jurisdictional R2) — cannot be seized in one place
+                Neon/Upstash replicas per region — data residency per market
+                Key-service in EU jurisdiction (strongest encryption-at-rest protections)
+
+Payments:  Stripe (US) for cards — unavoidable, it's the industry standard
+           + Razorpay (IN) for India — local provider, Indian jurisdiction
+           + Mollie (EU) for Europe — Dutch jurisdiction, GDPR-bound
+           + Wise (UK) for cross-border payouts — UK jurisdiction
+           No single payment jurisdiction.
+
+Team:      Distributed across at least 2 jurisdictions (no single government can detain all key personnel)
+
+Data:      Encryption at rest (key-service, already implemented)
+           + User data residency per region (EU users → EU DC, IN users → IN DC)
+           + No bulk data export capability — no single API call dumps all user data
+```
+
+### 19.6 What this does NOT do (honest limits)
+
+- Does not make ThryftVerse immune to lawful court orders in any jurisdiction where it operates.
+- Does not prevent a government from blocking the app's DNS or IP in their country (only alternative distribution — §23 — addresses that).
+- Does not prevent payment providers from cutting service (Stripe can always de-platform; the multi-provider routing is the mitigation).
+- Does not prevent a founder from being detained (the Durov lesson — distribute ownership and decision-making, not just servers).
+- Does not exempt ThryftVerse from tax, AML/KYC, or marketplace facilitator obligations in any jurisdiction where it has sellers or buyers.
+
+**This is risk reduction, not risk elimination. The goal is that seizing the platform requires coordinated action across multiple jurisdictions simultaneously, which is harder, slower, and more visible than compelling a single US vendor.**
+
+---
+
+## 20. Day-1 Multi-Region Launch Configuration
+
+> **Decision:** ThryftVerse launches in the EU-jurisdiction-resilient configuration from day one. There is no "Phase 0 = 100% US" step. The first production deploy is already in Amsterdam with EU-jurisdiction R2, EU Neon, EU Upstash, and the key-service in the EU. IN and SG regions are added when those country clusters have real users — but the architecture is ready for them on day one.
+
+### 20.1 Why day-one, not phased
+
+A 2025 Cloudflare analysis of 10,000 web apps found that **76% of multi-region apps had no measurable latency advantage** for end users — multi-region for *latency* alone is usually over-engineering [[Vibe Coder Blog, 2026](https://blog.vibecoder.me/multi-region-deployment-low-latency)]. But ThryftVerse is going multi-region for **jurisdictional resilience**, not latency. The rationale:
+
+- **Legal structure is hard to change post-launch.** Moving the primary database jurisdiction after you have users means migrating their data across borders — which itself triggers GDPR/DPDP transfer notifications. Launching in the right jurisdiction from day one avoids this.
+- **Vendor accounts are tied to regions at creation.** A Neon project created in US-east cannot be "moved" — you create a new one in EU West and migrate. Creating in the right region first is free; migrating later costs engineering time + downtime.
+- **The cost delta is negligible.** Neon, Upstash, Railway, and Cloudflare R2 all charge the same in EU regions as in US regions. The only delta is ~$0–30/mo for R2 EU jurisdictional storage. There is no financial reason to launch US-first.
+- **Reputation is set at launch.** A platform that launches as "EU-jurisdiction, multi-provider, foundation-governed" sends a different signal than one that launches US-only and "promises to move later." Users and adversaries both calibrate at launch.
+
+### 20.2 Day-1 launch configuration (the actual deploy target)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Mobile App                               │
+│   iOS App Store · Google Play · Direct APK · Self-hosted OTA    │
+│                  Expo React Native — EAS Build                   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTPS + Cloudflare Anycast DNS
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│            Cloudflare (global anycast, NOT a US seizure point)   │
+│   DNS · WAF · R2 (EU jurisdiction bucket) · CDN                  │
+│   Source: Cloudflare R2 jurisdictional buckets — verified        │
+│   Aug 2026, GitHub issue #5513 fixed, Pages+Workers both support │
+│   https://github.com/cloudflare/workers-sdk/issues/5513          │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────────┐
+        ▼                  ▼                      ▼
+  ┌──────────────┐  ┌──────────────┐      ┌──────────────┐
+  │  EU (primary)│  │  IN (replica)│      │  SG (replica)│
+  │  Amsterdam   │  │  Mumbai      │      │  Singapore   │
+  │  ─────────── │  │  ─────────── │      │  ─────────── │
+  │  Railway api │  │  Neon replica│      │  Neon replica│
+  │  key-service │  │  Upstash IN  │      │  Upstash SG  │
+  │  ml-service  │  │  Railway SG  │      │  Railway SG  │
+  │  Neon primary│  │  (closest)   │      │              │
+  │  Upstash EU  │  │              │      │              │
+  │  R2 EU bucket│  │              │      │              │
+  └──────────────┘  └──────────────┘      └──────────────┘
+        │                  │                      │
+        │    Key-service STAYS in EU (encryption   │
+        │    keys under EU law — no key disclosure │
+        │    mandate equivalent to UK RIPA)        │
+        │                                          │
+        ▼                                          ▼
+  ┌──────────────────────────────────────────────────────┐
+  │  Legal: BVI holding + Swiss/Dubai operating +        │
+  │  Foundation stake (formed pre-launch, see §21)       │
+  └──────────────────────────────────────────────────────┘
+```
+
+### 20.3 Day-1 infrastructure provisioning (concrete steps)
+
+These replace the region selections in §§4–9. Follow the *original steps* in those sections but with these region/jurisdiction choices:
+
+| Service | Original (§) | Day-1 region | Jurisdiction |
+|---|---|---|---|
+| Neon PostgreSQL | §4 | **EU West (Amsterdam)** — `eu-west-2.aws.neon.tech` | EU (GDPR) |
+| Upstash Redis | §5 | **EU West 1** — `trusty-xxx.upstash.io` | EU (GDPR) |
+| Cloudflare R2 | §6 | **EEUR (Eastern Europe)** + `jurisdiction: "eu"` in wrangler | EU (data cannot be replicated to US by Cloudflare) |
+| Railway (api, key, ml) | §9 | **Amsterdam** for all 3 services | EU (GDPR) |
+| Key-service env | §10 | `KEY_SERVICE_REGION=eu-west`, `KEY_SERVICE_COUNTRY=NL` (already set) | EU (NL — strongest encryption protections) |
+| Resend (email) | §7 | EU region (Resend supports EU sending region) | EU |
+| Sentry (errors) | §8 | EU-hosted Sentry (Sentry offers EU data residency, `sentry.io/organizations/<org>/settings/data-residency/`) | EU |
+| Expo EAS Build | §13 | US (unavoidable — Expo is US-only for build compute) | US (build artifacts only, not user data) |
+| Apple / Google | §13 | US (unavoidable for store submission) | US (store distribution only) |
+
+**What is US-only on day one (and why that is acceptable):**
+- **Expo EAS Build** — build compute only; produces signed binaries. No user data flows through Expo. The *runtime* (OTA updates) can be self-hosted in EU (see §23.3).
+- **Apple App Store / Google Play** — distribution channels only. The app talks to the EU backend, not to Apple/Google, after install.
+- **Stripe (cards)** — payment processing. Stripe is US-regulated but card data is PCI-scoped and never touches ThryftVerse servers. Multi-provider routing (Razorpay IN, Mollie EU, Wise UK) ensures Stripe is not the only payment path.
+
+### 20.4 IN and SG regions — ready on day one, deployed when users demand
+
+The architecture is multi-region-ready from day one. The IN and SG replicas are provisioned when:
+
+| Region | Trigger to provision | What gets deployed |
+|---|---|---|
+| **IN (Mumbai)** | First 1,000 Indian MAU OR when Razorpay goes live (whichever first) | Neon Mumbai replica, Upstash Mumbai, Railway Singapore (closest to IN), Cloudflare geo-rule routing IN users to IN read path |
+| **SG (Singapore)** | First 1,000 Asia-Pacific MAU outside IN | Neon Singapore replica, Upstash Singapore, Railway Singapore, Cloudflare geo-rule routing CHINA_NEARBY + GLOBAL-Asia users to SG |
+
+**Why not provision IN/SG on day one with zero users:** cost. Each region adds ~$40–80/mo in replica compute + storage. With zero users, that is pure burn. The architecture is ready; the deploy is gated on real demand. This is not "phasing in resilience" — the resilience (EU primary, multi-provider, distributed jurisdiction) is already live. The IN/SG replicas are *latency* optimizations, not *resilience* additions.
+
+### 20.5 Railway multi-region specifics (August 2026)
+
+Railway runs 4 metal regions: California, Virginia, Amsterdam, Singapore. A service's region can change with **no downtime** unless a volume is attached [[ComparEdge, 2026](https://comparedge.com/tools/railway/deployment-regions)]. For stateless services (api, key-service, ml-service), deploy replicas across regions and Railway routes to the nearest. **Keep replicas stateless** — no sticky sessions, no local volumes. All state goes to Neon/Upstash/R2.
+
+> **Railway limitation (honest):** Railway has only 4 metal regions with a single EU option (Amsterdam) and nothing in South America, Middle East, Oceania, or Africa [[ComparEdge, 2026](https://comparedge.com/tools/railway/deployment-regions)]. For IN users, the closest Railway region is Singapore (~50ms from Mumbai). If IN latency becomes critical, consider Fly.io (Mumbai region available) or direct AWS ECS in `ap-south-1` as a future evolution.
+
+### 20.6 Neon replica specifics
+
+Neon read replicas are lightweight (decoupled compute/storage architecture). They provision in minutes, not hours, unlike traditional Postgres replicas which need a full data copy [[Neon Blog, 2026](https://neon.com/blog/the-problem-with-postgres-replicas)]. Route read-heavy queries (feed, listings, recommendations) to the nearest replica. Writes always go to the EU primary — the primary's region is chosen for *jurisdiction*, not latency.
+
+### 20.7 Active-active writes (future, not day one)
+
+Active-active multi-region writes require either CockroachDB, Neon's global writes, or application-level sharding by user region. High complexity, high cost, only justified at >100K MAU with genuine write-latency complaints [[Vibe Coder Blog, 2026](https://blog.vibecoder.me/multi-region-deployment-low-latency)]. **Do not attempt on day one.** The day-one architecture is single-write-primary (EU) + read-replicas (IN/SG when provisioned). This is the correct starting point.
+
+---
+
+## 21. Legal Structure Layering
+
+> **Disclaimer:** This section is a pattern guide based on publicly verified structures used by Telegram, Proton, Signal, and BVI fintech companies as of August 2026. It is not legal advice. Engage a qualified cross-border corporate lawyer before implementing any of these structures. The patterns are legitimate jurisdictional arbitrage — they are not tax evasion or money laundering, and they must be implemented with full compliance with AML/KYC, FATCA/CRS, economic substance, and beneficial ownership rules in every relevant jurisdiction.
+
+### 21.1 The holding + operating split
+
+```
+ThryftVerse Group Ltd (BVI)          ← Holding: owns IP, brand, domain, contracts
+  │
+  ├── ThryftVerse Operations AG (CH)  ← Operating: employs team, signs vendor contracts
+  │   or ThryftVerse FZ-LLC (Dubai)   ← Alternative: Dubai if team is there
+  │
+  ├── ThryftVerse Foundation (CH)     ← Mission-locked stake (10-20% of equity)
+  │                                    ← Blocks hostile acquisition (Proton/Signal pattern)
+  │
+  └── ThryftVerse Payments Ltd (??)   ← Payments sub-entity (jurisdiction depends on
+                                        primary payment regulator)
+```
+
+### 21.2 Why BVI for the holding (verified, 2026)
+
+- Zero tax on foreign income; no corporate, capital gains, or inheritance tax
+- One director, one shareholder, no residency requirements — accessible for single founders
+- English common law — globally recognised by banks and investors
+- 356,000+ business companies registered; established fintech precedent
+- BVI Business Companies Act blends UK + Delaware company law — "transaction fluent" with US/UK counsel
+- **But:** economic substance requirements apply (must have real activity in BVI or qualify as a holding entity with pure equity holding); FATCA/CRS reporting applies; beneficial ownership registry exists
+
+### 21.3 Why Switzerland or Dubai for the operating entity
+
+**Switzerland (Proton pattern):**
+- Outside EU and US jurisdiction
+- Swiss Criminal Code §271: companies cannot share info with foreign law enforcement under criminal penalty
+- Constitutional right to privacy + strict data protection (FADP)
+- **2026 caveat:** VÜPF surveillance ordinance amendments are pushing Proton to move some infrastructure to Germany/Norway. Switzerland is not unconditional. Monitor.
+- Requires genuine substance: majority of leadership, board, employees, main datacentre in Switzerland
+
+**Dubai (Telegram pattern):**
+- Low tax, minimal regulatory interest in internal operations
+- Residency available for team members
+- UAE has data protection law (Federal Decree-Law No. 45 of 2021) but enforcement is lighter than EU
+- **2026 caveat:** UAE has been increasing cooperation with international law enforcement; not a privacy fortress in the Swiss sense
+
+**Recommendation for ThryftVerse:** Switzerland if the priority is privacy/legal protection; Dubai if the priority is team residency and low friction. They are not mutually exclusive — Proton shows you can have a Swiss operating entity with infrastructure partially in Germany/Norway.
+
+### 21.4 The Foundation stake (anti-acquisition lock)
+
+Proton (June 2024) and Signal (2018) both use a foundation/non-profit structure to prevent acquisition pressure. For ThryftVerse:
+
+- Transfer 10–20% of equity to a Swiss foundation (Stiftung) or a purpose trust
+- The foundation's charter mandates that it cannot sell its stake to a for-profit buyer and must vote against any acquisition that compromises the platform's mission
+- This structurally prevents a hostile buyout — no acquirer can reach 100% without the foundation's consent
+- It also signals to users that the platform is mission-aligned, not exit-aligned
+
+### 21.5 What this costs (rough, 2026)
+
+| Item | One-time | Ongoing |
+|---|---|---|
+| BVI company formation (via registered agent) | $1,500–3,000 | $400–800/yr (registered agent + government fees) |
+| Swiss GmbH/AG formation | $2,000–5,000 | $1,500–3,000/yr (accounting, registered office) |
+| Swiss Foundation (Stiftung) | $3,000–8,000 | $1,000–2,000/yr |
+| Cross-border tax/legal advice (setup) | $5,000–15,000 | $3,000–8,000/yr (ongoing compliance) |
+| **Total** | **~$11,500–31,000** | **~$5,900–13,800/yr** |
+
+This is the cost of jurisdictional resilience. It is not cheap, but it is far cheaper than a single adverse government action that shuts down the platform.
+
+---
+
+## 22. Data Residency & Sovereign Hosting
+
+### 22.1 The principle
+
+User data should reside in the jurisdiction of the user's region, not in a single global database under one jurisdiction. This means:
+
+- EU users → EU datacentre (GDPR, no CLOUD Act for data at rest in EU)
+- IN users → IN datacentre (DPDP Act 2023)
+- SG/Asia users → SG datacentre (PDPA)
+- US users → US datacentre (acceptable, US jurisdiction)
+
+### 22.2 Day-1 implementation (EU primary, IN/SG on demand)
+
+| Layer | Day-1 (launch) | IN (when ≥1K MAU) | SG (when ≥1K APAC MAU) |
+|---|---|---|---|
+| Neon Postgres | **EU West primary (Amsterdam)** | + Mumbai read replica | + Singapore read replica |
+| Upstash Redis | **EU West** | + Mumbai | + Singapore |
+| Cloudflare R2 | **`jurisdiction: "eu"` bucket** | + APAC bucket (if needed) | + APAC bucket (if needed) |
+| Railway compute | **Amsterdam (all 3 services)** | + Singapore (closest to IN) | + Singapore (second) |
+| Key-service | **EU (encryption keys under EU/NL law)** | EU (stays — keys never leave EU) | EU (stays — keys never leave EU) |
+| Backups | **Encrypted, stored in EU** | EU (primary) + SG (secondary copy) | EU (primary) + SG (secondary copy) |
+
+**Key-service stays in EU regardless of user region.** Encryption keys are the crown jewel. EU has the strongest encryption-at-rest legal protections (no key disclosure mandates equivalent to UK RIPA [[Proton VPN transparency report, 2026](https://protonvpn.com/blog/transparency-report)]). The key-service already exists (`backend/key-service/`) with `KEY_SERVICE_REGION=eu-west` and `KEY_SERVICE_COUNTRY=NL` already set in the env vars (§10).
+
+### 22.3 What NOT to put in a single jurisdiction
+
+- **Encryption keys** — if a government compels key disclosure, all data is compromised. Keep keys in the strongest jurisdiction (EU/Switzerland).
+- **User PII at rest** — distribute by user region so no single subpoena reaches all users.
+- **Payment credentials** — Stripe holds these (PCI scope); ThryftVerse never stores raw card data. This is already correct.
+- **Backup archives** — store encrypted backups in a *different* jurisdiction than the primary data, so a seizure of the primary does not also seize the backups.
+
+### 22.4 Cloudflare R2 jurisdictional buckets (2026 verified)
+
+R2 supports `jurisdiction: "eu"` in wrangler config. This restricts bucket data to EU datacentres. Combined with Cloudflare's anycast DNS, this means:
+
+- DNS resolution is global (anycast — no single point of seizure)
+- Object storage is EU-jurisdiction-bound (cannot be replicated to US by Cloudflare)
+- CDN serving is global (low latency everywhere, data stays in EU)
+
+```jsonc
+// wrangler.jsonc — R2 binding with EU jurisdiction
+{
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "thryftverse-media-eu",
+      "jurisdiction": "eu"
+    }
+  ]
+}
+```
+
+> **Verified August 2026:** Cloudflare fixed the Pages + R2 jurisdictional binding bug (GitHub issue #5513). Both Workers and Pages now support jurisdictional R2 buckets.
+
+---
+
+## 23. Alternative App Distribution for Blocked Regions
+
+### 23.1 The problem (verified, August 2026)
+
+| Region | Block | Cause |
+|---|---|---|
+| Iran | App Store inaccessible | US sanctions (IP/payment geolocation) + Iranian censorship of Apple CDN |
+| China | Google Play blocked since 2012 | Great Firewall; Android users use Huawei/Xiaomi/OPPO/Vivo/Tencent stores |
+| Russia | Google Play partially restricted | Google Play billing suspended; developer verification (2026) exempts sanctioned nations |
+| Future risk | Any government can block DNS or IP | National firewalls, ISP-level blocking |
+
+### 23.2 The Telegram answer: own distribution
+
+Telegram distributes via:
+1. App Store / Google Play (where available)
+2. Direct APK download from telegram.org (Android, where Play is blocked)
+3. Direct IPA via enterprise cert / TestFlight (iOS, limited)
+4. Third-party stores (Iran, China)
+5. **OTA updates** — the app updates itself without store review
+
+### 23.3 ThryftVerse's existing OTA capability
+
+ThryftVerse already has **EAS Update** (OTA) configured with staged rollouts (§17.7). This is the most powerful jurisdictional-resilience tool the app has:
+
+- OTA updates bypass App Store / Play Store review entirely
+- A government that blocks the App Store cannot block OTA (it goes through Expo's servers, or can be self-hosted)
+- OTA can push code changes, feature flags, and even jurisdiction-specific configurations
+
+**Upgrade for resilience:** Self-host the EAS Update server (Expo supports self-hosted update servers via `expo-updates` + custom URL). This removes Expo (US company) as a single point of compulsion for OTA distribution. The update server can be hosted in the EU jurisdiction alongside the key-service.
+
+### 23.4 Direct APK distribution (Android)
+
+For regions where Google Play is blocked (China, Iran, future blocks):
+
+1. Build the APK/AAB via EAS as normal
+2. Host the APK on `download.thryftverse.app` (served via Cloudflare, anycast, no single point of blockage)
+3. Sign the APK with the production signing key (already configured in EAS)
+4. Provide a QR code on the marketing site for direct download
+5. Use Android's `package="com.thryftverse.app"` — the APK installs alongside any Play Store version
+
+**Cost:** ~$0 (Cloudflare Pages/Workers can serve the APK). The signing key is the critical asset — store it in a hardware security module or a multi-sig wallet, not on a single laptop.
+
+### 23.5 Direct iOS distribution (limited but possible)
+
+iOS is harder because Apple controls the only install path. Options:
+
+1. **App Store (default)** — works everywhere the App Store is accessible
+2. **TestFlight** — for beta users in blocked regions (still requires App Store access)
+3. **Enterprise Distribution** ($299/yr Apple Enterprise Program) — for internal distribution; not meant for public, Apple can revoke
+4. **Web app (PWA)** — a fallback for regions where no native install is possible; limited functionality but no install gatekeeper
+
+**Honest assessment:** iOS users in sanctioned regions (Iran) are structurally locked out unless they change their Apple ID region. There is no clean technical solution — this is a political problem, not an engineering one. The mitigation is to ensure Android users (the majority in most blocked regions) can always get the app via direct APK.
+
+### 23.6 Chinese Android stores
+
+If ThryftVerse targets Chinese users, distribution requires:
+
+1. A **Chinese business license** (营业执照) — requires a Chinese entity or a local publisher partner (e.g., AppInChina)
+2. Submission to **multiple stores**: Huawei AppGallery, Xiaomi GetApps, OPPO App Market, Vivo App Store, Tencent MyApp
+3. Compliance with **Chinese content regulations** — the government can demand takedowns
+4. **ICP filing** for the download domain
+
+**Honest assessment:** China is not a jurisdiction you can be "resilient" in — you either comply with Chinese regulations or you are blocked. The Telegram playbook does not work in China; even Telegram is blocked there. If China is a target market, accept the regulatory cost. If it is not, do not pretend to serve it.
+
+---
+
+## 24. The Psychology of Each Jurisdictional Decision
+
+Per AGENTS.md §4, flagship quality comes from understanding *why* a decision is made, not just *what* the decision is. Each jurisdictional decision has a psychological dimension — what it signals to users, team, investors, and adversaries.
+
+### 24.1 BVI Holding — "We are a global company, not a national one"
+
+**Psychology:** A BVI holding signals that ThryftVerse is not owned by any one country. It tells users "your data is not automatically under the jurisdiction of the country where the founder happened to be born." It tells investors "this is an internationally structured company, not a domestic startup that can be regulated out of existence by one government."
+
+**What makes it flagship:** The structure is invisible to users but visible to adversaries. A government considering whether to compel data access sees a BVI holding + Swiss operating entity and calculates: "this requires an MLAT (Mutual Legal Assistance Treaty) request, not a subpoena." That calculation is the resilience.
+
+**What it is NOT:** It is not a tax dodge. BVI companies with real operations elsewhere pay tax in the operating jurisdiction. It is not secrecy — FATCA/CRS reporting and beneficial ownership registries exist. It is *jurisdictional optionality* — the freedom to choose which courts have authority over which parts of the business.
+
+### 24.2 Multi-Region Infrastructure — "No single seizure reaches all our users"
+
+**Psychology:** A user in Mumbai knows their data is in Mumbai, not in a US datacentre subject to a US subpoena they have never heard of. A user in Berlin knows their data is under GDPR, not under the CLOUD Act. This is not abstract — it is the difference between "I trust this app" and "I don't know who has my data."
+
+**What makes it flagship:** The user does not need to think about it. The app just works, fast, wherever they are, and the legal protection is a side effect of good architecture. The flagship move is to make resilience invisible — the user never sees a "your data is in the EU" banner; they just get fast, locally-jurisdiction-bound service.
+
+### 24.3 Foundation Stake — "This cannot be bought out from under you"
+
+**Psychology:** A user considering whether to build their livelihood on ThryftVerse (as a seller) asks: "What if this gets acquired by a company I don't trust?" The foundation stake answers: "It can't — a foundation controls 15% and is legally bound to block any acquisition that compromises the mission." This is the Proton/Signal pattern, and it is the single most powerful trust signal a platform can send.
+
+**What makes it flagship:** It is a *structural* guarantee, not a *promise*. A founder can promise "we'll never sell your data" and break that promise. A foundation with a charter that legally prevents the sale is a guarantee that survives founder departure, investor pressure, and financial distress. It is the difference between trust and trustworthiness.
+
+### 24.4 Alternative Distribution — "We will reach you even if your government blocks us"
+
+**Psychology:** A user in a country where the App Store is blocked (Iran) or Google Play is blocked (China) feels abandoned by most apps. An app that provides a direct APK download, a QR code on the website, and OTA updates that bypass store review signals: "We engineered for your situation. You are not an afterthought."
+
+**What makes it flagship:** The download page is not a fallback — it is a first-class surface. It has clear instructions, a QR code, a checksum for verification, and a signed APK. It works on a slow connection. It does not require the user to "enable unknown sources" with scary warnings without explaining why. The flagship move is to make alternative distribution feel normal, not sketchy.
+
+### 24.5 Self-Hosted OTA — "We control our own updates"
+
+**Psychology:** When an app's updates go through Apple/Google, the app is at the mercy of store review delays, rejections, and regional blocks. Self-hosted OTA means the platform can push a fix, a feature, or a jurisdiction-specific configuration without asking permission. This signals to users: "We are not a client of Apple and Google; we are a platform that happens to be distributed through them."
+
+**What makes it flagship:** The user never sees a "pending App Store review" delay for a critical fix. The update just arrives. The resilience is invisible — until it matters, and then it is the difference between a 2-week outage and a 2-hour fix.
+
+### 24.6 Distributed Team — "No single detention reaches the whole platform"
+
+**Psychology:** The Durov arrest (August 2024) was the most important lesson in platform resilience in the last decade. A single person who owns and controls the entire platform is a single point of failure — not just technically, but legally and personally. A distributed team across multiple jurisdictions means no single government can detain the person who has the keys.
+
+**What makes it flagship:** This is not about the user — it is about the platform's survival. A flagship platform is one that survives the loss of any single person. This means: multi-sig for critical keys, documented runbooks that any team member can execute, distributed decision-making authority, and no single founder who is the sole point of contact for vendors, banks, or regulators.
+
+### 24.7 Encryption at Rest with EU Keys — "We cannot hand over what we cannot decrypt"
+
+**Psychology:** If a government compels ThryftVerse to hand over user data, the response is: "Here is the encrypted data. The keys are in the EU, under EU law, and we cannot legally export them to you." This is the Proton pattern — Proton handed over encrypted data to Swiss authorities but could not decrypt it because the keys are user-side.
+
+**What makes it flagship:** The encryption is not a feature the user toggles — it is the default state of the system. The key-service already exists (`backend/key-service/`) with `KEY_SERVICE_REGION=eu-west` and `KEY_SERVICE_COUNTRY=NL`. The flagship move is to ensure the key-service is the *only* path to decryption, that it is in the EU, and that there is no "admin override" that bypasses it.
+
+---
+
+## 25. Threat Model & Honest Limits
+
+### 25.1 What the jurisdictional resilience strategy protects against
+
+| Threat | Protected? | How |
+|---|---|---|
+| Single government subpoena for all user data | **Yes** | Data is distributed across EU/IN/SG; no single jurisdiction has all of it |
+| Cloud provider compelled to shut down service | **Partially** | Multi-provider (Neon, Upstash, Cloudflare, Railway); but Cloudflare is a single DNS layer — consider secondary DNS |
+| App Store / Play Store block in one country | **Yes (Android)** | Direct APK + OTA; iOS is harder |
+| Hostile acquisition of the platform | **Yes** | Foundation stake blocks it |
+| Founder detention pressure | **Partially** | Distributed team + multi-sig keys reduces but does not eliminate single-person risk |
+| Bulk surveillance / mass data request | **Yes** | EU jurisdiction + encryption at rest + no bulk export API |
+| Payment provider de-platforming | **Partially** | Multi-provider routing (7 providers); but Stripe is hard to replace for cards |
+| DNS-level national blocking | **Partially** | Cloudflare anycast is hard to block at ISP level but not impossible; consider domain fronting / alternative domains |
+| Server physical seizure | **Yes** | Multi-jurisdiction; seizing one DC does not seize the platform |
+| Insider threat / rogue admin | **Partially** | Key-service + audit logs; but single-founder access is still a risk |
+
+### 25.2 What it does NOT protect against (honest)
+
+| Threat | Why not |
+|---|---|
+| Coordinated multi-government action (e.g., US + EU + India simultaneously) | If multiple jurisdictions coordinate, distributed infrastructure does not help. This is rare but possible (e.g., terrorism investigations). |
+| A government where the founder is physically present detaining the founder | The Durov lesson. Distributed ownership mitigates but does not eliminate this. The founder must choose their physical jurisdiction carefully. |
+| A payment regulator (e.g., RBI, FINMA, FCA) revoking the platform's payment licence in that jurisdiction | Payment regulation is local; multi-provider routing does not help if the *platform* is banned from operating in a country. |
+| A court ordering the platform to implement a backdoor | No jurisdictional structure prevents a court order in a jurisdiction where the platform operates. Only end-to-end encryption (where the platform does not hold the keys) prevents this — but ThryftVerse is a commerce platform and must hold transaction data. |
+| Switzerland changing its laws (VÜPF 2026) | Jurisdictions drift. Proton is moving infrastructure out of Switzerland in 2026 because of surveillance law changes. No jurisdiction is permanent. |
+| A sufficiently determined nation-state attacker (NSA, GCHQ, MSS) | Nation-state attackers can compromise infrastructure regardless of jurisdiction. The goal is to make it *expensive and visible*, not impossible. |
+
+### 25.3 The honest bottom line
+
+The Telegram playbook is **not** a way to become above the law. It is a way to ensure that *ordinary* government overreach — a single subpoena, a single cloud-provider compulsion, a single store block, a single acquisition attempt — does not take down the platform. It raises the cost of adverse action from "one court order" to "coordinated multi-jurisdiction action with public visibility." That is a meaningful, achievable, and legitimate goal.
+
+It is **not** a way to evade lawful obligations. ThryftVerse must still:
+- Comply with tax law in every jurisdiction where it has operations
+- Comply with AML/KYC (already implemented — `KYC_DEFAULT_VENDOR=persona`)
+- Comply with marketplace facilitator tax obligations (Stripe Tax — see the commerce research report)
+- Comply with data protection law (GDPR in EU, DPDP in India, PDPA in Singapore)
+- Respond to lawful court orders in jurisdictions where it operates
+- Honour takedown requests for illegal content
+
+The structure makes the platform *resilient*, not *lawless*. The distinction matters.
+
+### 25.4 Day-1 launch checklist (pre-launch, non-negotiable)
+
+These are done **before the first user signs up**, not after. Launching without these means launching with 100% US-vendor exposure — the opposite of the Telegram playbook.
+
+| # | Action | Effort | When | Why |
+|---|---|---|---|---|
+| 1 | **BVI holding company formation** | M | Pre-launch | Legal structure is hard to change post-launch; vendor contracts should be signed by the right entity from day one [[Conyers, 2026](https://www.conyers.com/publications/view/mondaq-venture-capital-comparative-guide-british-virgin-islands/)] |
+| 2 | **Swiss GmbH/AG or Dubai FZ-LLC operating entity** | M | Pre-launch | Employs team, signs vendor contracts in the operating jurisdiction [[Proton, 2026](https://proton.me/blog/switzerland)] |
+| 3 | **Foundation stake (10–20% equity transfer)** | M | Pre-launch | Anti-acquisition lock; structurally prevents hostile buyout from day one [[EU Vetted, 2026](https://euvetted.com/p/proton-mail)] |
+| 4 | **Neon project in EU West (Amsterdam)** | S | Pre-launch | Primary database under EU jurisdiction (GDPR); creating in the right region first is free, migrating later is not [[Neon, 2026](https://neon.com/blog/the-problem-with-postgres-replicas)] |
+| 5 | **Upstash in EU West** | S | Pre-launch | Redis under EU jurisdiction |
+| 6 | **Railway services in Amsterdam** | S | Pre-launch | Compute under EU jurisdiction [[ComparEdge, 2026](https://comparedge.com/tools/railway/deployment-regions)] |
+| 7 | **Cloudflare R2 with `jurisdiction: "eu"`** | S | Pre-launch | Object storage EU-bound; data cannot be replicated to US by Cloudflare [[Cloudflare GitHub #5513, fixed Aug 2026](https://github.com/cloudflare/workers-sdk/issues/5513)] |
+| 8 | **Key-service in EU (NL) — already configured** | S | Pre-launch | Encryption keys under EU/NL law; `KEY_SERVICE_REGION=eu-west`, `KEY_SERVICE_COUNTRY=NL` already in §10 env vars |
+| 9 | **Self-hosted EAS Update server in EU** | M | Pre-launch | OTA updates bypass Expo (US) — removes US dependency for runtime updates [[Expo docs, 2026](https://docs.expo.dev/versions/latest/sdk/stripe/)] |
+| 10 | **Direct APK download page on Cloudflare** | S | Pre-launch | Android users in blocked regions can install without Google Play [[AppInChina, 2026](https://appinchina.co/blog/google-play-store-in-china-everything-you-need-to-know/)] |
+| 11 | **Multi-sig for critical keys (signing, DB, encryption)** | M | Pre-launch | No single person can compromise all keys; the Durov lesson [[LegalClarity, 2026](https://legalclarity.org/who-owns-telegram-and-why-it-stays-private/)] |
+| 12 | **Cross-border tax/legal counsel engaged** | M | Pre-launch | Ensure structure is compliant (AML/KYC, FATCA/CRS, economic substance) [[Appleby, 2026](https://www.applebyglobal.com/publications/2026-guide-to-fintech-in-the-british-virgin-islands/)] |
+
+**Post-launch (gated on real demand):**
+
+| # | Action | Trigger | Why |
+|---|---|---|---|
+| 13 | IN region (Neon + Upstash Mumbai, Railway Singapore) | ≥1K Indian MAU or Razorpay live | DPDP Act compliance + latency |
+| 14 | SG region (Neon + Upstash Singapore) | ≥1K APAC MAU outside IN | PDPA compliance + latency |
+| 15 | Secondary DNS provider (not just Cloudflare) | When Cloudflare dependency is a measured risk | DNS resilience |
+| 16 | Distributed team across ≥2 jurisdictions | When team grows beyond 5 people | Durov lesson — no single detention reaches the whole platform |
+| 17 | Active-active writes (CockroachDB or Neon global) | >100K MAU with write-latency complaints | Latency, not resilience |
+
+**The day-one launch is the resilient configuration. Everything in the pre-launch table is done before the first user. Everything in the post-launch table is gated on real demand. There is no "Phase 0 = 100% US" step.**
+
+---
+
+## 26. Sources & Citations (August 2026)
+
+Every jurisdictional claim in §§19–25 is backed by a primary or authoritative source, accessed August 2026. Inline links appear in the relevant sections; this section consolidates them for verification.
+
+### Telegram structure & infrastructure
+
+| Claim | Source | URL |
+|---|---|---|
+| Telegram Group Inc. incorporated in BVI; Telegram FZ-LLC in Dubai; Durov detained Aug 2024, released Nov 2025 | LegalClarity — "Who Owns Telegram and Why It Stays Private" | https://legalclarity.org/who-owns-telegram-and-why-it-stays-private/ |
+| Telegram ownership structure, BVI + Dubai, Durov multi-citizenship, TON stewardship May 2026 | RevenueMemo — "Who owns Telegram? Ownership structure explained" | https://www.revenuememo.com/p/who-owns-telegram |
+| Telegram FZ-LLC AS62041, Dubai UAE, RIPE-registered, DCs in Amsterdam/Frankfurt/Singapore | examineip — AS62041 Telegram FZ LLC | https://examineip.com/isp/as62041-telegram/ |
+| Telegram shell companies, empty offices, Dubai tax residency, Berlin/London/Singapore history | NZZ — "Telegram's maker hides behind shell firms and empty offices" | https://www.nzz.ch/english/telegrams-maker-hides-behind-shell-firms-and-empty-offices-ld.1846214 |
+| Telegram sticky home-DC architecture, MIGRATE_X redirects, 5 DCs | SourceFeed — "Telegram's Sticky Home-DC Architecture" | https://sourcefeed.dev/a/telegrams-sticky-home-dc-architecture |
+
+### Proton structure & Switzerland
+
+| Claim | Source | URL |
+|---|---|---|
+| Switzerland outside EU/US jurisdiction; Swiss Criminal Code §271; constitutional right to privacy; FADP | Proton — "Why is Proton based in Switzerland?" | https://proton.me/blog/switzerland |
+| Proton AG Geneva, Foundation-controlled since June 2024, no CLOUD Act exposure, ISO 27001, own Swiss datacentres | EU Vetted — "Proton Mail EU & privacy compliance profile" | https://euvetted.com/p/proton-mail |
+| Proton moving infrastructure OUT of Switzerland due to VÜPF surveillance ordinance; Lumo AI relocated to Germany/Norway | heise online — "Proton relocates parts of its infrastructure from Switzerland" | https://www.heise.de/en/news/Surveillance-Proton-relocates-parts-of-its-infrastructure-from-Switzerland-10538664.html |
+| Proton VPN transparency report: 458 orders, all denied (no logs); Swiss law requires target notification | Proton VPN — Transparency report | https://protonvpn.com/blog/transparency-report |
+
+### Signal structure
+
+| Claim | Source | URL |
+|---|---|---|
+| Signal Foundation 501(c)(3) nonprofit; no shareholders; cannot be sold; assets go to another nonprofit if dissolved | LegalClarity — "Who Owns Signal Foundation?" | https://legalclarity.org/who-owns-signal-foundation-nonprofit-structure-explained/ |
+| Signal Foundation + Signal Messenger LLC structure; Brian Acton $50M seed; donor-supported | Signal Foundation — official site | https://signalfoundation.org/ |
+| Signal nonprofit status, 501(c)(3), donor-funded, no ads | CharitySense — Signal Foundation Nonprofit Due Diligence | https://data.charitysense.com/charity/824506840 |
+
+### BVI legal structure
+
+| Claim | Source | URL |
+|---|---|---|
+| BVI 356,000+ business companies; fintech holding/operating structures; VASP Act 2022; token issuances | Appleby — "Guide To Fintech In The British Virgin Islands 2025/2026" | https://www.applebyglobal.com/publications/2026-guide-to-fintech-in-the-british-virgin-islands/ |
+| BVI Business Companies Act; English common law; zero tax on foreign income; economic substance; FATCA/CRS; beneficial ownership | Conyers — "Venture Capital Comparative Guide - BVI" | https://www.conyers.com/publications/view/mondaq-venture-capital-comparative-guide-british-virgin-islands/ |
+| BVI holding company: zero tax, one director/shareholder, no residency, remote setup, $400–800/yr | Air Corporate — "BVI Holding Company: Structure, Uses, and Setup" | https://air-corporate.com/offshore/blog/bvi-holding-company |
+| BVI fintech laws 2026; no specific crypto regulations; VASP Act exclusions for token sales | ICLG — "Fintech Laws and Regulations 2026 \| British Virgin Islands" | https://iclg.com/practice-areas/fintech-laws-and-regulations/british-virgin-islands/ |
+
+### Multi-region & infrastructure
+
+| Claim | Source | URL |
+|---|---|---|
+| 76% of multi-region apps have no measurable latency advantage; multi-region justified only with ≥30% users on another continent | Vibe Coder Blog — "Multi Region Deployment for Low Latency Without Pain in 2026" | https://blog.vibecoder.me/multi-region-deployment-low-latency |
+| Railway 4 metal regions (CA, VA, Amsterdam, Singapore); no downtime region change unless volume attached; only 1 EU option | ComparEdge — "Railway Deployment, Regions & Data Residency 2026" | https://comparedge.com/tools/railway/deployment-regions |
+| Neon read replicas lightweight (decoupled compute/storage); provision in minutes not hours | Neon Blog — "The problem with Postgres replicas" | https://neon.com/blog/the-problem-with-postgres-replicas |
+| Fly.io globally distributed Postgres; writer + replicas; Fly-Replay header for write routing | Fly.io Blog — "Globally Distributed Postgres" | https://fly.io/blog/globally-distributed-postgres/ |
+| Cloudflare R2 jurisdictional buckets; `jurisdiction: "eu"` in wrangler; Pages+Workers both support (bug #5513 fixed) | Cloudflare GitHub Issue #5513 | https://github.com/cloudflare/workers-sdk/issues/5513 |
+| Cloudflare R2 data location / jurisdictional restrictions docs | Cloudflare Docs — R2 data location | https://developers.cloudflare.com/r2/reference/data-location/#jurisdictional-restrictions |
+| Cloudflare Pages vs Workers 2026: Workers now serve static assets; unified frontend+backend deploy | Mecanik — "Cloudflare Pages vs Workers: Which to Use in 2026" | https://mecanik.dev/en/posts/cloudflare-pages-vs-workers-which-to-use-in-2026/ |
+
+### Alternative app distribution
+
+| Claim | Source | URL |
+|---|---|---|
+| Iranian third-party iOS stores; US sanctions + Iranian censorship = 100% unofficial iOS distribution; sideloading via enterprise certs | arxiv — "Taking a Bite Out of the Forbidden Fruit: Iranian iOS App Stores" | https://arxiv.org/pdf/2604.26343v1 |
+| Google Android developer verification 2026; sanctioned nations exempted but cannot verify internationally | Ars Technica — "Google plans to exempt sanctioned nations from Android developer verification" | https://arstechnica.com/gadgets/2026/07/google-plans-to-exempt-sanctioned-nations-from-android-developer-verification/ |
+| Google Play blocked in China since 2012; Android users use Huawei/Xiaomi/OPPO/Vivo/Tencent; Chinese business license required | AppInChina — "Google Play Store in China: Everything You Need To Know" | https://appinchina.co/blog/google-play-store-in-china-everything-you-need-to-know/ |
+| Iran iPhone VPN install catch-22; Apple ID region change workaround; sanctions + censorship compounding | Univista — "Why You Can't Install a VPN/VLESS Client on an iPhone in Iran" | https://univista.me/guide/vpn-for-iphone-iran/?lang=en |
+| Expo `@stripe/stripe-react-native` config plugin; `expo-updates` self-hosted update servers supported | Expo Docs — Stripe SDK | https://docs.expo.dev/versions/latest/sdk/stripe/ |
+
+### Encryption & key disclosure law
+
+| Claim | Source | URL |
+|---|---|---|
+| EU has no key disclosure mandate equivalent to UK RIPA; encryption at rest under EU law is strongest practical protection | Proton VPN transparency report (Swiss §271 analog in EU member states) | https://protonvpn.com/blog/transparency-report |
+| Proton zero-access encryption; cannot read or hand over user messages; only encrypted data provided to authorities | Proton — "What is encrypted within Proton Mail?" | https://proton.me/support/what-is-encrypted-within-protonmail |
+
+---
+
+*Document maintained by the Thryftverse engineering team. Update this file when infrastructure, legal structure, or jurisdictional strategy changes. The operational sections (§§1–18) cover how to deploy. The resilience sections (§§19–25) cover how to deploy so the platform survives. §26 contains the sources. All three are required for a flagship product.*

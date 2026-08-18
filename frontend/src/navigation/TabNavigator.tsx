@@ -1,6 +1,7 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
@@ -14,6 +15,7 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
+import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,9 +29,13 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
+// Tab bar geometry — these are deliberate layout values, not token candidates.
+// They are tuned for the Liquid Glass tab bar with 24pt icons.
 const NAV_HEIGHT = 60;
+// Create button: 52pt hit area (exceeds 44pt minimum), 40pt visible control
 const CREATE_HIT_SIZE = 52;
 const CREATE_CONTROL_SIZE = 40;
+// Profile avatar: 27pt — fits within 28pt tabIconWrap with 0.5pt inset
 const AVATAR_SIZE = 27;
 
 interface TabIconProps {
@@ -50,7 +56,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Ionicons name={iconName} size={26} color={color} />
+      <Ionicons name={iconName} size={24} color={color} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -115,8 +121,7 @@ const AnimatedPressableRe = Reanimated.createAnimatedComponent(Pressable);
 
 interface CreateTabButtonProps {
   onPress: () => void;
-  onLongPress?: (() => void) | null;
-  accessibilityState?: { disabled?: boolean; selected?: boolean; checked?: boolean; busy?: boolean; expanded?: boolean };
+  onLongPress?: ((event: import('react-native').GestureResponderEvent) => void) | null;
   testID?: string;
   brandColor: string;
   surfaceColor: string;
@@ -125,7 +130,6 @@ interface CreateTabButtonProps {
 const CreateTabButton = ({
   onPress,
   onLongPress,
-  accessibilityState,
   testID,
   brandColor,
   surfaceColor,
@@ -154,7 +158,10 @@ const CreateTabButton = ({
       accessibilityRole="button"
       accessibilityLabel="Create"
       accessibilityHint="Opens camera to list a new item"
-      accessibilityState={accessibilityState}
+      // P4-02: Create is an action, not a navigation destination. It must
+      // never report a "selected" state — pressing it opens a modal overlay
+      // and does not change the active tab.
+      accessibilityState={{ selected: false, expanded: false }}
       testID={testID}
     >
       <View style={[tabStyles.createControl, { backgroundColor: brandColor }]}>
@@ -181,10 +188,29 @@ export default function TabNavigator() {
   }, [conversations, requestIds]);
   const lastTabRef = useRef<string>('Home');
 
+  // P4-02: Persist the user's last-used creation mode (Look / Poster) so the
+  // Create action reopens in that mode instead of silently defaulting to Look.
+  // Only defaults to 'look' on first-ever use (no stored value).
+  const [persistedCreateMode, setPersistedCreateMode] = useState<PersistedCreateMode>('look');
+  useEffect(() => {
+    let mounted = true;
+    getStoredCreateMode().then((mode) => {
+      if (mounted) setPersistedCreateMode(mode);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   const handleCreatePress = useCallback(() => {
     haptic.light();
-    navigation.navigate('CreateCamera', { mode: 'look' });
-  }, [haptic, navigation]);
+    // Opens CreatorStudio directly as a modal overlay with the camera/gallery
+    // entry screen shown (openEntry). This removes the redundant CreateCamera
+    // hop — CreatorStudio already has a CreatorEntryScreen built in. Create is
+    // an action, not a navigation destination, so the active tab is unchanged.
+    navigation.navigate('CreatorStudio', {
+      type: persistedCreateMode,
+      openEntry: true,
+    });
+  }, [haptic, navigation, persistedCreateMode]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -193,7 +219,7 @@ export default function TabNavigator() {
           headerShown: false,
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
-          // Instagram pattern: edge-to-edge transparent bar with frosted
+          // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
           // devices (BlurView fallback elsewhere). No floating pill, no
@@ -220,8 +246,16 @@ export default function TabNavigator() {
           tabBarInactiveTintColor: colors.textMuted,
         }}
         screenListeners={{
-          tabPress: (e: any) => {
-            const currentTab = e.target?.split('-')[0];
+          tabPress: (e: { target?: string; preventDefault?: () => void }) => {
+            const currentTab = e.target?.split('-')[0] ?? '';
+            // P4-02: Create is an action, not a navigation destination. Do not
+            // treat its press as a tab switch — skip the tab-switch haptic and
+            // do not update lastTabRef. The Create button's custom onPress
+            // opens a modal overlay without changing the active tab.
+            if (currentTab === 'Create') {
+              e.preventDefault?.();
+              return;
+            }
             if (currentTab !== lastTabRef.current) {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
@@ -253,16 +287,24 @@ export default function TabNavigator() {
           name="Create"
           component={View}
           options={{
-            tabBarButton: (props: any) => (
+            tabBarButton: (props: BottomTabBarButtonProps) => (
               <CreateTabButton
                 onPress={handleCreatePress}
                 onLongPress={props.onLongPress}
-                accessibilityState={props.accessibilityState}
                 testID={props.testID}
                 brandColor={colors.brand}
                 surfaceColor={colors.surface}
               />
             ),
+          }}
+          // P4-02: Prevent the tab navigator from ever navigating to the
+          // Create "tab" — it is a placeholder slot for the central Create
+          // action button, not a real destination. The custom tabBarButton
+          // handles the press and opens CreateCamera as a modal.
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
           }}
         />
         <Tab.Screen
@@ -316,10 +358,10 @@ const tabStyles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -6,
-    right: -10,
-    minWidth: 16,
-    height: 16,
+    top: -7,
+    right: -11,
+    minWidth: 18,
+    height: 18,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -328,7 +370,7 @@ const tabStyles = StyleSheet.create({
   },
   badgeText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center',

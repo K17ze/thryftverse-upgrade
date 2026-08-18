@@ -8,6 +8,8 @@ interface BoardItem {
   title: string;
   itemCount: number;
   covers: string[];
+  updatedAt?: number;
+  isPrivate?: boolean;
 }
 
 interface MoodboardCollectionGridProps {
@@ -33,6 +35,8 @@ export function MoodboardCollectionGrid({
           title={board.title}
           itemCount={board.itemCount}
           covers={board.covers}
+          updatedAt={board.updatedAt}
+          isPrivate={board.isPrivate}
           onPress={() => onPressBoard(board.id)}
           index={index}
         />

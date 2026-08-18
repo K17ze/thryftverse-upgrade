@@ -12,6 +12,14 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
+import { Anton_400Regular } from '@expo-google-fonts/anton';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
+import { Caveat_400Regular } from '@expo-google-fonts/caveat';
+import { DancingScript_400Regular } from '@expo-google-fonts/dancing-script';
+import { Lobster_400Regular } from '@expo-google-fonts/lobster';
+import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
+import { PlayfairDisplay_400Regular, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
@@ -22,8 +30,9 @@ import { TabScrollProvider } from './src/context/TabScrollContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
+import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
+import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
@@ -53,6 +62,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 initSentry();
+
+// Wrap React Native's default global JS error handler so uncaught errors are
+// logged and forwarded to Sentry, while preserving the dev redbox and native
+// crash reporting behaviour. Idempotent — safe to call once at startup.
+installGlobalErrorHandler();
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -109,6 +123,15 @@ export default function App() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    Anton_400Regular,
+    BebasNeue_400Regular,
+    Caveat_400Regular,
+    DancingScript_400Regular,
+    Lobster_400Regular,
+    Pacifico_400Regular,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_700Bold,
+    PressStart2P_400Regular,
   });
 
   React.useEffect(() => {
@@ -436,21 +459,24 @@ export default function App() {
 
   if (showBrandedSplash) {
     return (
-      <ThemeProvider>
-        <BrandedSplash
-          onFinish={() => {
-            setShowBrandedSplash(false);
-            // EAS Observe: the branded splash has dismissed and the real app
-            // surface is about to mount. The first markInteractive() records
-            // the TTI metric; later calls are ignored.
-            markInteractive({ surface: 'splash_resolved' });
-          }}
-        />
-      </ThemeProvider>
+      <AccessibilityPreferencesProvider>
+        <ThemeProvider>
+          <BrandedSplash
+            onFinish={() => {
+              setShowBrandedSplash(false);
+              // EAS Observe: the branded splash has dismissed and the real app
+              // surface is about to mount. The first markInteractive() records
+              // the TTI metric; later calls are ignored.
+              markInteractive({ surface: 'splash_resolved' });
+            }}
+          />
+        </ThemeProvider>
+      </AccessibilityPreferencesProvider>
     );
   }
 
   return (
+    <AccessibilityPreferencesProvider>
     <ThemeProvider>
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -505,5 +531,6 @@ export default function App() {
       </GestureHandlerRootView>
     </AppErrorBoundary>
     </ThemeProvider>
+    </AccessibilityPreferencesProvider>
   );
 }

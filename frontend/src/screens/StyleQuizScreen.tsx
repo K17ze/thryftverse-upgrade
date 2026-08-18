@@ -8,7 +8,6 @@ import {
   Platform,
 } from 'react-native';
 import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,7 +19,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -81,7 +80,7 @@ export default function StyleQuizScreen() {
   const handleNext = () => {
     haptic.medium();
     if (step === 0 && !selectedGender) {
-      show('Please select a preference', 'info');
+      show('Select a preference', 'info');
       return;
     }
     if (step < 3) {
@@ -186,7 +185,7 @@ export default function StyleQuizScreen() {
       <View style={styles.completeIconWrap}>
         <Ionicons name="checkmark-circle" size={64} color={colors.success} />
       </View>
-      <Text style={styles.stepTitle}>You're all set</Text>
+      <Text style={styles.stepTitle}>Quiz complete</Text>
       <Text style={styles.stepSub}>Your Explore feed will be tailored to your preferences.</Text>
       <View style={styles.summaryCard}>
         <SummaryRow label="Shopping for" value={selectedGender || '—'} />
@@ -197,9 +196,11 @@ export default function StyleQuizScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Style Quiz" onBack={handleBack} />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, flex: 1 }}
+      header={<FlagshipHeader title="Style Quiz" onBack={handleBack} />}
+    >
       {/* Progress */}
       <View style={styles.progressWrap}>
         <View style={styles.progressTrack}>
@@ -230,7 +231,7 @@ export default function StyleQuizScreen() {
           <AppButton title="Done" variant="primary" size="lg" onPress={handleComplete} />
         )}
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -247,7 +248,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.lg, paddingBottom: Space.xl },
   progressWrap: {
     paddingHorizontal: Space.md,

@@ -10,13 +10,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { buildBankAccountPaymentMethod } from '../utils/checkoutFlow';
 import { createUserPaymentMethod } from '../services/commerceApi';
@@ -40,7 +38,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +170,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
         ) : (
           <>
             {/* Hero summary — bank account purpose */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.heroRow}>
                   <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -193,7 +189,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                   </View>
                 </View>
               </View>
-            </Reanimated.View>
 
             {policyLabel ? (
               <Text style={[styles.policyLabel, { color: colors.textMuted }]}>
@@ -202,7 +197,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             ) : null}
 
             {/* Form section */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
                 ACCOUNT DETAILS
               </Text>
@@ -254,30 +248,24 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                   />
                 </View>
               </View>
-            </Reanimated.View>
 
             {/* Security note */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
               <View style={styles.secureRow}>
                 <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
                 <Text style={[styles.secureText, { color: colors.brand }]}>
                   Protected by bank-level encryption
                 </Text>
               </View>
-            </Reanimated.View>
 
             {/* Info card */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
               <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 <Text style={[styles.infoText, { color: colors.textMuted }]}>
                   Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
                 </Text>
               </View>
-            </Reanimated.View>
 
             {/* Save button */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
               <AppButton
                 title={isSaving ? 'Saving...' : 'Save bank account'}
                 onPress={handleSaveBank}
@@ -287,7 +275,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                 accessibilityLabel={isSaving ? 'Saving bank account' : 'Save bank account'}
                 accessibilityHint="Saves this bank account for withdrawals"
               />
-            </Reanimated.View>
           </>
         )}
       </KeyboardAwareScrollView>

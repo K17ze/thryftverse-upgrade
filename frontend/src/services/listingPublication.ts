@@ -2,6 +2,7 @@ import { MediaUploadQueue, UploadQueueItemState } from './mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from './listingsApi';
 import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { ListingPublicationRecovery } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 
 export type PublicationStage =
   | 'validating'
@@ -49,7 +50,7 @@ export interface PublicationResult {
 }
 
 function generateClientPublicationId(): string {
-  return `pub_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}`;
+  return makeStableId('pub');
 }
 
 function isLocalUri(uri: string): boolean {
@@ -156,7 +157,7 @@ export async function executePublication(
     );
     if (unresolvedLocals.length > 0) {
       setStage('failed_recoverable');
-      ctx.lastError = `${unresolvedLocals.length} media item(s) failed to upload. Tap Retry on failed items.`;
+      ctx.lastError = `${unresolvedLocals.length} upload(s) failed. Tap to retry.`;
       return { ok: false, error: ctx.lastError, context: ctx };
     }
 
@@ -167,7 +168,7 @@ export async function executePublication(
 
     if (uploadedUrls.length === 0) {
       setStage('failed_recoverable');
-      ctx.lastError = 'No usable media URLs after upload.';
+      ctx.lastError = 'No media uploaded successfully.';
       return { ok: false, error: ctx.lastError, context: ctx };
     }
 
@@ -180,7 +181,7 @@ export async function executePublication(
       : undefined;
     if (!coverImage || !coverFinalizationId) {
       setStage('failed_recoverable');
-      ctx.lastError = 'A verified cover image is required before publishing this listing.';
+      ctx.lastError = 'Cover image required to publish.';
       return { ok: false, error: ctx.lastError, context: ctx };
     }
 
@@ -188,7 +189,7 @@ export async function executePublication(
     setStage('creating_listing');
     let listingId = ctx.listingId;
     if (!listingId) {
-      listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      listingId = makeStableId('listing');
       await createListingOnApi({
         id: listingId,
         sellerId: input.sellerId,
@@ -218,7 +219,7 @@ export async function executePublication(
       if (ctx.attachedAssetIds.includes(m.id)) continue;
       const finalizationId = ctx.uploadedFinalizationByAssetId[m.id];
       if (!finalizationId) {
-        throw new Error(`Media ${m.id} is missing server verification. Upload it again before publishing.`);
+        throw new Error('Media verification failed — re-upload to continue.');
       }
 
       await createListingImageOnApi({
@@ -238,7 +239,7 @@ export async function executePublication(
     setStage('completed');
     return { ok: true, listingId, context: ctx };
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Publication failed. Please try again.';
+    const msg = e instanceof Error ? e.message : 'Publishing failed — try again.';
     ctx.lastError = msg;
     setStage('failed_recoverable');
     return { ok: false, error: msg, context: ctx };

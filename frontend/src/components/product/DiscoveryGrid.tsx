@@ -1,10 +1,10 @@
 import React, { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { ProductCardV2 } from '../ProductCardV2';
 import { ProductAnalytics } from '../../platform/product';
 
@@ -33,13 +33,41 @@ export function DiscoveryGrid({
   onSeeAll,
 }: DiscoveryGridProps) {
   const { colors } = useAppTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // Image resolution policy: compute the pixel width of each grid tile so
+  // CachedImage can downscale CDN images for thumbnails. This avoids
+  // downloading full-resolution images for small grid tiles.
+  // (LIST_RENDERING_POLICY.md §5.1 / audit §Caching/prefetch)
+  const tileDownscaleWidth = Math.round(
+    (screenWidth - Space.md * (numColumns + 1)) / numColumns,
+  );
+
   const handlePress = useCallback(
     (item: Listing, index: number) => {
       ProductAnalytics.recommendationClick(listingId, 'continue_exploring', index);
       onPressItem(item);
     },
     [listingId, onPressItem]
+  );
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible items on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderItem = useCallback(
+    ({ item, index }: { item: Listing; index: number }) => (
+      <View style={styles.gridItem}>
+        <ProductCardV2
+          item={item}
+          onPress={() => handlePress(item, index)}
+          showSaveButton
+          enableEntranceAnimation={false}
+          downscaleWidth={tileDownscaleWidth}
+        />
+      </View>
+    ),
+    [styles, handlePress, tileDownscaleWidth],
   );
 
   if (items.length === 0) return null;
@@ -70,16 +98,7 @@ export function DiscoveryGrid({
         numColumns={numColumns}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item, index }) => (
-          <View style={styles.gridItem}>
-            <ProductCardV2
-              item={item}
-              onPress={() => handlePress(item, index)}
-              showSaveButton
-              enableEntranceAnimation={false}
-            />
-          </View>
-        )}
+        renderItem={renderItem}
         ItemSeparatorComponent={() => <View style={{ height: Space.sm }} />}
         onEndReached={() => {
           if (onEndReached && hasMore) onEndReached();

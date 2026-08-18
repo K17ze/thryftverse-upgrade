@@ -545,7 +545,7 @@ interface ListUserMarketHistoryResponse {
   };
 }
 
-interface ListAuctionsOptions {
+export interface ListAuctionsOptions {
   status?: 'live' | 'scheduled' | 'ended' | 'all';
   query?: string;
   category?: string;
@@ -554,6 +554,8 @@ interface ListAuctionsOptions {
   seller?: 'me';
   cursor?: string;
   limit?: number;
+  priceMin?: number;
+  priceMax?: number;
 }
 
 // ── Auction House home aggregate ──
@@ -604,6 +606,16 @@ export interface AuctionHomeResponse {
   sellerSummary?: SellerSummary;
   sellerAuctions: MarketAuction[];
   watchlist: MarketAuction[];
+}
+
+// ── Auction browse scope & facets (Phase 2 canonical browse state) ──
+
+export type AuctionScope = 'live' | 'upcoming' | 'results' | 'watching';
+
+export interface AuctionFacets {
+  categories: { id: string; label: string; count: number }[];
+  price: { min: number; max: number };
+  statusCounts: Record<AuctionScope, number>;
 }
 
 interface ListAuctionBidsOptions {
@@ -703,9 +715,48 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
     seller: options.seller,
     cursor: options.cursor,
     limit: options.limit,
+    priceMin: options.priceMin,
+    priceMax: options.priceMax,
   });
   const payload = await fetchJson<ListAuctionsResponse>(`/auctions${query}`);
   return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };
+}
+
+// ── Server-driven facets (Phase 2: canonical category endpoint) ──
+// Returns stable category/price/status facets independent of loaded inventory.
+// The filter sheet uses these instead of deriving categories from home payload.
+
+export interface AuctionFacetsOptions {
+  scope?: AuctionScope;
+  query?: string;
+  category?: string;
+  priceMin?: number;
+  priceMax?: number;
+}
+
+interface AuctionFacetsResponse {
+  ok: true;
+  facets: AuctionFacets;
+  serverNow: string;
+}
+
+export async function getAuctionFacets(options: AuctionFacetsOptions = {}): Promise<AuctionFacets> {
+  // Inline scope→status mapping to avoid circular dependency on auctionHomeLogic.
+  const scopeStatus: string | undefined = options.scope
+    ? options.scope === 'live' ? 'live'
+      : options.scope === 'upcoming' ? 'scheduled'
+      : options.scope === 'results' ? 'ended'
+      : undefined // 'watching' → no server-side status filter
+    : undefined;
+  const query = toQuery({
+    status: scopeStatus,
+    query: options.query,
+    category: options.category,
+    priceMin: options.priceMin,
+    priceMax: options.priceMax,
+  });
+  const payload = await fetchJson<AuctionFacetsResponse>(`/auctions/facets${query}`);
+  return payload.facets;
 }
 
 // ── Dev mock fallback for /auctions/home ──
@@ -1201,7 +1252,7 @@ function mockCoOwnAsset(
       feeRights: '2% transaction fee on buys and sells',
     },
     riskDisclosures: {
-      marketRisk: 'Asset values fluctuate; you may receive less than paid',
+      marketRisk: 'Asset values fluctuate; you could receive less than paid',
       liquidityRisk: 'Selling depends on buyer demand',
       custodyRisk: 'Asset held by regulated custodian',
       regulatoryRisk: 'Subject to UK consumer protection law',
@@ -1889,10 +1940,10 @@ export async function listUserMarketHistory(
     if (ENABLE_RUNTIME_MOCKS) {
       console.warn('[marketApi] /market-history failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       const mockItems: MarketHistoryItem[] = [
-        { id: 'mock-hist-1', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-1', amountGbp: 255, units: 3, unitPriceGbp: 85, feeGbp: 2.55, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 120 * 60_000).toISOString() },
-        { id: 'mock-hist-2', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-2', amountGbp: 360, units: 2, unitPriceGbp: 180, feeGbp: 3.60, status: 'filled', orderType: 'limit', note: null, timestamp: new Date(Date.now() - 300 * 60_000).toISOString() },
-        { id: 'mock-hist-3', channel: 'co-own', action: 'sell-units', referenceId: 'mock-coown-2', amountGbp: 185, units: 1, unitPriceGbp: 185, feeGbp: 1.85, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 600 * 60_000).toISOString() },
-        { id: 'mock-hist-4', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-5', amountGbp: 285, units: 3, unitPriceGbp: 95, feeGbp: 2.85, status: 'filled', orderType: 'market', note: null, timestamp: new Date(Date.now() - 1440 * 60_000).toISOString() },
+        { id: 'mock-hist-1', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-1', amountGbp: 255, units: 3, unitPriceGbp: 85, feeGbp: 2.55, status: null, orderType: null, note: 'Vintage Trucker Jacket', timestamp: new Date(Date.now() - 120 * 60_000).toISOString() },
+        { id: 'mock-hist-2', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-2', amountGbp: 360, units: 2, unitPriceGbp: 180, feeGbp: 3.60, status: null, orderType: null, note: 'Designer Sneakers', timestamp: new Date(Date.now() - 300 * 60_000).toISOString() },
+        { id: 'mock-hist-3', channel: 'co-own', action: 'sell-units', referenceId: 'mock-coown-2', amountGbp: 185, units: 1, unitPriceGbp: 185, feeGbp: 1.85, status: null, orderType: null, note: 'Designer Sneakers', timestamp: new Date(Date.now() - 600 * 60_000).toISOString() },
+        { id: 'mock-hist-4', channel: 'co-own', action: 'buy-units', referenceId: 'mock-coown-5', amountGbp: 285, units: 3, unitPriceGbp: 95, feeGbp: 2.85, status: null, orderType: null, note: 'Leather Tote Bag', timestamp: new Date(Date.now() - 1440 * 60_000).toISOString() },
       ];
       return { items: mockItems, pageInfo: { hasMore: false } };
     }
@@ -2232,6 +2283,18 @@ export async function createCoOwnPriceAlert(
 
 export async function deleteCoOwnPriceAlert(id: string): Promise<void> {
   await fetchJson<{ ok: true }>(`/co-own/price-alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function toggleCoOwnPriceAlert(id: string, active: boolean): Promise<CoOwnPriceAlert> {
+  const payload = await fetchJson<{ ok: true; alert: CoOwnPriceAlert }>(
+    `/co-own/price-alerts/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    }
+  );
+  return payload.alert;
 }
 
 /* ─── Co-Own Price History (OHLCV) ─── */

@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -11,11 +9,11 @@ import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { fetchCoOwnAssetById } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { CoOwnMarketHeader, CoOwnStickyActionDock } from '../components/coown';
+import { CoOwnStickyActionDock } from '../components/coown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -27,10 +25,9 @@ const CATEGORIES = [
 ];
 
 export default function CoOwnIssueScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
-  const reducedMotionEnabled = useReducedMotion();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -67,31 +64,31 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Report an issue"
-        subtitle="Help us resolve your concern"
-        onBack={() => navigation.goBack()}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Report an issue"
+          subtitle="Help us resolve your concern"
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Asset context — show title, not UUID */}
         {assetId && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
-              <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
-                {assetTitle ?? 'Loading...'}
-              </Text>
-            </View>
-          </Reanimated.View>
+          <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
+            <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {assetTitle ?? 'Loading...'}
+            </Text>
+          </View>
         )}
 
         {/* Issue category */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Issue category</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
@@ -121,10 +118,10 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
               );
             })}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
+        <View style={{ marginTop: Space.lg }}>
           <AppInput
             label="Description"
             placeholder="Describe what happened and what you need..."
@@ -135,15 +132,24 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
             textAlignVertical="top"
             containerStyle={{ marginBottom: 0 }}
           />
-        </Reanimated.View>
+        </View>
 
-        {/* Note */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)} style={styles.note}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-          <Text style={[styles.noteText, { color: colors.textMuted }]}>
-            Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
-          </Text>
-        </Reanimated.View>
+        {/* Note — trust card */}
+        <View style={styles.note}>
+          <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.noteIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.noteTextWrap}>
+              <Text style={[styles.noteTitle, { color: colors.textPrimary }]}>
+                How this works
+              </Text>
+              <Text style={[styles.noteText, { color: colors.textMuted }]}>
+                Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
 
       {/* Sticky action dock */}
@@ -158,14 +164,11 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   scroll: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -177,24 +180,28 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm + 2,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   assetContextLabel: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   assetContextText: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   sectionLabel: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
     letterSpacing: Type.metaElevated.letterSpacing,
+    lineHeight: Type.metaElevated.lineHeight,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -210,19 +217,42 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   categoryLabel: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   note: {
-    flexDirection: 'row',
-    gap: Space.sm,
     marginTop: Space.lg,
-    alignItems: 'flex-start',
+  },
+  noteCard: {
+    flexDirection: 'row',
+    gap: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+  },
+  noteIconWrap: {
+    width: Space.xl - Space.xs,
+    height: Space.xl - Space.xs,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noteTextWrap: {
+    flex: 1,
+  },
+  noteTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    marginBottom: Space.xs / 2,
   },
   noteText: {
-    flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     lineHeight: Type.captionElevated.lineHeight,
   },
 });

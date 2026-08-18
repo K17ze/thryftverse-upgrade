@@ -3,14 +3,6 @@ import { View, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius } from '../../theme/designTokens';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  interpolate,
-  Easing,
-} from 'react-native-reanimated';
 
 import { Text } from 'react-native';
 
@@ -30,52 +22,11 @@ export function AvatarRing({
   fallbackInitials,
 }: AvatarRingProps) {
   const { colors } = useAppTheme();
-  const pulse = useSharedValue(0);
-
-  React.useEffect(() => {
-    if (isUnread) {
-      pulse.value = withRepeat(
-        withTiming(1, {
-          duration: 2000,
-          easing: Easing.inOut(Easing.sin),
-        }),
-        -1,
-        true
-      );
-    }
-  }, [isUnread, pulse]);
-
-  const glowStyle = useAnimatedStyle(() => {
-    const scale = interpolate(pulse.value, [0, 1], [1, 1.25]);
-    const opacity = interpolate(pulse.value, [0, 1], [0.4, 0]);
-    return {
-      transform: [{ scale }],
-      opacity,
-    };
-  });
 
   const ringColor = isUnread ? colors.brand : 'transparent';
-  const outerGlowSize = size + 8;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {/* Unread glow behind avatar */}
-      {isUnread && (
-        <Reanimated.View
-          style={[
-            styles.glow,
-            {
-              width: outerGlowSize,
-              height: outerGlowSize,
-              borderRadius: outerGlowSize / 2,
-              backgroundColor: colors.brand,
-            },
-            glowStyle,
-          ]}
-          pointerEvents="none"
-        />
-      )}
-
       {/* Gold ring for unread */}
       <View
         style={[
@@ -125,10 +76,6 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  glow: {
-    position: 'absolute',
-    alignSelf: 'center',
   },
   ring: {
     justifyContent: 'center',

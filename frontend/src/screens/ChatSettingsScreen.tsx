@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -11,7 +10,6 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 
@@ -20,7 +18,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ChatSettings'>;
 export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const archivedIds = useStore((s) => s.archivedConversationIds);
@@ -58,7 +55,6 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
       {/* Hero summary */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -88,7 +84,6 @@ export default function ChatSettingsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       <SettingsSection title="Who can reach you" noCard>
         <SettingsRow

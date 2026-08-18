@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import { Sentry } from './sentry';
+import { createStableId } from '../utils/createStableId';
 
 /** Maximum number of retry attempts before an item is moved to the dead-letter queue. */
 const MAX_RETRIES = 8;
@@ -78,7 +79,7 @@ export const useOfflineQueue = create<OfflineQueueState>()(
 
       pushToQueue: (url, options) => {
         const newRequest: QueuedRequest = {
-          id: Math.random().toString(36).substring(2, 11),
+          id: createStableId(),
           url,
           options,
           timestamp: Date.now(),

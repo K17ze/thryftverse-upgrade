@@ -36,7 +36,7 @@ export interface TrendingSearchesProps {
 const TREND_ICON: Record<TrendDirection, keyof typeof Ionicons.glyphMap> = {
   up: 'trending-up',
   down: 'trending-down',
-  new: 'sparkles',
+  new: 'flash-outline',
   stable: 'remove',
 };
 

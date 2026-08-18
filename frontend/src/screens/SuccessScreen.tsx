@@ -9,7 +9,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
@@ -83,25 +82,25 @@ export default function SuccessScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={styles.iconCircle}>
+          <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={48} color={colors.background} />
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)}>
+          <View>
             <Text style={styles.title}>Payment Successful</Text>
             <Text style={styles.subtitle}>
               Your order has been placed.{ '\n' }
               {isLoading
                 ? 'Fetching order details...'
                 : hasError
-                  ? 'Order confirmation received. You can view details from My Orders.'
+                  ? 'Order confirmation received. View details from My Orders.'
                   : `Order #${orderId.slice(-8).toUpperCase()} confirmed. The seller will prepare your item for dispatch.`}
             </Text>
-          </Reanimated.View>
+          </View>
 
           {/* Order Context Card */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(120)} style={styles.orderCardWrap}>
+            <View style={styles.orderCardWrap}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 {order.listingImageUrl && (
                   <CachedImage
@@ -116,12 +115,12 @@ export default function SuccessScreen() {
                   <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
                 </View>
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* What happens next — timeline */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)} style={styles.timelineWrap}>
+            <View style={styles.timelineWrap}>
               <Text style={styles.timelineTitle}>What happens next?</Text>
               <View style={styles.timeline}>
                 <TimelineStep
@@ -151,14 +150,11 @@ export default function SuccessScreen() {
                   isLast
                 />
               </View>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Support Action */}
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}
-            style={styles.supportRowWrap}
-          >
+          <View style={styles.supportRowWrap}>
             <AnimatedPressable
               onPress={handleOpenSupport}
               activeOpacity={0.85}
@@ -175,11 +171,11 @@ export default function SuccessScreen() {
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
-          </Reanimated.View>
+          </View>
         </View>
       </ScrollView>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)} style={styles.footer}>
+      <View style={styles.footer}>
         <FlagshipActionCluster
           actions={[
             { label: 'View Order', onPress: handleViewOrder, variant: 'primary' },
@@ -187,7 +183,7 @@ export default function SuccessScreen() {
           ]}
           layout="stack"
         />
-      </Reanimated.View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -241,7 +237,7 @@ function createTimelineStyles(colors: ThemeColors) {
   return StyleSheet.create({
   step: {
     flexDirection: 'row',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingBottom: Space.md,
   },
   iconCol: {
@@ -301,15 +297,15 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
 
-  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.sm + 4, textAlign: 'center' },
+  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
   subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
-    padding: Space.sm + 4,
+    gap: Space.smMd,
+    padding: Space.smMd,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
   },
@@ -344,7 +340,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 2,
   },
   supportAvatarWrap: {

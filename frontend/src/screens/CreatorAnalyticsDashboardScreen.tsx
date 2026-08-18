@@ -10,15 +10,7 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, {
-  FadeInDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  Easing,
-  interpolate,
-} from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing, interpolate } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -37,8 +29,9 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CommerceDetailOfflineBanner } from '../components/commerce/detail/CommerceDetailOfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import {
   fetchCreatorAnalyticsSummary,
   fetchCreatorAnalyticsTimeline,
@@ -111,9 +104,9 @@ interface TopContentItem {
 export default function CreatorAnalyticsDashboardScreen() {
   const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [period, setPeriod] = useState<PeriodKey>('30d');
@@ -413,8 +406,7 @@ export default function CreatorAnalyticsDashboardScreen() {
         }
       >
         {/* ── 1. SUMMARY METRICS — 2x2 grid, dominant ─────────────── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+        <View
           style={styles.metricsGrid}
         >
           {metrics.map((m, i) => (
@@ -426,11 +418,10 @@ export default function CreatorAnalyticsDashboardScreen() {
               reducedMotion={reducedMotionEnabled}
             />
           ))}
-        </Reanimated.View>
+        </View>
 
         {/* ── 2. ENGAGEMENT BREAKDOWN — horizontal bars ───────────── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}
+        <View
           style={styles.section}
         >
           <View style={styles.sectionHeader}>
@@ -452,11 +443,10 @@ export default function CreatorAnalyticsDashboardScreen() {
               />
             ))}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── 3. TIMELINE — daily views bar chart ─────────────────── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(140)}
+        <View
           style={styles.section}
         >
           <View style={styles.sectionHeader}>
@@ -472,11 +462,10 @@ export default function CreatorAnalyticsDashboardScreen() {
             colors={colors}
             reducedMotion={reducedMotionEnabled}
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── 4. TOP CONTENT — derived from timeline ──────────────── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}
+        <View
           style={styles.section}
         >
           <View style={styles.sectionHeader}>
@@ -499,7 +488,7 @@ export default function CreatorAnalyticsDashboardScreen() {
               No timeline data for this period.
             </Text>
           )}
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: Space.xl }} />
       </ScrollView>
@@ -526,7 +515,7 @@ function MetricTile({
     if (reducedMotion) {
       progress.value = 1;
     } else {
-      progress.value = withDelay(index * 60, withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }));
+      progress.value = withDelay(index * 60, withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.cubic) }));
     }
   }, [progress, index, reducedMotion]);
 
@@ -592,7 +581,7 @@ function EngagementBarRow({
     if (reducedMotion) {
       width.value = bar.pct;
     } else {
-      width.value = withDelay(index * 80 + 120, withTiming(bar.pct, { duration: 600, easing: Easing.out(Easing.cubic) }));
+      width.value = withDelay(index * 80 + 120, withTiming(bar.pct, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) }));
     }
   }, [width, bar.pct, index, reducedMotion]);
 
@@ -642,7 +631,7 @@ function TimelineChart({
     if (reducedMotion) {
       progress.value = 1;
     } else {
-      progress.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+      progress.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) });
     }
   }, [progress, reducedMotion, points.length]);
 
@@ -711,7 +700,7 @@ function TimelineBar({
     } else {
       height.value = withDelay(
         Math.min(index * 12, 400),
-        withTiming(heightPct, { duration: 500, easing: Easing.out(Easing.cubic) })
+        withTiming(heightPct, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) })
       );
     }
   }, [height, heightPct, index, reducedMotion]);

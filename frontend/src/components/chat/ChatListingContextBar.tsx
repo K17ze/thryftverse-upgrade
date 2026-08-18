@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, LayoutAnimation, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -39,6 +39,15 @@ export function ChatListingContextBar({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
+  const toggleCollapsed = () => {
+    if (Platform.OS === 'ios') {
+      LayoutAnimation.configureNext(
+        LayoutAnimation.create(200, 'easeInEaseOut', 'opacity'),
+      );
+    }
+    setCollapsed((c) => !c);
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.rowContainer}>
@@ -68,12 +77,13 @@ export function ChatListingContextBar({
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
             <View style={styles.metaRow}>
               <Text style={styles.price}>{price}</Text>
+              <View style={styles.availabilityDot} />
               <Text style={styles.availability}>{availability}</Text>
             </View>
           </View>
         </AnimatedPressable>
         <AnimatedPressable
-          onPress={() => setCollapsed((c) => !c)}
+          onPress={toggleCollapsed}
           activeOpacity={0.7}
           scaleValue={0.92}
           hapticFeedback="light"
@@ -81,7 +91,11 @@ export function ChatListingContextBar({
           accessibilityLabel={collapsed ? 'Expand listing actions' : 'Collapse listing actions'}
           style={styles.collapseBtn}
         >
-          <Ionicons name={collapsed ? 'ellipsis-horizontal' : 'close'} size={18} color={colors.textSecondary} />
+          <Ionicons
+            name={collapsed ? 'chevron-down' : 'chevron-up'}
+            size={18}
+            color={colors.textSecondary}
+          />
         </AnimatedPressable>
       </View>
       {!collapsed && (
@@ -95,7 +109,7 @@ export function ChatListingContextBar({
             accessibilityRole="button"
             accessibilityLabel={primaryActionLabel}
           >
-            <Ionicons name={primaryActionIcon} size={14} color={colors.textInverse} />
+            <Ionicons name={primaryActionIcon} size={15} color={colors.textInverse} />
             <Text style={styles.primaryBtnText}>{primaryActionLabel}</Text>
           </AnimatedPressable>
           {secondaryActionLabel && onSecondaryAction ? (
@@ -108,7 +122,7 @@ export function ChatListingContextBar({
               accessibilityRole="button"
               accessibilityLabel={secondaryActionLabel}
             >
-              <Ionicons name={secondaryActionIcon ?? 'chatbubbles-outline'} size={14} color={colors.textPrimary} />
+              <Ionicons name={secondaryActionIcon ?? 'chatbubbles-outline'} size={15} color={colors.textPrimary} />
               <Text style={styles.secondaryBtnText}>{secondaryActionLabel}</Text>
             </AnimatedPressable>
           ) : null}
@@ -124,7 +138,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
+    paddingVertical: Space.sm,
     gap: Space.sm,
   },
   rowContainer: {
@@ -135,19 +149,20 @@ const createStyles = (colors: any) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.sm + 1,
     flex: 1,
   },
   collapseBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.full,
   },
   thumb: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
@@ -163,23 +178,30 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   info: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   title: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xs + 1,
   },
   price: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
+  },
+  availabilityDot: {
+    width: 3,
+    height: 3,
+    borderRadius: Radius.full,
+    backgroundColor: colors.textMuted,
   },
   availability: {
     fontSize: Type.caption.size,
@@ -195,7 +217,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs + 1,
     minHeight: 44,
     borderRadius: Radius.md,
     backgroundColor: colors.textPrimary,
@@ -210,7 +232,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs + 1,
     minHeight: 44,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,

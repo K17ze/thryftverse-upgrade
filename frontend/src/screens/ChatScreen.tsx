@@ -9,17 +9,15 @@ import {
   Alert,
   Pressable,
   ActivityIndicator,
+  Dimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
 
-import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { FlashList } from "@shopify/flash-list";
 
 import { Ionicons } from "@expo/vector-icons";
 
-import NetInfo from "@react-native-community/netinfo";
-
-import { AppState } from "react-native";
 import {
   useSafeAreaInsets,
   SafeAreaView,
@@ -28,6 +26,7 @@ import {
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "../navigation/types";
+import { openProfile } from "../navigation/openProfile";
 
 import { useAppTheme } from "../theme/ThemeContext";
 
@@ -35,16 +34,12 @@ import { useFormattedPrice } from "../hooks/useFormattedPrice";
 
 import { useBackendData } from "../context/BackendDataContext";
 
-import { getListingCoverUri, isVideoUri } from "../utils/media";
+import { getListingCoverUri } from "../utils/media";
+import { makeStableId } from "../utils/createStableId";
 
 import { useStore } from "../store/useStore";
 
 import {
-  fetchConversationMessagesFromApi,
-  sendConversationMessageOnApi,
-  deleteConversationMessageOnApi,
-  fetchComposerStateFromApi,
-  upsertComposerStateOnApi,
   clearComposerStateOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
@@ -67,10 +62,10 @@ import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
 import { ChatListingContextBar } from "../components/chat/ChatListingContextBar";
+import { ChatTransactionStrip } from "../components/chat/ChatTransactionStrip";
 
 import {
   ChatActionSheet,
-  ChatAction,
 } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
@@ -109,8 +104,6 @@ import {
 
 import * as Clipboard from "expo-clipboard";
 
-import * as ImagePicker from "expo-image-picker";
-
 import { Caption } from "../components/ui/Text";
 
 import {
@@ -132,139 +125,101 @@ import {
 
 import { t } from "../i18n";
 
-import { requestPushPermissionOnce } from "../lib/pushPermission";
-
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+
+import {
+  useConversationMessages,
+  useConversationComposer,
+  type Message,
+  formatDateSeparator,
+  formatMessageTime,
+  DEFAULT_SELLER_QUICK_REPLIES,
+  DEFAULT_BUYER_QUICK_REPLIES,
+} from "../hooks/chat";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-type MsgType =
-  "text" | "offer" | "offer_declined" | "purchase_status" | "media" | "system" | "commerce_state" | "voice";
+// ─── Composer-stack contextual resolver ───────────────────────────────
+// The audit defines a strict priority for the contextual elements that
+// compete for vertical space around the message list. Only the
+// highest-priority contextual elements that fit the height budget are
+// shown, so the message list is never squeezed below ~40% of screen
+// height. Persistent elements (top bar, message list, composer) are
+// always visible and not part of this resolver.
+//
+// Priority order (highest first):
+//   1. safetyWarning       — user safety, always wins
+//   2. listingTransaction  — active commerce state only
+//   3. agentRow            — only when an agent is deployed/active
+//   4. suggestedReplies    — only when useful and not dismissed
+type ContextualStackSlot =
+  | "safetyWarning"
+  | "listingTransaction"
+  | "agentRow"
+  | "suggestedReplies";
 
-interface Message {
-  id: string;
+const CONTEXTUAL_SLOT_PRIORITY: Record<ContextualStackSlot, number> = {
+  safetyWarning: 1,
+  listingTransaction: 2,
+  agentRow: 3,
+  suggestedReplies: 4,
+};
 
-  type: MsgType;
-
-  sender: "me" | "them";
-
-  senderId?: string;
-
-  senderLabel?: string;
-
-  text?: string;
-
-  isSystem?: boolean;
-
-  systemTitle?: string;
-
-  offer?: {
-    offerId?: string;
-    price: number;
-    originalPrice: number;
-    status?: "pending" | "declined" | "countered" | "accepted" | "expired";
-    /** ISO date string when the offer expires */
-    expiresAt?: string;
-    /** Counter-offer chain depth (0 = initial, 1 = first counter, etc.) */
-    counterRound?: number;
-  };
-
-  date?: string;
-
-  replyToMessageId?: string;
-
-  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
-
-  mediaUri?: string;
-
-  mediaType?: "image" | "video";
-
-  voiceUri?: string;
-
-  voiceDurationMs?: number;
-
-  voiceWaveform?: number[];
-
-  commerceState?: {
-    stateType: "order_placed" | "payment_confirmed" | "order_shipped" | "order_in_transit" | "order_delivered" | "order_cancelled" | "order_refunded";
-    orderId: string;
-    orderShortId?: string;
-    itemTitle?: string;
-    itemImage?: string | null;
-    trackingNumber?: string | null;
-    carrier?: string | null;
-  };
-
-  uploadStatus?: "uploading" | "failed" | "sent";
-
-  status?: "sending" | "sent" | "failed";
-
-  readStatus?: "sending" | "sent" | "delivered" | "read";
-
-  /** True when this message was generated by a deployed AI agent (demo). */
-  isAgent?: boolean;
-
-  /** Ionicon name for the agent avatar glyph (only set for agent messages). */
-  agentAvatar?: string;
+interface ContextualSlotState {
+  slot: ContextualStackSlot;
+  visible: boolean;
+  /** Estimated rendered height in pixels, including margins. */
+  estimatedHeight: number;
 }
 
-const INITIAL_MESSAGES: Message[] = [];
-
-// Context-aware default quick replies shown when user hasn't configured custom ones
-const DEFAULT_SELLER_QUICK_REPLIES = [
-  "Thanks for your interest!",
-  "Yes, it's still available.",
-  "I can ship within 2 business days.",
-  "Any questions about the item?",
-];
-
-const DEFAULT_BUYER_QUICK_REPLIES = [
-  "Is this still available?",
-  "Can I make an offer?",
-  "What's your best price?",
-  "Could you share more photos?",
-];
-
-function parseMessageDate(dateStr: string): Date | null {
-  const legacyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
-  const d = legacyMatch
-    ? new Date(
-        Number(legacyMatch[3]),
-        Number(legacyMatch[2]) - 1,
-        Number(legacyMatch[1]),
-        Number(legacyMatch[4] ?? 12),
-        Number(legacyMatch[5] ?? 0),
-      )
-    : new Date(dateStr);
-  return Number.isNaN(d.getTime()) ? null : d;
+interface ContextualStackResolution {
+  /** Slots that should remain visible, in priority order. */
+  visible: Set<ContextualStackSlot>;
+  /** Slots suppressed to fit the height budget. */
+  suppressed: ContextualStackSlot[];
+  /** Total estimated height of the visible contextual stack. */
+  totalHeight: number;
 }
 
-function formatDateSeparator(dateStr: string): string | null {
-  const d = parseMessageDate(dateStr);
-  if (!d) return null;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const input = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diffDays = Math.round((today.getTime() - input.getTime()) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) {
-    return d.toLocaleDateString(undefined, { weekday: "short" });
+/**
+ * Resolve which contextual stack slots should be visible given a pixel
+ * budget. Slots are kept in priority order until the cumulative height
+ * would exceed the budget; lower-priority slots are suppressed rather
+ * than overflowing. The highest-priority active slot is always admitted
+ * even if it alone exceeds the budget (e.g. a safety warning must never
+ * be hidden by the budget).
+ */
+function resolveContextualStack(
+  slots: ContextualSlotState[],
+  budgetPixels: number,
+): ContextualStackResolution {
+  const active = slots
+    .filter((s) => s.visible && s.estimatedHeight > 0)
+    .sort(
+      (a, b) =>
+        CONTEXTUAL_SLOT_PRIORITY[a.slot] - CONTEXTUAL_SLOT_PRIORITY[b.slot],
+    );
+
+  const visible = new Set<ContextualStackSlot>();
+  const suppressed: ContextualStackSlot[] = [];
+  let totalHeight = 0;
+
+  for (const slot of active) {
+    if (
+      visible.size === 0 ||
+      totalHeight + slot.estimatedHeight <= budgetPixels
+    ) {
+      visible.add(slot.slot);
+      totalHeight += slot.estimatedHeight;
+    } else {
+      suppressed.push(slot.slot);
+    }
   }
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+
+  return { visible, suppressed, totalHeight };
 }
 
-function formatMessageTime(dateStr?: string): string | undefined {
-  if (!dateStr) return undefined;
-  const hasExplicitTime = /T\d{2}:\d{2}|\b\d{1,2}:\d{2}\b/.test(dateStr);
-  if (!hasExplicitTime) return undefined;
-  const d = parseMessageDate(dateStr);
-  if (!d) return undefined;
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
+/** Minimum share of screen height reserved for the message list. */
+const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -280,7 +235,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
@@ -301,20 +256,18 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     dateWrap: {
       alignItems: "center",
-      marginVertical: Space.sm,
-      paddingVertical: Space.xs,
-      paddingHorizontal: Space.sm,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
+      marginVertical: Space.md,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
       alignSelf: "center",
     },
 
     dateText: {
       fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontFamily: Typography.family.medium,
       color: colors.textMuted,
-      textTransform: "uppercase",
-      letterSpacing: Type.meta.letterSpacing,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
     },
 
     statusWrap: {
@@ -337,7 +290,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     linkPreviewWrap: {
       maxWidth: "78%",
       alignSelf: "flex-start",
-      marginTop: Space.xs,
+      marginTop: Space.sm,
     },
 
     linkPreviewWrapRight: {
@@ -375,7 +328,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: 0,
       paddingBottom: 0,
       paddingTop: 0,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },
@@ -387,31 +340,31 @@ export default function ChatScreen({ navigation, route }: Props) {
       backgroundColor: colors.surfaceAlt,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      marginHorizontal: -Space.md,
-      marginTop: -Space.xs,
-      marginBottom: Space.xs,
+      marginHorizontal: 0,
+      marginTop: 0,
+      marginBottom: 0,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm - 1,
     },
 
     undoBannerText: {
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
     },
 
     undoBannerAction: {
       color: colors.brand,
-      fontSize: Type.meta.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
 
     agentRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.sm + Space.xs,
+      paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      gap: Space.sm,
+      gap: Space.xs + 1,
       flexWrap: 'wrap',
     },
 
@@ -419,47 +372,22 @@ export default function ChatScreen({ navigation, route }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md,
-      backgroundColor: `${colors.brand}14`,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs + 1,
+      borderRadius: Radius.full,
+      backgroundColor: `${colors.brand}0D`,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: `${colors.brand}26`,
     },
 
     agentChipPressed: {
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: `${colors.brand}14`,
     },
 
     agentChipText: {
       fontSize: Type.meta.size,
-      color: colors.brand,
+      color: colors.textPrimary,
       fontFamily: Typography.family.semibold,
-    },
-
-    agentHintText: {
-      fontSize: Type.meta.size,
-      color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-    },
-
-    addAgentBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
-
-    addAgentBtnPressed: {
-      backgroundColor: colors.surfaceAlt,
-    },
-
-    addAgentBtnText: {
-      fontSize: Type.meta.size,
-      color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
     },
 
     typingRow: {
@@ -467,13 +395,89 @@ export default function ChatScreen({ navigation, route }: Props) {
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      gap: Space.xs,
+      gap: Space.xs + 1,
     },
 
     typingText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+    },
+
+    unreadDividerWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginVertical: Space.sm,
+      paddingHorizontal: Space.md,
+    },
+
+    unreadDividerLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.brand,
+    },
+
+    unreadDividerBadge: {
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+      backgroundColor: `${colors.brand}14`,
+    },
+
+    unreadDividerText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+
+    // Conversation-level safety banner — rendered above the message list
+    // as the highest-priority contextual element. Uses semantic tokens
+    // only; level emphasis comes from the icon/text colour, not alpha.
+    safetyBannerWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm - 1,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+
+    safetyBannerText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.medium,
+    },
+
+    // Suggested-replies wrapper — adds a dismiss control so the bar can
+    // be dismissed for the current conversation session.
+    suggestedRepliesWrap: {
+      position: 'relative',
+    },
+
+    suggestedRepliesClose: {
+      position: 'absolute',
+      top: Space.xs - 1,
+      right: Space.xs,
+      width: Control.icon - 6,
+      height: Control.icon - 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: Radius.full,
+    },
+
+    // Message list container — flexes to fill remaining space but is
+    // never squeezed below ~40% of screen height (audit requirement).
+    messageListContainer: {
+      flex: 1,
+      minHeight: Math.floor(
+        Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
+      ),
     },
   }), [colors]);
 
@@ -584,7 +588,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             originalPrice: entry.originalPrice,
 
-            status: entry.offerStatus,
+            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined,
           },
 
           text: entry.text,
@@ -632,9 +636,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
 
-  const [messages, setMessages] = useState<Message[]>(hydratedMessages);
-
-  const [input, setInput] = useState("");
   const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
   const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
 
@@ -644,12 +645,121 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [deployedChatAgents, setDeployedChatAgents] = useState<ChatAgent[]>([]);
   const [chatAgentSuggestions, setChatAgentSuggestions] = useState<SuggestedReply[]>([]);
 
-  // Per App Store / Google Play 2026 guidelines, push permission is requested
-  // only after a meaningful user action — here, after the user sends their
-  // first chat message. The ref guards against re-prompting within the same
-  // session; requestPushPermissionOnce also persists an AsyncStorage flag so
-  // the user is never re-prompted across sessions for the same trigger.
-  const pushPermissionAskedRef = useRef(false);
+  // Suggested replies are dismissible for the current conversation session.
+  // Once dismissed they do not reappear until the conversation changes.
+  const [suggestedRepliesDismissed, setSuggestedRepliesDismissed] = useState(false);
+
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  // Messages that have been toggled to show a translated view
+  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(new Set());
+
+  // Messages where the off-platform payment warning has been dismissed
+  const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
+
+  const [selectionMode, setSelectionMode] = useState(false);
+
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const [isTyping, setIsTyping] = useState(false);
+
+  const { formatFromFiat } = useFormattedPrice();
+
+  // ─── Controller hook: message list state, sync, send, retry, delete ───
+  // useConversationMessages owns the message list, API sync, sending, retry,
+  // delete (with undo), offer auto-send, date separators, scroll helpers.
+  // ChatScreen retains composer state, selection, safety, agents, and rendering.
+  const {
+    messages,
+    setMessages,
+    isSyncing,
+    syncError,
+    isOffline,
+    showScrollToBottom,
+    recentlyDeleted,
+    composerSending,
+    listRef,
+    scheduleScrollToEnd,
+    scrollToBottom,
+    scrollToMessage,
+    pushMessage,
+    appendToConversationStore,
+    confirmAgentDraft,
+    retryAgentDraft,
+    sendMessage: hookSendMessage,
+    sendMediaMessage,
+    handleRetryUpload,
+    handleRetrySendMessage,
+    createMediaMessage,
+    handleSendPendingAttachment: hookSendPendingAttachment,
+    handleUndoDelete,
+    handleBulkDelete: hookBulkDelete,
+    handleDeleteMessage,
+    dateSeparatorIndices,
+    unreadDividerIndex,
+    handleMessageListScroll: hookHandleMessageListScroll,
+    syncMessagesFromApi,
+  } = useConversationMessages({
+    conversationId,
+    routeOfferPayload,
+    currentUser,
+    hydratedMessages,
+    formatFromFiat,
+    show,
+    haptic,
+    onOfferSent: () => {},
+    clearComposerState: clearComposerStateOnApi,
+    deployedChatAgents,
+    getChatAgentResponse,
+    getChatAgentSuggestions,
+    setChatAgentSuggestionsExternal: setChatAgentSuggestions,
+    navigation,
+    isGroup,
+    conversationUnread: conversation?.unread,
+    markConversationRead,
+    appendConversationMessage,
+    replaceConversationMessages,
+  });
+
+  // ─── Controller hook: composer state, attachments, search, reply ───
+  // useConversationComposer owns text input, reply context, attachment picker,
+  // pending attachment, voice recording toggle, reaction picker, search state,
+  // and cross-device composer state hydration/persistence.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  const {
+    input,
+    setInput,
+    replyTo,
+    setReplyTo,
+    attachmentPickerVisible,
+    setAttachmentPickerVisible,
+    isVoiceRecording,
+    setIsVoiceRecording,
+    pendingAttachment,
+    setPendingAttachment,
+    reactingToMessage,
+    setReactingToMessage,
+    searchQuery,
+    setSearchQuery,
+    searchMatchIndex,
+    setSearchMatchIndex,
+    isSearchActive,
+    setIsSearchActive,
+    handleAttachmentSelect,
+  } = useConversationComposer({
+    conversationId,
+    initialSearchQuery: route.params?.focusQuery,
+    messagesRef,
+    show,
+    haptic,
+    setConversationDraft,
+  });
 
   // Real-time composer safety detection — re-evaluates as the user types
   const composerSafetyWarning = React.useMemo(() => {
@@ -673,270 +783,27 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   }, [input, dangerWarningDismissed, cautionWarningDismissed]);
 
-  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
+  const handleSend = useCallback(() => {
+    hookSendMessage(input, replyTo, setInput, setReplyTo);
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo]);
 
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-
-  // Messages that have been toggled to show a translated view
-  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(new Set());
-
-  // Messages where the off-platform payment warning has been dismissed
-  const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
-
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
-
-  const [reactingToMessage, setReactingToMessage] = useState<Message | null>(
-    null,
+  // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
+  const handleMessageListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      hookHandleMessageListScroll(e);
+    },
+    [hookHandleMessageListScroll],
   );
-
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-
-  const [selectionMode, setSelectionMode] = useState(false);
-
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
-    new Set(),
-  );
-
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const [syncError, setSyncError] = useState(false);
-
-  const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
-
-  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
-
-  const [pendingAttachment, setPendingAttachment] = useState<{
-    uri: string;
-    mediaType: "image" | "video";
-  } | null>(null);
-
-  const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
-
-  const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const scrollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const deleteApiStatusRef = useRef<"pending" | "success" | "error">("pending");
-
-  const wasOfflineRef = useRef(false);
-
-  const [searchQuery, setSearchQuery] = useState(
-    route.params?.focusQuery ?? "",
-  );
-
-  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
-
-  const [isSearchActive, setIsSearchActive] = useState(
-    !!route.params?.focusQuery,
-  );
-
-  const [isOffline, setIsOffline] = useState(false);
-
-  const [composerSending, setComposerSending] = useState(false);
-  // Ref guard prevents double-tap send before state update propagates (§13).
-  const composerSendingRef = useRef(false);
-
-  const [isTyping, setIsTyping] = useState(false);
-
-  const listRef = React.useRef<FlashListRef<Message>>(null);
-
-  const { formatFromFiat } = useFormattedPrice();
-
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(
-      (state: { isConnected: boolean | null }) => {
-        const isNowOffline = !state.isConnected;
-
-        setIsOffline(isNowOffline);
-
-        // Reconcile on reconnect
-
-        if (wasOfflineRef.current && !isNowOffline) {
-          void syncMessagesFromApi();
-        }
-
-        wasOfflineRef.current = isNowOffline;
-      },
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  const syncMessagesFromApi = async () => {
-    if (!conversationId) return;
-
-    setIsSyncing(true);
-
-    setSyncError(false);
-
-    try {
-      const syncedMessages =
-        await fetchConversationMessagesFromApi(conversationId);
-
-      if (!syncedMessages.length) return;
-
-      replaceConversationMessages(conversationId, syncedMessages);
-    } catch {
-      setSyncError(true);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === "active") {
-        void syncMessagesFromApi();
-      }
-    };
-
-    const subscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange,
-    );
-
-    return () => subscription.remove();
-  }, [conversationId]);
-
-  useEffect(() => {
-    setMessages(hydratedMessages);
-  }, [hydratedMessages]);
-
-  useEffect(() => {
-    if (conversationId) markConversationRead(conversationId);
-  }, [conversationId, markConversationRead]);
 
   useEffect(() => {
     setIsTyping(false);
   }, [conversationId]);
 
-  // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
-  const offerPayloadRef = useRef(routeOfferPayload);
-  offerPayloadRef.current = routeOfferPayload;
+  // Reset per-session dismissals when the conversation changes.
   useEffect(() => {
-    if (!routeOfferPayload || !conversationId) return;
-    const { offerId, price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
-    const localId = `offer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const offerMsg: Message = {
-      id: localId,
-      type: "offer",
-      sender: "me",
-      senderLabel: currentUser?.username ?? "you",
-      text: counterRound > 0
-        ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
-        : `Offer: ${formatFromFiat(price, "GBP")}`,
-      offer: {
-        offerId,
-        price,
-        originalPrice,
-        status: "pending",
-        expiresAt,
-        counterRound,
-      },
-      status: "sent",
-    };
-    pushMessage(offerMsg);
-    appendToConversationStore(offerMsg, currentUser?.id ?? "me");
-    scheduleScrollToEnd();
-    // Clear the payload from route params so it doesn't re-send on re-render
-    navigation.setParams({ offerPayload: undefined });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeOfferPayload, conversationId]);
-
-  useEffect(() => {
-    if (conversationId) setConversationDraft(conversationId, input);
-  }, [input, conversationId, setConversationDraft]);
-
-  // P0-7: Cross-device composer state hydration. On conversation open, fetch
-  // the persisted composer state from the backend and restore draft text,
-  // reply context and pending attachments so a draft started on another
-  // device continues here. Only restore when the local draft is empty — we
-  // never overwrite in-progress local input.
-  const hydratedComposerRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!conversationId) return;
-    hydratedComposerRef.current = null;
-    let cancelled = false;
-    (async () => {
-      try {
-        const state = await fetchComposerStateFromApi(conversationId);
-        if (cancelled) return;
-        hydratedComposerRef.current = conversationId;
-        if (state.draftText && !input) {
-          setInput(state.draftText);
-        }
-        if (state.replyToMessageId) {
-          const replied = messages.find((m) => m.id === state.replyToMessageId);
-          if (replied) setReplyTo(replied);
-        }
-      } catch {
-        // Hydration is best-effort — a failed fetch must not block the
-        // composer. The local draft store still works offline.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSuggestedRepliesDismissed(false);
   }, [conversationId]);
-
-  // P0-7: Debounced cross-device composer state persistence. Push the
-  // current draft + reply context to the backend so it restores on other
-  // devices. Debounced to 1.5s so we do not PUT on every keystroke.
-  const composerPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!conversationId) return;
-    if (composerPersistTimerRef.current) {
-      clearTimeout(composerPersistTimerRef.current);
-    }
-    composerPersistTimerRef.current = setTimeout(() => {
-      // Best-effort — never block UI on persistence failures.
-      upsertComposerStateOnApi(conversationId, {
-        draftText: input,
-        replyToMessageId: replyTo?.id ?? null,
-      }).catch(() => undefined);
-    }, 1500);
-    return () => {
-      if (composerPersistTimerRef.current) {
-        clearTimeout(composerPersistTimerRef.current);
-      }
-    };
-  }, [input, replyTo, conversationId]);
-
-  // P0-7: On unmount, flush the latest composer state synchronously-ish so
-  // backgrounding the app does not lose the draft.
-  useEffect(() => {
-    return () => {
-      if (composerPersistTimerRef.current) {
-        clearTimeout(composerPersistTimerRef.current);
-      }
-      if (scrollTimerRef.current) {
-        clearTimeout(scrollTimerRef.current);
-      }
-      if (undoTimerRef.current) {
-        clearTimeout(undoTimerRef.current);
-      }
-      if (conversationId && input) {
-        upsertComposerStateOnApi(conversationId, {
-          draftText: input,
-          replyToMessageId: replyTo?.id ?? null,
-        }).catch(() => undefined);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Helper: scroll to end with cleanup safety. Clears any pending scroll
-  // timer before setting a new one so we never leak timers on unmount.
-  const scheduleScrollToEnd = useCallback(() => {
-    if (scrollTimerRef.current) {
-      clearTimeout(scrollTimerRef.current);
-    }
-    scrollTimerRef.current = setTimeout(() => {
-      scrollTimerRef.current = null;
-      listRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-  }, []);
 
   const resolvedPartnerId = useMemo(() => {
     if (isGroup) return null;
@@ -1007,6 +874,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!conversationId) return;
     setDeployedChatAgents(getDeployedChatAgents(conversationId));
   }, [conversationId]);
+
+  // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
+  // suggestions are active (agent deployed, suggestions available, no input),
+  // suppress quick replies so only one suggestion area is visible.
+  const agentSuggestionsActive =
+    deployedChatAgents.length > 0 &&
+    chatAgentSuggestions.length > 0 &&
+    input.trim().length === 0;
 
   const handleDeployChatAgent = useCallback(
     (agent: ChatAgent) => {
@@ -1085,175 +960,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   }, [searchMatchIndex, searchMatches]);
 
-  const pushMessage = (next: Message) => {
-    setMessages((prev) => [...prev, next]);
-  };
-
-  const appendToConversationStore = (
-    next: Message,
-    senderIdOverride?: string,
-  ) => {
-    if (!conversationId) return;
-    appendConversationMessage(conversationId, {
-      id: next.id,
-
-      senderId:
-        senderIdOverride ??
-        (next.sender === "me" ? (currentUser?.id ?? "me") : "system"),
-
-      text: next.text,
-
-      offerPrice: next.offer?.price,
-
-      originalPrice: next.offer?.originalPrice,
-
-      offerStatus:
-        next.offer?.status === "countered" ? "pending" : next.offer?.status,
-
-      isSystem: senderIdOverride === "system",
-
-      timestamp: "just now",
-
-      type:
-        next.type === "offer"
-          ? "offer"
-          : next.type === "media"
-            ? "text"
-            : "text",
-
-      sender: next.sender === "me" ? "me" : "other",
-
-      mediaUri: next.mediaUri,
-
-      mediaType: next.mediaType,
-
-      uploadStatus: next.uploadStatus,
-    });
-  };
-
-  const sendMessage = () => {
-    const trimmed = input.trim();
-
-    if (!trimmed || !conversationId) return;
-    // Ref guard: prevents double-tap before setComposerSending propagates (§13).
-    if (composerSendingRef.current) return;
-    composerSendingRef.current = true;
-
-    haptic.light();
-
-    // Send-time safety nudge — if the message contains off-platform payment
-    // patterns, show a warning toast (but still allow sending).
-    if (containsOffPlatformPaymentPattern(trimmed)) {
-      show(
-        "Reminder: Keep payments in Thryftverse to stay protected by Buyer Protection.",
-        "error",
-      );
-    }
-
-    setComposerSending(true);
-
-    const localId =
-      String(Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
-
-    const outgoing: Message = {
-      id: localId,
-
-      type: "text",
-
-      sender: "me",
-
-      senderLabel: currentUser?.username ?? "you",
-
-      text: trimmed,
-
-      status: "sending",
-    };
-
-    if (replyTo) {
-      outgoing.replyToMessageId = replyTo.id;
-    }
-
-    pushMessage(outgoing);
-
-    appendToConversationStore(outgoing, currentUser?.id ?? "me");
-
-    scheduleScrollToEnd();
-
-    // Contextual push permission prompt — ask once after the user sends their
-    // first chat message. Best-effort; never blocks the send path.
-    if (!pushPermissionAskedRef.current) {
-      pushPermissionAskedRef.current = true;
-      requestPushPermissionOnce('chat').catch(() => undefined);
-    }
-
-    // Performance mark: chat message send initiated.
-    performance.mark("chat:send");
-
-    sendConversationMessageOnApi(conversationId, trimmed)
-      .then((serverMsg) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === localId
-              ? { ...m, id: serverMsg.id, status: "sent" as const }
-              : m,
-          ),
-        );
-        // Performance mark: chat message delivered (server confirmed).
-        performance.mark("chat:delivered");
-      })
-
-      .catch(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === localId ? { ...m, status: "failed" as const } : m,
-          ),
-        );
-
-        show("Message failed to send. Tap to retry.", "error");
-      })
-
-      .finally(() => {
-        composerSendingRef.current = false;
-        setComposerSending(false);
-      });
-
-    setInput("");
-
-    setReplyTo(null);
-
-    // P0-7: Clear the persisted cross-device composer state now that the
-    // draft has been sent. Best-effort — a failed clear does not block the
-    // send path; the next open will re-fetch and find an empty draft.
-    clearComposerStateOnApi(conversationId).catch(() => undefined);
-
-    // AI chat agent response (demo) — when an agent is deployed, surface a
-    // mock agent reply after the user's message. The agent message is marked
-    // as a system-style assistant message so it renders on the opposing side.
-    if (deployedChatAgents.length > 0 && conversationId) {
-      setTimeout(() => {
-        const agentResponse = getChatAgentResponse(conversationId, trimmed);
-        if (!agentResponse.content) return;
-        const agentMsg: Message = {
-          id: agentResponse.id,
-          type: "text",
-          sender: "them",
-          senderId: agentResponse.agentId,
-          senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
-          text: agentResponse.content,
-          status: "sent",
-          isAgent: true,
-          agentAvatar: deployedChatAgents[0]?.avatar,
-        };
-        pushMessage(agentMsg);
-        appendToConversationStore(agentMsg, agentResponse.agentId);
-        setChatAgentSuggestions(getChatAgentSuggestions(conversationId, agentResponse.content));
-        scheduleScrollToEnd();
-      }, 500);
-    } else if (conversationId) {
-      setChatAgentSuggestions(getChatAgentSuggestions(conversationId, trimmed));
-    }
-  };
-
   const handleAcceptOffer = async (msgId: string) => {
     const msg = messages.find((m) => m.id === msgId);
     const offerId = msg?.offer?.offerId;
@@ -1291,7 +997,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             : m,
         ),
       );
-      show("Could not accept offer. Please try again.", "error");
+      show("Could not accept offer. Try again.", "error");
     }
   };
 
@@ -1326,7 +1032,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             : m,
         ),
       );
-      show("Could not decline offer. Please try again.", "error");
+      show("Could not decline offer. Try again.", "error");
     }
   };
 
@@ -1401,385 +1107,21 @@ export default function ChatScreen({ navigation, route }: Props) {
     setSelectedMessageIds(new Set());
   };
 
-  const scheduleUndoClear = () => {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-
-    undoTimerRef.current = setTimeout(() => setRecentlyDeleted([]), 5000);
-  };
-
-  const handleUndoDelete = () => {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-
-    if (deleteApiStatusRef.current === "success") {
-      show(
-        "Messages were deleted on the server and cannot be restored.",
-        "info",
-      );
-
-      setRecentlyDeleted([]);
-
-      return;
-    }
-
-    setMessages((prev) => {
-      const restored = [...recentlyDeleted];
-
-      const all = [...prev, ...restored];
-
-      all.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
-
-      return all;
-    });
-
-    setRecentlyDeleted([]);
-
-    show(t('chat.messagesRestored'), "success");
-  };
-
-  const handleBulkDelete = () => {
-    const idsToDelete = new Set(selectedMessageIds);
-
-    const toDelete = messages.filter((m) => idsToDelete.has(m.id));
-
-    if (toDelete.length === 0) {
-      exitSelectionMode();
-      return;
-    }
-
-    Alert.alert(
-      "Delete messages?",
-
-      `This will remove ${toDelete.length} message${toDelete.length === 1 ? "" : "s"}.`,
-
-      [
-        { text: "Cancel", style: "cancel" },
-
-        {
-          text: "Delete",
-
-          style: "destructive",
-
-          onPress: async () => {
-            haptic.medium();
-
-            deleteApiStatusRef.current = "pending";
-
-            setRecentlyDeleted(toDelete);
-
-            setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
-
-            exitSelectionMode();
-
-            scheduleUndoClear();
-
-            try {
-              if (!conversationId) throw new Error("No conversation");
-              await Promise.all(
-                toDelete.map((m) =>
-                  deleteConversationMessageOnApi(conversationId, m.id),
-                ),
-              );
-
-              deleteApiStatusRef.current = "success";
-            } catch {
-              deleteApiStatusRef.current = "error";
-
-              show(
-                "Some messages may not have been deleted on the server.",
-                "error",
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleDeleteMessage = (msg: Message) => {
-    Alert.alert(
-      "Delete message?",
-
-      "This message will be removed.",
-
-      [
-        { text: "Cancel", style: "cancel" },
-
-        {
-          text: "Delete",
-
-          style: "destructive",
-
-          onPress: async () => {
-            haptic.medium();
-
-            deleteApiStatusRef.current = "pending";
-
-            setRecentlyDeleted([msg]);
-
-            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-
-            scheduleUndoClear();
-
-            try {
-              if (!conversationId) throw new Error("No conversation");
-              await deleteConversationMessageOnApi(conversationId, msg.id);
-
-              deleteApiStatusRef.current = "success";
-            } catch {
-              deleteApiStatusRef.current = "error";
-
-              show(
-                "Message deleted locally. It may still be visible to others.",
-                "info",
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const scrollToBottom = () => {
-    listRef.current?.scrollToEnd({ animated: true });
-
-    setShowScrollToBottom(false);
-  };
-
-  const sendMediaMessage = (
-    msgId: string,
-    uri: string,
-    mediaType: "image" | "video",
-  ) => {
-    if (!conversationId) return;
-    sendConversationMessageOnApi(conversationId, "", {
-      mediaUri: uri,
-
-      mediaType,
-    })
-      .then((serverMsg) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId
-              ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const }
-              : m,
-          ),
-        );
-      })
-
-      .catch(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
-          ),
-        );
-
-        show("Upload failed. Tap media to retry.", "error");
-      });
-
-    // Contextual push permission prompt — ask once after the user sends their
-    // first media message. Best-effort; never blocks the send path.
-    if (!pushPermissionAskedRef.current) {
-      pushPermissionAskedRef.current = true;
-      requestPushPermissionOnce('chat').catch(() => undefined);
-    }
-  };
-
-  const handleRetryUpload = (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-
-    if (!msg?.mediaUri || !msg.mediaType) return;
-
-    if (msg.uploadStatus === "uploading") return; // Guard against in-flight retry spam
-
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
-      ),
-    );
-
-    sendMediaMessage(msgId, msg.mediaUri, msg.mediaType);
-
-    haptic.light();
-  };
-
-  const handleRetrySendMessage = (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-
-    if (!msg?.text || msg.status === "sending" || !conversationId) return;
-
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, status: "sending" as const } : m,
-      ),
-    );
-
-    sendConversationMessageOnApi(conversationId, msg.text)
-      .then((serverMsg) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId
-              ? { ...m, id: serverMsg.id, status: "sent" as const }
-              : m,
-          ),
-        );
-      })
-
-      .catch(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId ? { ...m, status: "failed" as const } : m,
-          ),
-        );
-
-        show("Message failed to send. Tap to retry.", "error");
-      });
-
-    haptic.light();
-  };
-
-  const createMediaMessage = (uri: string): Message => {
-    const mediaType = isVideoUri(uri) ? "video" : "image";
-
-    return {
-      id:
-        String(Date.now()) +
-        "_" +
-        mediaType +
-        "_" +
-        Math.random().toString(36).slice(2, 7),
-
-      type: "media",
-
-      sender: "me",
-
-      senderLabel: currentUser?.username ?? "you",
-
-      text: "",
-
-      mediaUri: uri,
-
-      mediaType,
-
-      uploadStatus: "uploading",
-    };
-  };
-
-  const handleAttachmentSelect = async (type: ChatAction) => {
-    if (type === "gallery") {
-      try {
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permission.granted) {
-          show("Allow gallery access to upload media.", "error");
-          return;
-        }
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.All,
-
-          allowsMultipleSelection: false,
-
-          quality: 0.9,
-        });
-
-        if (!result.canceled && result.assets?.[0]?.uri) {
-          const uri = result.assets[0].uri;
-
-          const mediaType = isVideoUri(uri) ? "video" : "image";
-
-          setPendingAttachment({ uri, mediaType });
-
-          haptic.light();
-        }
-      } catch {
-        show("Could not open gallery.", "error");
-      }
-    } else if (type === "camera") {
-      try {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-
-        if (!permission.granted) {
-          show("Allow camera access to capture media.", "error");
-          return;
-        }
-
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.All,
-
-          quality: 0.9,
-        });
-
-        if (!result.canceled && result.assets?.[0]?.uri) {
-          const uri = result.assets[0].uri;
-
-          const mediaType = isVideoUri(uri) ? "video" : "image";
-
-          setPendingAttachment({ uri, mediaType });
-
-          haptic.light();
-        }
-      } catch {
-        show("Could not open camera.", "error");
-      }
-    }
-  };
-
-  const handleSendPendingAttachment = (caption: string) => {
-    if (!pendingAttachment) return;
-    const { uri, mediaType } = pendingAttachment;
-    const outgoing = createMediaMessage(uri);
-    if (caption) {
-      outgoing.text = caption;
-    }
-    pushMessage(outgoing);
-    appendToConversationStore(outgoing, currentUser?.id ?? "me");
-    haptic.success();
-    scheduleScrollToEnd();
-    sendMediaMessage(outgoing.id, uri, mediaType);
-    setPendingAttachment(null);
-  };
+  // Adapter: bind selection state to hookBulkDelete's (selectedMessageIds, exitSelectionMode) signature
+  const handleBulkDelete = useCallback(() => {
+    hookBulkDelete(selectedMessageIds, exitSelectionMode);
+  }, [hookBulkDelete, selectedMessageIds]);
+
+  // Adapter: bind pending attachment state to hookSendPendingAttachment's (caption, pendingAttachment, setPendingAttachment) signature
+  const handleSendPendingAttachment = useCallback(
+    (caption: string) => {
+      hookSendPendingAttachment(caption, pendingAttachment, setPendingAttachment);
+    },
+    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment],
+  );
 
   const mediaTypeLabel = (t: "image" | "video") =>
     t === "video" ? "Video" : "Photo";
-
-  // Date separator computation: show a date pill when the day changes between consecutive messages
-  const dateSeparatorIndices = useMemo(() => {
-    const indices = new Set<number>();
-    const extractDate = (d?: string) => {
-      if (!d) return "";
-      const parsed = parseMessageDate(d);
-      if (!parsed) return d;
-      return `${parsed.getFullYear()}-${parsed.getMonth()}-${parsed.getDate()}`;
-    };
-    for (let i = 0; i < messages.length; i++) {
-      if (i === 0) {
-        indices.add(i);
-        continue;
-      }
-      const prevDate = extractDate(messages[i - 1]?.date);
-      const currDate = extractDate(messages[i]?.date);
-      if (currDate && prevDate && currDate !== prevDate) {
-        indices.add(i);
-      }
-    }
-    return indices;
-  }, [messages]);
-
-  const scrollToMessage = (messageId: string) => {
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx >= 0 && listRef.current) {
-      try {
-        listRef.current.scrollToIndex({
-          index: idx,
-          animated: true,
-          viewPosition: 0.5,
-        });
-      } catch {
-        // FlashList may not have rendered the item yet
-      }
-    }
-  };
 
   const renderMessage = (msg: Message, index: number) => {
     const prevMsg = messages[index - 1];
@@ -1802,15 +1144,15 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isFirstInCluster = clusterFirst;
     const isLastInCluster = clusterLast;
 
-    // Spacing tiers — tight within clusters, normal between clusters
-    let spacingTop: number = Space.sm;
+    // Spacing tiers — 8pt within clusters, 12pt between clusters (AGENTS.md §4)
+    let spacingTop: number = Space.smMd;
     if (!prevMsg) spacingTop = Space.md;
-    else if (prevMsg.sender === msg.sender) spacingTop = Space.xs;
-    else spacingTop = Space.md;
+    else if (prevMsg.sender === msg.sender) spacingTop = Space.sm;
+    else spacingTop = Space.smMd;
 
     // Cluster rhythm: tight bottom inside cluster, normal at cluster end
-    let marginBottom: number = Space.xs;
-    if (isLastInCluster) marginBottom = Space.sm;
+    let marginBottom: number = Space.sm;
+    if (isLastInCluster) marginBottom = Space.smMd;
 
     const showDateSeparator = dateSeparatorIndices.has(index);
     const dateLabel = msg.date ? formatDateSeparator(msg.date) : null;
@@ -1821,6 +1163,20 @@ export default function ChatScreen({ navigation, route }: Props) {
           <Text style={styles.dateText}>{dateLabel}</Text>
         </View>
       ) : null;
+
+    // Unread divider — "New messages" separator between read and unread
+    const showUnreadDivider = unreadDividerIndex === index && unreadDividerIndex > 0;
+    const unreadDivider = showUnreadDivider ? (
+      <View style={styles.unreadDividerWrap}>
+        <View style={styles.unreadDividerLine} />
+        <View style={styles.unreadDividerBadge}>
+          <Text style={styles.unreadDividerText}>New messages</Text>
+        </View>
+        <View style={styles.unreadDividerLine} />
+      </View>
+    ) : null;
+
+    const separator = unreadDivider ?? dateSeparator;
 
     // Purchase status message — inline centered event
     if (msg.type === "purchase_status") {
@@ -2008,6 +1364,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             isTranslated={translatedMessageIds.has(msg.id)}
             isAgent={msg.isAgent}
             agentAvatar={msg.agentAvatar}
+            isDraft={msg.isAgent && msg.status === "draft"}
+            onConfirmDraft={
+              msg.isAgent && msg.status === "draft"
+                ? () => confirmAgentDraft(msg.id)
+                : undefined
+            }
+            onRetryDraft={
+              msg.isAgent && msg.status === "failed"
+                ? () => retryAgentDraft(msg.id)
+                : undefined
+            }
             status={
               isMe
                 ? msg.status === "sending"
@@ -2019,7 +1386,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                       : msg.uploadStatus === "failed"
                         ? "failed"
                         : "sent"
-                : undefined
+                : msg.isAgent && (msg.status === "sending" || msg.status === "failed")
+                  ? msg.status
+                  : undefined
             }
             readStatus={isMe ? msg.readStatus : undefined}
             onLongPress={() => handleMessageLongPress(msg)}
@@ -2067,7 +1436,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             onRetry={
               msg.uploadStatus === "failed"
                 ? () => handleRetryUpload(msg.id)
-                : msg.status === "failed"
+                : msg.status === "failed" && !msg.isAgent
                   ? () => handleRetrySendMessage(msg.id)
                   : undefined
             }
@@ -2157,16 +1526,104 @@ export default function ChatScreen({ navigation, route }: Props) {
     return listings.find((l) => l.id === itemId) ?? null;
   }, [routeItemId, conversation?.itemId, listings]);
 
+  // Conversation-level safety warning (triggered by conversation state,
+  // e.g. off-platform payment requests in messages). This is distinct
+  // from the real-time composer typing warnings, which stay in the
+  // composer. The conversation-level warning is rendered above the
+  // message list as the highest-priority contextual element.
+  const conversationSafetyWarning = useMemo(() => {
+    if (!conversation) return null;
+    return detectChatSafetyWarning(
+      conversation,
+      currentUser?.id,
+      conversation.messages,
+    );
+  }, [conversation, currentUser?.id]);
+
+  // Screen height (stable for the session) used to budget the
+  // contextual stack and guarantee the message list keeps ≥40% of the
+  // screen height.
+  const screenHeight = useMemo(() => Dimensions.get("window").height, []);
+
+  // Memoized contextual-stack resolver. Determines which contextual
+  // elements (safety warning, listing transaction strip, agent row,
+  // suggested replies) may be visible simultaneously. When the combined
+  // height would squeeze the message list below ~40% of the screen,
+  // only the highest-priority elements are kept.
+  const contextualStack = useMemo(() => {
+    const TOP_BAR_EST = 52;
+    const COMPOSER_BASE_EST = 72;
+    // Reserve space for the composer-area banner stack (reply/undo/
+    // offline/reaction), which has its own resolver.
+    const COMPOSER_BANNER_EST = 120;
+    const minMessageListHeight = Math.floor(
+      screenHeight * MESSAGE_LIST_MIN_HEIGHT_RATIO,
+    );
+    const budget = Math.max(
+      0,
+      screenHeight -
+        TOP_BAR_EST -
+        COMPOSER_BASE_EST -
+        COMPOSER_BANNER_EST -
+        minMessageListHeight,
+    );
+
+    const slots: ContextualSlotState[] = [
+      {
+        slot: "safetyWarning",
+        visible: !!conversationSafetyWarning,
+        estimatedHeight: 52,
+      },
+      {
+        slot: "listingTransaction",
+        visible:
+          !isGroup && !!linkedListing && !!linkedListing.isSold,
+        estimatedHeight: 48,
+      },
+      {
+        slot: "agentRow",
+        visible: deployedChatAgents.length > 0,
+        estimatedHeight: 36,
+      },
+      {
+        slot: "suggestedReplies",
+        visible:
+          agentSuggestionsActive && !suggestedRepliesDismissed,
+        estimatedHeight: 52,
+      },
+    ];
+
+    return resolveContextualStack(slots, budget);
+  }, [
+    screenHeight,
+    conversationSafetyWarning,
+    isGroup,
+    linkedListing,
+    deployedChatAgents,
+    agentSuggestionsActive,
+    suggestedRepliesDismissed,
+  ]);
+
+  const isContextualSlotVisible = useCallback(
+    (slot: ContextualStackSlot) => contextualStack.visible.has(slot),
+    [contextualStack],
+  );
+
   // Memoized FlashList callbacks — stable references avoid re-rendering the
   // whole message list when parent state that doesn't affect messages changes.
   const messageKeyExtractor = useCallback((item: Message) => item.id, []);
-  const handleMessageListScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const isNearBottom =
-        contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
-      setShowScrollToBottom(!isNearBottom);
-    },
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible messages on every parent state change (e.g. input text, agent
+  // panel toggle). renderMessage closes over many component-scope values, so
+  // we use a ref to always call the latest version while keeping a stable
+  // callback reference for FlashList's cell recycling.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderMessageRef = useRef(renderMessage);
+  renderMessageRef.current = renderMessage;
+  const renderMessageItem = useCallback(
+    ({ item, index }: { item: Message; index: number }) =>
+      renderMessageRef.current(item, index),
     [],
   );
 
@@ -2203,7 +1660,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 conversationId: conversation.id,
               });
             } else if (resolvedPartnerId) {
-              navigation.navigate("UserProfile", { userId: resolvedPartnerId });
+              openProfile(navigation, resolvedPartnerId, currentUser?.id);
             } else {
               navigation.navigate("ConversationInfo", {
                 conversationId: conversation.id,
@@ -2234,6 +1691,52 @@ export default function ChatScreen({ navigation, route }: Props) {
             setSearchQuery("");
           }}
         />
+
+        {/* Contextual stack — resolved by priority + height budget.
+            Safety warning is the highest-priority contextual element and
+            sits directly below the top bar. It is only shown when the
+            conversation state triggers it (never as permanent chrome). */}
+        {isContextualSlotVisible("safetyWarning") && conversationSafetyWarning ? (
+          <View
+            style={styles.safetyBannerWrap}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
+            <Ionicons
+              name={
+                conversationSafetyWarning.level === "danger"
+                  ? "warning"
+                  : conversationSafetyWarning.level === "caution"
+                    ? "alert-circle-outline"
+                    : "shield-outline"
+              }
+              size={14}
+              color={
+                conversationSafetyWarning.level === "danger"
+                  ? colors.danger
+                  : conversationSafetyWarning.level === "caution"
+                    ? colors.warning
+                    : colors.textMuted
+              }
+            />
+            <Text
+              style={[
+                styles.safetyBannerText,
+                {
+                  color:
+                    conversationSafetyWarning.level === "danger"
+                      ? colors.danger
+                      : conversationSafetyWarning.level === "caution"
+                        ? colors.warning
+                        : colors.textSecondary,
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {conversationSafetyWarning.message}
+            </Text>
+          </View>
+        ) : null}
 
         {!isGroup && linkedListing && (
           <ChatListingContextBar
@@ -2292,6 +1795,17 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         )}
 
+        {/* Transaction strip — shows order milestone + deadline + CTA.
+            Only rendered when there is an active commerce state (sold
+            listing with an order) and the contextual-stack budget
+            admits it (priority 2, below the safety warning). */}
+        {isContextualSlotVisible("listingTransaction") &&
+          !isGroup &&
+          linkedListing &&
+          linkedListing.isSold && (
+          <ChatTransactionStrip listingId={linkedListing.id} />
+        )}
+
         {selectionMode ? (
           <View style={styles.selectionToolbar}>
             <AnimatedPressable
@@ -2331,37 +1845,41 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {isSyncing ? (
-          <SkeletonChatLoader count={6} />
-        ) : syncError && !messages.length ? (
-          <RetryState
-            message="Couldn't load messages. Check your connection and try again."
-            onRetry={() => void syncMessagesFromApi()}
-          />
-        ) : messages.length ? (
-          <FlashList
-            ref={listRef}
-            data={messages}
-            renderItem={({ item, index }) => renderMessage(item, index)}
-            keyExtractor={messageKeyExtractor}
-            contentContainerStyle={styles.messageList}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="always"
-            accessibilityLiveRegion="polite"
-            onScroll={handleMessageListScroll}
-            scrollEventThrottle={200}
-          />
-        ) : (
-          <View style={styles.emptyStateWrap}>
-            <EmptyState
-              density="compact"
-              icon="chatbubble-outline"
-              title="Start the conversation"
-              subtitle="Send a message below to get started."
+        {/* Message list — persistent. Flexes to fill remaining space but
+            is never squeezed below ~40% of screen height (audit). */}
+        <View style={styles.messageListContainer}>
+          {isSyncing ? (
+            <SkeletonChatLoader count={6} />
+          ) : syncError && !messages.length ? (
+            <RetryState
+              message="Couldn't load messages. Check your connection and try again."
+              onRetry={() => void syncMessagesFromApi()}
             />
-          </View>
-        )}
+          ) : messages.length ? (
+            <FlashList
+              ref={listRef}
+              data={messages}
+              renderItem={renderMessageItem}
+              keyExtractor={messageKeyExtractor}
+              contentContainerStyle={styles.messageList}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="always"
+              accessibilityLiveRegion="polite"
+              onScroll={handleMessageListScroll}
+              scrollEventThrottle={200}
+            />
+          ) : (
+            <View style={styles.emptyStateWrap}>
+              <EmptyState
+                density="compact"
+                icon="chatbubble-outline"
+                title="Start the conversation"
+                subtitle="Send a message below to get started."
+              />
+            </View>
+          )}
+        </View>
 
         <KeyboardStickyView offset={{ closed: Math.max(insets.bottom, Space.sm) + Space.sm, opened: Space.sm }}>
         <View
@@ -2373,7 +1891,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           {isTyping ? (
             <View style={styles.typingRow}>
               <TypingIndicator />
-              <Text style={styles.typingText}>typing...</Text>
+              <Text style={styles.typingText}>typing…</Text>
             </View>
           ) : null}
           {/* P0-8: Composer-stack height enforcement. Multiple contextual
@@ -2446,97 +1964,94 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           {/* AI agent suggested replies — shown above the composer when an
               agent is deployed, suggestions are available, and the user has
-              not started typing (so the bar never competes with in-progress
-              input). */}
-          {deployedChatAgents.length > 0 &&
-            chatAgentSuggestions.length > 0 &&
-            input.trim().length === 0 && (
-            <SuggestedRepliesBar
-              suggestions={chatAgentSuggestions}
-              onSelect={handleSelectChatAgentSuggestion}
-            />
+              not started typing. The contextual-stack resolver may suppress
+              them (priority 4) when the height budget is tight. Dismissable
+              for the current conversation session via the close control. */}
+          {isContextualSlotVisible("suggestedReplies") &&
+            agentSuggestionsActive && (
+            <View style={styles.suggestedRepliesWrap}>
+              <SuggestedRepliesBar
+                suggestions={chatAgentSuggestions}
+                onSelect={handleSelectChatAgentSuggestion}
+                agentName={deployedChatAgents[0]?.name}
+                agentAvatar={deployedChatAgents[0]?.avatar}
+              />
+              <Pressable
+                onPress={() => {
+                  haptic.light();
+                  setSuggestedRepliesDismissed(true);
+                }}
+                style={styles.suggestedRepliesClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Dismiss suggested replies"
+                accessibilityRole="button"
+                accessibilityHint="Hides suggested replies for this conversation"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </Pressable>
+            </View>
           )}
 
-          {/* AI agent deployment row — quick access to deploy/remove agents.
-              Shows deployed agent chips (each with the agent's avatar icon) or
-              a subtle hint + "Add AI assistant" button when none are deployed. */}
-          <View style={styles.agentRow}>
-            {deployedChatAgents.map((agent) => (
+          {/* Deployed agent indicator — a single quiet chip that consolidates
+              all deployed agents. Per spec 16: "a single quiet '2 agents'
+              indicator is enough." Tap to open the agent picker to manage.
+              Only rendered when an agent is actually deployed (priority 3);
+              the "ask AI" entry point lives in the composer's attachment
+              rail, not as permanent chrome. */}
+          {isContextualSlotVisible("agentRow") &&
+            deployedChatAgents.length > 0 && (
+            <View style={styles.agentRow}>
               <Pressable
-                key={agent.id}
-                onPress={() => handleRemoveChatAgent(agent.id)}
+                onPress={() => setChatAgentPickerVisible(true)}
                 style={({ pressed }) => [
                   styles.agentChip,
                   pressed && styles.agentChipPressed,
                 ]}
-                accessibilityLabel={`Remove ${agent.name}`}
+                accessibilityLabel={
+                  deployedChatAgents.length === 1
+                    ? `${deployedChatAgents[0].name} is active. Tap to manage agents.`
+                    : `${deployedChatAgents.length} agents are active. Tap to manage agents.`
+                }
                 accessibilityRole="button"
-                accessibilityHint={`Remove ${agent.name} from this conversation`}
+                accessibilityHint="Open agent management"
               >
                 <Ionicons
-                  name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'sparkles'}
-                  size={Type.meta.size}
+                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                  size={13}
                   color={colors.brand}
                 />
-                <Text style={styles.agentChipText}>
-                  {agent.name}
+                <Text style={[styles.agentChipText, { color: colors.brand }]}>
+                  {deployedChatAgents.length === 1
+                    ? `${deployedChatAgents[0].name} active`
+                    : `${deployedChatAgents.length} agents active`}
                 </Text>
-                <Ionicons
-                  name="close-circle"
-                  size={Type.meta.size}
-                  color={colors.brand}
-                />
               </Pressable>
-            ))}
-
-            {deployedChatAgents.length === 0 && (
-              <Text style={styles.agentHintText}>
-                AI assistants can help with search, styling, offers, and safety
-              </Text>
-            )}
-
-            <Pressable
-              onPress={() => setChatAgentPickerVisible(true)}
-              style={({ pressed }) => [
-                styles.addAgentBtn,
-                pressed && styles.addAgentBtnPressed,
-              ]}
-              accessibilityLabel="Add AI assistant"
-              accessibilityRole="button"
-              accessibilityHint="Browse and deploy AI assistants into this conversation"
-            >
-              <Ionicons
-                name="sparkles"
-                size={Type.meta.size}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.addAgentBtnText}>
-                {deployedChatAgents.length > 0
-                  ? 'Add another assistant'
-                  : 'Add AI assistant'}
-              </Text>
-            </Pressable>
-          </View>
+            </View>
+          )}
 
           <ChatComposerBar
             value={input}
             onChangeText={setInput}
-            onSend={sendMessage}
+            onSend={handleSend}
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
             onCameraPress={() => handleAttachmentSelect("camera")}
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
-              agentQuickReplies.length > 0
+              // Chat stays quiet by default — quick replies only appear when
+              // the conversation is empty to help start it, then recede once
+              // there are messages. Agent suggestions take precedence.
+              agentSuggestionsActive || messages.length > 0
+                ? undefined
+                : agentQuickReplies.length > 0
                 ? agentQuickReplies
                 : linkedListing
                 ? linkedListing.sellerId === currentUser?.id
                   ? [
                       ...(sellerQuickReplies.length > 0
-                        ? sellerQuickReplies.slice(0, 4).map((text) => ({
-                            label:
-                              text.length > 30 ? text.slice(0, 28) + "…" : text,
-                            onPress: () => setInput(text),
+                        ? sellerQuickReplies.slice(0, 4).map((reply) => ({
+                            label: reply.title,
+                            onPress: () => setInput(reply.message),
                           }))
                         : DEFAULT_SELLER_QUICK_REPLIES.map((text) => ({
                             label: text,
@@ -2552,10 +2067,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ]
                   : [
                       ...(buyerQuickReplies.length > 0
-                        ? buyerQuickReplies.slice(0, 4).map((text) => ({
-                            label:
-                              text.length > 30 ? text.slice(0, 28) + "…" : text,
-                            onPress: () => setInput(text),
+                        ? buyerQuickReplies.slice(0, 4).map((reply) => ({
+                            label: reply.title,
+                            onPress: () => setInput(reply.message),
                           }))
                         : DEFAULT_BUYER_QUICK_REPLIES.map((text) => ({
                             label: text,
@@ -2571,15 +2085,6 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ]
                 : undefined
             }
-            safetyWarning={
-              conversation
-                ? detectChatSafetyWarning(
-                    conversation,
-                    currentUser?.id,
-                    conversation.messages,
-                  )?.message
-                : undefined
-            }
             dangerWarning={composerDangerWarning?.message}
             cautionWarning={composerCautionWarning?.message}
             onDismissDangerWarning={() => setDangerWarningDismissed(true)}
@@ -2588,17 +2093,24 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
         </KeyboardStickyView>
 
+        {/* Audit: no simultaneous spinner + toast + full overlay for one
+            mutation. The composer's isSending spinner is the single
+            feedback signal for an in-flight send; overlay sheets are
+            suppressed while a send is in progress so the user never sees
+            a spinner and a full overlay at once. */}
         <ChatActionSheet
-          visible={attachmentPickerVisible}
+          visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
           onSelect={(action) => {
             if (action === "gallery" || action === "camera") {
               handleAttachmentSelect(action);
+            } else if (action === "agent") {
+              setChatAgentPickerVisible(true);
             }
           }}
         />
 
-        {pendingAttachment && (
+        {pendingAttachment && !composerSending && (
           <AttachmentReviewSheet
             visible={!!pendingAttachment}
             uri={pendingAttachment.uri}
@@ -2612,7 +2124,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             Demo mode per AGENTS.md §11 — agents use keyword-based suggestions,
             not real LLM inference. */}
         <ChatAgentPicker
-          visible={chatAgentPickerVisible}
+          visible={chatAgentPickerVisible && !composerSending}
           onClose={() => setChatAgentPickerVisible(false)}
           onDeploy={handleDeployChatAgent}
           deployedAgentIds={deployedChatAgents.map((a) => a.id)}
@@ -2653,6 +2165,20 @@ export default function ChatScreen({ navigation, route }: Props) {
               case "report":
                 show("Report submitted. Thank you.", "success");
                 break;
+              case "askAgent": {
+                // Spec 16: long press message → Ask agent about this.
+                // Pre-fill the composer with the message text so the user can
+                // direct an agent to analyse it. If no agent is deployed yet,
+                // open the agent picker so they can deploy one first.
+                if (deployedChatAgents.length === 0) {
+                  setChatAgentPickerVisible(true);
+                } else {
+                  const msgText = selectedMessage.text ?? "";
+                  const agentName = deployedChatAgents[0]?.name ?? "";
+                  setInput(`@${agentName} ${msgText}`.trim());
+                }
+                break;
+              }
               case "translate": {
                 setTranslatedMessageIds((prev) => {
                   const next = new Set(prev);

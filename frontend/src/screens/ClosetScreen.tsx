@@ -8,10 +8,11 @@ import {
   ScrollView,
   Share,
   Alert,
+  Dimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -31,6 +32,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
+import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -39,14 +41,23 @@ import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollecti
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-
-import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout } from '../theme/designTokens';
+import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
+
+// ── Mosaic geometry — matches ClosetMediaMosaic tile dimensions so the
+//    loading skeleton preserves the final 3:4 portrait silhouette and
+//    avoids layout shift when media decodes (AGENTS.md §14, §16). ──
+const { width: SCREEN_W } = Dimensions.get('window');
+const SKEL_COLUMNS = 3;
+const SKEL_GAP = Space.sm;
+const SKEL_PADDING = Space.md;
+const SKEL_TILE_W =
+  (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
+const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
@@ -75,7 +86,7 @@ export default function ClosetScreen() {
     filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     filterChipText: { color: colors.brand },
     filterChipTextActive: { color: colors.background },
-    statsCard: { backgroundColor: 'transparent', borderColor: 'transparent' },
+    statsCard: { backgroundColor: 'transparent', borderColor: colors.border },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -98,6 +109,10 @@ export default function ClosetScreen() {
   const [showPriceDropsOnly, setShowPriceDropsOnly] = useState(false);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [manageMode, setManageMode] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState('');
   const scrollY = useSharedValue(0);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -107,10 +122,12 @@ export default function ClosetScreen() {
   const outfits = useStore((state) => state.outfits);
   const removeOutfit = useStore((state) => state.removeOutfit);
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
+  const deleteCollection = useStore((state) => state.deleteCollection);
+  const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
+  const renameCollection = useStore((state) => state.renameCollection);
+  const reorderCollections = useStore((state) => state.reorderCollections);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
-
   React.useEffect(() => {
     let mounted = true;
     void loadCollectionsFromApi()
@@ -309,6 +326,60 @@ export default function ClosetScreen() {
     navigation.navigate('OutfitBuilder');
   }, [haptic, navigation]);
 
+  const handleDeleteCollection = useCallback((id: string, name: string) => {
+    haptic.medium();
+    Alert.alert(
+      'Delete Collection?',
+      `"${name}" will be permanently removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            haptic.medium();
+            void deleteCollectionOnApi(id).catch(() => {
+              // Fallback to local delete if API fails
+              deleteCollection(id);
+            });
+          },
+        },
+      ]
+    );
+  }, [haptic, deleteCollection, deleteCollectionOnApi]);
+
+  const handleStartRename = useCallback((id: string, currentName: string) => {
+    haptic.light();
+    setRenamingId(id);
+    setRenameText(currentName);
+  }, [haptic]);
+
+  const handleConfirmRename = useCallback(() => {
+    if (renamingId && renameText.trim().length > 0) {
+      haptic.light();
+      renameCollection(renamingId, renameText.trim());
+    }
+    setRenamingId(null);
+    setRenameText('');
+  }, [renamingId, renameText, haptic, renameCollection]);
+
+  const handleCancelRename = useCallback(() => {
+    setRenamingId(null);
+    setRenameText('');
+  }, []);
+
+  const handleMoveCollection = useCallback((index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= collections.length) return;
+    haptic.light();
+    reorderCollections(index, newIndex);
+  }, [haptic, reorderCollections, collections.length]);
+
+  const handleToggleManage = useCallback(() => {
+    haptic.light();
+    setManageMode((v) => !v);
+  }, [haptic]);
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
@@ -327,8 +398,8 @@ export default function ClosetScreen() {
     OUTFITS: 'shirt-outline' as const,
   };
 
-  const renderBrandChips = () => {
-    if (availableBrands.length <= 1) return null;
+  const renderFilterPanel = () => {
+    if (!showFilters) return null;
     return (
       <ScrollView
         horizontal
@@ -406,12 +477,14 @@ export default function ClosetScreen() {
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonWrap}>
       <View style={styles.skeletonRow}>
-        <SkeletonLoader width="48%" height={200} borderRadius={Radius.lg} />
-        <SkeletonLoader width="48%" height={260} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
       </View>
       <View style={styles.skeletonRow}>
-        <SkeletonLoader width="48%" height={240} borderRadius={Radius.lg} />
-        <SkeletonLoader width="48%" height={180} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
       </View>
     </View>
   );
@@ -430,18 +503,14 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
-        {renderSortBar()}
-        {renderSortMenu()}
-        {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderBrandChips() : null}
-        <MasonryGrid
+      <>
+        {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
+        <ClosetMediaMosaic
           items={filteredSaved}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-          numColumns={2}
           showSaveButton
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -452,46 +521,20 @@ export default function ClosetScreen() {
         <EmptyState
           graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
           title="Your wishlist is empty"
-          subtitle="Heart items to track them."
+          subtitle="Heart items to track price drops and get notified when they go on sale."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
         />
       );
     }
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
-        {renderSortBar()}
-        {renderSortMenu()}
-        {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderBrandChips() : null}
-        {/* Price drop filter chip — only on wishlist */}
-        {priceDropCount > 0 ? (
-          <View style={styles.filterChipRow}>
-            <AnimatedPressable
-              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
-              onPress={() => {
-                haptic.light();
-                setShowPriceDropsOnly((v) => !v);
-              }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityState={{ selected: showPriceDropsOnly }}
-              accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
-            >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
-              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
-                Price drops ({priceDropCount})
-              </Text>
-            </AnimatedPressable>
-          </View>
-        ) : null}
-        <MasonryGrid
+      <>
+        <ClosetMediaMosaic
           items={filteredWishlist}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-          numColumns={2}
-          showSaveButton
+          showWishlistButton
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -499,10 +542,10 @@ export default function ClosetScreen() {
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
-          graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first moodboard" icon="folder-open-outline" size={140} />}
+          graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first board" icon="folder-open-outline" size={140} />}
           title="No collections yet"
-          subtitle="Group your saved items into boards."
-          ctaLabel="Create Collection"
+          subtitle="Group saved items by style, season, or vibe."
+          ctaLabel="Create collection"
           onCtaPress={handleCreateCollection}
         />
       );
@@ -510,7 +553,7 @@ export default function ClosetScreen() {
 
     const boardData = filteredCollections.map((collection) => {
       const covers = collection.itemIds
-        .slice(0, 3)
+        .slice(0, 4)
         .map((id) => listings.find((l) => l.id === id))
         .filter((l): l is NonNullable<typeof listings[0]> => !!l && Array.isArray(l.images) && l.images.length > 0)
         .map((l) => l.images[0]);
@@ -519,12 +562,13 @@ export default function ClosetScreen() {
         title: collection.name,
         itemCount: collection.itemIds?.length ?? 0,
         covers,
+        updatedAt: collection.updatedAt,
+        isPrivate: collection.isPrivate === true,
       };
     });
 
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
-        {renderSortBar()}
+      <>
         <MoodboardCollectionGrid
           boards={boardData}
           onPressBoard={(id) => navigation.navigate('CollectionDetail', { collectionId: id })}
@@ -536,7 +580,7 @@ export default function ClosetScreen() {
           onPress={handleCreateCollection}
           style={styles.createCollectionBtn}
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -575,7 +619,7 @@ export default function ClosetScreen() {
     });
 
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <>
         <View style={styles.outfitsGrid}>
           {outfitBoardData.map((outfit) => (
             <OutfitCard
@@ -612,7 +656,7 @@ export default function ClosetScreen() {
           onPress={handleCreateOutfit}
           style={styles.createCollectionBtn}
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -627,7 +671,7 @@ export default function ClosetScreen() {
       {/* Header */}
       <View style={styles.header}>
         <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>
@@ -664,24 +708,6 @@ export default function ClosetScreen() {
           />
         }
       >
-        {/* Search Bar */}
-        <View style={styles.searchWrap}>
-          <AppInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={searchPlaceholder}
-            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
-            suffix={
-              searchQuery.length > 0 ? (
-                <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                </AnimatedPressable>
-              ) : null
-            }
-            containerStyle={{ marginBottom: 0 }}
-          />
-        </View>
-
         {/* Error banner */}
         {(lastError || collectionsSyncError) && (
           <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
@@ -694,37 +720,7 @@ export default function ClosetScreen() {
           </View>
         )}
 
-        {/* Closet stats summary — total items, value, savings */}
-        {closetStats.totalItems > 0 ? (
-          <View style={[styles.statsCard, t.statsCard]}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
-              </View>
-              <View style={[styles.statDivider, t.statDivider]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
-              </View>
-              <View style={[styles.statDivider, t.statDivider]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
-              </View>
-            </View>
-            {closetStats.totalSavings > 0 ? (
-              <View style={[styles.savingsRow, t.savingsRow]}>
-                <Ionicons name="trending-down" size={12} color={colors.success} />
-                <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* Tabs */}
+        {/* Tabs — immediately after header, before any stats/filters */}
         <View style={styles.tabsWrap}>
           <View style={[styles.tabBar, t.tabBar]}>
             {(['SAVED', 'WISHLIST', 'COLLECTIONS', 'OUTFITS'] as TabKey[]).map((tab) => {
@@ -756,11 +752,164 @@ export default function ClosetScreen() {
           </View>
         </View>
 
-        {/* Content */}
+        {/* Compact search + sort/filter toolbar — single icons, not chip walls */}
+        <View style={styles.closetToolbar}>
+          <AppInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={searchPlaceholder}
+            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
+            suffix={
+              searchQuery.length > 0 ? (
+                <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </AnimatedPressable>
+              ) : null
+            }
+            containerStyle={{ flex: 1, marginBottom: 0 }}
+          />
+          {activeTab === 'SAVED' || activeTab === 'WISHLIST' ? (
+            <>
+              <AnimatedPressable
+                style={styles.closetToolbarBtn}
+                onPress={() => setShowSortMenu((v) => !v)}
+                accessibilityLabel={`Sort by ${sortBy}`}
+                accessibilityRole="button"
+              >
+                <Ionicons name="swap-vertical" size={20} color={colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.closetToolbarBtn}
+                onPress={() => { haptic.light(); setShowFilters((v) => !v); }}
+                accessibilityLabel={showFilters ? 'Close filters' : 'Open filters'}
+                accessibilityRole="button"
+              >
+                <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
+                {activeBrand ? (
+                  <View style={styles.closetToolbarBadge}>
+                    <Text style={styles.closetToolbarBadgeText}>1</Text>
+                  </View>
+                ) : null}
+              </AnimatedPressable>
+            </>
+          ) : null}
+        </View>
+
+        {/* Sort menu — compact dropdown */}
+        {showSortMenu && (activeTab === 'SAVED' || activeTab === 'WISHLIST') ? (
+          <View style={[styles.sortMenu, t.sortMenu]}>
+            {SORT_OPTIONS.map((opt) => (
+              <AnimatedPressable
+                key={opt}
+                style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
+                onPress={() => {
+                  haptic.light();
+                  setSortBy(opt);
+                  setShowSortMenu(false);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
+                {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
+              </AnimatedPressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Brand filter panel — only visible when filter icon is tapped */}
+        {showFilters && (activeTab === 'SAVED' || activeTab === 'WISHLIST') && availableBrands.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.brandChipScroll}
+            contentContainerStyle={styles.brandChipContent}
+          >
+            <AnimatedPressable
+              style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
+              onPress={() => { haptic.light(); setActiveBrand(null); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !activeBrand }}
+              accessibilityLabel="All brands"
+            >
+              <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
+            </AnimatedPressable>
+            {availableBrands.map((brand) => (
+              <AnimatedPressable
+                key={brand}
+                style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
+                onPress={() => {
+                  haptic.light();
+                  setActiveBrand((prev) => (prev === brand ? null : brand));
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeBrand === brand }}
+                accessibilityLabel={`Filter by brand ${brand}`}
+              >
+                <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
+              </AnimatedPressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {/* Price drop filter — only on wishlist, compact chip */}
+        {activeTab === 'WISHLIST' && priceDropCount > 0 ? (
+          <View style={styles.filterChipRow}>
+            <AnimatedPressable
+              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
+              onPress={() => {
+                haptic.light();
+                setShowPriceDropsOnly((v) => !v);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: showPriceDropsOnly }}
+              accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
+            >
+              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
+                Price drops ({priceDropCount})
+              </Text>
+            </AnimatedPressable>
+          </View>
+        ) : null}
+
+        {/* Content — grid is the FIRST visible content after tabs+toolbar */}
         {activeTab === 'SAVED' && renderSavedContent()}
         {activeTab === 'WISHLIST' && renderWishlistContent()}
         {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
         {activeTab === 'OUTFITS' && renderOutfitsContent()}
+
+        {/* Closet stats — below the fold, after content */}
+        {closetStats.totalItems > 0 ? (
+          <View style={[styles.statsCard, t.statsCard, styles.statsCardBelowFold]}>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
+              </View>
+              <View style={[styles.statDivider, t.statDivider]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
+              </View>
+              <View style={[styles.statDivider, t.statDivider]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
+              </View>
+            </View>
+            {closetStats.totalSavings > 0 ? (
+              <View style={[styles.savingsRow, t.savingsRow]}>
+                <Ionicons name="trending-down" size={12} color={colors.success} />
+                <Text style={[styles.savingsText, t.savingsText]}>
+                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -850,21 +999,57 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     paddingHorizontal: Space.md,
+    marginBottom: Space.md,
+  },
+  closetToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
     marginBottom: Space.sm,
+  },
+  closetToolbarBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  closetToolbarBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  closetToolbarBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    lineHeight: 12,
+  },
+  statsCardBelowFold: {
+    marginTop: Space.xl,
   },
   tabsWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
   },
   scrollContent: {
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
   },
   sortBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   resultCount: {
     fontSize: Type.caption.size,
@@ -895,7 +1080,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderBottomWidth: Stroke.hairline,
   },
   sortOptionActive: {
@@ -917,7 +1102,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
@@ -949,23 +1134,20 @@ const styles = StyleSheet.create({
     width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
   },
   skeletonWrap: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
+    paddingHorizontal: SKEL_PADDING,
+    gap: SKEL_GAP,
     marginTop: Space.sm,
   },
   skeletonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: Space.sm,
   },
   statsCard: {
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    borderRadius: Radius.none,
-    borderWidth: 0,
+    marginBottom: Space.lg,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
     padding: Space.md,
-    borderTopWidth: Stroke.hairline,
-    borderBottomWidth: Stroke.hairline,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1011,7 +1193,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   brandChip: {
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,

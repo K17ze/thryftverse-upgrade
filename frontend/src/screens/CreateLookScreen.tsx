@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,10 +18,10 @@ import { Type, Space, Radius, Typography, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { uploadMedia } from '../services/mediaUpload';
 import { createLookOnApi } from '../services/looksApi';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaComposer';
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -42,7 +41,6 @@ export default function CreateLookScreen() {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -50,6 +48,9 @@ export default function CreateLookScreen() {
   const [tags, setTags] = useState<OutfitTag[]>([]);
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [isPublishing, setIsPublishing] = useState(false);
+  // Stable look id generated once per editing session so a publish retry
+  // reuses the same id (idempotency) instead of creating a duplicate post.
+  const lookIdRef = useRef<string>(makeStableId('look'));
 
   const allowNavigationRef = useRef(false);
 
@@ -113,7 +114,7 @@ export default function CreateLookScreen() {
       try {
         const uploaded = await uploadMedia(imageUri, 'looks');
         const mediaUrl = uploaded.publicUrl;
-        const lookId = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const lookId = lookIdRef.current;
         const internalTitle =
           caption
             .trim()
@@ -181,7 +182,7 @@ export default function CreateLookScreen() {
         showsVerticalScrollIndicator={false}
       >
           {/* Media Composer */}
-          <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+          <View>
             <LookMediaComposer
               imageUri={imageUri}
               onImageChange={setImageUri}
@@ -189,11 +190,10 @@ export default function CreateLookScreen() {
               onTagsChange={handleTagsChange}
               editable
             />
-          </Reanimated.View>
+          </View>
 
           {/* Caption */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(60)}
+          <View
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Caption</Text>
@@ -209,22 +209,20 @@ export default function CreateLookScreen() {
               accessibilityLabel="Look caption"
             />
             <Text style={styles.charCount}>{caption.length}/500</Text>
-          </Reanimated.View>
+          </View>
 
           {/* Outfit Pieces */}
           {tags.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(100)}
+            <View
               style={styles.section}
             >
               <Text style={styles.sectionLabel}>Outfit Pieces</Text>
               <OutfitPieceEditor tags={tags} onTagsChange={handleTagsChange} />
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Audience */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(140)}
+          <View
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Audience</Text>
@@ -260,11 +258,10 @@ export default function CreateLookScreen() {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Publish Button */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(180)}
+          <View
             style={styles.publishSection}
           >
             <AnimatedPressable
@@ -276,12 +273,12 @@ export default function CreateLookScreen() {
               accessibilityLabel="Publish look"
             >
               {isPublishing ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
                 <Text style={styles.publishBtnText}>Publish Look</Text>
               )}
             </AnimatedPressable>
-          </Reanimated.View>
+          </View>
 
           <View style={{ height: 40 }} />
       </KeyboardAwareScrollView>
@@ -368,7 +365,7 @@ function createStyles(colors: ThemeColors) {
   },
   audienceBtnActive: {
     borderColor: colors.brand,
-    backgroundColor: 'rgba(99,102,241,0.06)',
+    backgroundColor: colors.brandSubtle,
   },
   audienceBtnText: {
     fontSize: Type.body.size,
@@ -396,7 +393,7 @@ function createStyles(colors: ThemeColors) {
   publishBtnText: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   });
 }

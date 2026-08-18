@@ -1,15 +1,28 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  Pressable,
-  ScrollView,
   Image,
+  Pressable,
+  Text,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import type * as MediaLibrary from 'expo-media-library/legacy';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, Typography, Type } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { AnimatedPressable } from '../AnimatedPressable';
+
 interface BottomControlBarProps {
   onGalleryPress: () => void;
   onFlipCamera: () => void;
@@ -27,55 +40,121 @@ export default function BottomControlBar({
   showCameraControls,
   onRotateCamera,
 }: BottomControlBarProps) {
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  // Gallery thumb spring scale for enhanced press feedback
+  const galleryThumbScale = useSharedValue(1);
+  const galleryThumbStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: galleryThumbScale.value }],
+  }));
+
+  const handleGalleryPressIn = () => {
+    if (!reducedMotion) {
+      galleryThumbScale.value = withSpring(0.95, spring.tap);
+    }
+  };
+  const handleGalleryPressOut = () => {
+    if (!reducedMotion) {
+      galleryThumbScale.value = withSpring(1, spring.entrance);
+    }
+  };
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible recent photo thumbnails on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderRecentPhotoItem = useCallback(
+    ({ item, index }: { item: (typeof recentPhotos)[number]; index: number }) => (
+      <AnimatedPressable
+        style={styles.photoThumb}
+        onPress={() => {
+          haptic.light();
+          onRecentPhotoPress(item.uri ?? '');
+        }}
+        scaleValue={0.92}
+        activeOpacity={0.85}
+        hapticFeedback="light"
+        accessibilityLabel={`Recent photo ${index + 1}`}
+        accessibilityHint="Selects this photo from your recent photos"
+        accessibilityRole="button"
+      >
+        <Image source={{ uri: item.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      </AnimatedPressable>
+    ),
+    [styles, haptic, onRecentPhotoPress]
+  );
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       {/* Gallery strip + camera flip */}
       <View style={styles.bottomRow}>
-        <Pressable style={styles.galleryThumb} onPress={onGalleryPress} hitSlop={12}>
-          {recentPhotos[0] ? (
-            <Image
-              source={{ uri: recentPhotos[0].uri ?? '' }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="cover"
-            />
-          ) : (
-            <Ionicons name="images-outline" size={20} color="#fff" />
-          )}
-          <View style={styles.galleryOverlay}>
-            <Ionicons name="chevron-up" size={14} color="#fff" />
-          </View>
+        <Pressable
+          onPress={onGalleryPress}
+          onPressIn={handleGalleryPressIn}
+          onPressOut={handleGalleryPressOut}
+          accessibilityLabel="Open gallery"
+          accessibilityHint="Opens the photo gallery to select media"
+          accessibilityRole="button"
+        >
+          <Reanimated.View style={[styles.galleryThumb, galleryThumbStyle]}>
+            {recentPhotos[0] ? (
+              <Image
+                source={{ uri: recentPhotos[0].uri ?? '' }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="images-outline" size={20} color="#fff" />
+            )}
+            <View style={styles.galleryOverlay}>
+              <Ionicons name="chevron-up" size={14} color="#fff" />
+            </View>
+          </Reanimated.View>
         </Pressable>
 
         {showCameraControls && (
-          <Pressable style={styles.flipBtn} onPress={onRotateCamera || onFlipCamera} hitSlop={12}>
+          <AnimatedPressable
+            style={styles.flipBtn}
+            onPress={() => {
+              haptic.medium();
+              (onRotateCamera || onFlipCamera)();
+            }}
+            scaleValue={0.90}
+            activeOpacity={0.85}
+            hapticFeedback="medium"
+            accessibilityLabel="Flip camera"
+            accessibilityHint="Switches between front and back camera"
+            accessibilityRole="button"
+          >
             <Ionicons name="sync-outline" size={22} color="#fff" />
-          </Pressable>
+          </AnimatedPressable>
         )}
       </View>
 
-      {/* Recent photos horizontal strip */}
+      {/* Recent photos horizontal strip — spring snap-to-position */}
       {recentPhotos.length > 0 && (
-        <ScrollView
+        <FlashList
           horizontal
+          data={recentPhotos.slice(0, 10)}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRecentPhotoItem}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.photoStrip}
-        >
-          {recentPhotos.slice(0, 10).map((photo) => (
-            <Pressable
-              key={photo.id}
-              style={styles.photoThumb}
-              onPress={() => onRecentPhotoPress(photo.uri ?? '')}
-            >
-              <Image source={{ uri: photo.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            </Pressable>
-          ))}
-        </ScrollView>
+          decelerationRate="fast"
+          snapToInterval={64}
+          snapToAlignment="start"
+          accessibilityRole="list"
+          accessibilityLabel="Recent photos"
+        />
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 0,
@@ -96,7 +175,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -110,7 +189,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -118,7 +197,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -132,6 +211,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.overlay,
   },
-});
+  });
+}

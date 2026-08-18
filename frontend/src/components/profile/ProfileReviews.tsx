@@ -5,6 +5,7 @@ import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
+import { formatFullDate, formatShortDate } from '../../utils/dateFormat';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -94,7 +95,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
-    ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    ? formatFullDate(item.createdAt)
     : '';
   const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
   const canOpenListing = Boolean(item.listing?.id && onOpenListing);
@@ -102,14 +103,14 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   const photos = item.photoUrls ?? [];
   const sellerResponse = item.sellerResponse ?? null;
   const responseDate = sellerResponse?.createdAt
-    ? new Date(sellerResponse.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    ? formatShortDate(sellerResponse.createdAt)
     : '';
 
   return (
     <View style={styles.reviewRow}>
       {/* Reviewer identity + rating */}
       <Pressable
-        style={styles.reviewHeader}
+        style={({ pressed }) => [styles.reviewHeader, pressed && { opacity: 0.6 }]}
         onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
         disabled={!canOpenReviewer}
         accessibilityRole={canOpenReviewer ? 'button' : undefined}
@@ -162,6 +163,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
               disabled={!onOpenPhoto}
               accessibilityRole={onOpenPhoto ? 'button' : undefined}
               accessibilityLabel={onOpenPhoto ? `View review photo ${idx + 1}` : undefined}
+              style={({ pressed }) => pressed && { opacity: 0.6 }}
             >
               <CachedImage
                 uri={uri}
@@ -194,7 +196,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
       {/* Respond button — only for own profile and when no response exists */}
       {onRespond && !sellerResponse && (
         <Pressable
-          style={styles.respondBtn}
+          style={({ pressed }) => [styles.respondBtn, pressed && { opacity: 0.6 }]}
           onPress={() => onRespond(item.id, reviewerName, item.rating)}
           accessibilityRole="button"
           accessibilityLabel="Respond to this review"
@@ -237,17 +239,17 @@ function createStyles(colors: ThemeColors) {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  reviewSummaryTop: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  reviewSummaryAvg: { alignItems: 'center' },
-  reviewSummaryAvgValue: { fontSize: Type.display.size + 2, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.display.letterSpacing },
+  reviewSummaryTop: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  reviewSummaryAvg: { alignItems: 'center', minWidth: 80 },
+  reviewSummaryAvgValue: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceLarge.letterSpacing, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   reviewSummaryStars: { flexDirection: 'row', gap: Space.xs / 4, marginTop: Space.xs / 2 },
   reviewSummaryCount: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs / 2 },
-  reviewSummaryDist: { flex: 1, gap: Space.xs / 2 + 1 },
+  reviewSummaryDist: { flex: 1, gap: Space.xs },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
   distStar: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.textSecondary, width: Space.sm },
-  distTrack: { flex: 1, height: Stroke.standard * 2, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
-  distFill: { height: '100%', backgroundColor: colors.brand, borderRadius: Radius.sm },
-  distCount: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, width: Space.xl, textAlign: 'right' },
+  distTrack: { flex: 1, height: 3, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+  distFill: { height: '100%', backgroundColor: colors.brand, borderRadius: Radius.full },
+  distCount: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, width: Space.xl, textAlign: 'right', fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   reviewSummaryContext: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   reviewRow: {
     paddingHorizontal: Space.md,
@@ -256,20 +258,20 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   // Full reviewer identity region — tappable as one unit
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm + 2, marginBottom: Space.xs + 2 },
-  reviewAvatar: { width: Space.xl + Space.xs, height: Space.xl + Space.xs, borderRadius: Radius.xxl },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm + 2, marginBottom: Space.sm },
+  reviewAvatar: { width: 40, height: 40, borderRadius: Radius.full },
   reviewAvatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   reviewAvatarInitials: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   reviewIdentityCol: { flex: 1, gap: Space.xs / 2 },
-  reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
-  reviewName: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 + 1, flexShrink: 0 },
-  verifiedBadgeText: { fontSize: Type.meta.size - 2, fontFamily: Typography.family.medium, color: colors.success, letterSpacing: 0.2 },
+  reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
+  reviewName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1, lineHeight: Type.bodyEmphasis.lineHeight },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2, flexShrink: 0 },
+  verifiedBadgeText: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.success, letterSpacing: 0.15 },
   reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 },
   reviewDate: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginLeft: Space.xs + 2 },
-  reviewComment: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight, marginTop: Space.xs },
-  photoRow: { flexDirection: 'row', gap: Space.xs + 2, marginTop: Space.sm },
-  reviewPhoto: { width: Space.xxl + Space.xxl, height: Space.xxl + Space.xxl, borderRadius: Radius.md },
+  reviewComment: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight, marginTop: Space.sm },
+  photoRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm },
+  reviewPhoto: { width: 72, height: 72, borderRadius: Radius.md },
   photoOverflowOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -281,24 +283,24 @@ function createStyles(colors: ThemeColors) {
   photoOverflowText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, color: '#fff' },
   sellerResponseBox: {
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Space.sm + 2,
+    borderRadius: Radius.lg,
+    padding: Space.md - 2,
     marginTop: Space.sm,
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
   sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
-  sellerResponseLabel: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1 },
+  sellerResponseLabel: { fontSize: Type.metaElevated.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1, letterSpacing: Type.metaElevated.letterSpacing },
   sellerResponseDate: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
-  sellerResponseText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.caption.lineHeight },
+  sellerResponseText: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight },
   respondBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
     marginTop: Space.sm,
     paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}10`,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.full,
+    backgroundColor: `${colors.brand}12`,
     alignSelf: 'flex-start',
   },
   respondBtnText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.brand },

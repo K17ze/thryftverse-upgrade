@@ -50,13 +50,15 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(accountControlSection).toBeTruthy();
     });
 
-    it('exposes a truthful Delete account row in a separated Danger zone section', () => {
+    it('exposes a truthful Delete account row in the Account section', () => {
       // Per Apple App Store + Google Play 2026 requirements, account deletion
-      // MUST be reachable in-app. The row must be in a danger zone section
-      // (visually separated) and navigate to the dedicated DeleteAccount screen.
-      expect(settingsSrc).toMatch(/Danger zone/i);
+      // MUST be reachable in-app. Following flagship app patterns (Instagram,
+      // Vinted, Depop), the row lives in the Account section (not a separate
+      // "Danger zone" section which is an AI-slop anti-pattern) and navigates
+      // to the dedicated DeleteAccount screen.
       expect(settingsSrc).toMatch(/Delete account/);
       expect(settingsSrc).toMatch(/DeleteAccount/);
+      expect(settingsSrc).not.toMatch(/Danger zone/i);
     });
   });
 

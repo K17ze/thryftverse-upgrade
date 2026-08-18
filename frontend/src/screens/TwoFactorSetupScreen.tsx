@@ -9,7 +9,6 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -17,7 +16,6 @@ import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from 
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment, disableTwoFactor } from '../services/authApi';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -42,7 +40,6 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotionEnabled = useReducedMotion();
 
   const [phase, setPhase] = useState<Phase>(twoFactorEnabled ? 'disable' : 'setup');
   const [code, setCode] = useState('');
@@ -475,9 +472,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
 
       <View style={[styles.recoveryCodesContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {recoveryCodes.map((code, i) => (
-          <Reanimated.View
+          <View
             key={i}
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(i * 50)}
             style={[
               styles.recoveryCodeRow,
               i < recoveryCodes.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -485,7 +481,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           >
             <Text style={[styles.recoveryCodeIndex, { color: colors.textMuted }]}>{i + 1}</Text>
             <Text style={[styles.recoveryCodeValue, { color: colors.textPrimary }]}>{code}</Text>
-          </Reanimated.View>
+          </View>
         ))}
       </View>
 
@@ -506,7 +502,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       </View>
 
       <Text style={[styles.recoveryWarning, { color: colors.textMuted }]}>
-        Each code can only be used once. You will not see these again.
+        Each code can only be used once. You won't see these again.
       </Text>
     </>
   );
@@ -564,13 +560,13 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             {phase === 'disable' && renderDisableOverview()}
             {phase === 'disable-confirm' && renderDisableConfirm()}
             {phase === 'setup' && renderSetup()}
             {phase === 'verify' && renderVerify()}
             {phase === 'recovery' && renderRecovery()}
-          </Reanimated.View>
+          </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );

@@ -69,6 +69,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Co-Own / syndicate
       CoOwnHub: 'co-own',
       AssetDetail: 'asset/:assetId',
+      AssetDueDiligence: 'asset/:assetId/due-diligence',
       Portfolio: 'portfolio',
       CoOwnOrderHistory: 'co-own/orders',
 
@@ -82,6 +83,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
       MyOrders: 'orders',
       BalanceHistory: 'wallet/balance',
       Withdraw: 'wallet/withdraw',
+      SellerEarnings: 'wallet/earnings',
+      WalletActivity: 'wallet/activity',
 
       // Discovery
       GlobalSearch: 'search',

@@ -7,8 +7,6 @@ import {
   View,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,16 +27,15 @@ import {
   CoOwnEducationCard,
   CoOwnHubSkeleton,
   CoOwnInstrumentCard,
-  CoOwnMarketHeader,
   CoOwnMarketHighlightsCarousel,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   CoOwnStateCanvas,
   COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
-  type CoOwnMarketHeaderAction,
   type CoOwnMarketHighlight,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
@@ -119,7 +116,7 @@ export default function CoOwnHubScreen() {
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
   const { isOffline } = useConnectivity();
@@ -253,19 +250,38 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
-  const headerActions = React.useMemo<CoOwnMarketHeaderAction[]>(() => [
-    {
-      icon: 'pie-chart-outline',
-      label: yourPositions.length > 0 ? `Portfolio, ${yourPositions.length} positions held` : 'Portfolio',
-      badge: yourPositions.length,
-      onPress: () => navigation.navigate('Portfolio'),
-    },
-    {
-      icon: 'pulse-outline',
-      label: 'Activity',
-      onPress: () => navigation.navigate('CoOwnOrderHistory'),
-    },
-  ], [navigation, yourPositions.length]);
+  const headerRightAction = React.useMemo(
+    () => (
+      <View style={styles.headerActions}>
+        <AnimatedPressable
+          style={styles.headerAction}
+          onPress={() => navigation.navigate('Portfolio')}
+          accessibilityRole="button"
+          accessibilityLabel={yourPositions.length > 0 ? `Portfolio, ${yourPositions.length} positions held` : 'Portfolio'}
+          hapticFeedback="light"
+        >
+          <Ionicons name="pie-chart-outline" size={20} color={colors.textPrimary} />
+          {yourPositions.length > 0 ? (
+            <View style={[styles.headerBadge, { backgroundColor: colors.brand, borderColor: colors.background }]}>
+              <Text style={[styles.headerBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.1}>
+                {yourPositions.length > 9 ? '9+' : yourPositions.length}
+              </Text>
+            </View>
+          ) : null}
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.headerAction}
+          onPress={() => navigation.navigate('CoOwnOrderHistory')}
+          accessibilityRole="button"
+          accessibilityLabel="Activity"
+          hapticFeedback="light"
+        >
+          <Ionicons name="pulse-outline" size={20} color={colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
+    ),
+    [colors, navigation, yourPositions.length]
+  );
 
   const segmentCounts = React.useMemo<Record<HubSegment, number>>(() => {
     const now = Date.now();
@@ -361,12 +377,24 @@ export default function CoOwnHubScreen() {
   }, [columns, filteredAssets]);
 
   const hubRows = React.useMemo<HubRow[]>(() => {
-    const rows: HubRow[] = [
-      { kind: 'highlights', key: 'highlights' },
-      { kind: 'tabs', key: 'tabs' },
-      { kind: 'positions', key: 'positions' },
-      { kind: 'instrumentsHeader', key: 'instruments-header' },
-    ];
+    const hasPositions = yourPositions.length > 0;
+    const rows: HubRow[] = [];
+
+    // Holders: positions first (personal portfolio), then market tabs + grid.
+    // Non-holders: market highlights first (education/discovery), then tabs + grid.
+    // Per doc 42: "Do not always put generic highlights before existing holdings."
+    // This keeps tabs at index 1 so stickyHeaderIndices={[1]} always pins the
+    // market segment selector (holders: positions[0] → tabs[1]; non-holders:
+    // highlights[0] → tabs[1]).
+    if (hasPositions) {
+      rows.push({ kind: 'positions', key: 'positions' });
+    } else {
+      rows.push({ kind: 'highlights', key: 'highlights' });
+    }
+
+    rows.push({ kind: 'tabs', key: 'tabs' });
+    rows.push({ kind: 'instrumentsHeader', key: 'instruments-header' });
+
     if (instrumentRows.length === 0) {
       rows.push({ kind: 'instrumentsEmpty', key: 'instruments-empty' });
     } else {
@@ -376,7 +404,7 @@ export default function CoOwnHubScreen() {
     }
     rows.push({ kind: 'remaining', key: 'remaining' });
     return rows;
-  }, [instrumentRows]);
+  }, [instrumentRows, yourPositions.length]);
 
   const handleHighlightPress = React.useCallback((item: CoOwnMarketHighlight) => {
     navigation.navigate('AssetDetail', { assetId: item.id });
@@ -410,7 +438,7 @@ export default function CoOwnHubScreen() {
   }, [format1ze, formatLocal, navigation, totalPositionValue]);
 
   const renderTabs = React.useCallback(() => (
-    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border }]}> 
+    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border, borderTopColor: colors.border }]}>
       <View style={styles.tabsRow} accessibilityRole="tablist">
         {SEGMENTS.map((segment) => {
           const isActive = activeSegment === segment;
@@ -741,33 +769,33 @@ export default function CoOwnHubScreen() {
 
   if (isSyncing && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnHubSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (isError && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={loadData} />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No items yet"
-          subtitle="When issuers list items for shared ownership, you will find them here."
+          subtitle="When issuers list items for shared ownership, you'll find them here."
           actionLabel="Issue a Co-Own"
           onAction={() => {
             navigation.navigate('CreateCoOwn');
@@ -775,14 +803,16 @@ export default function CoOwnHubScreen() {
           secondaryActionLabel="Learn how it works"
           onSecondaryAction={() => navigation.navigate('CoOwnOnboarding')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
       <FlashList
@@ -801,16 +831,40 @@ export default function CoOwnHubScreen() {
         }
         keyboardShouldPersistTaps="handled"
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   listContent: {
     paddingBottom: Space.xxl,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerAction: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 17,
+    height: 17,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.xs,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
   },
   highlightsSection: {
     paddingTop: Space.sm,
@@ -826,6 +880,7 @@ const styles = StyleSheet.create({
   tabsSurface: {
     minHeight: Control.hit + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
     justifyContent: 'flex-end',
   },
   tabsRow: {
@@ -977,7 +1032,7 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     minHeight: Control.hit,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
@@ -1002,7 +1057,7 @@ const styles = StyleSheet.create({
   },
   sortOption: {
     minHeight: Control.hit,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',

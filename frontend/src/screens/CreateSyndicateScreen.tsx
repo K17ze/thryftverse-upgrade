@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -24,14 +22,13 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnIssueStudioStep,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
@@ -51,11 +48,10 @@ type Stage = 'select' | 'configure' | 'review' | 'recourse';
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -224,7 +220,7 @@ export default function CreateCoOwnScreen() {
       // Move to the recourse agreement signing stage
       setStage('recourse');
     } catch (err) {
-      show('Failed to issue co-own. Please try again.', 'error');
+      show('Failed to issue co-own. Try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -358,28 +354,36 @@ export default function CreateCoOwnScreen() {
   // ── Loading state ──
   if (isLoadingListings) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Issue Co-Own"
-          subtitle="Create a shared ownership item"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Issue Co-Own"
+            subtitle="Create a shared ownership item"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnCreateStudioSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Empty state (no listings) ──
   if (issuerListings.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Issue Co-Own"
-          subtitle="Create a shared ownership item"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Issue Co-Own"
+            subtitle="Create a shared ownership item"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title={issuerId ? 'No eligible listings' : 'Sign in required'}
@@ -395,24 +399,26 @@ export default function CreateCoOwnScreen() {
           }}
           emptyGraphicVariant="box"
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title={stageTitles[stage]}
-        subtitle="Issue Co-Own"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={stageTitles[stage]}
+          subtitle="Issue Co-Own"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={1}
               totalSteps={3}
@@ -459,12 +465,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               )}
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 2: Configure units and price ── */}
         {stage === 'configure' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={2}
               totalSteps={3}
@@ -653,12 +659,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               </View>
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 3: Review and issue ── */}
         {stage === 'review' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={3}
               totalSteps={3}
@@ -719,12 +725,12 @@ export default function CreateCoOwnScreen() {
               {/* Risk disclosure */}
               <CoOwnRiskDisclosure />
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
         {stage === 'recourse' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={4}
               totalSteps={4}
@@ -734,7 +740,7 @@ export default function CreateCoOwnScreen() {
               {/* Liability summary */}
               <View style={[styles.recourseSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.recourseLiabilityRow}>
-                  <Ionicons name="shield-checkmark" size={20} color={colors.brand} />
+                  <Ionicons name="checkmark-done" size={20} color={colors.brand} />
                   <View style={styles.recourseLiabilityBody}>
                     <Text style={[styles.recourseLiabilityLabel, { color: colors.textMuted }]}>
                       Personal liability
@@ -799,7 +805,7 @@ export default function CreateCoOwnScreen() {
                 </Text>
               </Pressable>
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
 
@@ -808,7 +814,7 @@ export default function CreateCoOwnScreen() {
         {stage === 'review' ? (
           <AppButton
             title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
-            icon={<Ionicons name="flash-outline" size={16} color={colors.background} />}
+            icon={<Ionicons name="speedometer-outline" size={16} color={colors.background} />}
             onPress={() => void issueCoOwn()}
             variant="primary"
             size="lg"
@@ -820,7 +826,7 @@ export default function CreateCoOwnScreen() {
         ) : stage === 'recourse' ? (
           <AppButton
             title={isSubmitting ? 'Signing...' : 'Sign & finish'}
-            icon={<Ionicons name="shield-checkmark" size={16} color={colors.background} />}
+            icon={<Ionicons name="checkmark-done" size={16} color={colors.background} />}
             onPress={() => void signAndFinish()}
             variant="primary"
             size="lg"
@@ -831,7 +837,7 @@ export default function CreateCoOwnScreen() {
           />
         ) : (
           <AppButton
-            title="Continue"
+            title="Next step"
             icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
             onPress={handleNext}
             variant="primary"
@@ -843,14 +849,11 @@ export default function CreateCoOwnScreen() {
           />
         )}
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

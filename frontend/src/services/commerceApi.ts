@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import type { FulfilmentSnapshot } from '../components/orders/orderCapabilities';
 
 export interface CommerceAddress {
   id: number;
@@ -123,6 +124,19 @@ export interface CommerceOrder {
   updatedAt: string;
   buyer: { id: string; username: string; avatar: string | null } | null;
   seller: { id: string; username: string; avatar: string | null } | null;
+  /**
+   * Immutable snapshot of the buyer-selected shipping service, captured at
+   * checkout. When present, the seller's guided dispatch flow shows the exact
+   * service the buyer paid for and suppresses the generic carrier picker.
+   * Backend-provided; optional for backward compatibility with older orders.
+   */
+  fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /**
+   * Server-derived ship-by deadline (ISO 8601). The seller must dispatch by
+   * this date or risk cancellation / SLA penalties. May be derived from the
+   * fulfilment snapshot or a separate backend field.
+   */
+  shipByDate?: string | null;
 }
 
 export interface ShippingQuoteItem {
@@ -238,6 +252,10 @@ export interface CommerceUserOrder {
   createdAt: string;
   buyerUsername: string | null;
   sellerUsername: string | null;
+  /** Server-derived ship-by deadline (ISO 8601). Optional for older orders. */
+  shipByDate?: string | null;
+  /** Immutable purchased-service snapshot (optional for older orders). */
+  fulfilmentSnapshot?: FulfilmentSnapshot | null;
 }
 
 export interface OrderParcelEvent {
@@ -609,6 +627,39 @@ export async function shipOrder(orderId: string, input?: { trackingNumber?: stri
   );
 }
 
+/**
+ * Integrated shipping handoff assertion.
+ *
+ * For integrated shipping, the seller's drop-off assertion MUST NOT mutate
+ * the canonical order status to 'shipped'. The carrier's first scan is the
+ * authoritative event that advances the order to in-transit.
+ *
+ * This endpoint records the seller's handoff claim (timestamp, label/tracking
+ * context) but does NOT change `orders.status`. It is a non-state-advancing
+ * event overlay used for reconciliation when carrier scans are delayed.
+ *
+ * Per P0-1: "Integrated seller handoff does not set shipped."
+ */
+export async function assertHandoff(
+  orderId: string,
+  context?: { trackingNumber?: string; shippingProvider?: string; labelUrl?: string }
+) {
+  return fetchJson<{
+    ok: true;
+    orderId: string;
+    handoffClaimedAt: string;
+    /** Canonical order status — unchanged by this call. */
+    status: string;
+  }>(
+    `/orders/${encodeURIComponent(orderId)}/fulfilment/handoff-assertion`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(context ?? {}),
+    }
+  );
+}
+
 export async function deliverOrder(orderId: string) {
   return fetchJson<{ ok: true; orderId: string; status: string }>(`/orders/${encodeURIComponent(orderId)}/deliver`, {
     method: 'POST',
@@ -706,7 +757,7 @@ export interface SellerAnalytics {
 
 export async function fetchSellerAnalytics(
   sellerId: string,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: '7d' | '30d' | '90d' | '1y' = '30d'
 ): Promise<SellerAnalytics> {
   const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
     `/sellers/${encodeURIComponent(sellerId)}/analytics?period=${period}`

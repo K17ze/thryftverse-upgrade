@@ -4,6 +4,35 @@ import { getFreshPosters, POSTER_TEMPLATES } from '../data/posters';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 const POSTER_STORY_CACHE_KEY = 'thryftverse.poster-stories.cache.v1';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// ── Custom Error Types ──────────────────────────────────────────────
+
+export class PosterApiError extends Error {
+  code: string;
+  retryable: boolean;
+  statusCode?: number;
+
+  constructor(message: string, code: string, retryable: boolean, statusCode?: number) {
+    super(message);
+    this.name = 'PosterApiError';
+    this.code = code;
+    this.retryable = retryable;
+    this.statusCode = statusCode;
+  }
+
+  static network(): PosterApiError {
+    return new PosterApiError('Network error', 'NETWORK_ERROR', true);
+  }
+
+  static notFound(resource: string): PosterApiError {
+    return new PosterApiError(`${resource} not found`, 'NOT_FOUND', false, 404);
+  }
+
+  static server(statusCode: number): PosterApiError {
+    return new PosterApiError('Server error', 'SERVER_ERROR', true, statusCode);
+  }
+}
 
 // ── Types: Stickers ─────────────────────────────────────────────────
 
@@ -171,7 +200,11 @@ async function readCachedPosterStories(): Promise<PosterStory[]> {
   try {
     const cached = await AsyncStorage.getItem(POSTER_STORY_CACHE_KEY);
     if (!cached) return [];
-    const parsed = JSON.parse(cached) as PosterStoryListResponse;
+    const parsed = JSON.parse(cached) as PosterStoryListResponse & { cachedAt?: number };
+    // Check TTL — entries older than CACHE_TTL_MS are considered stale
+    if (parsed.cachedAt && Date.now() - parsed.cachedAt > CACHE_TTL_MS) {
+      return [];
+    }
     return Array.isArray(parsed.items) ? parsed.items : [];
   } catch {
     return [];
@@ -180,9 +213,24 @@ async function readCachedPosterStories(): Promise<PosterStory[]> {
 
 async function writeCachedPosterStories(items: PosterStory[]) {
   try {
-    await AsyncStorage.setItem(POSTER_STORY_CACHE_KEY, JSON.stringify({ items }));
+    await AsyncStorage.setItem(
+      POSTER_STORY_CACHE_KEY,
+      JSON.stringify({ items, cachedAt: Date.now() })
+    );
   } catch {
     // A successful live response remains usable when local persistence fails.
+  }
+}
+
+/**
+ * Invalidate the poster story cache. Call after create/delete/archive
+ * operations to ensure stale data isn't served on next fetch.
+ */
+export async function invalidatePosterCache(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(POSTER_STORY_CACHE_KEY);
+  } catch {
+    // Best-effort — cache invalidation failure is non-fatal
   }
 }
 
@@ -373,11 +421,13 @@ export interface PosterCreateBody {
 // ── API Functions: Stories ──────────────────────────────────────────
 
 export async function createPosterStory(body: PosterStoryCreateBody): Promise<{ ok: boolean; storyId: string }> {
-  return fetchJson<{ ok: boolean; storyId: string }>('/poster-stories', {
+  const result = await fetchJson<{ ok: boolean; storyId: string }>('/poster-stories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  void invalidatePosterCache();
+  return result;
 }
 
 export async function fetchPosterStories(options?: {
@@ -422,11 +472,15 @@ export async function fetchPosterStoryById(storyId: string): Promise<PosterStory
 }
 
 export async function deletePosterStory(storyId: string): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/poster-stories/${storyId}`, { method: 'DELETE' });
+  const result = await fetchJson<{ ok: boolean }>(`/poster-stories/${storyId}`, { method: 'DELETE' });
+  void invalidatePosterCache();
+  return result;
 }
 
 export async function archivePosterStory(storyId: string): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/poster-stories/${storyId}/archive`, { method: 'POST' });
+  const result = await fetchJson<{ ok: boolean }>(`/poster-stories/${storyId}/archive`, { method: 'POST' });
+  void invalidatePosterCache();
+  return result;
 }
 
 export async function deletePosterFrame(frameId: string): Promise<{ ok: boolean }> {

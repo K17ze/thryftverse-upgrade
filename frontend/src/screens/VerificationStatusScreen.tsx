@@ -3,23 +3,22 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   Pressable,
   RefreshControl,
   ActivityIndicator,
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { fetchKycStatus, type KycStatus } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
@@ -41,7 +40,6 @@ export default function VerificationStatusScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const currentUser = useStore((state) => state.currentUser);
@@ -213,7 +211,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
       header={<FlagshipHeader title="Verification Status" onBack={() => navigation.goBack()} />}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <Reanimated.ScrollView
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -222,106 +220,121 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         }
       >
         {/* ── Status hero ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <StatusHero status={effectiveStatus} colors={colors} styles={styles} rejectedReason={backendStatus && backendRejected ? undefined : undefined} />
-        </Reanimated.View>
+        <View>
+          <StatusHero status={effectiveStatus} colors={colors} styles={styles} />
+        </View>
 
         {/* ── Status-specific content ── */}
         {effectiveStatus === 'unverified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
-                Build buyer trust
-              </Text>
-              <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
-                Verified sellers get a trust badge, higher listing visibility, and access to higher selling limits. The process takes a few minutes to complete and is typically reviewed within 24 hours.
-              </Text>
-              <AnimatedPressable
-                style={styles.primaryBtn}
-                onPress={handleStartVerification}
-                hapticFeedback="medium"
-                accessibilityRole="button"
-                accessibilityLabel="Start verification"
-              >
-                <Text style={styles.primaryBtnText}>Start verification</Text>
-              </AnimatedPressable>
-            </View>
-          </Reanimated.View>
+          <View>
+            <FlagshipFormSection
+              variant="flat"
+              title="Build buyer trust"
+              style={styles.section}
+            >
+              <View style={styles.panelContent}>
+                <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
+                  Verified sellers get a trust badge, higher listing visibility, and access to higher selling limits. The process takes a few minutes to complete and is typically reviewed within 24 hours.
+                </Text>
+                <AnimatedPressable
+                  style={styles.primaryBtn}
+                  onPress={handleStartVerification}
+                  hapticFeedback="medium"
+                  accessibilityRole="button"
+                  accessibilityLabel="Start verification"
+                >
+                  <Text style={styles.primaryBtnText}>Start verification</Text>
+                </AnimatedPressable>
+              </View>
+            </FlagshipFormSection>
+          </View>
         )}
 
         {effectiveStatus === 'in_review' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
-                What we are checking
-              </Text>
-              <ReviewCheckItem icon="document-text-outline" text="Your identity details match the document provided" colors={colors} styles={styles} />
-              <ReviewCheckItem icon="scan-outline" text="Document is genuine and not tampered with" colors={colors} styles={styles} />
-              <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
-              <ReviewCheckItem icon="shield-checkmark-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
-              <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="time-outline" size={16} color={colors.warning} />
-                <Text style={[styles.etaText, { color: colors.textSecondary }]}>
-                  Estimated review time: within 24 hours
-                </Text>
+          <View>
+            <FlagshipFormSection
+              variant="flat"
+              title="What we are checking"
+              style={styles.section}
+            >
+              <View style={styles.panelContent}>
+                <ReviewCheckItem icon="document-text-outline" text="Your identity details match the document provided" colors={colors} styles={styles} />
+                <ReviewCheckItem icon="scan-outline" text="Document is genuine and not tampered with" colors={colors} styles={styles} />
+                <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
+                <ReviewCheckItem icon="shield-checkmark-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
+                <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="time-outline" size={16} color={colors.warning} />
+                  <Text style={[styles.etaText, { color: colors.textSecondary }]}>
+                    Estimated review time: within 24 hours
+                  </Text>
+                </View>
               </View>
-            </View>
-          </Reanimated.View>
+            </FlagshipFormSection>
+          </View>
         )}
 
         {effectiveStatus === 'verified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
-                Your verification benefits
-              </Text>
-              <BenefitItem icon="shield-checkmark" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
-              <BenefitItem icon="trending-up-outline" text="Higher listing visibility in search and discovery" colors={colors} styles={styles} />
-              <BenefitItem icon="cube-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
-              <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
-            </View>
-          </Reanimated.View>
+          <View>
+            <FlagshipFormSection
+              variant="flat"
+              title="Your verification benefits"
+              style={styles.section}
+            >
+              <View style={styles.panelContent}>
+                <BenefitItem icon="shield-checkmark" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
+                <BenefitItem icon="trending-up-outline" text="Higher listing visibility in search and discovery" colors={colors} styles={styles} />
+                <BenefitItem icon="cube-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
+                <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
+              </View>
+            </FlagshipFormSection>
+          </View>
         )}
 
         {effectiveStatus === 'rejected' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
-                Verification declined
-              </Text>
-              <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
-                Your submission could not be verified. This can happen if the document was unclear, the selfie did not match, or details did not match our records. Please review and resubmit.
-              </Text>
-              <AnimatedPressable
-                style={styles.primaryBtn}
-                onPress={handleResubmit}
-                hapticFeedback="medium"
-                accessibilityRole="button"
-                accessibilityLabel="Resubmit verification"
-              >
-                <Text style={styles.primaryBtnText}>Resubmit verification</Text>
-              </AnimatedPressable>
-            </View>
-          </Reanimated.View>
+          <View>
+            <FlagshipFormSection
+              variant="flat"
+              title="Verification declined"
+              style={styles.section}
+            >
+              <View style={styles.panelContent}>
+                <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
+                  Your submission could not be verified. This can happen if the document was unclear, the selfie did not match, or details did not match our records. Review and resubmit.
+                </Text>
+                <AnimatedPressable
+                  style={styles.primaryBtn}
+                  onPress={handleResubmit}
+                  hapticFeedback="medium"
+                  accessibilityRole="button"
+                  accessibilityLabel="Resubmit verification"
+                >
+                  <Text style={styles.primaryBtnText}>Resubmit verification</Text>
+                </AnimatedPressable>
+              </View>
+            </FlagshipFormSection>
+          </View>
         )}
 
         {/* ── Timeline ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            Verification timeline
-          </Text>
-          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {timeline.map((step, i) => (
-              <TimelineRow
-                key={step.label}
-                step={step}
-                isLast={i === timeline.length - 1}
-                colors={colors}
-                styles={styles}
-              />
-            ))}
-          </View>
-        </Reanimated.View>
+        <View>
+          <FlagshipFormSection
+            variant="flat"
+            title="Verification timeline"
+            style={styles.section}
+          >
+            <View style={styles.timelineList}>
+              {timeline.map((step, i) => (
+                <TimelineRow
+                  key={step.label}
+                  step={step}
+                  isLast={i === timeline.length - 1}
+                  colors={colors}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </FlagshipFormSection>
+        </View>
 
         {/* ── Trust & privacy note ── */}
         <SettingsInfoBanner
@@ -339,7 +352,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             Read our verification guide
           </Text>
         </Pressable>
-      </Reanimated.ScrollView>
+      </ScrollView>
     </FlagshipScreen>
   );
 }
@@ -353,7 +366,6 @@ function StatusHero({
   status: EffectiveStatus;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  rejectedReason?: string;
 }) {
   const config = STATUS_HERO_CONFIG[status];
   const accentColor =
@@ -366,19 +378,21 @@ function StatusHero({
       : colors.brand;
 
   return (
-    <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.heroIcon, { backgroundColor: `${accentColor}18` }]}>
-        <Ionicons name={config.icon} size={28} color={accentColor} />
+    <FlagshipFormSection variant="state" tone={config.accent} style={styles.section}>
+      <View style={styles.heroRow}>
+        <View style={[styles.heroIcon, { backgroundColor: `${accentColor}18` }]}>
+          <Ionicons name={config.icon} size={28} color={accentColor} />
+        </View>
+        <View style={styles.heroBody}>
+          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+            {config.title}
+          </Text>
+          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+            {config.subtitle}
+          </Text>
+        </View>
       </View>
-      <View style={styles.heroBody}>
-        <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-          {config.title}
-        </Text>
-        <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-          {config.subtitle}
-        </Text>
-      </View>
-    </View>
+    </FlagshipFormSection>
   );
 }
 
@@ -406,7 +420,7 @@ const STATUS_HERO_CONFIG: Record<
   },
   rejected: {
     title: 'Verification declined',
-    subtitle: 'Your submission could not be verified. You can resubmit.',
+    subtitle: 'Your submission could not be verified. Resubmit to try again.',
     icon: 'close-circle-outline',
     accent: 'danger',
   },
@@ -493,14 +507,13 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.sm,
       paddingBottom: Space.xl,
     },
-    hero: {
+    section: {
+      marginBottom: Space.md,
+    },
+    heroRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      padding: Space.md,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      marginBottom: Space.md,
     },
     heroIcon: {
       width: Control.hit + Space.sm,
@@ -523,17 +536,8 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       lineHeight: Type.body.lineHeight,
     },
-    panel: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      padding: Space.md,
-      marginBottom: Space.md,
+    panelContent: {
       gap: Space.sm,
-    },
-    panelTitle: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
     },
     panelBody: {
       fontSize: Type.body.size,
@@ -578,19 +582,8 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textInverse,
     },
-    sectionLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.wide,
-      textTransform: 'uppercase',
-      marginBottom: Space.sm,
-      marginLeft: Space.xs / 2,
-    },
-    timelineCard: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      padding: Space.md,
-      marginBottom: Space.md,
+    timelineList: {
+      paddingVertical: Space.xs,
     },
     timelineRow: {
       flexDirection: 'row',

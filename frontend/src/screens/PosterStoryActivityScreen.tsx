@@ -6,6 +6,7 @@ import {
   StatusBar,
   RefreshControl,
   LayoutChangeEvent,
+  AccessibilityInfo,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -92,6 +93,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies') => {
     haptic.selection();
     setActiveTab(key);
+    AccessibilityInfo.announceForAccessibility(`Showing ${key}`);
     const layout = tabLayoutsRef.current[key];
     if (layout) {
       tabIndicatorX.value = withSpring(layout.x, spring.entrance);
@@ -139,7 +141,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       ? Math.round((completedViewers / viewerCount) * 100)
       : 0;
 
-    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames };
+    // Engagement rate: (reactions + replies) / viewers * 100
+    const engagementRate = viewerCount > 0
+      ? Math.round((totalEngagement / viewerCount) * 1000) / 10 // 1 decimal place
+      : 0;
+
+    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate };
   }, [activity]);
 
   const tabs = [
@@ -148,7 +155,10 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     { key: 'replies' as const, label: 'Replies', count: summary.replyCount, icon: 'chatbubble-outline' as const },
   ];
 
-  const renderViewer = ({ item }: { item: ActivityData['viewers'][0] }) => (
+  // FlashList v2 performance: memoized render functions prevent full
+  // re-render of all visible activity rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderViewer = useCallback(({ item }: { item: ActivityData['viewers'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} viewed ${item.viewedFrameCount} frame${item.viewedFrameCount !== 1 ? 's' : ''}`}>
       {item.avatar ? (
         <CachedImage
@@ -172,9 +182,9 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         {formatRelativeTime(item.latestViewedAt)}
       </Text>
     </View>
-  );
+  ), [styles, formatRelativeTime]);
 
-  const renderReaction = ({ item }: { item: ActivityData['reactions'][0] }) => (
+  const renderReaction = useCallback(({ item }: { item: ActivityData['reactions'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} reacted ${REACTION_LABELS[item.reaction] ?? item.reaction}`}>
       {item.avatar ? (
         <CachedImage
@@ -194,9 +204,9 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       </View>
       <Text style={styles.reactionEmoji}>{REACTION_EMOJI[item.reaction] ?? '👍'}</Text>
     </View>
-  );
+  ), [styles]);
 
-  const renderReply = ({ item }: { item: ActivityData['replies'][0] }) => (
+  const renderReply = useCallback(({ item }: { item: ActivityData['replies'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.authorUsername ?? item.authorId} replied: ${item.body}`}>
       {item.authorAvatar ? (
         <CachedImage
@@ -218,16 +228,25 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         {formatRelativeTime(item.createdAt)}
       </Text>
     </View>
-  );
+  ), [styles, formatRelativeTime]);
+
+  // FlashList v2 performance: memoized renderItem dispatches to the
+  // memoized render functions above, preventing full re-render of all
+  // visible activity rows on every parent state change.
+  const renderActivityItem = useCallback(({ item }: { item: ActivityItem; index: number }) => {
+    if ('viewedFrameCount' in item) return renderViewer({ item });
+    if ('reaction' in item) return renderReaction({ item });
+    return renderReply({ item });
+  }, [renderViewer, renderReaction, renderReply]);
 
   // ── Summary header card ──────────────────────────────────────────────
-  // Instagram/Snapchat pattern: a compact metrics summary at the top of the
+  // A compact metrics summary at the top of the
   // activity screen showing total views, reactions, replies, and completion
   // rate at a glance.
   const renderSummaryHeader = () => {
     if (!activity) return null;
     return (
-      <View style={styles.summaryCard} accessibilityLabel="Story summary">
+      <View style={styles.summaryCard} accessibilityLabel={`Story summary: ${summary.viewerCount} viewers, ${summary.reactionCount} reactions, ${summary.replyCount} replies, ${summary.engagementRate}% engagement rate, ${summary.completionRate}% completion`}>
         <View style={styles.summaryMetric}>
           <Text style={styles.summaryMetricValue}>{summary.viewerCount}</Text>
           <Text style={styles.summaryMetricLabel}>Viewers</Text>
@@ -241,6 +260,11 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         <View style={styles.summaryMetric}>
           <Text style={styles.summaryMetricValue}>{summary.replyCount}</Text>
           <Text style={styles.summaryMetricLabel}>Replies</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryMetric}>
+          <Text style={styles.summaryMetricValue}>{summary.engagementRate}%</Text>
+          <Text style={styles.summaryMetricLabel}>Engagement</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryMetric}>
@@ -458,11 +482,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           if ('id' in item) return item.id;
           return item.userId;
         }}
-        renderItem={({ item }: { item: ActivityItem; index: number }) => {
-          if ('viewedFrameCount' in item) return renderViewer({ item });
-          if ('reaction' in item) return renderReaction({ item });
-          return renderReply({ item });
-        }}
+        renderItem={renderActivityItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

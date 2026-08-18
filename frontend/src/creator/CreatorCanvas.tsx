@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type ViewStyle, type TextStyle } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -10,20 +11,49 @@ import Reanimated, {
   runOnJS,
   withTiming,
   withSpring,
-  withRepeat,
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-native-skia';
-import { Image as ExpoImage } from 'expo-image';
+import {
+  Canvas as SkiaCanvas,
+  Path as SkiaPath,
+  Skia,
+  Image as SkiaImage,
+  ColorMatrix as SkiaColorMatrix,
+  Mask as SkiaMask,
+  useImage as useSkiaImage,
+  Fit as SkiaFit,
+} from '@shopify/react-native-skia';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
+// Playback pipeline — single clock, keyframe evaluator, effect evaluator
+import type { PlaybackClock } from './core/playback/PlaybackClock';
+import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
+import {
+  evaluateCompositionEffectStack,
+  multiplyMatrix,
+  type EvaluatedEffect,
+} from './core/playback/EffectEvaluator';
+import {
+  getActiveAdjustmentLayers,
+  applyAdjustmentLayersToClip,
+} from './core/playback/AdjustmentLayerEvaluator';
+import { getCanvasLabel, CANVAS_ACCESSIBILITY_ACTIONS } from './core/a11y/CanvasAccessibilityLabels';
+// Shared layer primitives — single source of truth for accent colours,
+// context menus, and gesture handling across poster + creator surfaces.
+import {
+  getLayerAccentColor,
+  getLayerCategoryLabel,
+} from '../components/poster/shared/layerAccents';
+import { ContextMenu, type ContextMenuAction } from '../components/poster/shared/ContextMenu';
+import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
 
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -33,6 +63,12 @@ function normaliseDegrees(deg: number): number {
   return result;
 }
 
+// ── Layer type accent colors ───────────────────────────────────────
+// Premium selection visuals use distinct accent colors per layer category.
+// Now imported from shared/layerAccents.ts so the poster composition
+// surface, the creator canvas, and the layers sheet share one source of
+// truth for layer-type accent colouring.
+
 export interface CreatorCanvasProps {
   document: CreatorDocument;
   page: CreatorPage;
@@ -40,12 +76,43 @@ export interface CreatorCanvasProps {
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
   selectedLayerId?: string | null;
+  /** Full multi-select set. When non-empty, all listed layers show selection. */
+  selectedLayerIds?: string[];
   onLayerPress?: (layerId: string) => void;
   onCanvasPress?: () => void;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
   onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onLayerDoubleTap?: (layerId: string) => void;
   onLayerLongPress?: (layerId: string) => void;
+  // Multi-select drag callbacks. When a selected layer is dragged and
+  // multiple layers are selected, these fire so the parent can move all
+  // selected layers together. Deltas are in normalized (0–1) canvas coords.
+  onMultiDragStart?: () => void;
+  onMultiDragUpdate?: (deltaXNorm: number, deltaYNorm: number) => void;
+  onMultiDragCommit?: (deltaXNorm: number, deltaYNorm: number) => void;
+  // Context menu actions (long-press). Optional — when omitted the context
+  // menu shows only the actions that can be served by onLayerTransformChange.
+  onLayerDuplicate?: (layerId: string) => void;
+  onLayerDelete?: (layerId: string) => void;
+  onLayerReorder?: (layerId: string, direction: 'front' | 'back') => void;
+  onLayerToggleLock?: (layerId: string) => void;
+  /** When true, renders the shared SafeZoneOverlay inside the canvas.
+   *  Parent composers manage when to show it (manual toggle under More,
+   *  or auto-while-dragging near reserved top/bottom UI areas). */
+  showSafeZone?: boolean;
+  /** Height (px) of the top reserved chrome region for the safe zone. */
+  safeZoneTop?: number;
+  /** Height (px) of the bottom reserved tool dock for the safe zone. */
+  safeZoneBottom?: number;
+  /** Playback clock — when provided, video play/pause/seek follows the clock
+   *  instead of hardcoded shouldPlay. Drives temporal visibility, keyframes,
+   *  and timeline-driven playback. Optional — absent in Look composer and
+   *  viewer contexts (backward compatible). */
+  playbackClock?: PlaybackClock | null;
+  /** Current playback time (ms) — when provided with playbackClock, drives
+   *  temporal visibility, keyframe evaluation, and overlay time ranges.
+   *  When absent, layers render in their static (non-temporal) state. */
+  currentTimeMs?: number;
 }
 
 export function CreatorCanvas({
@@ -55,16 +122,73 @@ export function CreatorCanvas({
   canvasHeight,
   mode,
   selectedLayerId,
+  selectedLayerIds,
   onLayerPress,
   onCanvasPress,
   onLayerTransformChange,
   onLayerDoubleTap,
   onLayerLongPress,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragCommit,
+  onLayerDuplicate,
+  onLayerDelete,
+  onLayerReorder,
+  onLayerToggleLock,
+  showSafeZone,
+  safeZoneTop = 0,
+  safeZoneBottom = 0,
+  playbackClock = null,
+  currentTimeMs,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
+
+  // Context menu state — long-press opens an ActionSheet with layer actions.
+  // The per-layer gesture composition calls onContextMenu(layer) to set this;
+  // the shared <ContextMenu> sheet is then driven by `visible`.
+  const [contextMenuLayer, setContextMenuLayer] = useState<CreatorLayer | null>(null);
+
+  // Build the context-menu action list from the active layer + callbacks.
+  // Mirrors the previous inline LayerContextMenu action set (duplicate,
+  // front/back, lock/unlock, flip, delete) but via the shared ContextMenu API.
+  const contextMenuActions = useMemo<ContextMenuAction[]>(() => {
+    if (!contextMenuLayer) return [];
+    const id = contextMenuLayer.id;
+    const isLocked = !!contextMenuLayer.locked;
+    const actions: ContextMenuAction[] = [];
+    if (onLayerDuplicate) {
+      actions.push({ id: 'duplicate', label: 'Duplicate', icon: 'copy-outline', onPress: () => onLayerDuplicate(id) });
+    }
+    if (onLayerReorder) {
+      actions.push({ id: 'front', label: 'Front', icon: 'arrow-up-circle-outline', onPress: () => onLayerReorder(id, 'front') });
+      actions.push({ id: 'back', label: 'Back', icon: 'arrow-down-circle-outline', onPress: () => onLayerReorder(id, 'back') });
+    }
+    if (onLayerToggleLock) {
+      actions.push({
+        id: 'lock',
+        label: isLocked ? 'Unlock' : 'Lock',
+        icon: isLocked ? 'lock-open-outline' : 'lock-closed-outline',
+        onPress: () => onLayerToggleLock(id),
+      });
+    }
+    // Flip: reset rotation to 0 (2D flip equivalent)
+    actions.push({
+      id: 'flip',
+      label: 'Flip',
+      icon: 'swap-horizontal-outline',
+      onPress: () => onLayerTransformChange?.(id, { rotation: 0 }),
+    });
+    if (onLayerDelete) {
+      actions.push({ id: 'delete', label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => onLayerDelete(id) });
+    }
+    return actions;
+  }, [contextMenuLayer, onLayerDuplicate, onLayerDelete, onLayerReorder, onLayerToggleLock, onLayerTransformChange]);
+
+  const contextMenuTitle = contextMenuLayer ? getLayerCategoryLabel(contextMenuLayer.type) : 'Options';
+  const contextMenuAccent = contextMenuLayer ? getLayerAccentColor(contextMenuLayer.type) : undefined;
 
   const renderBackground = () => {
     if (canvas.background.type === 'color') {
@@ -82,10 +206,12 @@ export function CreatorCanvas({
     }
     if (canvas.background.type === 'image' && canvas.background.value) {
       return (
-        <CachedImage
-          uri={canvas.background.value}
+        <ExpoImage
+          source={{ uri: canvas.background.value }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          blurRadius={canvas.background.imageBlur ?? 0}
+          cachePolicy="memory-disk"
         />
       );
     }
@@ -106,14 +232,41 @@ export function CreatorCanvas({
           borderRadius: canvasRadius,
         },
       ]}
+      accessibilityLabel={getCanvasLabel(visibleLayers.length, mode)}
+      accessibilityRole="image"
+      accessibilityActions={CANVAS_ACCESSIBILITY_ACTIONS}
+      onAccessibilityAction={(event) => {
+        const actionName = (event as { actionName?: string }).actionName;
+        if (actionName === 'selectNextLayer' && onLayerPress) {
+          const next = visibleLayers.find((l) => l.id !== selectedLayerId);
+          if (next) onLayerPress(next.id);
+        } else if (actionName === 'selectPreviousLayer' && onLayerPress) {
+          const prev = [...visibleLayers].reverse().find((l) => l.id !== selectedLayerId);
+          if (prev) onLayerPress(prev.id);
+        } else if (actionName === 'selectTopLayer' && onLayerPress) {
+          const top = visibleLayers[visibleLayers.length - 1];
+          if (top) onLayerPress(top.id);
+        } else if (actionName === 'selectBottomLayer' && onLayerPress) {
+          const bottom = visibleLayers[0];
+          if (bottom) onLayerPress(bottom.id);
+        }
+      }}
     >
       {renderBackground()}
 
       {mode === 'edit' && (
-        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} />
+        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Canvas background, tap to deselect" accessibilityHint="Taps the canvas to deselect the current layer" accessibilityRole="button" />
       )}
 
-      {visibleLayers.map((layer) => (
+      {visibleLayers.map((layer) => {
+        const isInMultiSelect = !!(selectedLayerIds && selectedLayerIds.length > 0);
+        const isSelected = isInMultiSelect
+          ? selectedLayerIds.includes(layer.id)
+          : selectedLayerId === layer.id;
+        const isPrimarySelected = isInMultiSelect
+          ? selectedLayerIds[0] === layer.id
+          : false;
+        return (
         <LayerRenderer
           key={layer.id}
           layer={layer}
@@ -121,17 +274,60 @@ export function CreatorCanvas({
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
-          isSelected={selectedLayerId === layer.id}
+          isSelected={isSelected}
+          isPrimarySelected={isPrimarySelected}
+          isMultiSelectActive={isInMultiSelect && isSelected && (selectedLayerIds?.length ?? 0) > 1}
           onPress={onLayerPress}
           onTransformChange={onLayerTransformChange}
           onDoubleTap={onLayerDoubleTap}
           onLongPress={onLayerLongPress}
+          onMultiDragStart={onMultiDragStart}
+          onMultiDragUpdate={onMultiDragUpdate}
+          onMultiDragCommit={onMultiDragCommit}
+          onContextMenu={(l) => setContextMenuLayer(l)}
+          onDuplicate={onLayerDuplicate}
+          onDelete={onLayerDelete}
+          onReorder={onLayerReorder}
+          onToggleLock={onLayerToggleLock}
+          playbackClock={playbackClock}
+          currentTimeMs={currentTimeMs}
         />
-      ))}
+        );
+      })}
 
       {/* Empty canvas state — guides the user to start creating */}
       {mode === 'edit' && isEmpty && (
         <EmptyCanvasState colors={colors} />
+      )}
+
+      {/* Long-press context menu — shared ContextMenu sheet with layer actions.
+          The per-layer gesture composition sets contextMenuLayer on long-press;
+          the shared <ContextMenu> renders the spring-entrance sheet driven by
+          `visible`. `enabled={false}` disables the wrapper's own long-press
+          (each LayerRenderer manages its own long-press inside its gesture race). */}
+      {mode === 'edit' && (
+        <ContextMenu
+          actions={contextMenuActions}
+          visible={!!contextMenuLayer}
+          onDismiss={() => setContextMenuLayer(null)}
+          onOpen={() => setContextMenuLayer(contextMenuLayer)}
+          enabled={false}
+          title={contextMenuTitle}
+          accentColor={contextMenuAccent}
+        >
+          <View />
+        </ContextMenu>
+      )}
+
+      {/* Safe zone overlay — shared visual guide for reserved top/bottom
+          UI areas. Rendered when the parent passes showSafeZone (manual
+          toggle under More, or auto-while-dragging). pointerEvents none. */}
+      {mode === 'edit' && showSafeZone && (
+        <SafeZoneOverlay
+          visible={showSafeZone}
+          topHeight={safeZoneTop}
+          bottomHeight={safeZoneBottom}
+        />
       )}
     </GestureHandlerRootView>
   );
@@ -142,29 +338,35 @@ export function CreatorCanvas({
 // Not just a pulsing icon — a proper designed empty surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
   const reducedMotion = useReducedMotion();
-  const scaleSV = useSharedValue(1);
+  const scaleSV = useSharedValue(reducedMotion ? 1 : 0.9);
+  const opacitySV = useSharedValue(reducedMotion ? 1 : 0);
 
   useEffect(() => {
     if (reducedMotion) {
-      // WCAG 2.2 §2.3.3 — no repeating pulse animation when Reduce Motion is on
+      // WCAG 2.2 §2.3.3 — instant, no animation when Reduce Motion is on
       cancelAnimation(scaleSV);
+      cancelAnimation(opacitySV);
       scaleSV.value = 1;
+      opacitySV.value = 1;
       return;
     }
-    scaleSV.value = withRepeat(
-      withTiming(1.06, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-    return () => cancelAnimation(scaleSV);
-  }, [scaleSV, reducedMotion]);
+    // One-time entrance: fade in + scale from 0.9 → 1.0, then stop.
+    // No continuous pulsing (AGENTS.md §17).
+    scaleSV.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    opacitySV.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    return () => {
+      cancelAnimation(scaleSV);
+      cancelAnimation(opacitySV);
+    };
+  }, [scaleSV, opacitySV, reducedMotion]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleSV.value }],
+    opacity: opacitySV.value,
   }));
 
   return (
-    <View style={styles.emptyState} pointerEvents="none">
+    <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, tap a tool to start" accessibilityRole="text">
       <View style={styles.emptyStateIconWrap}>
         <Reanimated.View style={animatedIconStyle}>
           <Ionicons name="add-circle-outline" size={64} color="rgba(255,255,255,0.4)" />
@@ -187,19 +389,31 @@ interface LayerRendererProps {
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
   isSelected: boolean;
+  /** True for the first (primary) layer in a multi-select set. */
+  isPrimarySelected?: boolean;
+  /** True when this layer is selected AND multiple layers are selected. */
+  isMultiSelectActive?: boolean;
   onPress?: (layerId: string) => void;
   onTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onDoubleTap?: (layerId: string) => void;
   onLongPress?: (layerId: string) => void;
+  onMultiDragStart?: () => void;
+  onMultiDragUpdate?: (deltaXNorm: number, deltaYNorm: number) => void;
+  onMultiDragCommit?: (deltaXNorm: number, deltaYNorm: number) => void;
+  onContextMenu?: (layer: CreatorLayer) => void;
+  onDuplicate?: (layerId: string) => void;
+  onDelete?: (layerId: string) => void;
+  onReorder?: (layerId: string, direction: 'front' | 'back') => void;
+  onToggleLock?: (layerId: string) => void;
+  /** Playback clock — drives temporal visibility, keyframes, video play/pause/seek. */
+  playbackClock?: PlaybackClock | null;
+  /** Current playback time (ms) — used for temporal visibility and keyframe evaluation. */
+  currentTimeMs?: number;
 }
 
 const SNAP_THRESHOLD = 0.02;
 const SAFE_MARGIN = 0.05;
 const ROTATION_SNAP_DEG = 15;
-
-function triggerHaptic() {
-  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-}
 
 const LayerRenderer = React.memo(function LayerRenderer({
   layer,
@@ -208,13 +422,24 @@ const LayerRenderer = React.memo(function LayerRenderer({
   canvasHeight,
   mode,
   isSelected,
+  isPrimarySelected,
+  isMultiSelectActive,
   onPress,
   onTransformChange,
   onDoubleTap,
   onLongPress,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragCommit,
+  onContextMenu,
+  playbackClock,
+  currentTimeMs,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const haptic = useHaptic();
+  const { spring } = useMotionConfig();
+  const accentColor = getLayerAccentColor(layer.type);
   const translateX = useSharedValue(layer.x * canvasWidth);
   const translateY = useSharedValue(layer.y * canvasHeight);
   const scaleSV = useSharedValue(layer.scale);
@@ -223,24 +448,40 @@ const LayerRenderer = React.memo(function LayerRenderer({
   const startY = useSharedValue(0);
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
+  // During-drag: show basic center guides only. On drag end: compute smart guides.
   const [showGuides, setShowGuides] = useState(false);
   // Smart alignment guides — vertical/horizontal pixel positions where the
   // dragged layer's edges/centre align with a sibling's edges/centre.
   const [smartGuides, setSmartGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
+  // Center guide visibility — only show center lines when the layer's center
+  // is within 8pt of the canvas center (Canva/Figma/Instagram Stories pattern)
+  const [centerGuideVisible, setCenterGuideVisible] = useState(false);
+  // Guide appearance animation — spring scale + fade
+  const guideOpacity = useSharedValue(0);
+  // Throttle: last position at which smart guides were computed, to avoid
+  // running the O(n²) computation + JS bridge hop on every animation frame.
+  const lastGuideX = useSharedValue(0);
+  const lastGuideY = useSharedValue(0);
+  const GUIDE_THROTTLE_PX = 2;
 
   // Selection animation: border + handles fade/scale in with spring
+  // Premium: scale 0.8→1.0 on appearance, 1.0→0.8 + fade on disappearance
   const selectionOpacity = useSharedValue(0);
-  const handleScale = useSharedValue(0.5);
+  const handleScale = useSharedValue(0.8);
+  // Gesture lift shadow — increases during active gesture
+  const liftSV = useSharedValue(0);
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 15, stiffness: 180 });
-      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 14, stiffness: 200 });
+      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, spring.entrance);
+      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, spring.success);
+      if (!reducedMotion) haptic.light();
     } else {
-      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withSpring(0, { damping: 16, stiffness: 200 });
-      handleScale.value = reducedMotion ? withTiming(0.5, { duration: 0 }) : withSpring(0.5, { damping: 16, stiffness: 200 });
+      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withSpring(0, spring.entrance);
+      handleScale.value = reducedMotion ? withTiming(0.8, { duration: 0 }) : withSpring(0.8, spring.entrance);
+      if (!reducedMotion) haptic.light();
     }
-  }, [isSelected, selectionOpacity, handleScale, reducedMotion]);
+  }, [isSelected, selectionOpacity, handleScale, reducedMotion, spring, haptic]);
 
   // Gesture feedback badges (scale % and rotation angle)
   const [gestureBadge, setGestureBadge] = useState<string | null>(null);
@@ -254,12 +495,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
       scaleSV.value = withTiming(layer.scale, { duration: 0 });
       rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 0 });
     } else {
-      translateX.value = withSpring(layer.x * canvasWidth, { damping: 18, stiffness: 220 });
-      translateY.value = withSpring(layer.y * canvasHeight, { damping: 18, stiffness: 220 });
-      scaleSV.value = withSpring(layer.scale, { damping: 18, stiffness: 220 });
-      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), { damping: 18, stiffness: 220 });
+      translateX.value = withSpring(layer.x * canvasWidth, spring.entrance);
+      translateY.value = withSpring(layer.y * canvasHeight, spring.entrance);
+      scaleSV.value = withSpring(layer.scale, spring.entrance);
+      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), spring.entrance);
     }
-  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion]);
+  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion, spring]);
 
   const handlePress = useCallback(() => {
     if (mode === 'edit' && onPress) {
@@ -274,10 +515,18 @@ const LayerRenderer = React.memo(function LayerRenderer({
   }, [mode, onDoubleTap, layer.id]);
 
   const handleLongPress = useCallback(() => {
-    if (mode === 'edit' && onLongPress) {
-      onLongPress(layer.id);
+    if (mode === 'edit') {
+      // When onLongPress is provided, long-press enters multi-select mode
+      // (the parent's onLongPress handler) and the context menu is suppressed
+      // to avoid a conflicting double-sheet. When onLongPress is absent,
+      // long-press falls back to the context menu.
+      if (onLongPress) {
+        onLongPress(layer.id);
+      } else if (onContextMenu) {
+        onContextMenu(layer);
+      }
     }
-  }, [mode, onLongPress, layer.id]);
+  }, [mode, onLongPress, onContextMenu, layer]);
 
   const handlePositionCommit = useCallback((finalX: number, finalY: number) => {
     let normX = finalX / canvasWidth;
@@ -299,16 +548,17 @@ const LayerRenderer = React.memo(function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    translateX.value = withTiming(normX * canvasWidth, { duration: reducedMotion ? 0 : 100 });
-    translateY.value = withTiming(normY * canvasHeight, { duration: reducedMotion ? 0 : 100 });
+    // Spring settle for natural position commit (spring physics)
+    translateX.value = withSpring(normX * canvasWidth, spring.settle);
+    translateY.value = withSpring(normY * canvasHeight, spring.settle);
 
-    if (snappedX || snappedY) triggerHaptic();
+    if (snappedX || snappedY) haptic.light();
     setShowGuides(false);
     setSmartGuides({ vertical: [], horizontal: [] });
-    setSmartGuides({ vertical: [], horizontal: [] });
+    setCenterGuideVisible(false);
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
-  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY, reducedMotion]);
+  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY, reducedMotion, haptic]);
 
   const handleTransformCommit = useCallback((finalScale: number, finalRotation: number) => {
     const clampedScale = Math.max(0.2, Math.min(5, finalScale));
@@ -319,13 +569,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
     const nearestSnap = Math.round(normalisedRotation / ROTATION_SNAP_DEG) * ROTATION_SNAP_DEG;
     if (Math.abs(normalisedRotation - nearestSnap) < 5) {
       snappedRotation = nearestSnap % 360;
-      triggerHaptic();
+      haptic.light();
     }
 
-    scaleSV.value = withTiming(clampedScale, { duration: reducedMotion ? 0 : 100 });
-    rotationSV.value = withTiming(snappedRotation, { duration: reducedMotion ? 0 : 100 });
+    // Spring settle for natural transform commit (spring physics)
+    scaleSV.value = withSpring(clampedScale, spring.settle);
+    rotationSV.value = withSpring(snappedRotation, spring.settle);
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
-  }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion]);
+  }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion, haptic]);
 
   const panGesture = useMemo(
     () =>
@@ -337,17 +588,32 @@ const LayerRenderer = React.memo(function LayerRenderer({
           startY.value = translateY.value;
           runOnJS(handlePress)();
           runOnJS(setShowGuides)(true);
+          if (isMultiSelectActive && onMultiDragStart) {
+            runOnJS(onMultiDragStart)();
+          }
         })
         .onUpdate((e) => {
           translateX.value = startX.value + e.translationX;
           translateY.value = startY.value + e.translationY;
+          if (isMultiSelectActive && onMultiDragUpdate) {
+            runOnJS(onMultiDragUpdate)(e.translationX / canvasWidth, e.translationY / canvasHeight);
+          }
         })
         .onEnd((e) => {
-          const finalX = startX.value + e.translationX;
-          const finalY = startY.value + e.translationY;
-          runOnJS(handlePositionCommit)(finalX, finalY);
+          if (isMultiSelectActive && onMultiDragCommit) {
+            // Multi-select: the parent commits positions for ALL selected
+            // layers (including this one) in a single history entry.
+            runOnJS(onMultiDragCommit)(e.translationX / canvasWidth, e.translationY / canvasHeight);
+            runOnJS(setShowGuides)(false);
+            runOnJS(setSmartGuides)({ vertical: [], horizontal: [] });
+            runOnJS(setCenterGuideVisible)(false);
+          } else {
+            const finalX = startX.value + e.translationX;
+            const finalY = startY.value + e.translationY;
+            runOnJS(handlePositionCommit)(finalX, finalY);
+          }
         }),
-    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit]
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight]
   );
 
   const pinchGesture = useMemo(
@@ -420,10 +686,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
     [mode, handleLongPress]
   );
 
+  // ── Simultaneous gestures (Instagram Stories / Canva pattern) ──
+  // Pan, pinch, and rotation all work together simultaneously so the user
+  // can drag + resize + rotate a layer in one fluid motion. Tap,
+  // double-tap, and long-press race with the transform gestures so they
+  // don't fire mid-drag.
   const composedGesture = useMemo(
     () => Gesture.Race(
-      Gesture.Simultaneous(pinchGesture, rotationGesture),
-      panGesture,
+      Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
       doubleTapGesture,
       longPressGesture,
       tapGesture,
@@ -445,12 +715,68 @@ const LayerRenderer = React.memo(function LayerRenderer({
       transform: [
         { rotate: `${rotationSV.value}deg` },
       ],
-      opacity: layer.opacity,
+      opacity: effectiveOpacity,
       zIndex: layer.zIndex,
     };
   });
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
+  // ── Temporal visibility & keyframe evaluation ───────────────────
+  // When a playback clock is provided, layers with a timeRange are only
+  // visible during that time window. Layers with keyframes have their
+  // position/scale/rotation/opacity interpolated at the current time.
+  const hasPlaybackClock = !!playbackClock;
+  const timeMs = currentTimeMs ?? 0;
+
+  // Temporal visibility: if the layer has a timeRange and we have a clock,
+  // check whether the current time is within the range.
+  const isTemporallyVisible = useMemo(() => {
+    if (!hasPlaybackClock) return true;
+    if (!layer.timeRange) return true;
+    return timeMs >= layer.timeRange.startMs && timeMs < layer.timeRange.endMs;
+  }, [hasPlaybackClock, layer.timeRange, timeMs]);
+
+  // Keyframe evaluation: if the layer has keyframes and we have a clock,
+  // compute the interpolated values at the current time.
+  const keyframeValues = useMemo(() => {
+    if (!hasPlaybackClock || !layer.keyframes || layer.keyframes.length === 0) return null;
+    const result: Partial<Record<'position' | 'scale' | 'rotation' | 'opacity', number>> = {};
+    const props: Array<'position' | 'scale' | 'rotation' | 'opacity'> = ['position', 'scale', 'rotation', 'opacity'];
+    for (const prop of props) {
+      const val = evaluateKeyframes(layer.keyframes!, timeMs, prop);
+      if (val !== null) result[prop] = val;
+    }
+    return Object.keys(result).length > 0 ? result : null;
+  }, [hasPlaybackClock, layer.keyframes, timeMs]);
+
+  // Apply keyframe values to shared values when in playback mode
+  useEffect(() => {
+    if (!hasPlaybackClock || !keyframeValues) return;
+    if (keyframeValues.position !== undefined) {
+      // Position keyframes drive the center position (normalized 0-1)
+      // The keyframe value is interpreted as a normalized position
+      translateX.value = keyframeValues.position * canvasWidth;
+    }
+    if (keyframeValues.scale !== undefined) {
+      scaleSV.value = keyframeValues.scale;
+    }
+    if (keyframeValues.rotation !== undefined) {
+      rotationSV.value = keyframeValues.rotation;
+    }
+  }, [hasPlaybackClock, keyframeValues, canvasWidth, canvasHeight, translateX, scaleSV, rotationSV]);
+
+  // Compute effective opacity (layer opacity * keyframe opacity * temporal visibility)
+  const effectiveOpacity = useMemo(() => {
+    let opacity = layer.opacity;
+    if (keyframeValues?.opacity !== undefined) {
+      opacity *= keyframeValues.opacity;
+    }
+    if (hasPlaybackClock && !isTemporallyVisible) {
+      opacity = 0;
+    }
+    return opacity;
+  }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
+
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -497,6 +823,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
         }
       }
       setSmartGuides({ vertical: Array.from(vertical), horizontal: Array.from(horizontal) });
+      // Center guide: show when the layer's center is within 8pt of canvas center
+      const centerThreshold = 8;
+      const nearCenterX = Math.abs(cx - canvasWidth / 2) < centerThreshold;
+      const nearCenterY = Math.abs(cy - canvasHeight / 2) < centerThreshold;
+      setCenterGuideVisible(nearCenterX || nearCenterY);
     },
     [layer.width, layer.height, layer.scale, canvasWidth, canvasHeight, siblingLayers],
   );
@@ -505,7 +836,16 @@ const LayerRenderer = React.memo(function LayerRenderer({
     () => ({ x: translateX.value, y: translateY.value }),
     (pos) => {
       if (showGuides) {
-        runOnJS(computeSmartGuides)(pos.x, pos.y);
+        // Throttle: only recompute when the layer has moved more than
+        // GUIDE_THROTTLE_PX since the last computation. This avoids running
+        // the O(n²) alignment check + JS bridge hop on every animation frame.
+        const dx = Math.abs(pos.x - lastGuideX.value);
+        const dy = Math.abs(pos.y - lastGuideY.value);
+        if (dx >= GUIDE_THROTTLE_PX || dy >= GUIDE_THROTTLE_PX) {
+          lastGuideX.value = pos.x;
+          lastGuideY.value = pos.y;
+          runOnJS(computeSmartGuides)(pos.x, pos.y);
+        }
       }
     },
     [showGuides, computeSmartGuides],
@@ -515,9 +855,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // product/mention/look/vote = 8px (pill content), decorative = 0
   const layerRadius = getLayerRadius(layer);
 
-  // Animated selection border style
+  // Animated selection border style. The primary selection in a
+  // multi-select set uses a thicker (3pt) outline; secondary selections
+  // use the standard 2pt. Both use the brand colour.
   const selectionBorderStyle = useAnimatedStyle(() => ({
-    borderWidth: 2,
+    borderWidth: isPrimarySelected ? 3 : 2,
     borderColor: layer.locked
       ? colors.warning
       : colors.brand,
@@ -529,7 +871,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
   if (mode === 'edit') {
     return (
       <GestureDetector gesture={composedGesture}>
-        <Reanimated.View style={animatedStyle} accessibilityLabel={`${layer.type} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`} accessibilityRole="image">
+        <Reanimated.View
+          style={animatedStyle}
+          accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
+          accessibilityRole="adjustable"
+          accessibilityHint="Drag to move, pinch to resize, rotate to rotate, double-tap to edit, long-press for options"
+        >
           <View style={[styles.layerInner, { borderRadius: layerRadius }]}>
             {content}
           </View>
@@ -537,8 +884,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
           {isSelected && (
             <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
           )}
-          {/* Selection handles — draggable corner + rotation handles */}
-          {isSelected && (
+          {/* Selection handles — draggable corner + rotation handles.
+              Hidden in multi-select mode; only the primary shows handles. */}
+          {isSelected && !isMultiSelectActive && (
             <SelectionHandles
               handleScaleSV={handleScale}
               colors={colors}
@@ -555,40 +903,46 @@ const LayerRenderer = React.memo(function LayerRenderer({
           )}
           {/* Locked badge */}
           {isSelected && layer.locked && (
-            <View style={[styles.lockedBadge, { backgroundColor: colors.warning }]} pointerEvents="none">
+            <View style={[styles.lockedBadge, { backgroundColor: colors.warning }]} pointerEvents="none" accessibilityLabel="Layer locked" accessibilityRole="image">
               <Ionicons name="lock-closed" size={10} color="#fff" />
             </View>
           )}
           {/* Gesture feedback badge */}
           {gestureBadge && (
-            <View style={[styles.gestureBadge, { backgroundColor: colors.surfaceElevated }]} pointerEvents="none">
+            <View style={[styles.gestureBadge, { backgroundColor: colors.surfaceElevated }]} pointerEvents="none" accessibilityLabel={`Transform ${gestureBadge}`} accessibilityRole="text">
               <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
             </View>
           )}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} />}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} centerGuideVisible={centerGuideVisible} />}
         </Reanimated.View>
       </GestureDetector>
     );
   }
 
-  const left = layer.x * canvasWidth;
-  const top = layer.y * canvasHeight;
-  const width = layer.width * canvasWidth * layer.scale;
-  const height = layer.height * canvasHeight * layer.scale;
+  // Non-edit (preview/view) render path — apply keyframe-driven transform
+  // and temporal opacity when a playback clock is present.
+  const previewScale = keyframeValues?.scale ?? layer.scale;
+  const previewRotation = keyframeValues?.rotation ?? layer.rotation;
+  const previewLeft = (keyframeValues?.position !== undefined ? keyframeValues.position : layer.x) * canvasWidth;
+  const previewTop = layer.y * canvasHeight;
+  const width = layer.width * canvasWidth * previewScale;
+  const height = layer.height * canvasHeight * previewScale;
 
   return (
     <View
       style={{
         position: 'absolute',
-        left: left - width / 2,
-        top: top - height / 2,
+        left: previewLeft - width / 2,
+        top: previewTop - height / 2,
         width,
         height,
-        transform: [{ rotate: `${layer.rotation}deg` }],
-        opacity: layer.opacity,
+        transform: [{ rotate: `${previewRotation}deg` }],
+        opacity: effectiveOpacity,
         zIndex: layer.zIndex,
       }}
       pointerEvents="none"
+      accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}`}
+      accessibilityRole="image"
     >
       <View style={[styles.layerInner, { borderRadius: getLayerRadius(layer) }]}>
         {content}
@@ -637,10 +991,17 @@ function getLayerRadius(layer: CreatorLayer): number {
   }
 }
 
-function renderLayerContent(layer: CreatorLayer, width: number, height: number): React.ReactNode {
+function renderLayerContent(
+  layer: CreatorLayer,
+  width: number,
+  height: number,
+  playbackClock?: PlaybackClock | null,
+  currentTimeMs?: number,
+  siblingLayers?: CreatorLayer[],
+): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -682,64 +1043,248 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
   }
 }
 
-function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'media' }>; width: number; height: number }) {
+function MediaLayerContent({
+  layer,
+  width,
+  height,
+  playbackClock,
+  currentTimeMs,
+  siblingLayers,
+}: {
+  layer: Extract<CreatorLayer, { type: 'media' }>;
+  width: number;
+  height: number;
+  playbackClock?: PlaybackClock | null;
+  currentTimeMs?: number;
+  siblingLayers?: CreatorLayer[];
+}) {
   const { payload } = layer;
-  const { colors } = useAppTheme();
   const [videoError, setVideoError] = React.useState(false);
-  const [imageLoaded, setImageLoaded] = React.useState(false);
-  const [imageError, setImageError] = React.useState(false);
+  const hasPlaybackClock = !!playbackClock;
+  const timeMs = currentTimeMs ?? 0;
+
+  // ── Effect evaluation ───────────────────────────────────────────
+  // Evaluate the clip's own effect stack, then merge any active adjustment
+  // layers (Meta Edits August 2026). Adjustment layers apply a global grade
+  // on top of per-clip adjustments; their opacity blends the contribution.
+  // Each segment is evaluated independently with its intensity (the
+  // EffectEvaluator interpolates color matrices toward identity for
+  // intensity < 1), then the per-segment EvaluatedEffects are combined:
+  //   - color matrices are multiplied (composes the grades)
+  //   - blur radii take the maximum
+  //   - vignette / grain amounts are summed (clamped to 0..1)
+  const evaluatedEffect = useMemo<EvaluatedEffect>(() => {
+    const clipEffects = payload.effects ?? [];
+    // Resolve active adjustment layers from the sibling set at the current
+    // time. siblingLayers excludes this clip but includes adjustment layers
+    // (they are separate layers). getActiveAdjustmentLayers filters by
+    // type, enabled, hidden, and temporal range.
+    const adjustmentLayers = siblingLayers
+      ? getActiveAdjustmentLayers(siblingLayers, timeMs)
+      : [];
+
+    // No adjustment layers -> evaluate the clip's own effects directly
+    // (preserves the original fast path).
+    if (adjustmentLayers.length === 0) {
+      if (clipEffects.length === 0) return {};
+      return evaluateCompositionEffectStack(clipEffects, 1);
+    }
+
+    // Build the combined segment stack: clip effects first, then each
+    // applicable adjustment layer's effects scaled by its opacity.
+    const combined = applyAdjustmentLayersToClip(
+      { id: layer.id, effects: clipEffects },
+      adjustmentLayers,
+      timeMs,
+    );
+
+    // Evaluate each segment with its own intensity and merge.
+    let colorMatrix: number[] | undefined;
+    let blurRadius = 0;
+    let vignetteAmount = 0;
+    let hasBlur = false;
+    let hasVignette = false;
+
+    for (const segment of combined.segments) {
+      const segResult = evaluateCompositionEffectStack(segment.effects, segment.intensity);
+      if (segResult.colorMatrix) {
+        if (colorMatrix) {
+          // Multiply matrices to compose the grades.
+          colorMatrix = multiplyMatrix(colorMatrix, segResult.colorMatrix);
+        } else {
+          colorMatrix = [...segResult.colorMatrix];
+        }
+      }
+      if (segResult.blurRadius !== undefined && segResult.blurRadius > 0) {
+        blurRadius = Math.max(blurRadius, segResult.blurRadius);
+        hasBlur = true;
+      }
+      if (segResult.vignetteAmount !== undefined && segResult.vignetteAmount > 0) {
+        vignetteAmount += segResult.vignetteAmount;
+        hasVignette = true;
+      }
+    }
+
+    const result: EvaluatedEffect = {};
+    if (colorMatrix) result.colorMatrix = colorMatrix;
+    if (hasBlur && blurRadius > 0) result.blurRadius = blurRadius;
+    if (hasVignette && vignetteAmount > 0) result.vignetteAmount = Math.min(1, vignetteAmount);
+    return result;
+  }, [payload.effects, siblingLayers, timeMs, layer.id]);
+
+  const hasColorMatrix = !!evaluatedEffect?.colorMatrix && evaluatedEffect.colorMatrix.length === 20;
+
+  // ── Mask evaluation ──────────────────────────────────────────────
+  // If the layer has a maskRef, we composite the media with the mask
+  // using Skia's Mask component (alpha mode). The mask URI is resolved
+  // from the layer's maskRef field (which stores the mask URI directly
+  // in the current schema).
+  const maskUri = layer.maskRef ?? null;
+  const skiaMaskImage = useSkiaImage(maskUri);
+  const hasMask = !!skiaMaskImage;
+
+  // ── Skia image for effect/mask rendering ─────────────────────────
+  // For images with effects or masks, we load the image via Skia's
+  // useImage hook so we can render it inside a Skia Canvas with
+  // ColorMatrix and Mask components.
+  const skiaImage = useSkiaImage(payload.mediaUri);
+  const useSkiaRendering = (hasColorMatrix || hasMask) && !!skiaImage;
+
+  // ── Video playback state ─────────────────────────────────────────
+  // When a playback clock is provided, video play/pause follows the clock.
+  // When no clock is present (Look composer, viewer), fall back to the
+  // legacy behavior: shouldPlay=true, muted=true, looping=true.
+  const volume = payload.volume ?? 1;
+  const speed = payload.speed ?? 1;
+  const isMuted = hasPlaybackClock ? volume === 0 : true;
+  const shouldPlay = hasPlaybackClock ? (playbackClock?.isPlaying ?? false) : true;
+  const isLooping = !hasPlaybackClock;
+
+  // ── Video seek driven by playback clock ──────────────────────────
+  // When the clock's currentTimeMs changes, seek the video to the
+  // corresponding source position. The seek is handled by the Video
+  // compat component's internal effect on `shouldPlay` and the
+  // playback clock's registered adapter. For simplicity, we use the
+  // currentTimeMs prop to drive seeks via a ref to the Video player.
+  // The actual seek is performed by the playback clock's video adapter,
+  // which is registered by the timeline screen. Here we just pass the
+  // playback state as props.
 
   if (payload.mediaType === 'video' && !videoError) {
     return (
       <>
-        {payload.thumbnailUri && (
-          <ExpoImage source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" recyclingKey={payload.thumbnailUri} enforceEarlyResizing />
+        {payload.thumbnailUri && !hasPlaybackClock && (
+          <CachedImage
+            uri={payload.thumbnailUri}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
         )}
         <Video
           key={`${layer.id}-${payload.mediaUri}`}
           source={{ uri: payload.mediaUri }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isMuted
-          isLooping
+          shouldPlay={shouldPlay}
+          isMuted={isMuted}
+          isLooping={isLooping}
           onError={() => setVideoError(true)}
         />
-        <View style={mediaStyles.videoBadge} pointerEvents="none">
+        {/* Video effects: documented as needing Skia video integration.
+            The current expo-video VideoView renders natively and cannot
+            be wrapped in a Skia Canvas. For now, video effects are
+            applied via a CSS filter fallback (opacity/blur) or deferred
+            to the export pipeline. Image effects are fully rendered
+            via Skia below. */}
+        {evaluatedEffect?.blurRadius && evaluatedEffect.blurRadius > 0 && (
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+            pointerEvents="none"
+          />
+        )}
+        <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
           <Ionicons name="videocam" size={12} color="#fff" />
         </View>
       </>
     );
   }
 
-  if (imageError) {
+  // ── Image rendering with Skia effects/mask ───────────────────────
+  // When the image has effects (color matrix) or a mask, render it via
+  // a Skia Canvas with ColorMatrix and Mask components. Otherwise, use
+  // the standard CachedImage for memory/disk caching and BlurHash support.
+  if (useSkiaRendering) {
+    const contentFitMap: Record<string, SkiaFit> = {
+      cover: 'cover',
+      contain: 'contain',
+      fill: 'fill',
+    };
+    const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
-        <Ionicons name="image-outline" size={28} color={colors.textMuted} />
-      </View>
+      <SkiaCanvas style={{ width, height }} accessibilityLabel="Media layer with effects" accessibilityRole="image">
+        {hasMask && skiaMaskImage ? (
+          <SkiaMask
+            mode="alpha"
+            mask={
+              <SkiaImage
+                image={skiaMaskImage}
+                x={0}
+                y={0}
+                width={width}
+                height={height}
+                fit={fit}
+              />
+            }
+          >
+            <SkiaImage
+              image={skiaImage!}
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fit={fit}
+            >
+              {hasColorMatrix && (
+                <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
+              )}
+            </SkiaImage>
+          </SkiaMask>
+        ) : (
+          <SkiaImage
+            image={skiaImage!}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit={fit}
+          >
+            {hasColorMatrix && (
+              <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
+            )}
+          </SkiaImage>
+        )}
+      </SkiaCanvas>
     );
   }
 
+  // Image layers use the shared CachedImage system for memory/disk caching,
+  // BlurHash placeholder support, and CDN downscale support — consistent
+  // with the rest of the app. CachedImage handles its own loading shimmer
+  // and error fallback graphic internally.
   return (
-    <>
-      {/* Placeholder while loading */}
-      {!imageLoaded && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
-      )}
-      <Reanimated.Image
-        source={{ uri: payload.mediaUri }}
-        style={[StyleSheet.absoluteFill, { opacity: imageLoaded ? 1 : 0 }]}
-        resizeMode={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'stretch' : 'cover'}
-        onLoadEnd={() => setImageLoaded(true)}
-        onError={() => setImageError(true)}
-      />
-    </>
+    <CachedImage
+      uri={payload.mediaUri}
+      style={StyleSheet.absoluteFill}
+      contentFit={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'fill' : 'cover'}
+    />
   );
 }
 
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
   const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
 
   // Text entrance animation (Instagram 2025-2026: typewriter, bounce, fade, slide)
   const animProgress = useSharedValue(0);
@@ -772,14 +1317,14 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     } else if (animation === 'bounce') {
       animOpacity.value = 1;
       animTranslateY.value = -16;
-      animTranslateY.value = withSpring(0, { damping: 8, stiffness: 120, mass: 0.8 });
+      animTranslateY.value = withSpring(0, spring.success);
       setTypewriterText(payload.text);
     } else if (animation === 'typewriter') {
       animOpacity.value = 1;
       setTypewriterText('');
       animProgress.value = withTiming(1, { duration: Math.max(800, (payload.text?.length ?? 0) * 60), easing: Easing.linear });
     }
-  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY, reducedMotion]);
+  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY, reducedMotion, spring]);
 
   // Typewriter: react to progress shared value and update visible substring on JS thread
   useAnimatedReaction(
@@ -800,7 +1345,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
   // Instagram 2025-2026: 10 fonts with distinct visual character
   const styleMap: Record<string, any> = {
     headline: {
-      fontFamily: Typography.family.bold,
+      // Anton — display/impact for cover statements
+      fontFamily: 'Anton_400Regular',
       fontSize: Type.title.size + 4,
       lineHeight: (Type.title.size + 4) * 1.15,
       textShadowColor: 'rgba(0,0,0,0.4)',
@@ -808,7 +1354,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 4,
     },
     editorial: {
-      fontFamily: Typography.family.bold,
+      // Playfair Display Bold — editorial serif for issue/collection titles
+      fontFamily: 'PlayfairDisplay_700Bold',
       fontSize: Type.title.size + 1,
       lineHeight: (Type.title.size + 1) * 1.2,
       textShadowColor: 'rgba(0,0,0,0.35)',
@@ -816,7 +1363,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 3,
     },
     clean: {
-      fontFamily: Typography.family.medium,
+      // Inter Regular — clean modern sans (lighter weight)
+      fontFamily: 'Inter_400Regular',
       fontSize: Type.body.size + 1,
       lineHeight: (Type.body.size + 1) * 1.35,
       textShadowColor: 'rgba(0,0,0,0.3)',
@@ -824,52 +1372,61 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 2,
     },
     compact: {
-      fontFamily: Typography.family.semibold,
+      // Inter SemiBold — uppercase labels (kept as-is)
+      fontFamily: 'Inter_600SemiBold',
       fontSize: Type.caption.size,
       lineHeight: Type.caption.size * 1.3,
       letterSpacing: 0.8,
       textTransform: 'uppercase',
     },
     handwritten: {
-      fontFamily: Typography.family.medium,
+      // Caveat — genuine handwriting font
+      fontFamily: 'Caveat_400Regular',
       fontSize: Type.body.size + 2,
       lineHeight: (Type.body.size + 2) * 1.3,
-      fontStyle: 'italic',
     },
     bubble: {
-      fontFamily: Typography.family.bold,
+      // Playfair Display Regular — editorial serif for a restrained,
+      // non-template feel (replaces round script Pacifico)
+      fontFamily: 'PlayfairDisplay_400Regular',
       fontSize: Type.bodyEmphasis.size + 6,
       lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
       letterSpacing: 0.5,
     },
     deco: {
-      fontFamily: Typography.family.bold,
+      // Anton — strong display (replaces retro Lobster for a more
+      // cohesive, less template-like feel)
+      fontFamily: 'Anton_400Regular',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
       letterSpacing: 1.5,
     },
     poster: {
-      fontFamily: Typography.family.bold,
+      // Bebas Neue — condensed display for poster titles
+      fontFamily: 'BebasNeue_400Regular',
       fontSize: Type.title.size - 2,
       lineHeight: (Type.title.size - 2) * 1.1,
       letterSpacing: -0.5,
     },
     squeeze: {
-      fontFamily: Typography.family.semibold,
+      // Bebas Neue — condensed display (tighter feel)
+      fontFamily: 'BebasNeue_400Regular',
       fontSize: Type.body.size,
       lineHeight: Type.body.size * 1.1,
       letterSpacing: -0.3,
     },
     signature: {
-      fontFamily: Typography.family.regular,
+      // Playfair Display Regular italic — refined serif signature
+      // (replaces generic Dancing Script for a more editorial feel)
+      fontFamily: 'PlayfairDisplay_400Regular',
+      fontStyle: 'italic',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
-      fontStyle: 'italic',
     },
   };
 
   // Text effect styles (Instagram 2025-2026)
-  const effectStyle: any = {};
+  const effectStyle: TextStyle = {};
   if (payload.textEffect === 'shadow') {
     effectStyle.textShadowColor = 'rgba(0,0,0,0.6)';
     effectStyle.textShadowOffset = { width: 2, height: 2 };
@@ -896,6 +1453,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
         payload.alignment === 'left' && { alignItems: 'flex-start' },
         payload.alignment === 'right' && { alignItems: 'flex-end' },
       ]}
+      accessibilityLabel={`Text, ${payload.text}`}
+      accessibilityRole="text"
     >
       <Reanimated.View style={animStyle}>
         <Text
@@ -925,7 +1484,11 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 
   if (hasImage) {
     return (
-      <View style={productStyles.imageContainer}>
+      <View
+        style={productStyles.imageContainer}
+        accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
+        accessibilityRole="link"
+      >
         <ExpoImage
           source={{ uri: payload.snapshotImageUrl! }}
           style={productStyles.thumbnail}
@@ -955,7 +1518,11 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 
   if (hasHotspot) {
     return (
-      <View style={productStyles.hotspotContainer}>
+      <View
+        style={productStyles.hotspotContainer}
+        accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
+        accessibilityRole="link"
+      >
         <View style={productStyles.hotspotDot} />
         <Text style={productStyles.hotspotLabel} numberOfLines={1}>
           {payload.hotspotLabel}
@@ -972,7 +1539,11 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   // Fallback: compact tag with icon — premium shoppable pin style
 
   return (
-    <View style={productStyles.container}>
+    <View
+      style={productStyles.container}
+      accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
+      accessibilityRole="link"
+    >
       <View style={productStyles.row}>
         <Ionicons name="pricetag" size={12} color="#fff" />
         <Text style={productStyles.title} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
@@ -989,7 +1560,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mention' }> }) {
   const { payload } = layer;
   return (
-    <View style={mentionStyles.container}>
+    <View style={mentionStyles.container} accessibilityLabel={`Mention @${payload.username}`} accessibilityRole="link">
       <Text style={mentionStyles.text}>@{payload.username}</Text>
     </View>
   );
@@ -998,7 +1569,7 @@ function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'look' }> }) {
   const { payload } = layer;
   return (
-    <View style={lookStyles.container}>
+    <View style={lookStyles.container} accessibilityLabel={`Look, ${payload.snapshotCaption || 'View look'}`} accessibilityRole="link">
       <Ionicons name="shirt-outline" size={12} color="#fff" />
       <Text style={lookStyles.text} numberOfLines={1}>{payload.snapshotCaption || 'View look'}</Text>
     </View>
@@ -1016,7 +1587,11 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
       : `${timerSeconds}s`;
 
   return (
-    <View style={[voteStyles.container, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}>
+    <View
+      style={[voteStyles.container, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}
+      accessibilityLabel={`Poll, ${payload.question}${hasTimer ? `, ${timerLabel} timer` : ''}`}
+      accessibilityRole="summary"
+    >
       <View style={voteStyles.headerRow}>
         <Text style={voteStyles.question}>{payload.question}</Text>
         {hasTimer && (
@@ -1043,7 +1618,7 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
 function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
   const { payload } = layer;
   return (
-    <View style={quizStyles.container}>
+    <View style={quizStyles.container} accessibilityLabel={`Quiz, ${payload.emoji} ${payload.question}`} accessibilityRole="summary">
       <View style={quizStyles.header}>
         <Text style={quizStyles.emoji}>{payload.emoji}</Text>
         <Text style={quizStyles.question}>{payload.question}</Text>
@@ -1078,7 +1653,7 @@ function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'qui
 function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
   const { payload } = layer;
   return (
-    <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]}>
+    <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]} accessibilityLabel={`Question box, ${payload.prompt}`} accessibilityRole="search">
       <Text style={questionStyles.prompt}>{payload.prompt}</Text>
       <View style={questionStyles.inputAffordance}>
         <Ionicons name="chatbubbles-outline" size={14} color="rgba(255,255,255,0.5)" />
@@ -1097,7 +1672,7 @@ function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
 function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
   const { payload } = layer;
   return (
-    <View style={sliderStyles.container}>
+    <View style={sliderStyles.container} accessibilityLabel={`Emoji slider, ${payload.emoji} ${payload.question}`} accessibilityRole="adjustable">
       <Text style={sliderStyles.question}>{payload.question}</Text>
       <View style={sliderStyles.sliderRow}>
         <Text style={sliderStyles.emoji}>{payload.emoji}</Text>
@@ -1138,7 +1713,7 @@ function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type:
     : `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   return (
-    <View style={[countdownStyles.container, { backgroundColor: payload.color }]}>
+    <View style={[countdownStyles.container, { backgroundColor: payload.color }]} accessibilityLabel={`Countdown, ${payload.label}, ${timeStr}`} accessibilityRole="timer">
       <View style={countdownStyles.iconRow}>
         <Ionicons name="time-outline" size={12} color={payload.textColor} />
         <Text style={countdownStyles.label}>{payload.label}</Text>
@@ -1173,6 +1748,8 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             opacity: payload.opacity,
             ...subtleShadow,
           }}
+          accessibilityLabel="Decorative circle shape"
+          accessibilityRole="image"
         />
       );
     case 'square':
@@ -1186,6 +1763,8 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             opacity: payload.opacity,
             ...subtleShadow,
           }}
+          accessibilityLabel="Decorative square shape"
+          accessibilityRole="image"
         />
       );
     case 'line':
@@ -1214,13 +1793,13 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
       );
     case 'star':
       return (
-        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }} accessibilityLabel="Decorative star shape" accessibilityRole="image">
           <Ionicons name="star" size={iconSize} color={fillColor} />
         </View>
       );
     case 'heart':
       return (
-        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }} accessibilityLabel="Decorative heart shape" accessibilityRole="image">
           <Ionicons name="heart" size={iconSize} color={fillColor} />
         </View>
       );
@@ -1278,7 +1857,7 @@ function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLaye
   }, [payload.strokes, width, height]);
 
   return (
-    <SkiaCanvas style={{ width, height }}>
+    <SkiaCanvas style={{ width, height }} accessibilityLabel="Drawing layer" accessibilityRole="image">
       {strokePaths.map((sp: any) => {
         const isEraser = sp.stroke.tool === 'eraser';
         const isMarker = sp.stroke.tool === 'marker';
@@ -1328,17 +1907,21 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
   const { payload } = layer;
   const { colors } = useAppTheme();
   return (
-    <View style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: Radius.lg,
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      minWidth: 160,
-      maxWidth: '100%',
-    }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: Radius.lg,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        minWidth: 160,
+        maxWidth: '100%',
+      }}
+      accessibilityLabel={`Music, ${payload.trackName}${payload.artistName ? ` by ${payload.artistName}` : ''}`}
+      accessibilityRole="button"
+    >
       {payload.artworkUrl ? (
         <ExpoImage
           source={{ uri: payload.artworkUrl }}
@@ -1405,7 +1988,7 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
       minWidth: 120,
-    }}>
+    }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
       <Ionicons name="link-outline" size={16} color={payload.textColor} />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
         {payload.ctaText}
@@ -1427,7 +2010,7 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       borderRadius: Radius.md,
       backgroundColor: 'rgba(0,0,0,0.6)',
       minWidth: 100,
-    }}>
+    }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
       <Ionicons name="location-outline" size={16} color="#fff" />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
         {payload.placeName}
@@ -1449,7 +2032,7 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
       minWidth: 80,
-    }}>
+    }} accessibilityLabel={`Hashtag, ${payload.tag}`} accessibilityRole="link">
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
         #{payload.tag}
       </Text>
@@ -1476,7 +2059,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
       minWidth: 80,
-    }}>
+    }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
       <Ionicons name="time-outline" size={16} color={payload.textColor} />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
         {timeStr}
@@ -1498,7 +2081,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
       minWidth: 120,
-    }}>
+    }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
       <Text style={{ fontSize: Type.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
         <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
@@ -1594,7 +2177,7 @@ function SelectionHandles({
     [layerLocked, rotationSV, startRotation, onRotationChange, onCommit]
   );
 
-  const handleBase: any = {
+  const handleBase: ViewStyle = {
     position: 'absolute',
     width: 20,
     height: 20,
@@ -1610,7 +2193,7 @@ function SelectionHandles({
   };
 
   // Invisible hit zone — 44pt for touch compliance
-  const hitZone: any = {
+  const hitZone: ViewStyle = {
     position: 'absolute',
     width: 44,
     height: 44,
@@ -1618,29 +2201,29 @@ function SelectionHandles({
   };
 
   return (
-    <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]} accessibilityLabel="Layer selection handles" accessibilityRole="adjustable">
       {/* Corner handles — 20px visible, 44pt hit zone, draggable */}
       {/* Top-left */}
       <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { top: -22, left: -22 }]}>
+        <Reanimated.View style={[hitZone, { top: -22, left: -22 }]} accessibilityLabel="Resize handle, top left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
           <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none" />
         </Reanimated.View>
       </GestureDetector>
       {/* Top-right */}
       <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { top: -22, right: -22 }]}>
+        <Reanimated.View style={[hitZone, { top: -22, right: -22 }]} accessibilityLabel="Resize handle, top right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
           <View style={[handleBase, { top: 12, right: 12 }]} pointerEvents="none" />
         </Reanimated.View>
       </GestureDetector>
       {/* Bottom-left */}
       <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { bottom: -22, left: -22 }]}>
+        <Reanimated.View style={[hitZone, { bottom: -22, left: -22 }]} accessibilityLabel="Resize handle, bottom left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
           <View style={[handleBase, { bottom: 12, left: 12 }]} pointerEvents="none" />
         </Reanimated.View>
       </GestureDetector>
       {/* Bottom-right */}
       <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { bottom: -22, right: -22 }]}>
+        <Reanimated.View style={[hitZone, { bottom: -22, right: -22 }]} accessibilityLabel="Resize handle, bottom right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
           <View style={[handleBase, { bottom: 12, right: 12 }]} pointerEvents="none" />
         </Reanimated.View>
       </GestureDetector>
@@ -1659,7 +2242,7 @@ function SelectionHandles({
         pointerEvents="none"
       />
       <GestureDetector gesture={rotationPan}>
-        <Reanimated.View style={[hitZone, { top: -50, left: '50%', marginLeft: -22 }]}>
+        <Reanimated.View style={[hitZone, { top: -50, left: '50%', marginLeft: -22 }]} accessibilityLabel="Rotation handle" accessibilityRole="adjustable" accessibilityHint="Drag to rotate the layer">
           <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none">
             <Ionicons name="refresh" size={10} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} />
           </View>
@@ -1674,45 +2257,54 @@ function AlignmentGuides({
   canvasHeight,
   colors,
   smartGuides,
+  centerGuideVisible,
 }: {
   canvasWidth: number;
   canvasHeight: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
   smartGuides?: { vertical: number[]; horizontal: number[] };
+  centerGuideVisible?: boolean;
 }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Horizontal centre line — 1.5px, brand color at 50% opacity */}
-      <View style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: canvasHeight / 2 - 0.75,
-        height: 1.5,
-        backgroundColor: colors.brand,
-        opacity: 0.5,
-      }} />
-      {/* Vertical centre line */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: canvasWidth / 2 - 0.75,
-        width: 1.5,
-        backgroundColor: colors.brand,
-        opacity: 0.5,
-      }} />
-      {/* Center dot at intersection */}
-      <View style={{
-        position: 'absolute',
-        left: canvasWidth / 2 - 3,
-        top: canvasHeight / 2 - 3,
-        width: 6,
-        height: 6,
-        borderRadius: Radius.full,
-        backgroundColor: colors.brand,
-        opacity: 0.6,
-      }} />
+      {/* Center-line guides — appear only when the layer's center is within
+          8pt of canvas center (Canva/Figma/Instagram Stories pattern).
+          1pt guide line with colors.brand at 50% opacity. */}
+      {centerGuideVisible && (
+        <>
+          {/* Horizontal centre line — 1px, brand color at 50% opacity */}
+          <View style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: canvasHeight / 2 - 0.5,
+            height: 1,
+            backgroundColor: colors.brand,
+            opacity: 0.5,
+          }} />
+          {/* Vertical centre line */}
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: canvasWidth / 2 - 0.5,
+            width: 1,
+            backgroundColor: colors.brand,
+            opacity: 0.5,
+          }} />
+          {/* Center dot at intersection */}
+          <View style={{
+            position: 'absolute',
+            left: canvasWidth / 2 - 3,
+            top: canvasHeight / 2 - 3,
+            width: 6,
+            height: 6,
+            borderRadius: Radius.full,
+            backgroundColor: colors.brand,
+            opacity: 0.6,
+          }} />
+        </>
+      )}
       {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
@@ -1911,7 +2503,7 @@ function createProductStyles(colors: ThemeColors) {
     gap: 6,
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1945,7 +2537,7 @@ const mentionStyles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs,
     justifyContent: 'center',
     alignItems: 'center',

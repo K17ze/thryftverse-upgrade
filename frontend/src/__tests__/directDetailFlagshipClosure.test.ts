@@ -94,8 +94,11 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
       expect(src).toContain('More like this');
     });
 
-    it('retains Seen in Looks module', () => {
-      expect(src).toContain('SeenInLooksRail');
+    // Seen in Looks rail was removed in Phase 2 per spec 12:
+    // "One high-quality continuation section is better than 3 repetitive rails."
+    // Look context remains accessible via the seller profile's Looks tab.
+    it('does not contain Seen in Looks rail (consolidated per spec 12)', () => {
+      expect(src).not.toContain('<SeenInLooksRail');
     });
   });
 

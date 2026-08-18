@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     minHeight: 48,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.md,
   },
   primaryBtnText: {

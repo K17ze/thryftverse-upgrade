@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, TypeStyles, Typography, Radius } from '../../theme/designTokens';
+import { Space, Type, TypeStyles, Typography, Radius, Stroke } from '../../theme/designTokens';
 
-export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests' | 'groups';
+export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests';
 
 export interface MessagingSegmentRailProps {
   active: MessagingSegment;
@@ -24,16 +24,22 @@ export function MessagingSegmentRail({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
+  // Only 3 scopes are visible in the first viewport (Primary, Buying,
+  // Selling). Additional classifiers (Requests, Unread, Archived, Groups)
+  // are surfaced behind a filter icon in the InboxScreen header.
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
-    { key: 'all', label: 'All' },
+    { key: 'all', label: 'Primary' },
     { key: 'buying', label: 'Buying', badge: buyingCount > 0 ? buyingCount : undefined },
     { key: 'selling', label: 'Selling', badge: sellingCount > 0 ? sellingCount : undefined },
-    { key: 'requests', label: 'Requests', badge: requestCount > 0 ? requestCount : undefined },
-    { key: 'groups', label: 'Groups' },
   ];
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.root}
+      contentContainerStyle={styles.content}
+    >
       {segments.map((seg) => {
         const isActive = seg.key === active;
         return (
@@ -43,24 +49,29 @@ export function MessagingSegmentRail({
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={`${seg.label} tab${seg.badge ? `, ${seg.badge} new` : ''}`}
-            style={styles.tab}
+            style={({ pressed }) => [
+              styles.tab,
+              isActive && styles.tabActive,
+              pressed && styles.tabPressed,
+            ]}
           >
             <Text
               style={[
                 styles.label,
-                isActive && styles.labelActive,
-                !isActive && styles.labelInactive,
+                isActive ? styles.labelActive : styles.labelInactive,
               ]}
               numberOfLines={1}
             >
               {seg.label}
             </Text>
             {seg.badge ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{seg.badge}</Text>
+              <View style={[styles.badge, isActive && styles.badgeActive]}>
+                <Text style={[styles.badgeText, isActive && styles.badgeTextActive]}>
+                  {seg.badge > 99 ? '99+' : seg.badge}
+                </Text>
               </View>
             ) : null}
-            {/* Underline indicator — active segment only (iOS/Instagram native pattern) */}
+            {/* Underline indicator — active segment only (Instagram native pattern) */}
             <View style={[styles.indicator, isActive && styles.indicatorActive]} />
           </Pressable>
         );
@@ -72,26 +83,32 @@ export function MessagingSegmentRail({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
+    gap: Space.smMd,
+    paddingVertical: Space.xs,
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingBottom: Space.sm,
+    gap: Space.xs + 1,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.xs,
     position: 'relative',
+    minHeight: 44,
+  },
+  tabActive: {},
+  tabPressed: {
+    opacity: 0.6,
   },
   label: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.body.fontFamily,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   labelActive: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -101,29 +118,36 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textMuted,
   },
   badge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: Radius.md,
-    backgroundColor: colors.brand,
+    minWidth: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    backgroundColor: `${colors.brand}1F`,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.xs,
+    paddingHorizontal: Space.xs + 1,
+  },
+  badgeActive: {
+    backgroundColor: colors.brand,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: colors.brand,
+  },
+  badgeTextActive: {
     color: colors.textInverse,
   },
   indicator: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: Space.xs,
+    right: Space.xs,
     height: 2,
     borderRadius: 1,
     backgroundColor: 'transparent',
   },
   indicatorActive: {
     backgroundColor: colors.textPrimary,
+    height: 2.5,
   },
 });

@@ -121,7 +121,7 @@ export function CommerceDetailSellerRow({
               {displayedName}
             </Text>
             {institutional && verified ? (
-              <Ionicons name="shield-checkmark" size={15} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
             ) : verified ? (
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
             ) : null}
@@ -143,7 +143,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(secondaryAction.onPress)}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityLabel={secondaryAction.label}
               accessibilityRole="button"
             >
@@ -156,7 +156,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(primaryAction.onPress)}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityLabel={primaryAction.label}
               accessibilityRole="button"
             >

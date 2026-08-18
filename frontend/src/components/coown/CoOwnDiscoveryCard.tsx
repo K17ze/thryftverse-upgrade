@@ -1,11 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface CoOwnDiscoveryCardProps {
   imageUri?: string | null;
@@ -31,7 +29,6 @@ export function CoOwnDiscoveryCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
-  const reducedMotion = useReducedMotion();
   const cardWidth = (width - Space.md * 2 - Space.sm) / 2;
   const imageHeight = cardWidth * 1.25; // 4:5 editorial ratio
 
@@ -42,7 +39,7 @@ export function CoOwnDiscoveryCard({
     status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Allocated';
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(300)}>
+    <View>
       <Pressable
         onPress={onPress}
         style={[styles.root, { width: cardWidth }]}
@@ -74,7 +71,7 @@ export function CoOwnDiscoveryCard({
           </View>
         </View>
       </Pressable>
-    </Reanimated.View>
+    </View>
   );
 }
 

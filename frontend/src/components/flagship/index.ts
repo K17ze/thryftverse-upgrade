@@ -12,3 +12,6 @@ export { FlagshipStickyFooter } from './FlagshipStickyFooter';
 export { FlagshipState } from './FlagshipState';
 export { FlagshipDangerZone } from './FlagshipDangerZone';
 export { FlagshipFormSection } from './FlagshipFormSection';
+export type { FlagshipFormSectionVariant } from './FlagshipFormSection';
+export { FlagshipNavigationRow } from './FlagshipNavigationRow';
+export { FlagshipMetricLine } from './FlagshipMetricLine';

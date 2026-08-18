@@ -5,8 +5,9 @@ import {
   buildEngagementSummary,
   buildCapabilities,
   buildListingDetail,
+  detectCommerceTier,
 } from '../platform/product/listingDetailContract';
-import { Listing, ListingSeller } from '../data/mockData';
+import { Listing, ListingSeller } from '../domain/listing';
 
 function makeListing(overrides: Partial<Listing> = {}): Listing {
   return {
@@ -206,6 +207,55 @@ describe('listingDetailContract', () => {
       expect(caps.canOffer).toBe(false);
       expect(caps.isAvailable).toBe(false);
       expect(caps.unavailableReason).toBe('status_unknown');
+    });
+  });
+
+  describe('detectCommerceTier', () => {
+    it('returns brokered for cars regardless of price', () => {
+      expect(detectCommerceTier('cars', 200)).toBe('brokered');
+      expect(detectCommerceTier('cars-luxury', 5000000)).toBe('brokered');
+    });
+
+    it('returns brokered for yachts regardless of price', () => {
+      expect(detectCommerceTier('yachts', 100)).toBe('brokered');
+      expect(detectCommerceTier('yachts-motor', 4000000)).toBe('brokered');
+    });
+
+    it('returns specialist for art/collectibles', () => {
+      expect(detectCommerceTier('art', 500)).toBe('specialist');
+      expect(detectCommerceTier('collectibles', 50000)).toBe('specialist');
+    });
+
+    it('returns authenticated_luxury for bags at £10,000+', () => {
+      expect(detectCommerceTier('women-bags', 10000)).toBe('authenticated_luxury');
+      expect(detectCommerceTier('women-bags', 50000)).toBe('authenticated_luxury');
+    });
+
+    it('returns authenticated_luxury for watches at £10,000+', () => {
+      expect(detectCommerceTier('designer-watches', 20000)).toBe('authenticated_luxury');
+    });
+
+    it('returns authenticated_luxury for jewellery at £10,000+', () => {
+      expect(detectCommerceTier('designer-jewellery', 15000)).toBe('authenticated_luxury');
+    });
+
+    it('returns standard for bags below £10,000', () => {
+      expect(detectCommerceTier('women-bags', 9999)).toBe('standard');
+      expect(detectCommerceTier('women-bags', 500)).toBe('standard');
+    });
+
+    it('returns standard for watches below £10,000', () => {
+      expect(detectCommerceTier('designer-watches', 9999)).toBe('standard');
+    });
+
+    it('returns standard for non-luxury categories regardless of price', () => {
+      expect(detectCommerceTier('women-clothing', 50000)).toBe('standard');
+      expect(detectCommerceTier('electronics', 50000)).toBe('standard');
+    });
+
+    it('returns standard for empty/unknown category', () => {
+      expect(detectCommerceTier('', 100)).toBe('standard');
+      expect(detectCommerceTier('unknown', 100000)).toBe('standard');
     });
   });
 

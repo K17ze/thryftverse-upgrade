@@ -10,12 +10,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 
+// Decorative palette — intentionally hardcoded.
+// These are user-facing canvas background swatches (solid colors and
+// gradients) that the creator picks from. They are persisted as canvas
+// background values and rendered over media, so they must remain stable
+// literal colors rather than theme tokens that shift with light/dark mode.
 const BG_PRESETS = [
   { label: 'Black', type: 'color' as const, value: '#000000' },
   { label: 'Dark', type: 'color' as const, value: '#1a1a1a' },
@@ -342,7 +347,7 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
       onPress={() => onSelect(ratio)}
       style={[
         styles.ratioBtn,
-        { borderColor: isActive ? colors.brand : colors.border, backgroundColor: isActive ? `${colors.brand}10` : 'transparent' },
+        { borderColor: isActive ? colors.brand : colors.border, borderWidth: isActive ? Stroke.emphasis : Stroke.standard, backgroundColor: isActive ? `${colors.brand}10` : 'transparent' },
       ]}
       accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
       accessibilityRole="button"
@@ -370,8 +375,8 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.subtitle.size,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
@@ -393,7 +398,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
@@ -404,7 +409,7 @@ function createStyles(colors: ThemeColors) {
   },
   inputFocused: {
     borderColor: colors.brand,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
   },
   textArea: {
     minHeight: 80,
@@ -432,8 +437,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    gap: 6,
+    borderWidth: Stroke.standard,
+    gap: Space.xs,
     minWidth: 72,
     minHeight: 72,
   },
@@ -484,23 +489,17 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
+    minHeight: 50,
     paddingVertical: Space.md,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
   },
   saveBtnDisabled: {
     opacity: 0.4,
-    shadowOpacity: 0,
-    elevation: 0,
   },
   saveBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.surface,
   },
   attributionBox: {
@@ -515,7 +514,7 @@ function createStyles(colors: ThemeColors) {
   },
   attributionContent: {
     flex: 1,
-    gap: 2,
+    gap: Space.xxs,
   },
   attributionText: {
     fontFamily: Typography.family.medium,
@@ -524,7 +523,7 @@ function createStyles(colors: ThemeColors) {
   },
   attributionDetail: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size - 2,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
   },
   // ── Background picker ──
@@ -533,17 +532,17 @@ function createStyles(colors: ThemeColors) {
   },
   bgScrollContent: {
     paddingHorizontal: Space.md,
-    gap: 10,
+    gap: Space.sm,
   },
   bgTileWrap: {
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   bgTile: {
     width: 64,
     height: 80,
     borderRadius: Radius.lg,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     overflow: 'hidden',
   },
   bgTileFill: {
@@ -552,11 +551,11 @@ function createStyles(colors: ThemeColors) {
   },
   bgCheckOverlay: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: Space.xs,
+    right: Space.xs,
     width: 20,
     height: 20,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',

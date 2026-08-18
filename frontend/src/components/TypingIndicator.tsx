@@ -6,6 +6,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { Space } from '../theme/designTokens';
 interface TypingIndicatorProps {
@@ -26,12 +27,18 @@ export function TypingIndicator({
   style,
 }: TypingIndicatorProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const resolvedDotColor = dotColor ?? colors.textMuted;
   const animations = useRef(
     Array.from({ length: dotCount }, () => new Animated.Value(0))
   ).current;
 
   useEffect(() => {
+    // Reduced motion: show static dots at a fixed opacity (no travel).
+    if (reducedMotion) {
+      animations.forEach((a) => a.setValue(0.6));
+      return;
+    }
     // Create staggered animations for each dot
     const createAnimation = (index: number) => {
       return Animated.loop(
@@ -63,7 +70,7 @@ export function TypingIndicator({
     return () => {
       animations_started.forEach(anim => anim.stop());
     };
-  }, []);
+  }, [reducedMotion]);
 
   return (
     <View style={StyleSheet.flatten([styles.container, style])}>

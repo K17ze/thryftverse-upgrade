@@ -9,7 +9,7 @@ export interface FormErrorSummaryProps {
   title?: string;
 }
 
-export function FormErrorSummary({ errors, title = 'Please fix the following:' }: FormErrorSummaryProps) {
+export function FormErrorSummary({ errors, title = 'Fix the following:' }: FormErrorSummaryProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 

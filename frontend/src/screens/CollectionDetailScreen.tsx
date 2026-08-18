@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -29,18 +28,40 @@ import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
+import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
-const COVER_H = 180;
+const COVER_H = 220;
+
+/**
+ * Relative-time formatter for "last updated" metadata.
+ * Returns compact strings: "now", "3d", "2w", "1mo", "1y".
+ */
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  const years = Math.floor(days / 365);
+  return `${years}y`;
+}
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CollectionDetailScreen() {
@@ -50,7 +71,6 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
@@ -73,11 +93,17 @@ export default function CollectionDetailScreen() {
     [listings, collection]
   );
 
-  const coverImage = useMemo(() => {
-    if (!collection?.itemIds?.length) return null;
-    const firstItem = listings.find((l) => l.id === collection.itemIds[0]);
-    return firstItem?.images?.[0] ?? null;
+  const coverImages = useMemo(() => {
+    if (!collection?.itemIds?.length) return [];
+    return collection.itemIds
+      .slice(0, 4)
+      .map((id) => listings.find((l) => l.id === id))
+      .filter((l): l is NonNullable<typeof l> => !!l)
+      .map((l) => l.images?.[0])
+      .filter((uri): uri is string => !!uri);
   }, [collection, listings]);
+
+  const coverImage = coverImages[0] ?? null;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -110,7 +136,7 @@ export default function CollectionDetailScreen() {
                 show('Collection deleted', 'info');
                 handleGoBack();
               } catch {
-                show('Unable to delete collection. Please try again.', 'error');
+                show('Unable to delete collection. Try again.', 'error');
               }
             }
           },
@@ -203,10 +229,27 @@ export default function CollectionDetailScreen() {
           />
         }
       >
-        {/* Cover Image Hero */}
-        {coverImage && (
+        {/* Cover Image Hero — 2x2 mosaic from first 2-4 items */}
+        {coverImages.length > 0 && (
           <View style={styles.coverWrap}>
-            <CachedImage uri={coverImage} style={styles.coverImage} contentFit="cover" />
+            {coverImages.length === 1 ? (
+              <CachedImage uri={coverImages[0]} style={styles.coverImage} contentFit="cover" />
+            ) : (
+              <View style={styles.coverMosaic}>
+                {coverImages.map((uri, i) => (
+                  <CachedImage
+                    key={uri + i}
+                    uri={uri}
+                    style={styles.coverMosaicTile}
+                    contentFit="cover"
+                  />
+                ))}
+                {/* Fill empty slots with dark tiles */}
+                {Array.from({ length: 4 - coverImages.length }).map((_, i) => (
+                  <View key={`empty-${i}`} style={[styles.coverMosaicTile, { backgroundColor: colors.surfaceAlt }]} />
+                ))}
+              </View>
+            )}
             <View style={styles.coverGradient} />
             <View style={styles.coverInfo}>
               <View style={styles.coverTitleRow}>
@@ -221,7 +264,15 @@ export default function CollectionDetailScreen() {
               {collection.description ? (
                 <Text style={styles.coverDesc} numberOfLines={2}>{collection.description}</Text>
               ) : null}
-              <Text style={styles.coverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
+              <View style={styles.coverMetaRow}>
+                <Text style={styles.coverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
+                {collection.updatedAt ? (
+                  <>
+                    <Text style={styles.coverMetaDot}>·</Text>
+                    <Text style={styles.coverMetaUpdated}>Updated {formatRelativeTime(collection.updatedAt)}</Text>
+                  </>
+                ) : null}
+              </View>
             </View>
             {/* Actions overlay */}
             <View style={styles.coverActions} pointerEvents="box-none">
@@ -277,7 +328,15 @@ export default function CollectionDetailScreen() {
               {collection.description ? (
                 <Text style={styles.noCoverDesc} numberOfLines={2}>{collection.description}</Text>
               ) : null}
-              <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
+              <View style={styles.noCoverMetaRow}>
+                <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
+                {collection.updatedAt ? (
+                  <>
+                    <Text style={styles.noCoverMetaDot}>·</Text>
+                    <Text style={styles.noCoverMetaUpdated}>Updated {formatRelativeTime(collection.updatedAt)}</Text>
+                  </>
+                ) : null}
+              </View>
             </View>
             <View style={styles.actionRow}>
               {!collection.isPrivate && (
@@ -329,23 +388,22 @@ export default function CollectionDetailScreen() {
           </AnimatedPressable>
         )}
 
-        {/* Grid */}
+        {/* Grid — 3-column media mosaic with 3:4 portrait thumbnails */}
         {count > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
-            <MasonryGrid
+          <View style={{ marginTop: Space.md }}>
+            <ClosetMediaMosaic
               items={collectionItems}
               onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
-              numColumns={2}
               showSaveButton
             />
-          </Reanimated.View>
+          </View>
         )}
         {count === 0 && (
           <EmptyState
-            graphic={<BoardEmptyGraphic title="Empty collection" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
-            title="Empty collection"
-            subtitle="Browse items and add them to this collection."
-            ctaLabel="Browse"
+            graphic={<BoardEmptyGraphic title="No items yet" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
+            title="This collection is empty"
+            subtitle="Browse items and save them to this collection to start curating your board."
+            ctaLabel="Browse items"
             onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
           />
         )}
@@ -384,7 +442,6 @@ function MoreLikeThisRow({
   formatFromFiat: any;
 }) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];
@@ -401,7 +458,7 @@ function MoreLikeThisRow({
   return (
     <View style={{ marginTop: Space.xl, paddingBottom: Space.sm }}>
       <Text style={styles.moreTitle}>More like this</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Space.xs + 2, paddingRight: 20 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Space.xs + 2, paddingHorizontal: Space.md, paddingRight: 20 }}>
         {similarItems.map((item) => (
           <AnimatedPressable
             key={item.id}
@@ -485,6 +542,16 @@ function createStyles(colors: ThemeColors) {
     width: '100%',
     height: '100%',
   },
+  coverMosaic: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  coverMosaicTile: {
+    width: '50%',
+    height: '50%',
+  },
   coverGradient: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -508,6 +575,22 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.85)',
     marginTop: Space.xs,
+  },
+  coverMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    marginTop: Space.xs,
+  },
+  coverMetaDot: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.medium,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  coverMetaUpdated: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.regular,
+    color: 'rgba(255,255,255,0.7)',
   },
   coverActions: {
     position: 'absolute',
@@ -549,6 +632,22 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
+  },
+  noCoverMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    marginTop: Space.xs / 2,
+  },
+  noCoverMetaDot: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+  },
+  noCoverMetaUpdated: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
   },
   coverTitleRow: {
     flexDirection: 'row',
@@ -616,12 +715,13 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
+    marginTop: Space.lg,
+    marginBottom: Space.xs,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
+    backgroundColor: 'transparent',
+    borderWidth: Stroke.hairline,
     borderColor: colors.border,
   },
   manageRowText: {
@@ -642,7 +742,6 @@ function createStyles(colors: ThemeColors) {
   },
   moreCard: {
     width: Space.xxl * 2 + Control.hit,
-    paddingLeft: Space.md,
   },
   moreMediaWrap: {
     width: Space.xxl * 2 + Control.hit,

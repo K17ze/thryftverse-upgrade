@@ -62,7 +62,7 @@ export function useListingDetail(listingId: string | undefined) {
           listing: mapBackendListingToListing(res.listing),
           commerce: res.commerce,
         } as ListingDetailResult;
-      } catch (error: any) {
+      } catch (error: unknown) {
         const mockFallback = findMockListingDetail(listingId);
         if (mockFallback) return mockFallback;
         throw error;

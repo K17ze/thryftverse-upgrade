@@ -22,6 +22,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
@@ -53,7 +55,8 @@ import {
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import type { Message as ConversationMessage } from '../data/mockData';
+import { deleteConversationOnApi, leaveGroupOnApi } from '../services/chatApi';
+import type { Message as ConversationMessage } from '../domain';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
@@ -78,6 +81,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
+  const deleteConversation = useStore((state) => state.deleteConversation);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === groupId),
@@ -92,6 +96,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const [agentPickerVisible, setAgentPickerVisible] = useState(false);
   const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const listRef = useRef<FlashListRef<GroupMessage>>(null);
 
@@ -156,7 +161,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     setSending(true);
     haptic.light();
 
-    const localId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const localId = makeStableId('g', 7);
     const outgoing: GroupMessage = {
       id: localId,
       text: trimmed,
@@ -386,16 +391,6 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 value={input}
                 onChangeText={setInput}
                 onSend={handleSend}
-                onAttachmentPress={() => {
-                  haptic.light();
-                  // Media sharing in group chats is not yet available —
-                  // truthful per AGENTS.md §11. The attachment glyph stays
-                  // as a transparent 44pt target but does not fabricate
-                  // functionality.
-                }}
-                onCameraPress={() => {
-                  haptic.light();
-                }}
                 placeholder="Message the group…"
                 isSending={sending}
               />
@@ -412,7 +407,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                   accessibilityLabel="Add AI Agent to this group"
                   accessibilityHint="Opens the AI agent picker"
                 >
-                  <Ionicons name="sparkles-outline" size={15} color={colors.brand} />
+                  <Ionicons name="person-add-outline" size={15} color={colors.brand} />
                   <Text style={[styles.addAgentText, { color: colors.brand }]}>
                     {deployedAgents.length > 0 ? 'Manage AI agents' : 'Add AI agent'}
                   </Text>
@@ -439,11 +434,38 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           memberProfiles={memberProfiles}
           memberCount={memberCount}
           deployedAgents={deployedAgents}
+          isLeaving={isLeaving}
           onLeaveGroup={() => {
-            setInfoVisible(false);
-            haptic.warning();
-            show('Left group', 'info');
-            navigation.goBack();
+            Alert.alert(
+              'Leave group?',
+              "You'll no longer receive messages from this group.",
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Leave group',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (!currentUser?.id) {
+                      show('Could not leave group. Try again.', 'error');
+                      return;
+                    }
+                    haptic.warning();
+                    setIsLeaving(true);
+                    try {
+                      await leaveGroupOnApi(groupId, currentUser.id);
+                      deleteConversation(groupId);
+                      setInfoVisible(false);
+                      show('Left group', 'info');
+                      navigation.goBack();
+                    } catch {
+                      show('Could not leave group. Try again.', 'error');
+                    } finally {
+                      setIsLeaving(false);
+                    }
+                  },
+                },
+              ],
+            );
           }}
           onManageAgents={() => {
             setInfoVisible(false);
@@ -465,6 +487,7 @@ function GroupInfoModal({
   memberProfiles,
   memberCount,
   deployedAgents,
+  isLeaving,
   onLeaveGroup,
   onManageAgents,
 }: {
@@ -474,6 +497,7 @@ function GroupInfoModal({
   memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
   memberCount: number;
   deployedAgents: ChatAgent[];
+  isLeaving: boolean;
   onLeaveGroup: () => void;
   onManageAgents: () => void;
 }) {
@@ -482,10 +506,10 @@ function GroupInfoModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
           accessibilityLabel="Group info sheet"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -557,13 +581,19 @@ function GroupInfoModal({
           </ScrollView>
 
           <Pressable
-            style={[styles.leaveBtn, { borderColor: colors.danger }]}
+            style={[styles.leaveBtn, { borderColor: colors.danger }, isLeaving && styles.leaveBtnDisabled]}
             onPress={onLeaveGroup}
+            disabled={isLeaving}
             accessibilityRole="button"
             accessibilityLabel="Leave group"
             accessibilityHint="Removes you from this group conversation"
+            accessibilityState={{ disabled: isLeaving }}
           >
-            <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
+            {isLeaving ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
+            )}
           </Pressable>
 
           <Pressable
@@ -574,8 +604,8 @@ function GroupInfoModal({
           >
             <Text style={[styles.cancelText, { color: colors.textPrimary }]}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -763,6 +793,9 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: StyleSheet.hairlineWidth,
       minHeight: Control.hit,
       justifyContent: 'center',
+    },
+    leaveBtnDisabled: {
+      opacity: 0.6,
     },
     leaveBtnText: {
       fontSize: Type.body.size,

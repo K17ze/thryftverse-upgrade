@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown, SlideInDown } from 'react-native-reanimated';
+import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -24,20 +24,8 @@ import {
   deleteLookCommentOnApi,
   type LookCommentApiItem,
 } from '../../services/looksApi';
-
-function formatRelativeTime(iso: string): string {
-  const now = Date.now();
-  const then = new Date(iso).getTime();
-  const diffSec = Math.floor((now - then) / 1000);
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
+import { formatRelativeTime } from '../../utils/dateFormat';
+import { makeStableId } from '../../utils/createStableId';
 
 export interface LookCommentsSheetProps {
   lookId: string;
@@ -96,7 +84,7 @@ export function LookCommentsSheet({
     if (!body || isSending) return;
     haptic.light();
     setIsSending(true);
-    const tempId = `comment_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const tempId = makeStableId('comment', 6);
     try {
       const res = await createLookCommentOnApi(lookId, { id: tempId, body });
       setComments((prev) => {
@@ -134,9 +122,8 @@ export function LookCommentsSheet({
   const renderItem = ({ item, index }: { item: LookCommentApiItem; index: number }) => {
     const isOwner = currentUserId && item.authorId === currentUserId;
     return (
-      <Reanimated.View
+      <View
         key={item.id}
-        entering={FadeInDown.duration(200).delay(index * 30)}
         style={styles.commentRow}
       >
         <View style={styles.avatarWrap}>
@@ -167,7 +154,7 @@ export function LookCommentsSheet({
             <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         )}
-      </Reanimated.View>
+      </View>
     );
   };
 
@@ -400,7 +387,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.brand,
-    backgroundColor: 'rgba(99,102,241,0.06)',
+    backgroundColor: colors.brandSubtle,
   },
   signInBtnText: {
     fontSize: Type.body.size,

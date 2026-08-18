@@ -312,7 +312,7 @@ export function CoOwnTradeComposer({
           when the backend provides them. Fail closed (omit when null). */}
       {escrowPartner ? (
         <View style={[styles.settlementRow, { marginTop: Space.xs }]}>
-          <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
           <Text style={[styles.settlementText, { color: colors.textSecondary }]} numberOfLines={1}>
             Escrow: {escrowPartner}
             {escrowTermsUrl ? ' · terms available' : ''}

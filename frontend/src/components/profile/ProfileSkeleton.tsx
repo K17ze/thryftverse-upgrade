@@ -1,19 +1,13 @@
 import React from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
-import { ActiveTheme, Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, ProfileLayout } from '../../theme/designTokens';
+import { SkeletonLoader } from '../SkeletonLoader';
 
-const BG = Colors.background;
-const BORDER = Colors.border;
-const SURFACE_ALT = Colors.surfaceAlt;
-
-const COVER_HEIGHT = 160;
-const AVATAR_SIZE = 84;
-const AVATAR_OVERLAP = AVATAR_SIZE / 2;
-const GRID_GAP = 8;
+const GRID_GAP = Space.sm;
 const CARD_ASPECT = 1.25;
 const LOOK_COLS = 3;
-const LOOK_GAP = 2;
+const LOOK_GAP = Space.xxs;
 
 type SkeletonDestination = 'Shop' | 'Looks' | 'Reviews';
 
@@ -37,11 +31,12 @@ interface ProfileSkeletonProps {
  * No layout shift when data resolves.
  */
 export function ProfileSkeleton({
-  coverHeight = COVER_HEIGHT,
-  avatarSize = AVATAR_SIZE,
+  coverHeight = ProfileLayout.coverHeightSkeleton,
+  avatarSize = ProfileLayout.avatarSkeleton,
   screenWidth,
   destination = 'Shop',
 }: ProfileSkeletonProps) {
+  const { colors, isDark } = useAppTheme();
   const avatarOverlap = avatarSize / 2;
   const cardW = screenWidth ? (screenWidth - Space.md * 2 - GRID_GAP) / 2 : 160;
   const cardH = cardW * CARD_ASPECT;
@@ -49,18 +44,21 @@ export function ProfileSkeleton({
   const lookH = lookW * (4 / 3);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {/* Cover stage — exact final height */}
-      <View style={[styles.coverSkeleton, { height: coverHeight }]} />
+      <SkeletonLoader width="100%" height={coverHeight} borderRadius={0} />
 
       {/* Hero root — position relative for absolute avatar */}
-      <View style={styles.heroRoot}>
+      <View style={[styles.heroRoot, { backgroundColor: colors.background }]}>
         {/* Avatar skeleton — absolutely positioned at the seam */}
         <View style={[styles.skeletonAvatar, {
           width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2,
           top: -avatarOverlap, left: Space.md,
-        }]} />
+          borderColor: colors.background,
+        }]}>
+          <SkeletonLoader width={avatarSize} height={avatarSize} borderRadius={avatarSize / 2} />
+        </View>
 
         {/* Identity canvas — no top padding; seamRow reserves avatar overlap height */}
         <View style={[styles.skeletonBody, { paddingTop: 0 }]}>
@@ -68,78 +66,74 @@ export function ProfileSkeleton({
           <View style={[styles.skeletonSeamRow, { minHeight: avatarOverlap + Space.sm }]}>
             <View style={{ width: avatarSize + Space.sm }} />
             <View style={styles.skeletonSeamStats}>
-              <View style={styles.skeletonSeamStat} />
-              <View style={styles.skeletonSeamStat} />
-              <View style={styles.skeletonSeamStat} />
+              <SkeletonLoader width={40} height={36} borderRadius={Radius.sm} />
+              <SkeletonLoader width={40} height={36} borderRadius={Radius.sm} />
+              <SkeletonLoader width={40} height={36} borderRadius={Radius.sm} />
             </View>
           </View>
 
           {/* Identity — full-width, left-aligned */}
-          <View style={styles.skeletonName} />
-          <View style={styles.skeletonHandle} />
-          <View style={styles.skeletonBioLine} />
-          <View style={styles.skeletonBioLineShort} />
+          <SkeletonLoader width={180} height={20} borderRadius={Radius.sm} style={{ marginBottom: 6 }} />
+          <SkeletonLoader width={120} height={14} borderRadius={Radius.sm} style={{ marginBottom: Space.sm }} />
+          <SkeletonLoader width="100%" height={14} borderRadius={Radius.sm} style={{ marginBottom: Space.xs }} />
+          <SkeletonLoader width="60%" height={14} borderRadius={Radius.sm} style={{ marginBottom: Space.xs }} />
 
           {/* Trust line */}
-          <View style={styles.skeletonTrustLine} />
+          <SkeletonLoader width={160} height={13} borderRadius={Radius.sm} style={{ marginBottom: Space.sm }} />
 
           {/* Action row skeleton */}
           <View style={styles.skeletonActionRow}>
-            <View style={styles.skeletonActionPrimary} />
-            <View style={styles.skeletonActionPrimary} />
-            <View style={styles.skeletonActionSecondary} />
+            <View style={styles.skeletonActionPrimary}>
+              <SkeletonLoader width="100%" height={44} borderRadius={Radius.lg} />
+            </View>
+            <View style={styles.skeletonActionPrimary}>
+              <SkeletonLoader width="100%" height={44} borderRadius={Radius.lg} />
+            </View>
+            <View style={styles.skeletonActionSecondary}>
+              <SkeletonLoader width={44} height={44} borderRadius={Radius.lg} />
+            </View>
           </View>
 
           {/* Tab rail skeleton */}
-          <View style={styles.skeletonTabRail} />
+          <View style={styles.skeletonTabRail}>
+            <SkeletonLoader width="100%" height={44} borderRadius={0} />
+          </View>
 
           {/* Destination-specific content skeletons */}
           {destination === 'Shop' ? (
             <View style={styles.skeletonGrid}>
-              <View style={[styles.skeletonCard, { width: cardW, height: cardH }]} />
-              <View style={[styles.skeletonCard, { width: cardW, height: cardH }]} />
-              <View style={[styles.skeletonCard, { width: cardW, height: cardH }]} />
-              <View style={[styles.skeletonCard, { width: cardW, height: cardH }]} />
+              <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />
+              <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />
+              <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />
+              <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />
             </View>
           ) : destination === 'Looks' ? (
             <View style={styles.skeletonLookGrid}>
               {Array.from({ length: 9 }).map((_, i) => (
-                <View key={i} style={[styles.skeletonLookCard, { width: lookW, height: lookH }]} />
+                <SkeletonLoader key={i} width={lookW} height={lookH} borderRadius={Radius.sm} />
               ))}
             </View>
           ) : (
             <View style={styles.skeletonReviews}>
               {/* Reputation summary skeleton */}
               <View style={styles.skeletonReviewSummary}>
-                <View style={styles.skeletonReviewAvg} />
+                <SkeletonLoader width={60} height={60} borderRadius={Radius.sm} />
                 <View style={styles.skeletonReviewDist}>
-                  <View style={styles.skeletonDistRow} />
-                  <View style={styles.skeletonDistRow} />
-                  <View style={styles.skeletonDistRow} />
+                  <SkeletonLoader width="100%" height={10} borderRadius={Radius.sm} />
+                  <SkeletonLoader width="100%" height={10} borderRadius={Radius.sm} />
+                  <SkeletonLoader width="100%" height={10} borderRadius={Radius.sm} />
                 </View>
               </View>
               {/* Three review rows */}
-              <View style={styles.skeletonReviewRow}>
-                <View style={styles.skeletonReviewAvatar} />
-                <View style={styles.skeletonReviewIdentity}>
-                  <View style={styles.skeletonReviewName} />
-                  <View style={styles.skeletonReviewDate} />
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonReviewRow}>
+                  <SkeletonLoader width={36} height={36} borderRadius={Radius.full} />
+                  <View style={styles.skeletonReviewIdentity}>
+                    <SkeletonLoader width="50%" height={12} borderRadius={Radius.sm} />
+                    <SkeletonLoader width="30%" height={10} borderRadius={Radius.sm} style={{ marginTop: 4 }} />
+                  </View>
                 </View>
-              </View>
-              <View style={styles.skeletonReviewRow}>
-                <View style={styles.skeletonReviewAvatar} />
-                <View style={styles.skeletonReviewIdentity}>
-                  <View style={styles.skeletonReviewName} />
-                  <View style={styles.skeletonReviewDate} />
-                </View>
-              </View>
-              <View style={styles.skeletonReviewRow}>
-                <View style={styles.skeletonReviewAvatar} />
-                <View style={styles.skeletonReviewIdentity}>
-                  <View style={styles.skeletonReviewName} />
-                  <View style={styles.skeletonReviewDate} />
-                </View>
-              </View>
+              ))}
             </View>
           )}
         </View>
@@ -149,49 +143,33 @@ export function ProfileSkeleton({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  coverSkeleton: { backgroundColor: SURFACE_ALT },
-  heroRoot: { position: 'relative', backgroundColor: BG },
+  container: { flex: 1 },
+  heroRoot: { position: 'relative' },
   skeletonAvatar: {
     position: 'absolute',
-    backgroundColor: SURFACE_ALT,
     borderWidth: 3,
-    borderColor: BG,
     zIndex: 10,
+    overflow: 'hidden',
+    borderRadius: 999,
   },
   skeletonBody: { paddingHorizontal: Space.md, paddingBottom: Space.sm },
   // Seam row — begins at canvas boundary, minHeight reserves avatar overlap
   skeletonSeamRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Space.xs },
   skeletonSeamStats: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  skeletonSeamStat: { width: 40, height: 36, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
-  // Identity — full-width
-  skeletonName: { width: 180, height: 20, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: 6 },
-  skeletonHandle: { width: 120, height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
-  skeletonBioLine: { width: '100%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
-  skeletonBioLineShort: { width: '60%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
-  // Trust line
-  skeletonTrustLine: { width: 160, height: 13, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
   // Actions — flat 11pt radius
-  skeletonActionRow: { flexDirection: 'row', gap: 8, marginBottom: Space.sm },
-  skeletonActionPrimary: { flex: 1, height: 44, borderRadius: Radius.lg, backgroundColor: SURFACE_ALT },
-  skeletonActionSecondary: { width: 44, height: 44, borderRadius: Radius.lg, backgroundColor: SURFACE_ALT },
+  skeletonActionRow: { flexDirection: 'row', gap: Space.sm, marginBottom: Space.sm },
+  skeletonActionPrimary: { flex: 1, height: 44, borderRadius: Radius.lg, overflow: 'hidden' },
+  skeletonActionSecondary: { width: 44, height: 44, borderRadius: Radius.lg, overflow: 'hidden' },
   // Tab rail
-  skeletonTabRail: { height: 44, backgroundColor: SURFACE_ALT, marginBottom: Space.md },
+  skeletonTabRail: { height: 44, marginBottom: Space.md, overflow: 'hidden' },
   // Shop grid — 4:5 tiles
   skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
-  skeletonCard: { borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   // Looks grid — 3-column portrait
   skeletonLookGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: LOOK_GAP },
-  skeletonLookCard: { borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   // Reviews
   skeletonReviews: { gap: Space.sm },
   skeletonReviewSummary: { flexDirection: 'row', gap: Space.md, paddingVertical: Space.md },
-  skeletonReviewAvg: { width: 60, height: 60, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
-  skeletonReviewDist: { flex: 1, gap: 4 },
-  skeletonDistRow: { height: 8, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
-  skeletonReviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  skeletonReviewAvatar: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: SURFACE_ALT },
-  skeletonReviewIdentity: { flex: 1, gap: 4 },
-  skeletonReviewName: { width: 120, height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
-  skeletonReviewDate: { width: 80, height: 12, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
+  skeletonReviewDist: { flex: 1, gap: Space.xs },
+  skeletonReviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.smMd, paddingVertical: Space.smMd },
+  skeletonReviewIdentity: { flex: 1, gap: Space.xs },
 });

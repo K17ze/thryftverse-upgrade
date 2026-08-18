@@ -9,14 +9,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
@@ -55,7 +53,6 @@ export default function SavedAddressesScreen({ navigation }: Props) {
   const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [addresses, setAddresses] = useState<CommerceAddress[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -201,7 +198,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const isDeleting = deletingId === address.id;
     const detail = formatAddressDetail(address);
     return (
-      <Reanimated.View key={address.id} entering={FadeInDown.duration(250).delay(index * 40)}>
+      <View key={address.id}>
         <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
@@ -254,7 +251,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             ) : null}
           </View>
         </View>
-      </Reanimated.View>
+      </View>
     );
   };
 
@@ -315,7 +312,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             variant="empty"
             icon="location-outline"
             title="No saved addresses"
-            subtitle="Add a delivery address for faster checkout. You can add multiple addresses and choose a default."
+            subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
             actionLabel="Add address"
             onAction={handleAdd}
           />
@@ -329,7 +326,6 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           />
         ) : (
           <View style={styles.listWrap}>
-            <Reanimated.View entering={FadeInDown.duration(300)}>
               <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.heroRow}>
                   <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -345,7 +341,6 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                   </View>
                 </View>
               </View>
-            </Reanimated.View>
             {addresses.map((address, index) => renderAddressCard(address, index))}
             <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.

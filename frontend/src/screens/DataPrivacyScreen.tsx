@@ -26,11 +26,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
@@ -42,7 +40,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
 // Demo mode flag — privacy controls are persisted locally in this build.
-const DATA_PRIVACY_DEMO_MODE = true;
+const DATA_PRIVACY_DEMO_MODE = __DEV__;
 
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
@@ -55,7 +53,6 @@ const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; la
 
 export default function DataPrivacyScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const { show } = useToast();
   const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
@@ -84,7 +81,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Data & Privacy"
-          subtitle="Control your data and privacy"
+          subtitle="Privacy settings"
           onBack={() => navigation.goBack()}
         />
       }
@@ -104,7 +101,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       )}
 
       {/* ── Your data — explanation block ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.commerceTrust }]}>
@@ -131,10 +128,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             ))}
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* ── Data actions — export & delete ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <View>
         <SettingsSection title="Your data rights" noCard>
           <SettingsRow
             icon="download-outline"
@@ -152,10 +149,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* ── Privacy controls ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <View>
         <SettingsSection title="Privacy controls" noCard>
           <SettingsRow
             icon="megaphone-outline"
@@ -173,7 +170,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             onToggle={(v) => { haptic.selection(); setAnalyticsOptOut(!v); }}
           />
           <SettingsRow
-            icon="sparkles-outline"
+            icon="person-outline"
             title="Recommendation personalisation"
             subtitle="Use your activity to personalise feed recommendations"
             toggleValue={recommendationPersonalization}
@@ -181,10 +178,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* ── Data retention ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <View>
         <View style={styles.infoBlock}>
           <View style={styles.infoHeader}>
             <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
@@ -194,10 +191,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             We retain your account data for as long as your account is active. After account deletion, personal data is removed within 30 days, except where retention is required by law (e.g. tax records for 7 years). Listing and order data needed for buyer protection is retained for the duration of any open dispute plus 90 days.
           </Text>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* ── Third-party sharing ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <View>
         <SettingsSection title="Third-party sharing" noCard>
           <SettingsRow
             icon="share-outline"
@@ -214,10 +211,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             We share data with shipping carriers and payment processors only to fulfil your orders and payouts. We never sell your personal data. Disabling this toggle stops anonymised aggregate sharing but does not affect order fulfilment.
           </Text>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* ── Cookie preferences ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+      <View>
         <SettingsSection title="Cookie preferences" noCard>
           <SettingsRow
             icon="document-text-outline"
@@ -228,10 +225,10 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* ── Legal ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(360)}>
+      <View>
         <SettingsSection title="Legal" noCard>
           <SettingsRow
             icon="shield-checkmark-outline"
@@ -246,7 +243,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
+      </View>
     </FlagshipScreen>
   );
 }

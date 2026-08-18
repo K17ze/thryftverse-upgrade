@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Type, Typography, Radius, Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   contentCentered: {
     justifyContent: 'center',
   },
-  // Icon wrapper — transparent centering only. Per AGENTS.md section 4, do not
+  // Icon wrapper — transparent centering only. Per AGENTS.md §4, do not
   // render a visible grey circle around the glyph; the icon renders directly
   // with transparent background. The 44pt hit target is the button itself.
   iconWrap: {

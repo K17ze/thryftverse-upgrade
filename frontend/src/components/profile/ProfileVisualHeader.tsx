@@ -7,14 +7,12 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -65,9 +63,8 @@ export function ProfileVisualHeader({
   hideCover = false,
 }: ProfileVisualHeaderProps) {
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(30)} style={styles.root}>
+    <View style={styles.root}>
       {/* Cover with gradient scrim */}
       {!hideCover && (
       <View style={styles.coverWrap}>
@@ -180,7 +177,7 @@ export function ProfileVisualHeader({
           </>
         )}
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -274,20 +271,20 @@ const styles = StyleSheet.create({
     fontSize: Type.priceList.size,
     color: Colors.textPrimary,
     letterSpacing: -0.4,
-    lineHeight: 26,
+    lineHeight: Type.priceList.lineHeight,
   },
   handle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   bio: {
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
     color: Colors.textSecondary,
     marginTop: Space.xs,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   statsRail: {
     flexDirection: 'row',

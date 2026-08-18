@@ -38,6 +38,7 @@ import {
   type GalleriaFeaturedAsset,
   type GalleriaCollectionDetail,
 } from '../services/galleriaApi';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GalleriaCollectionDetail'>;
 
@@ -198,7 +199,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
         const result = await fetchCollectionDetail(collectionId);
         setDetail(result);
       } catch (e) {
-        setError('We couldn\u2019t load this collection. Please try again.');
+        setError('We couldn\u2019t load this collection. Try again.');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -227,7 +228,12 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
   const handleItemPress = useCallback(
     (asset: GalleriaFeaturedAsset) => {
       haptic.selection();
-      navigation.navigate('ItemDetail', { itemId: asset.id });
+      openProductDetail(navigation, {
+        referenceKind: 'co_own',
+        canonicalId: asset.id,
+        sourceSurface: 'GalleriaCollectionDetail',
+        sourceItemId: asset.id,
+      });
     },
     [haptic, navigation],
   );

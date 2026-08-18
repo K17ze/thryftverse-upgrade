@@ -1,5 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
-import type { ChatAgentConfig, ChatBot } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot } from '../domain';
 
 interface ApiBotPayload {
   id: string;

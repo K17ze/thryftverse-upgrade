@@ -3,47 +3,49 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useBackendData } from '../context/BackendDataContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
   const { collectionId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const collections = useStore((state) => state.collections);
   const renameCollection = useStore((state) => state.renameCollection);
   const deleteCollection = useStore((state) => state.deleteCollection);
   const updateCollectionOnApi = useStore((state) => state.updateCollectionOnApi);
   const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
+  const { listings } = useBackendData();
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
     [collections, collectionId]
+  );
+
+  const itemCount = useMemo(
+    () => collection?.itemIds?.length ?? 0,
+    [collection]
   );
 
   const [name, setName] = useState(collection?.name ?? '');
@@ -74,7 +76,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch {
       setIsSaving(false);
-      show('Unable to update collection. Please check your connection.', 'error');
+      show('Unable to update collection. Check your connection.', 'error');
     }
   }, [canSave, collectionId, haptic, name, description, isPrivate, updateCollectionOnApi, show, navigation]);
 
@@ -95,7 +97,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 show('Collection deleted', 'info');
                 navigation.navigate('Closet');
               } catch {
-                show('Unable to delete collection. Please try again.', 'error');
+                show('Unable to delete collection. Try again.', 'error');
               }
             }
           },
@@ -106,9 +108,14 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 
   if (!collection) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Edit Collection" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Edit Collection"
+            onBack={() => navigation.goBack()}
+          />
+        }
+      >
         <EmptyState
           icon="folder-open-outline"
           title="Collection not found"
@@ -116,33 +123,36 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
           ctaLabel="Go back"
           onCtaPress={() => navigation.goBack()}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Edit Collection"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={handleSave}
-            disabled={!canSave}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Save changes"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.headerAction, !canSave && styles.headerActionDisabled]}>
-              Save
-            </Text>
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Edit Collection"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={handleSave}
+              disabled={!canSave}
+              activeOpacity={0.7}
+              scaleValue={0.95}
+              hapticFeedback="light"
+              accessibilityLabel="Save changes"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.headerAction, !canSave && styles.headerActionDisabled]}>
+                Save
+              </Text>
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
@@ -150,7 +160,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
+          <View style={styles.card}>
             <Text style={styles.label}>Name</Text>
             <AppInput
               value={name}
@@ -161,9 +171,9 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               accessibilityLabel="Collection name input"
             />
             <Text style={styles.charCount}>{name.length}/40</Text>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
+          <View style={styles.card}>
             <Text style={styles.label}>Description</Text>
             <AppInput
               value={description}
@@ -175,9 +185,9 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               accessibilityLabel="Collection description input"
             />
             <Text style={styles.charCount}>{description.length}/200</Text>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
+          <View style={styles.card}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleIconWrap}>
                 <Ionicons
@@ -206,9 +216,28 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 </View>
               </AnimatedPressable>
             </View>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.dangerCard}>
+          {/* Manage items link — navigates to ManageCollectionItemsScreen */}
+            <AnimatedPressable
+              style={styles.manageItemsRow}
+              onPress={() => { haptic.light(); navigation.navigate('ManageCollectionItems', { collectionId }); }}
+              activeOpacity={0.85}
+              hapticFeedback="light"
+              accessibilityLabel={`Manage items, ${itemCount} item${itemCount !== 1 ? 's' : ''} in collection`}
+              accessibilityRole="button"
+            >
+              <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
+              <View style={styles.manageItemsText}>
+                <Text style={styles.manageItemsLabel}>Manage items</Text>
+                <Text style={styles.manageItemsSub}>
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'} in this collection
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </AnimatedPressable>
+
+          <View style={styles.dangerCard}>
             <Text style={styles.dangerLabel}>Danger Zone</Text>
             <AppButton
               title="Delete Collection"
@@ -224,18 +253,14 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.dangerSub}>
               This action cannot be undone. Your saved items will remain in Saved.
             </Text>
-          </Reanimated.View>
+          </View>
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     flex: 1,
   },
@@ -282,7 +307,7 @@ function createStyles(colors: ThemeColors) {
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   toggleIconWrap: {
     width: Control.chrome,
@@ -338,6 +363,35 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
     ...Elevation.subtle,
     marginTop: Space.md,
+  },
+  manageItemsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    minHeight: Control.hit,
+    ...Elevation.subtle,
+  },
+  manageItemsText: {
+    flex: 1,
+  },
+  manageItemsLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  manageItemsSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
+    letterSpacing: Type.caption.letterSpacing,
   },
   dangerLabel: {
     fontSize: Type.caption.size,

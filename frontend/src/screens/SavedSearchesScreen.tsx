@@ -93,7 +93,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs + 2,
     },
     backBtn: {
@@ -123,7 +123,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     tab: {
       flex: 1,
       paddingVertical: Space.xs + 1,
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
       borderWidth: Stroke.standard,
@@ -169,7 +169,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm + 4,
+      paddingVertical: Space.smMd,
       paddingHorizontal: Space.sm + 2,
       borderRadius: Radius.xl,
       backgroundColor: colors.surface,
@@ -181,7 +181,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + 4,
+      gap: Space.smMd,
     },
     searchIconWrap: {
       width: Space.xl + 6,
@@ -330,7 +330,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
             {totalNewMatches > 0 && (
               <View style={styles.newMatchesBanner}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Ionicons name="notifications-outline" size={16} color={colors.brand} />
                 <Text style={styles.newMatchesText}>
                   {totalNewMatches} new {totalNewMatches === 1 ? 'match' : 'matches'} across your saved searches
                 </Text>

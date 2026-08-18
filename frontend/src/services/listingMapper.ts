@@ -5,6 +5,10 @@ import type {
   ListingLifecycleStatus,
   ListingSeller,
 } from './listingsApi';
+import {
+  resolveListingCategoryPolicy,
+  type ListingFieldKey,
+} from '../contracts/listingCategoryPolicy';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -52,11 +56,16 @@ export interface BackendListingRow {
  * care as a detail screen. Keep incomplete records available to detail routes,
  * but exclude them from compact feeds instead of filling them with invented
  * values.
+ *
+ * Category-aware (Phase 5 WP7): brand and size are NOT universally required.
+ * A brandless vintage item or a sizeless home good is still display-ready
+ * when the category policy says brandless/sizeless is valid. The universal
+ * floor is: title, condition, price, sellerId, category, description, createdAt.
  */
 export type DisplayReadyListing = Listing & {
   title: string;
-  brand: string;
-  size: string;
+  brand: string | null;
+  size: string | null;
   condition: ListingCondition;
   price: number;
   sellerId: string;
@@ -189,15 +198,26 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
 }
 
 export function isDisplayReadyListing(listing: Listing): listing is DisplayReadyListing {
-  return listing.title !== null
-    && listing.brand !== null
-    && listing.size !== null
+  // Universal floor: these fields are always required for a feed tile.
+  const hasUniversalFields = listing.title !== null
     && listing.condition !== null
     && listing.price !== null
     && listing.sellerId !== null
     && listing.category !== null
     && listing.description !== null
     && listing.createdAt !== null;
+
+  if (!hasUniversalFields) return false;
+
+  // Category-aware: brand and size are only required when the category
+  // policy says they are NOT valid as absent (brandlessValid/sizelessValid
+  // = false). For categories where brandless/sizeless is valid, a null
+  // brand/size does not disqualify the listing from the feed.
+  const policy = resolveListingCategoryPolicy(listing.category, listing.subcategory);
+  if (!policy.brandlessValid && listing.brand === null) return false;
+  if (!policy.sizelessValid && listing.size === null) return false;
+
+  return true;
 }
 
 export function mapBackendListings(
@@ -214,7 +234,74 @@ export function mapBackendListings(
       // still surface this contract violation through the single-row mapper.
     }
   }
-  return mapped.filter(isDisplayReadyListing);
+  const displayReady = mapped.filter(isDisplayReadyListing);
+
+  // Telemetry: log when identity fallback is needed for valid listings.
+  // This tracks how often brandless/sizeless listings (valid per category
+  // policy) enter the feed via the fallback path.
+  for (const listing of displayReady) {
+    if (listing.brand === null || listing.size === null) {
+      logIdentityFallbackTelemetry(listing);
+    }
+  }
+
+  return displayReady;
+}
+
+// ── Identity synthesis ──────────────────────────────────────────────────────
+
+/**
+ * Synthesize a display-ready identity line for a listing card.
+ *
+ * Pattern (per Phase 5 WP7):
+ *   1. brand + title  → "Nike · Vintage Jacket"
+ *   2. clean title    → "Vintage Levi's 501 Denim Jacket"
+ *   3. category fallback → "Home · Vintage Jacket" (when brand is absent
+ *      and the title is too generic to be the sole identity)
+ *
+ * Brandless listings (valid per category policy) still produce a valid
+ * identity — they use the clean title or a category-based fallback.
+ * Sizeless listings are not part of card identity (size is a PDP fact).
+ */
+export function synthesizeListingIdentity(listing: Listing): string {
+  const title = listing.title ?? 'Untitled listing';
+  const brand = listing.brand;
+  const category = listing.category;
+
+  if (brand && brand.trim()) {
+    return `${brand.trim()} · ${title}`;
+  }
+
+  // Brandless: use the clean title. If the title is very short/generic,
+  // prepend the category so the card still has a scannable identity.
+  if (title.trim().length < 12 && category && category.trim()) {
+    return `${category.trim()} · ${title}`;
+  }
+
+  return title;
+}
+
+/**
+ * Log completeness telemetry when identity fallback is needed.
+ * Called by feed/search mappers when a listing enters the feed without
+ * a brand (and brandless is valid for its category) so we can track
+ * how often the fallback path is exercised.
+ */
+export function logIdentityFallbackTelemetry(listing: Listing): void {
+  const policy = resolveListingCategoryPolicy(listing.category, listing.subcategory);
+  const missingFields: ListingFieldKey[] = [];
+  if (listing.brand === null && policy.brandlessValid) missingFields.push('brand');
+  if (listing.size === null && policy.sizelessValid) missingFields.push('size');
+
+  if (missingFields.length > 0) {
+    // Telemetry: a valid listing entered the feed using a category-aware
+    // fallback. This is expected behaviour, not an error — the warn level
+    // makes it visible in dev tooling without alarming production logs.
+    console.warn(
+      `[listingMapper] Identity fallback used for listing ${listing.id}: ` +
+      `missing [${missingFields.join(', ')}] (valid for category "${listing.category}")`,
+    );
+  }
 }
 
 /**

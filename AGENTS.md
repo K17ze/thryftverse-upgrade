@@ -1,10 +1,41 @@
-# THRYFTVERSE — FLAGSHIP PRODUCT EXECUTION CHARTER
+@# THRYFTVERSE — FLAGSHIP PRODUCT EXECUTION CHARTER
 
 This file defines the working principles for every AI agent operating inside the ThryftVerse repository.
 
 These principles apply to all implementation, UI/UX, debugging, refactoring and validation tasks unless the user explicitly overrides a principle in the current task.
 
 The native mobile application is the product. Every decision must serve the user's experience at the highest possible quality.
+
+---
+
+## 0. AGENT SCOPE — MAIN AGENT ONLY
+
+This charter is intended for the **main agent** driving the task — the single orchestrator that plans, implements, verifies, and reports.
+
+It is **not** intended to be loaded verbatim into parallel subagents. Subagents are short-lived, stateless workers that should receive a focused, self-contained prompt describing only the slice of work they need to perform — not the entire charter.
+
+### Do not nest parallel subagents
+
+Parallel subagents must not spawn further parallel subagents. Unbounded nesting produces a fan-out explosion:
+
+```
+main agent
+  └─ N parallel subagents
+       └─ each spawns M parallel subagents
+            └─ each spawns K parallel subagents
+                 └─ ... → OOM loop / context exhaustion
+```
+
+This escalates context and memory usage geometrically and terminates in an **out-of-memory loop error** with no useful output.
+
+### Rules
+
+- The main agent owns this charter and the task plan.
+- Dispatch parallel subagents only for self-contained, leaf-level work (search, read, isolated edits, single-file fixes).
+- Subagent prompts must inline only the specific context they need — do not paste this whole file into a subagent prompt.
+- Subagents must not invoke `run_subagent` themselves. No recursive delegation.
+- If a subagent's task turns out to require broader orchestration, it should return its findings to the main agent, which decides the next step.
+- Keep fan-out shallow: one level of parallelism from the main agent, then stop.
 
 ---
 
@@ -875,3 +906,139 @@ This protocol scales with the prompt. A one-line fix still requires codebase res
 - The device render is the source of truth. Iterate against it.
 - The improvement must be obvious at thumbnail size.
 - The correct outcome is a richer, clearer, more coherent, and more trustworthy native product.
+
+---
+
+## 27. 2026 FLAGSHIP UX PSYCHOLOGY PRINCIPLES
+
+Updated August 2026 with latest industry research (Baymard 2026 benchmark, CHI 2026 Material 3 Expressive study, Don Norman emotional design levels, Depop/Vinted/Pinterest/Instagram reference analysis).
+
+### 27.1 The psychology of premium feel
+
+Premium is less about decoration and more about control. Users form snap judgments about quality within seconds of opening an app. The product should feel "edited, stable, and deliberate."
+
+**Three levels of emotional design (Don Norman):**
+1. **Visceral** — Initial sensory reaction (happens without conscious thought). Driven by: visual hierarchy, spacing rhythm, media quality, color restraint.
+2. **Behavioral** — How it functions and performs. Driven by: gesture responsiveness (<16ms = 60fps), spring physics, haptic grammar, state predictability.
+3. **Reflective** — Meaning and message. Driven by: trust signals, truthful UI, social proof, identity expression.
+
+**Cognitive fluency:** Easy-to-process interfaces feel premium. Reduce visual noise, maintain clear hierarchy, use consistent patterns. Generous whitespace signals confidence. High-quality imagery signals investment. Smooth animations signal technical competence.
+
+### 27.2 Flagship timing rules (2026)
+
+| Duration | Use case | Example |
+|----------|----------|---------|
+| 50–100ms | Instant feedback | Button press highlight |
+| 100–200ms | Simple state change | Toggle, checkbox, icon swap |
+| 200–300ms | Standard transition | Page slide, sheet appear, tab switch |
+| 300–500ms | Complex transition | Layout rearrangement, shared element |
+| 500ms+ | Elaborate animation | Onboarding, celebratory moments |
+
+**Key principle:** Err on the shorter side. Users are more forgiving of fast than sluggish. Feedback must arrive within 100ms of user action.
+
+### 27.3 Flagship spring configs (2026)
+
+These are the canonical spring configs for 2026 flagship feel. They are already defined in `theme/motionTokens.ts` — use them via `useMotionConfig()`.
+
+| Config | Damping | Stiffness | Mass | Use case |
+|--------|---------|-----------|------|----------|
+| tap | 18 | 280 | 0.8 | Snappy tap feedback |
+| press | 15 | 200 | 0.9 | Gentle press |
+| entrance | 22 | 180 | 1.0 | Sheet/modal entrance |
+| lift | 16 | 160 | 1.0 | Card lift / pop |
+| success | 12 | 120 | 1.0 | Bouncy celebration |
+| sharedElement | 26 | 200 | 1.0 | No overshoot transition |
+| urgency | 14 | 220 | 0.9 | Tight, lively pulse |
+
+**Flagship range:** damping 12–18, stiffness 120–280, mass 0.8–1.0. Lower damping = more bounce. Higher stiffness = snappier.
+
+### 27.4 Flagship vs good (2026 benchmark)
+
+| Aspect | Good | Flagship |
+|--------|------|----------|
+| Animation timing | 300–500ms | 200–300ms standard, 100–200ms feedback |
+| Gesture response | 50–100ms delay | <16ms (60fps) |
+| Loading states | Spinner | Skeleton matching final silhouette + shimmer |
+| Error handling | Alert dialog | Inline error + recovery action |
+| Empty states | "No items" text | Illustration + CTA + explanation |
+| Button press | Color change | Scale + color + haptic |
+| Toggle | Snap | Spring animation + shadow |
+| Success | Checkmark | Spring celebration + haptic + sound |
+| Error | Red border | Shake + inline message |
+| Pull to refresh | Spinner | Custom animation + physics |
+| Product images | 2–3 photos | Zoom, video, swipe, pagination |
+| Search | Keyword only | Visual, voice, AI-powered, autocomplete |
+| Recommendations | Related items | Complete the look, style guide |
+
+### 27.5 2026 platform design languages
+
+**iOS 26 Liquid Glass:**
+- Translucent, lensing, depth-driven material system
+- Multi-layer depth, subtle refraction, dynamic lighting
+- Use sparingly: navigation bars, floating controls, compact panels
+- Never wrap entire app in glass — scoped usage only
+- Check `AccessibilityInfo.isReduceTransparencyEnabled()` before rendering glass
+
+**Android 16 Material 3 Expressive:**
+- Emotion-first, physics-driven update to Material You
+- Bold, springy motion; dynamic color from wallpaper
+- Variable corner radius; expressive shape choices
+- Grounded in 46 research studies with 18,000 participants
+
+### 27.6 Social commerce patterns (2026)
+
+From Depop ($1B sales 2025, 60% YoY growth), Vinted profile redesign, Pinterest Gestalt system, Instagram UX analysis:
+
+- **Feed cards:** Full-width or masonry, seller profiles prominent, social proof visible (likes, comments), mobile-first social-native
+- **Profile:** Clear hierarchy, seller-focused, separate seller wardrobe from buyer entry points. Profile is not a feature dumping ground.
+- **Discovery:** Personalized feeds replacing static homepages, AI-powered search (keyword matching is now a liability), thumb-friendly design
+- **Commerce:** Apps convert at 3–5x higher rates than mobile web. Guest checkout, 1-click buy, visual search, shoppable posts with product tagging.
+
+### 27.7 Trust architecture (2026)
+
+Trust is a critical necessity, not a nice-to-have:
+
+- **Transparent pricing:** Every fee, status, pending state visible and labeled
+- **No false success:** Money movements always resolve to clear state
+- **Trust signals:** Verified badges (tiered), ratings with review counts, response time, dispatch time, completed sales count, response rate
+- **Seller standards:** Derived badges (fast shipper, responsive, top-rated, trusted seller)
+- **Holiday/vacation mode:** Custom away messages, clear visual indicator, navigation to settings
+
+### 27.8 Performance as flagship quality (2026)
+
+Performance is a flagship feature, not a technical concern:
+
+- **60fps minimum** for all scrolling and animations (120fps on ProMotion)
+- **<500ms feed load** time
+- **FlashList v2** with masonry prop for Pinterest-style feeds
+- **Reanimated 4 worklets** for all animations (off JS thread)
+- **React.memo** on all list item components
+- **useRecyclingState** for like/favorite buttons in recycled list items
+- **Profile in release mode only** — dev mode is 2–5× slower
+- **Hermes bytecode** for faster startup
+- **Image preloading** on onboarding for smooth initial scroll
+
+### 27.9 Micro-interaction grammar (2026)
+
+Every interactive element must have purposeful micro-interactions:
+
+| Element | Good | Flagship |
+|---------|------|----------|
+| Button press | Color change | Scale 0.95–0.97 + spring back + light haptic |
+| Tab switch | Instant | Sliding indicator + selection haptic + content crossfade |
+| Card tap | Background change | Scale 0.97 + light haptic + spring back |
+| Like | Icon swap | Heart burst animation + success haptic |
+| Pull to refresh | Spinner | Custom indicator with physics + progress haptic |
+| Error | Red text | Shake animation + error haptic + inline recovery |
+| Success | Text change | Spring celebration + success notification haptic |
+| Scroll past section | None | Subtle selection haptic at section boundary |
+
+### 27.10 Research protocol for 2026
+
+Before implementing any UI/UX upgrade, research current best practices online. Best practices drift — do not rely on memory:
+
+1. Search for the latest patterns (e.g., "flagship mobile feed design 2026")
+2. Verify current library APIs and versions (e.g., "Reanimated 4.5 features")
+3. Study reference apps' latest versions (e.g., "Depop UX redesign 2026")
+4. Check platform design language updates (e.g., "iOS 26 Liquid Glass guidelines")
+5. Implement findings — do not stop at research

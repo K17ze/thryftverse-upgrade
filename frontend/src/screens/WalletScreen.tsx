@@ -1,77 +1,51 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   RefreshControl,
-  TextInput,
-  LayoutAnimation,
-  Platform,
   Pressable,
   Linking,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  initPaymentSheet,
-  PaymentSheetError,
-  presentPaymentSheet,
-} from '@stripe/stripe-react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, Stroke } from '../theme/designTokens';
-import { AppButton } from '../components/ui/AppButton';
-import { AnimatedPressable } from '../components/AnimatedPressable';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
-import { formatIzeAmount } from '../utils/currency';
-import { convertDisplayToGbpAmount, convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
+import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
   getSellerWalletBalances,
-  createIzeMintQuote,
-  createStripeIntentSheet,
-  buyIze,
-  convertIzeToFiat,
   type SellerWalletBalanceItem,
 } from '../services/walletApi';
 import {
-  configureStripeMobile,
-  getStripeReturnUrl,
-} from '../platform/payments/stripeMobile';
-import {
-  CoOwnMarketHeader,
-  CoOwnWalletBreakdown,
-  CoOwnWalletBreakdownSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
-import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
+import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow, FlagshipFormSection } from '../components/flagship';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
+import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
-/** Add-flow mode: 'load' converts external fiat → 1ZE; 'buy' uses fiat balance → 1ZE. */
-type AddMode = 'load' | 'buy';
-
-// Fee rates sourced from the central config in tradeFlow.ts (single source of truth)
-import { CO_OWN_LOAD_FEE_RATE as LOAD_IZE_FEE_RATE, CO_OWN_CONVERT_FEE_RATE as CONVERT_FEE_RATE } from '../utils/tradeFlow';
-
 export default function WalletScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { currencyCode, goldRates } = useCurrencyContext();
@@ -111,26 +85,18 @@ export default function WalletScreen({ navigation }: Props) {
     heldInReserveGbp: number;
     pendingBreakdown: SellerWalletBalanceItem[];
   } | null>(null);
-  const [showPendingBreakdown, setShowPendingBreakdown] = useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
   // ── Inline flow state ──
-  // 'none' = both collapsed; 'add' = Add 1ZE expanded; 'redeem' = Redeem 1ZE expanded.
-  // The two flows are never combined — expanding one collapses the other (spec §2.1).
-  const [activeFlow, setActiveFlow] = useState<'none' | 'add' | 'redeem'>('none');
-  const [addMode, setAddMode] = useState<AddMode>('load');
-  const [loadFiatInput, setLoadFiatInput] = useState('');
-  const [buyFiatInput, setBuyFiatInput] = useState('');
-  const [convertIzeInput, setConvertIzeInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const topupIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  // Add money is handled by the extracted AddMoneySheet (spec 17).
+  // Convert is handled by the dedicated WalletConvertScreen (Phase 3.1).
+  const [addMoneyVisible, setAddMoneyVisible] = useState(false);
+  // ── Privacy eye (spec 17 viewport 1) ──
+  const [balanceHidden, setBalanceHidden] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
-  const loadInputRef = useRef<TextInput>(null);
-  const buyInputRef = useRef<TextInput>(null);
-  const convertInputRef = useRef<TextInput>(null);
 
   // ── Balance hydration ──
   const loadBalance = React.useCallback(() => {
@@ -180,7 +146,11 @@ export default function WalletScreen({ navigation }: Props) {
         setIsError(true);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          // Finish refresh when the request settles — no fixed timer (spec 17).
+          setRefreshing(false);
+        }
       });
 
     return () => { cancelled = true; };
@@ -194,7 +164,6 @@ export default function WalletScreen({ navigation }: Props) {
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
     loadBalance();
-    setTimeout(() => setRefreshing(false), 800);
   }, [loadBalance]);
 
   const handleBack = React.useCallback(() => {
@@ -202,35 +171,31 @@ export default function WalletScreen({ navigation }: Props) {
     navigation.navigate('CoOwnHub');
   }, [navigation]);
 
-  // ── Flow expansion (separate flows, never combined) ──
-  const expandFlow = React.useCallback((flow: 'add' | 'redeem') => {
+  // ── Flow expansion — now navigates to dedicated screens ──
+  const handleConvert = React.useCallback(() => {
     haptics.tap();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setActiveFlow((prev) => (prev === flow ? 'none' : flow));
-  }, []);
+    navigation.navigate('WalletConvert');
+  }, [navigation]);
 
-  // ── Derived values for Add / Redeem flows ──
-  const availableIze = balance.available;
+  // ── Derived values ──
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
 
-  const loadFiatValue = Number(loadFiatInput || '0');
-  const loadGrossIze = convertDisplayToGbpAmount(loadFiatValue, currencyCode, goldRates);
-  const loadFeeIze = loadGrossIze * LOAD_IZE_FEE_RATE;
-  const loadNetIze = Math.max(0, loadGrossIze - loadFeeIze);
-  const loadFeeFiat = loadFiatValue * LOAD_IZE_FEE_RATE;
-  const canLoadIze = Number.isFinite(loadFiatValue) && loadFiatValue > 0 && !isProcessing && isWalletOperational;
-  const loadFeeRateLabel = `${Math.round(LOAD_IZE_FEE_RATE * 100)}%`;
+  // ── Derived sub-balance values (preserving reconciliation truth) ──
+  const settledClaim =
+    balance.settledCustomerClaim ??
+    (balance.available + balance.reservedForOrders + balance.redemptionInProgress + balance.otherHolds);
+  const withdrawable = balance.withdrawable ?? balance.available;
+  const hasPendingAttention = balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0;
 
-  const buyFiatValue = Number(buyFiatInput || '0');
-  const buyIzeAmount = convertDisplayToGbpAmount(buyFiatValue, currencyCode, goldRates);
-  const canBuyIze = Number.isFinite(buyFiatValue) && buyFiatValue > 0 && buyFiatValue <= availableFiatBalance && !isProcessing && isWalletOperational;
+  // ── Balance formatting (tabular-nums, 2dp) ──
+  const formatBalance = (value: number) =>
+    value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const convertIzeValue = Number(convertIzeInput || '0');
-  const convertFiatValue = convertGbpToDisplayAmount(convertIzeValue, currencyCode, goldRates);
-  const convertFee = convertFiatValue * CONVERT_FEE_RATE;
-  const convertNetFiat = Math.max(0, convertFiatValue - convertFee);
-  const canConvertIze = Number.isFinite(convertIzeValue) && convertIzeValue > 0 && convertIzeValue <= availableIze && !isProcessing && isWalletOperational;
-  const convertFeeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
+  // ── Pending attention summary text (spec 17 viewport 1) ──
+  const pendingAttentionTitle = [
+    balance.pendingDeposit > 0 ? `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending` : null,
+    balance.unsettledSaleProceeds > 0 ? `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled` : null,
+  ].filter(Boolean).join(' · ');
 
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
@@ -238,178 +203,32 @@ export default function WalletScreen({ navigation }: Props) {
     ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
     : undefined;
 
-  // ── Handlers (preserved from BalanceScreen — real API calls) ──
-  const handleLoadIze = async () => {
-    if (!canLoadIze) {
-      show('Enter a valid amount to convert into 1ZE.', 'error');
-      return;
-    }
-    if (!currentUser?.id) {
-      show('Please sign in to load 1ZE.', 'error');
-      navigation.navigate('AuthLanding');
-      return;
-    }
+  // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
+  const handleAddMoney = React.useCallback(() => {
+    haptics.tap();
+    setAddMoneyVisible(true);
+  }, []);
 
-    const loadAmountGbpRaw = convertDisplayToGbpAmount(loadFiatValue, currencyCode, goldRates);
-    const loadAmountGbp = Number(loadAmountGbpRaw.toFixed(2));
-    if (!Number.isFinite(loadAmountGbp) || loadAmountGbp <= 0) {
-      show('Unable to convert that amount right now.', 'error');
-      return;
-    }
+  // ── Privacy eye toggle (spec 17 viewport 1) ──
+  const handleTogglePrivacy = React.useCallback(() => {
+    setBalanceHidden((prev) => !prev);
+  }, []);
 
-    setIsProcessing(true);
-    try {
-      const topupFingerprint = `${currentUser.id}:GBP:${loadAmountGbp.toFixed(2)}`;
-      if (topupIdempotencyRef.current?.fingerprint !== topupFingerprint) {
-        topupIdempotencyRef.current = {
-          fingerprint: topupFingerprint,
-          key: `wallet_topup_${currentUser.id}_${Date.now()}`,
-        };
-      }
-      const quoteResponse = await createIzeMintQuote({
-        userId: currentUser.id,
-        fiatAmount: loadAmountGbp,
-        fiatCurrency: 'GBP',
-        idempotencyKey: topupIdempotencyRef.current.key,
-        metadata: {
-          source: 'wallet_screen_topup_quote',
-          displayCurrency: currencyCode,
-          enteredDisplayAmount: loadFiatValue,
-          enteredGbpAmount: loadAmountGbp,
-        },
-      });
-
-      const intent = quoteResponse.intent;
-      if (intent.clientSecret && intent.gatewayId === 'stripe_americas') {
-        const sheet = await createStripeIntentSheet(intent.id);
-        await configureStripeMobile(sheet.publishableKey);
-        const { error: initializationError } = await initPaymentSheet({
-          merchantDisplayName: sheet.merchantDisplayName,
-          customerId: sheet.customerId,
-          customerSessionClientSecret: sheet.customerSessionClientSecret,
-          paymentIntentClientSecret: sheet.paymentIntentClientSecret,
-          returnURL: getStripeReturnUrl(),
-          allowsDelayedPaymentMethods: false,
-          applePay:
-            sheet.applePayEnabled && Platform.OS === 'ios'
-              ? { merchantCountryCode: sheet.merchantCountryCode }
-              : undefined,
-          googlePay:
-            sheet.googlePayEnabled && Platform.OS === 'android'
-              ? {
-                  merchantCountryCode: sheet.merchantCountryCode,
-                  currencyCode: sheet.currency,
-                  testEnv: sheet.publishableKey.startsWith('pk_test_'),
-                }
-              : undefined,
-        });
-        if (initializationError) {
-          throw new Error(initializationError.message);
-        }
-
-        const { error: presentationError } = await presentPaymentSheet();
-        if (presentationError?.code === PaymentSheetError.Canceled) {
-          show('Top-up cancelled. No funds were added.', 'info');
-          return;
-        }
-        if (presentationError) {
-          throw new Error(presentationError.message);
-        }
-      } else if (intent.status !== 'succeeded') {
-        if (intent.nextActionUrl && await Linking.canOpenURL(intent.nextActionUrl)) {
-          await Linking.openURL(intent.nextActionUrl);
-          setLoadFiatInput('');
-          show('Payment is pending. 1ZE is credited only after provider confirmation.', 'info');
-        } else {
-          show('This payment provider cannot complete checkout on this device.', 'error');
-        }
-        return;
-      }
-
-      setLoadFiatInput('');
-      topupIdempotencyRef.current = null;
-      show(
-        `${formatIzeAmount(quoteResponse.operation.izeAmount)} is pending provider confirmation.`,
-        'success'
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to load 1ZE right now. Please try again shortly.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBuyIze = async () => {
-    if (!canBuyIze || !currentUser?.id) {
-      show('Enter a valid amount within your fiat balance.', 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const result = await buyIze({
-        userId: currentUser.id,
-        fiatAmount: buyFiatValue,
-        fiatCurrency: currencyCode,
-      });
-      setAvailableFiatBalance(result.wallet.fiatBalance);
-      setBuyFiatInput('');
-      show(
-        `Bought ${formatIzeAmount(result.purchase.izeAmount)} with ${formatFromFiat(result.purchase.fiatAmount, currencyCode, { displayMode: 'fiat' })}`,
-        'success',
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to buy 1ZE right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleConvertIzeToFiat = async () => {
-    if (!canConvertIze || !currentUser?.id) {
-      show('Enter a valid amount within your 1ZE balance.', 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const result = await convertIzeToFiat({
-        userId: currentUser.id,
-        izeAmount: convertIzeValue,
-        fiatCurrency: currencyCode,
-      });
-      setAvailableFiatBalance(result.wallet.fiatBalance);
-      setConvertIzeInput('');
-      show(
-        `Converted ${formatIzeAmount(result.conversion.izeAmount)} to ${formatFromFiat(result.conversion.fiatAmount, currencyCode, { displayMode: 'fiat' })}`,
-        'success',
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to convert 1ZE right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
+  // ── Activity (canonical WalletActivityScreen — spec 17) ──
   const handleViewActivity = React.useCallback(() => {
     haptics.tap();
-    navigation.navigate('CoOwnOrderHistory');
+    navigation.navigate('WalletActivity');
+  }, [navigation]);
+
+  // ── Seller earnings (extracted SellerEarningsScreen — spec 17) ──
+  const handleViewEarnings = React.useCallback(() => {
+    haptics.tap();
+    navigation.navigate('SellerEarnings');
   }, [navigation]);
 
   const handleWithdraw = React.useCallback(() => {
     haptics.tap();
     navigation.navigate('Withdraw');
-  }, [navigation]);
-
-  const handleBalanceHistory = React.useCallback(() => {
-    haptics.tap();
-    navigation.navigate('BalanceHistory');
   }, [navigation]);
 
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight;
@@ -424,93 +243,149 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Biometric gate: block sensitive content until authenticated ──
   if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <BiometricGatePrompt
           gate={biometricGate}
           reason="Authenticate to view your wallet"
-          header={
-            <CoOwnMarketHeader
-              title="Wallet"
-              subtitle="Your 1ZE settlement balance"
-              onBack={handleBack}
-            />
-          }
           onBack={handleBack}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
-  // ── Loading state ──
+  // ── Loading state — skeleton matching final layout ──
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          subtitle="Your 1ZE settlement balance"
-          onBack={handleBack}
-        />
-        <CoOwnWalletBreakdownSkeleton />
-      </SafeAreaView>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Balance hero skeleton */}
+          <SkeletonLoader width="35%" height={13} borderRadius={Radius.sm} />
+          <View style={{ height: Space.sm }} />
+          <SkeletonLoader width="60%" height={40} borderRadius={Radius.sm} />
+          <View style={{ height: Space.xs }} />
+          <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} />
+          {/* Action buttons skeleton */}
+          <View style={{ height: Space.lg }} />
+          <View style={styles.actionRow}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.actionBtn}>
+                <SkeletonLoader width="100%" height={44} borderRadius={Radius.md} />
+              </View>
+            ))}
+          </View>
+          {/* Sub-balance rows skeleton */}
+          <View style={{ height: Space.lg }} />
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={styles.skeletonSubRow}>
+              <SkeletonLoader width="35%" height={14} borderRadius={Radius.sm} />
+              <View style={{ flex: 1 }} />
+              <SkeletonLoader width={70} height={16} borderRadius={Radius.sm} />
+            </View>
+          ))}
+        </ScrollView>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (isError) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          subtitle="Your 1ZE settlement balance"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
           onAction={loadBalance}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Empty state ──
   if (balance.available === 0 && balance.reservedForOrders === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          subtitle="Your 1ZE settlement balance"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No 1ZE yet"
-          subtitle="Add 1ZE to start trading Co-Own units."
-          actionLabel="Add 1ZE"
-          onAction={() => expandFlow('add')}
+          subtitle="Add money to start trading Co-Own units."
+          actionLabel="Add money"
+          onAction={handleAddMoney}
           emptyGraphicVariant="bag"
         />
-      </SafeAreaView>
+        <AddMoneySheet
+          visible={addMoneyVisible}
+          onDismiss={() => setAddMoneyVisible(false)}
+          availableFiatBalance={availableFiatBalance}
+          isWalletOperational={isWalletOperational}
+          onCompleted={loadBalance}
+          userId={currentUser?.id}
+        />
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title="Wallet"
-        subtitle="Your 1ZE settlement balance"
-        onBack={handleBack}
-        actions={[
-          { icon: 'receipt-outline', label: 'Activity', onPress: handleViewActivity },
-        ]}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Wallet"
+          onBack={handleBack}
+          rightAction={
+            <AnimatedPressable
+              onPress={handleViewActivity}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Activity"
+              accessibilityHint="View all wallet activity"
+            >
+              <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner
         isActive={balance.reconciliationState === 'reconciling' || balance.reconciliationState === 'break'}
@@ -531,352 +406,185 @@ export default function WalletScreen({ navigation }: Props) {
           />
         }
       >
-        {/* ── Wallet breakdown — spendable hero + sub-balances + safeguarding ── */}
-        <CoOwnWalletBreakdown
-          balance={balance}
-          localFiatLabel={localFiatLabel}
-          localFiatSource={currencyCode}
-        />
-
-        {/* ── Seller wallet: pending vs available with release countdown ── */}
-        {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
-          <View style={[styles.sellerWalletCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sellerWalletTitle, { color: colors.textPrimary }]}>
-              Selling balance
-            </Text>
-
-            <View style={styles.sellerBalanceRow}>
-              <View style={styles.sellerBalanceItem}>
-                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                  Available
-                </Text>
-                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.sellerBalanceItem}>
-                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                  Pending
-                </Text>
-                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              {sellerBalances.heldInReserveGbp > 0 && (
-                <>
-                  <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.sellerBalanceItem}>
-                    <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                      In reserve
-                    </Text>
-                    <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                      {formatFromFiat(sellerBalances.heldInReserveGbp, currencyCode, { displayMode: 'fiat' })}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-
-            {sellerBalances.pendingGbp > 0 && (
-              <Pressable
-                onPress={() => {
-                  haptics.selection();
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setShowPendingBreakdown(!showPendingBreakdown);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={showPendingBreakdown ? 'Hide pending breakdown' : 'Show pending breakdown'}
-                style={styles.pendingToggle}
-              >
-                <Text style={[styles.pendingToggleText, { color: colors.textSecondary }]}>
-                  {showPendingBreakdown ? 'Hide' : 'Show'} pending orders ({sellerBalances.pendingBreakdown.length})
-                </Text>
-                <Ionicons
-                  name={showPendingBreakdown ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            )}
-
-            {showPendingBreakdown && sellerBalances.pendingBreakdown.length > 0 && (
-              <View style={styles.pendingBreakdownList}>
-                {sellerBalances.pendingBreakdown.map((item) => {
-                  const releaseIn = item.releaseScheduledAt
-                    ? Math.max(0, Math.ceil((new Date(item.releaseScheduledAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-                    : null;
-                  return (
-                    <View key={item.orderId} style={[styles.pendingItem, { borderColor: colors.border }]}>
-                      <View style={styles.pendingItemInfo}>
-                        <Text
-                          style={[styles.pendingItemTitle, { color: colors.textPrimary }]}
-                          numberOfLines={1}
-                        >
-                          {item.listingTitle ?? 'Order'}
-                        </Text>
-                        <Text style={[styles.pendingItemMeta, { color: colors.textMuted }]}>
-                          {item.orderStatus === 'delivered'
-                            ? releaseIn !== null && releaseIn > 0
-                              ? `Releases in ${releaseIn}d`
-                              : 'Releasing soon'
-                            : `Awaiting ${item.orderStatus === 'shipped' ? 'delivery' : 'shipment'}`}
-                        </Text>
-                      </View>
-                      <Text style={[styles.pendingItemAmount, { color: colors.textPrimary }]}>
-                        {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+        {/* ── Balance hero — flat, largest text on screen (spec 17 viewport 1) ── */}
+        <View style={styles.balanceHero}>
+          <View style={styles.balanceHeader}>
+            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Spendable now</Text>
+            <Pressable
+              onPress={() => { haptics.tap(); handleTogglePrivacy(); }}
+              style={styles.eyeToggle}
+              accessibilityRole="button"
+              accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
+              accessibilityHint="Toggles privacy for your wallet balance"
+            >
+              <Ionicons
+                name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
           </View>
-        )}
+          {balanceHidden ? (
+            <Text
+              style={[styles.balanceMasked, { color: colors.textMuted }]}
+              accessibilityLabel="Balance hidden"
+              accessibilityHint="Activate the eye control to reveal your spendable balance"
+            >
+              ••••••
+            </Text>
+          ) : (
+            <Text
+              style={[styles.balanceValue, { color: colors.textPrimary }]}
+              accessibilityLabel={`${formatBalance(balance.available)} 1ZE`}
+            >
+              {formatBalance(balance.available)}
+              <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+            </Text>
+          )}
+          {localFiatLabel && !balanceHidden && (
+            <View style={styles.localFiatRow}>
+              <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+                {localFiatLabel}
+                {currencyCode ? ` · ${currencyCode}` : ''}
+              </Text>
+            </View>
+          )}
+        </View>
 
-        {/* ── Add 1ZE / Redeem 1ZE — separate flows, never combined ── */}
+        {/* ── Primary actions — 3 equal-width buttons in a row (spec 17 viewport 1) ── */}
         <View style={styles.actionRow}>
-          <AppButton
-            title="Add 1ZE"
-            icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
-            onPress={() => expandFlow('add')}
-            variant={activeFlow === 'add' ? 'secondary' : 'primary'}
-            size="md"
-            accessibilityLabel="Add 1ZE to your wallet"
-            accessibilityHint={activeFlow === 'add' ? 'Collapses the add 1ZE form' : 'Expands the add 1ZE form'}
-            hapticFeedback="medium"
-            style={styles.actionBtn}
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnPrimary,
+              { backgroundColor: colors.brand },
+              pressed && { opacity: 0.85 },
+              !isWalletOperational && { opacity: 0.5 },
+            ]}
+            onPress={handleAddMoney}
             disabled={!isWalletOperational}
-          />
-          <AppButton
-            title="Redeem 1ZE"
-            icon={<Ionicons name="arrow-down-circle-outline" size={18} color={colors.textPrimary} />}
-            onPress={() => expandFlow('redeem')}
-            variant={activeFlow === 'redeem' ? 'primary' : 'secondary'}
-            size="md"
-            accessibilityLabel="Redeem 1ZE to your bank"
-            accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem 1ZE form' : 'Expands the redeem 1ZE form'}
-            hapticFeedback="medium"
-            style={styles.actionBtn}
-            disabled={balance.available <= 0 || !isWalletOperational}
-          />
-        </View>
-
-        {/* ── Add 1ZE flow (inline, expandable) ── */}
-        {activeFlow === 'add' && (
-          <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.flowHeader}>
-              <Ionicons name="add-circle" size={16} color={colors.brand} />
-              <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>Add 1ZE</Text>
-            </View>
-            <Text style={[styles.flowHint, { color: colors.textMuted }]}>
-              Convert external currency into 1ZE, or buy 1ZE using your fiat balance.
-            </Text>
-
-            {/* Sub-mode tabs: Load (external) vs Buy (from fiat balance) */}
-            <View style={styles.tabRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.tab,
-                  addMode === 'load' && { backgroundColor: colors.brand + '14', borderColor: colors.brand },
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => { haptics.tap(); setAddMode('load'); }}
-                accessibilityRole="tab"
-                accessibilityLabel="Load 1ZE from external payment"
-                accessibilityState={{ selected: addMode === 'load' }}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: addMode === 'load' ? colors.brand : colors.textSecondary },
-                    addMode === 'load' && { fontFamily: Typography.family.semibold },
-                  ]}
-                >
-                  Load
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.tab,
-                  addMode === 'buy' && { backgroundColor: colors.brand + '14', borderColor: colors.brand },
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => { haptics.tap(); setAddMode('buy'); }}
-                accessibilityRole="tab"
-                accessibilityLabel="Buy 1ZE from fiat balance"
-                accessibilityState={{ selected: addMode === 'buy' }}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: addMode === 'buy' ? colors.brand : colors.textSecondary },
-                    addMode === 'buy' && { fontFamily: Typography.family.semibold },
-                  ]}
-                >
-                  Buy
-                </Text>
-              </Pressable>
-            </View>
-
-            {addMode === 'load' && (
-              <>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Amount in {currencyCode}
-                </Text>
-                <TextInput
-                  ref={loadInputRef}
-                  style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={loadFiatInput}
-                  onChangeText={(v) => setLoadFiatInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  accessibilityLabel={`Amount in ${currencyCode}`}
-                  accessibilityHint="Enter the amount to convert into 1ZE."
-                />
-                <SummaryRow
-                  label="Gross 1ZE"
-                  value={<CoOwnNumericText value={loadGrossIze} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label={`Platform fee (${loadFeeRateLabel})`}
-                  value={<CoOwnNumericText value={loadFeeIze} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label="Net 1ZE credited"
-                  value={<CoOwnNumericText value={loadNetIze} unit="1ZE" size="price" align="right" />}
-                  colors={colors}
-                  total
-                />
-                <AppButton
-                  title={isProcessing ? 'Processing…' : 'Load 1ZE'}
-                  onPress={handleLoadIze}
-                  variant="primary"
-                  size="md"
-                  disabled={!canLoadIze}
-                  accessibilityLabel="Load 1ZE"
-                  accessibilityHint="Converts the entered amount into 1ZE and credits your wallet."
-                  style={styles.flowSubmitBtn}
-                />
-              </>
-            )}
-
-            {addMode === 'buy' && (
-              <>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Amount in {currencyCode}
-                </Text>
-                <Text style={[styles.balanceHint, { color: colors.textMuted }]}>
-                  Fiat balance available: {formatFromFiat(availableFiatBalance, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-                <TextInput
-                  ref={buyInputRef}
-                  style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={buyFiatInput}
-                  onChangeText={(v) => setBuyFiatInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  accessibilityLabel={`Amount in ${currencyCode}`}
-                  accessibilityHint="Enter the fiat amount to buy 1ZE."
-                />
-                <SummaryRow
-                  label="You will receive"
-                  value={<CoOwnNumericText value={buyIzeAmount} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label="Rate"
-                  value={<CoOwnNumericText value={localFiatRate} unit={currencyCode} size="priceList" align="right" showUnit={false} />}
-                  colors={colors}
-                  total
-                />
-                <AppButton
-                  title={isProcessing ? 'Processing…' : 'Buy 1ZE'}
-                  onPress={handleBuyIze}
-                  variant="primary"
-                  size="md"
-                  disabled={!canBuyIze}
-                  accessibilityLabel="Buy 1ZE"
-                  accessibilityHint="Buys 1ZE using your fiat balance."
-                  style={styles.flowSubmitBtn}
-                />
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ── Redeem 1ZE flow (inline, expandable) ── */}
-        {activeFlow === 'redeem' && (
-          <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.flowHeader}>
-              <Ionicons name="arrow-down-circle" size={16} color={colors.textSecondary} />
-              <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>Redeem 1ZE</Text>
-            </View>
-            <Text style={[styles.flowHint, { color: colors.textMuted }]}>
-              Convert your 1ZE to {currencyCode} for withdrawal. Settlement details are confirmed at the time of each request.
-            </Text>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Amount in 1ZE</Text>
-            <Text style={[styles.balanceHint, { color: colors.textMuted }]}>
-              1ZE available: {formatIzeAmount(availableIze)}
-            </Text>
-            <TextInput
-              ref={convertInputRef}
-              style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-              value={convertIzeInput}
-              onChangeText={(v) => setConvertIzeInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              accessibilityLabel="Amount in 1ZE"
-              accessibilityHint="Enter the 1ZE amount to convert to fiat."
-            />
-            <SummaryRow label={`Gross ${currencyCode}`} value={<CoOwnNumericText value={convertFiatValue} size="priceList" align="right" showUnit={false} />} colors={colors} />
-            <SummaryRow label={`Platform fee (${convertFeeRateLabel})`} value={<CoOwnNumericText value={convertFee} size="priceList" align="right" showUnit={false} />} colors={colors} />
-            <SummaryRow label="Net fiat credited" value={<CoOwnNumericText value={convertNetFiat} size="price" align="right" showUnit={false} />} colors={colors} total />
-            <AppButton
-              title={isProcessing ? 'Processing…' : 'Convert to Fiat'}
-              onPress={handleConvertIzeToFiat}
-              variant="primary"
-              size="md"
-              disabled={!canConvertIze}
-              accessibilityLabel="Convert 1ZE to fiat"
-              accessibilityHint="Converts 1ZE to fiat and credits your wallet."
-              style={styles.flowSubmitBtn}
-            />
-          </View>
-        )}
-
-        {/* ── Quick actions row ── */}
-        <View style={styles.quickActionsRow}>
-          <QuickAction
-            icon="library-outline"
-            label="Withdraw"
+            accessibilityRole="button"
+            accessibilityLabel="Add money to your wallet"
+            accessibilityHint="Opens the add money flow"
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.background} />
+            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>Add money</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnSecondary,
+              { borderColor: colors.border },
+              pressed && { opacity: 0.7 },
+              !isWalletOperational && { opacity: 0.5 },
+            ]}
             onPress={handleWithdraw}
-            colors={colors}
-          />
-          <QuickAction
-            icon="time-outline"
-            label="History"
-            onPress={handleBalanceHistory}
-            colors={colors}
-          />
-          <QuickAction
-            icon="receipt-outline"
-            label="Activity"
-            onPress={handleViewActivity}
-            colors={colors}
-          />
+            disabled={!isWalletOperational}
+            accessibilityRole="button"
+            accessibilityLabel="Withdraw from your wallet"
+            accessibilityHint="Opens the withdraw flow"
+          >
+            <Ionicons name="arrow-down-circle-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Withdraw</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnSecondary,
+              { borderColor: colors.border },
+              pressed && { opacity: 0.7 },
+              (balance.available <= 0 || !isWalletOperational) && { opacity: 0.5 },
+            ]}
+            onPress={handleConvert}
+            disabled={balance.available <= 0 || !isWalletOperational}
+            accessibilityRole="button"
+            accessibilityLabel="Convert 1ZE to fiat"
+            accessibilityHint="Opens the convert screen"
+          >
+            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Convert</Text>
+          </Pressable>
         </View>
 
-        {/* ── Transaction history ── */}
+        {/* ── Pending attention — if real (spec 17 viewport 1) ── */}
+        {hasPendingAttention && !balanceHidden && (
+          <FlagshipNavigationRow
+            icon="time-outline"
+            iconColor={colors.warning}
+            title={pendingAttentionTitle}
+            onPress={handleViewEarnings}
+            style={{ marginTop: Space.md }}
+            accessibilityLabel={`Pending attention: ${formatBalance(balance.pendingDeposit)} 1ZE deposit, ${formatBalance(balance.unsettledSaleProceeds)} 1ZE unsettled proceeds`}
+            accessibilityHint="View seller earnings and release schedule"
+          />
+        )}
+
+        {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
+        {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
+          <FlagshipNavigationRow
+            icon="pricetag-outline"
+            iconColor={colors.brand}
+            title="Seller earnings"
+            subtitle={`${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available · ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
+            onPress={handleViewEarnings}
+            accessibilityLabel={`Seller earnings, ${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available, ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
+            accessibilityHint="View seller earnings and release schedule"
+          />
+        )}
+
+        {/* ── Sub-balances — flat rows, below the fold (spec 17 viewport 2) ── */}
+        <View style={styles.subBalanceSection}>
+          <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Settled claim</Text>
+          {settledClaim === 0 ? (
+            <Text style={[styles.subBalanceEmpty, { color: colors.textMuted }]}>
+              No settled 1ZE yet.
+            </Text>
+          ) : (
+            <>
+              <SubBalanceRow label="Available" value={balance.available} formatBalance={formatBalance} colors={colors} emphasis />
+              {balance.reservedForOrders > 0 && (
+                <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
+              )}
+              {balance.redemptionInProgress > 0 && (
+                <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
+              )}
+              {balance.otherHolds > 0 && (
+                <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
+              )}
+              <View style={[styles.subBalanceTotalRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.subBalanceTotalLabel, { color: colors.textPrimary }]}>Settled claim</Text>
+                <Text style={[styles.subBalanceTotalValue, { color: colors.textPrimary }]}>
+                  {formatBalance(settledClaim)}
+                  <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* ── Pending section (not yet settled) ── */}
+        {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={styles.subBalanceSection}>
+            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Pending</Text>
+            <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
+            <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+          </View>
+        )}
+
+        {/* ── Withdrawable ── */}
+        <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+          <View style={styles.withdrawableLeft}>
+            <Ionicons name="arrow-down-circle-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.withdrawableLabel, { color: colors.textSecondary }]}>Withdrawable</Text>
+          </View>
+          <Text style={[styles.withdrawableValue, { color: colors.textPrimary }]}>
+            {formatBalance(withdrawable)}
+            <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+          </Text>
+        </View>
+
+        {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
           <View style={styles.txHistoryHeader}>
             <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>Recent activity</Text>
@@ -892,322 +600,310 @@ export default function WalletScreen({ navigation }: Props) {
           <WalletTransactionHistory limit={20} />
         </View>
 
-        {/* ── Safeguarding & redemption info ── */}
-        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.infoHeader}>
-            <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
-          </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            {balance.safeguarded
-              ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
-              : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
-          </Text>
-          {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
-          {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
-            <View style={styles.safeguardingLinksRow}>
-              {balance.safeguardingEvidenceUrl ? (
-                <Pressable
-                  onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="View safeguarding evidence"
-                  accessibilityHint="Opens in external browser"
-                >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
-                </Pressable>
-              ) : null}
-              {balance.safeguardingTermsUrl ? (
-                <Pressable
-                  onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="View safeguarding terms"
-                  accessibilityHint="Opens in external browser"
-                >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
-                </Pressable>
-              ) : null}
+        {/* ── Safeguarding & 1ZE disclosure — lower down, not competing with balance (spec 17) ── */}
+        <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
+          <View style={styles.infoContent}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
             </View>
-          ) : null}
-        </View>
+            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+              {balance.safeguarded
+                ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
+                : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
+            </Text>
+            {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
+            {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
+              <View style={styles.safeguardingLinksRow}>
+                {balance.safeguardingEvidenceUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    accessibilityRole="link"
+                    accessibilityLabel="View safeguarding evidence"
+                    accessibilityHint="Opens in external browser"
+                  >
+                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
+                  </Pressable>
+                ) : null}
+                {balance.safeguardingTermsUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    accessibilityRole="link"
+                    accessibilityLabel="View safeguarding terms"
+                    accessibilityHint="Opens in external browser"
+                  >
+                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
 
-        {/* ── 1ZE disclosure — what 1ZE is, per research doc §1.1 ── */}
-        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.infoHeader}>
-            <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
+            <View style={[styles.infoDivider, { borderColor: colors.border }]} />
+
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
+            </View>
+            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+              1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
+            </Text>
           </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
-          </Text>
-        </View>
+        </FlagshipFormSection>
 
       </ScrollView>
-    </SafeAreaView>
+
+      {/* ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ── */}
+      <AddMoneySheet
+        visible={addMoneyVisible}
+        onDismiss={() => setAddMoneyVisible(false)}
+        availableFiatBalance={availableFiatBalance}
+        isWalletOperational={isWalletOperational}
+        onCompleted={loadBalance}
+        userId={currentUser?.id}
+      />
+    </FlagshipScreen>
   );
 }
 
 // ── Helper sub-components ──
 
-function SummaryRow({
+/** Flat sub-balance row — label left, tabular-nums value right. */
+function SubBalanceRow({
   label,
   value,
+  formatBalance,
   colors,
-  total,
+  emphasis,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: number;
+  formatBalance: (v: number) => string;
   colors: ReturnType<typeof useAppTheme>['colors'];
-  total?: boolean;
+  emphasis?: boolean;
 }) {
   return (
     <View
-      style={[styles.summaryRow, total && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: Space.xs, paddingTop: Space.xs }]}
+      style={styles.subBalanceRow}
       accessibilityRole="text"
-      accessibilityLabel={label}
+      accessibilityLabel={`${label}: ${formatBalance(value)} 1ZE`}
     >
       <Text
         style={[
-          styles.summaryLabel,
-          { color: total ? colors.textPrimary : colors.textSecondary },
-          total && { fontFamily: Typography.family.semibold },
+          styles.subBalanceLabel,
+          { color: emphasis ? colors.textPrimary : colors.textSecondary },
+          emphasis && { fontFamily: Typography.family.semibold },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
-      {value}
+      <Text
+        style={[
+          styles.subBalanceValue,
+          { color: colors.textPrimary },
+          emphasis && { fontFamily: Typography.family.semibold },
+        ]}
+      >
+        {formatBalance(value)}
+        <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+      </Text>
     </View>
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-}) {
-  return (
-    <AnimatedPressable
-      style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      scaleValue={0.97}
-      hapticFeedback="light"
-    >
-      <View style={styles.quickActionCircle}>
-        <Ionicons name={icon} size={20} color={colors.textPrimary} />
-      </View>
-      <Text style={[styles.quickActionLabel, { color: colors.textSecondary }]}>{label}</Text>
-    </AnimatedPressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
-  sellerWalletCard: {
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginTop: Space.md,
-  },
-  sellerWalletTitle: {
-    fontSize: Type.body.size,
-    fontWeight: '600',
-    marginBottom: Space.sm,
-  },
-  sellerBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  sellerBalanceItem: {
-    flex: 1,
-    paddingVertical: Space.xs,
-  },
-  sellerBalanceDivider: {
-    width: Stroke.standard,
-    marginVertical: Space.xs,
-  },
-  sellerBalanceLabel: {
-    fontSize: Type.caption.size,
-    fontWeight: '500',
-    marginBottom: Space.xs / 2,
-  },
-  sellerBalanceValue: {
-    fontSize: Type.title.size,
-    fontWeight: '700',
-  },
-  pendingToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
+
+  // ── Balance hero — flat, no card (spec 17 viewport 1) ──
+  balanceHero: {
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
   },
-  pendingToggleText: {
-    fontSize: Type.caption.size,
-    fontWeight: '500',
-  },
-  pendingBreakdownList: {
-    gap: Space.xs,
-  },
-  pendingItem: {
+  balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  pendingItemInfo: {
+  balanceLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  // 44pt transparent hit area — visible eye glyph is 20pt
+  eyeToggle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -Space.xs,
+  },
+  balanceMasked: {
+    fontSize: 40,
+    lineHeight: 44,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 2,
+    marginTop: Space.xs,
+  },
+  // Largest text on screen — tabular-nums, bold
+  balanceValue: {
+    fontSize: 40,
+    lineHeight: 44,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -1,
+    marginTop: Space.xs,
+  },
+  balanceUnit: {
+    fontSize: 20,
+    lineHeight: 44,
+    fontFamily: Typography.family.semibold,
+  },
+  localFiatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs + 2,
+  },
+  localFiatText: {
     flex: 1,
-    marginRight: Space.sm,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
   },
-  pendingItemTitle: {
-    fontSize: Type.body.size,
-    fontWeight: '500',
-  },
-  pendingItemMeta: {
-    fontSize: Type.caption.size,
-    marginTop: Space.xs / 2,
-  },
-  pendingItemAmount: {
-    fontSize: Type.body.size,
-    fontWeight: '600',
-  },
+
+  // ── Primary actions — 3 equal-width buttons in a row ──
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.lg,
-  },
-  actionBtn: { flex: 1 },
-
-  // ── Flow cards (inline Add / Redeem) ──
-  flowCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
     marginTop: Space.md,
   },
-  flowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  flowTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  flowHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  tab: {
+  actionBtn: {
     flex: 1,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
+    minHeight: 44,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs - 1,
+    paddingVertical: Space.sm,
   },
-  tabText: {
+  actionBtnPrimary: {
+    borderWidth: 0,
+  },
+  actionBtnSecondary: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionBtnLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+
+  // ── Pending attention row (now FlagshipNavigationRow) ──
+
+  // ── Seller earnings summary row (now FlagshipNavigationRow) ──
+
+  // ── Sub-balance flat rows ──
+  subBalanceSection: {
+    marginTop: Space.lg,
+  },
+  subBalanceSectionLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs + 2,
+  },
+  subBalanceEmpty: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  inputLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs,
-  },
-  balanceHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    paddingVertical: Space.sm,
   },
-  amountInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? Space.sm : Space.xs,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
-  summaryRow: {
+  subBalanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm + 2,
+    gap: Space.md,
   },
-  summaryLabel: {
+  subBalanceLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
   },
-  summaryValue: {
+  subBalanceValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  subBalanceUnit: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  subBalanceTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Space.sm + 2,
+    marginTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
+  },
+  subBalanceTotalLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  subBalanceTotalValue: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.priceList.letterSpacing,
+  },
+
+  // ── Withdrawable ──
+  withdrawableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
+    marginTop: Space.lg,
+  },
+  withdrawableLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  withdrawableLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.medium,
     letterSpacing: Type.body.letterSpacing,
+  },
+  withdrawableValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
-  },
-  flowSubmitBtn: {
-    marginTop: Space.sm,
-  },
-
-  // ── Quick actions ──
-  quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: Space.lg,
-    gap: Space.sm,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  quickActionCircle: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickActionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
 
   // ── Transaction history ──
@@ -1218,26 +914,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.xs,
     marginBottom: Space.sm,
   },
   txHistoryTitle: {
     fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   txHistorySeeAll: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
-  // ── Safeguarding info ──
-  infoCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+  // ── Skeleton ──
+  skeletonSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.sm + 2,
+  },
+
+  // ── Safeguarding info (flat canvas, hairline divider — no card) ──
+  infoContent: {
     padding: Space.md,
     gap: Space.xs,
-    marginTop: Space.lg,
   },
   infoHeader: {
     flexDirection: 'row',
@@ -1245,16 +947,16 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   infoTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   infoBody: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   safeguardingLinksRow: {
     flexDirection: 'row',
@@ -1266,5 +968,9 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
     textTransform: 'uppercase',
+  },
+  infoDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginVertical: Space.sm,
   },
 });

@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { fetchFollowing, type FollowListUser } from '../services/profileApi';
 import { fetchUserListingsFromApi } from '../services/listingsApi';
 import { mapBackendListings } from '../services/listingMapper';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 interface FollowingFeedState {
   listings: Listing[];

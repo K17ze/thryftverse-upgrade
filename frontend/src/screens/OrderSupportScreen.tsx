@@ -3,20 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation, LetterSpacing, Stroke } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -26,7 +23,6 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -55,12 +51,11 @@ const ALL_SUPPORT_TOPICS: SupportTopic[] = [
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
   const { orderId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [details, setDetails] = useState('');
@@ -103,7 +98,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
   const handlePickEvidence = useCallback(async () => {
     if (evidenceUris.length >= 3) {
-      show('You can attach up to 3 photos.', 'info');
+      show('Attach up to 3 photos.', 'info');
       return;
     }
     haptic.light();
@@ -129,7 +124,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setEvidenceUris((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
     } catch {
-      show('Unable to upload photo(s). Please try again.', 'error');
+      show('Unable to upload photo(s). Try again.', 'error');
     } finally {
       setIsUploadingEvidence(false);
     }
@@ -158,7 +153,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setIsSubmitting(false);
       setIsSubmitted(true);
       setSubmittedTicketId(ticketId);
-      show('Support request submitted. We will review and respond as soon as possible.', 'success');
+      show('Support request submitted. We\'ll review and respond as soon as possible.', 'success');
     } catch (err) {
       setIsSubmitting(false);
       const parsed = parseApiError(err);
@@ -167,13 +162,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, evidenceUris, show]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Order Support"
-        onBack={() => navigation.goBack()}
-      />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Order Support" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
@@ -183,7 +176,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       >
           {/* Order Context Card */}
           {order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
+            <View>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -200,12 +193,12 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   </View>
                 </View>
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Existing Open Ticket */}
           {openTicket && !isSubmitted && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
+            <View>
               <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
                 <View style={styles.existingTicketRow}>
                   <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
@@ -221,10 +214,10 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
                 />
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+          <View>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic) => {
@@ -269,7 +262,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* What happens next — contextual guidance after topic selection */}
           {selectedTopic && !isSubmitted && (() => {
@@ -277,16 +270,16 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             if (!topic) return null;
             const isEscrowHeld = orderStatus === 'paid' || orderStatus === 'shipped' || orderStatus === 'in transit' || orderStatus === 'out for delivery';
             const guidance: Record<string, string> = {
-              not_received: 'We will contact the seller to confirm dispatch and tracking. If the item cannot be located, you may be eligible for a full refund from escrow.',
-              not_as_described: 'Provide photos showing the discrepancy. We will compare against the listing and mediate a partial or full refund from escrow.',
-              damaged: 'Attach photos of the damage and original packaging. We will assess liability and arrange a refund from escrow or a seller remedy.',
-              wrong_item: 'Attach photos of the received item. We will arrange a return label and refund from escrow once the item is returned.',
-              return: 'We will review your return eligibility. If approved, you will receive a return label and a refund from escrow once the item is received by the seller.',
-              payment_issue: 'We will investigate the payment and billing discrepancy and correct any erroneous charges.',
+              not_received: 'We\'ll contact the seller to confirm dispatch and tracking. If the item cannot be located, you could be eligible for a full refund from escrow.',
+              not_as_described: 'Provide photos showing the discrepancy. We\'ll compare against the listing and mediate a partial or full refund from escrow.',
+              damaged: 'Attach photos of the damage and original packaging. We\'ll assess liability and arrange a refund from escrow or a seller remedy.',
+              wrong_item: 'Attach photos of the received item. We\'ll arrange a return label and refund from escrow once the item is returned.',
+              return: 'We\'ll review your return eligibility. If approved, you\'ll receive a return label and a refund from escrow once the item is received by the seller.',
+              payment_issue: 'We\'ll investigate the payment and billing discrepancy and correct any erroneous charges.',
               other: 'Describe the issue in detail below. Our support team will review and respond.',
             };
             return (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+              <View>
                 <View style={styles.guidanceCard}>
                   <View style={styles.guidanceHeader}>
                     <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
@@ -302,11 +295,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                     </View>
                   )}
                 </View>
-              </Reanimated.View>
+              </View>
             );
           })()}
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <View>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
@@ -320,11 +313,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               />
               <Text style={styles.charCount}>{details.length}/800</Text>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Evidence upload */}
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+            <View>
               <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
               <View style={styles.evidenceCard}>
                 {evidenceUris.length > 0 && (
@@ -364,11 +357,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   </Pressable>
                 )}
               </View>
-            </Reanimated.View>
+            </View>
           )}
 
           {isSubmitted && submittedTicketId && (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={styles.successCard}>
+            <View style={styles.successCard}>
               <Ionicons name="checkmark-circle" size={32} color={colors.success} />
               <BodyEmphasis style={styles.successTitle}>Request received</BodyEmphasis>
               <Caption color={colors.textSecondary} style={styles.successSub}>
@@ -384,16 +377,16 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                 style={{ marginTop: Space.sm }}
                 onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: submittedTicketId })}
               />
-            </Reanimated.View>
+            </View>
           )}
 
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
+            <View style={styles.honestNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Caption color={colors.textMuted} style={styles.honestNoteText}>
                 Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.
               </Caption>
-            </Reanimated.View>
+            </View>
           )}
 
         <View style={styles.footer}>
@@ -408,7 +401,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             />
           ) : (
             <AppButton
-              title={isSubmitting ? 'Submitting...' : 'Submit Request'}
+              title={isSubmitting ? 'Submitting...' : 'Submit support request'}
               onPress={handleSubmit}
               disabled={!canSubmit}
               variant="primary"
@@ -420,16 +413,12 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           )}
         </View>
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     flex: 1,
   },
@@ -491,8 +480,8 @@ function createStyles(colors: ThemeColors) {
   topicRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
-    paddingVertical: Space.sm + 4,
+    gap: Space.smMd,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -662,7 +651,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',

@@ -12,6 +12,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { Caption, Meta } from './ui/Text';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 interface VoiceMessagePlayerProps {
   duration: number; // in seconds
   waveform: number[]; // 40 bars, normalized 0-1
@@ -52,7 +53,7 @@ export function VoiceMessagePlayer({
     const progress = (currentTime / duration) * 100;
     Animated.timing(progressAnim, {
       toValue: progress,
-      duration: 100,
+      duration: Motion.duration.touch,
       useNativeDriver: false,
     }).start();
   }, [currentTime, duration]);

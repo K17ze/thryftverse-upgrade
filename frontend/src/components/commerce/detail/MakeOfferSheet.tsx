@@ -256,11 +256,11 @@ export function MakeOfferSheet({
       return;
     }
     if (numericOfferGbp > askingPriceGbp * 2) {
-      setErrorMsg('Offer seems too high. Please review the amount.');
+      setErrorMsg('Offer seems too high. Review the amount.');
       return;
     }
     if (!sellerId) {
-      setErrorMsg('Could not load seller info. Please try again.');
+      setErrorMsg('Could not load seller info. Try again.');
       return;
     }
 
@@ -326,7 +326,7 @@ export function MakeOfferSheet({
         </View>
         <Pressable
           onPress={onDismiss}
-          style={styles.closeTarget}
+          style={({ pressed }) => [styles.closeTarget, pressed && { opacity: 0.5 }]}
           accessibilityLabel="Close make an offer"
           accessibilityRole="button"
           accessibilityHint="Dismisses the offer sheet"
@@ -533,7 +533,7 @@ export function MakeOfferSheet({
       {/* Smart Sell demo-mode indicator */}
       {smartSellEnabled && smartSellThreshold != null && smartSellThreshold > 0 ? (
         <View style={[styles.smartSellBanner, { backgroundColor: `${colors.success}14`, borderColor: `${colors.success}30` }]}>
-          <Ionicons name="sparkles" size={14} color={colors.success} />
+          <Ionicons name="trending-up-outline" size={14} color={colors.success} />
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
             {SMART_SELL_DEMO_MODE ? 'Demo mode — ' : ''}
             Seller has Smart Sell enabled — offers above {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
     fontSize: Type.subtitle.size,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
   },
   listingText: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   listingTitle: {
     fontSize: Type.body.size,

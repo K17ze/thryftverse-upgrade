@@ -1,227 +1,38 @@
+import type {
+  Address,
+  PaymentMethod,
+  Order,
+  Transaction,
+  ListingSeller,
+  Listing,
+  User,
+  MessageReaction,
+  Message,
+  ConversationType,
+  ChatAgentConfig,
+  ChatBot,
+  Conversation,
+  Notification,
+  Review,
+} from '../domain';
 
-export interface Address {
-  id: string;
-  name: string;
-  street: string;
-  city: string;
-  postcode: string;
-  isDefault: boolean;
-}
-
-export interface PaymentMethod {
-  id: string;
-  type: 'card' | 'bank_account';
-  last4: string;
-  brand?: 'visa' | 'mastercard' | 'amex';
-  bankName?: string;
-  expiry?: string;
-  isDefault: boolean;
-}
-
-export interface Order {
-  id: string;
-  listingId: string;
-  buyerId: string;
-  sellerId: string;
-  status: 'pending' | 'shipped' | 'delivered' | 'cancelled';
-  totalPrice: number;
-  trackingNumber?: string;
-  createdAt: string;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'sale' | 'purchase' | 'withdrawal' | 'refund';
-  amount: number;
-  status: 'completed' | 'pending';
-  date: string;
-  description: string;
-}
-
-export interface ListingSeller {
-  id: string;
-  username: string | null;
-  avatar: string | null;
-  rating?: number | null;
-  reviewCount?: number | null;
-  location?: string | null;
-  verified?: boolean | null;
-}
-
-export interface Listing {
-  id: string;
-  title: string;
-  brand: string;
-  size: string;
-  condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
-  price: number;
-  originalPrice?: number;
-  priceWithProtection?: number;
-  images: string[];
-  /**
-   * Width divided by height for the primary media asset. Backends should
-   * provide this when known so discovery grids can reserve the final frame
-   * before the image downloads and avoid visible layout shifts.
-   */
-  mediaAspectRatio?: number | null;
-  mediaWidth?: number | null;
-  mediaHeight?: number | null;
-  likes: number;
-  views?: number;
-  isBumped?: boolean;
-  isSold?: boolean;
-  status?: 'draft' | 'active' | 'paused' | 'reserved' | 'sold' | 'deleted' | 'removed' | 'unknown';
-  sellerId: string;
-  seller?: ListingSeller | null;
-  category: string;
-  subcategory?: string | null;
-  description: string;
-  createdAt?: string;
-  shippingMethod?: string | null;
-  shippingPayer?: string | null;
-}
-
-export interface User {
-  id: string;
-  username: string;
-  avatar: string;
-  coverPhoto?: string;
-  rating: number;
-  reviewCount: number;
-  location: string;
-  followers: number;
-  following: number;
-  isVerified: boolean;
-  badges: string[];
-  lastSeen: string;
-  listingCount: number;
-  bio?: string;
-  website?: string;
-}
-
-export interface MessageReaction {
-  emoji: string;
-  userIds: string[];
-}
-
-export interface Message {
-  id: string;
-  senderId: string;
-  text?: string;
-  offerPrice?: number;
-  originalPrice?: number;
-  offerStatus?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired';
-  isSystem?: boolean;
-  systemTitle?: string;
-  timestamp: string;
-  itemImage?: string;
-  type?: 'text' | 'offer' | 'system' | 'commerce_state';
-  sender?: 'me' | 'other' | 'system';
-  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired'; expiresAt?: string; counterRound?: number };
-  reactions?: MessageReaction[];
-  replyToMessageId?: string;
-  mediaUri?: string;
-  mediaType?: 'image' | 'video';
-  uploadStatus?: 'uploading' | 'failed' | 'sent';
-  commerceState?: {
-    stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
-    orderId: string;
-    orderShortId?: string;
-    itemTitle?: string;
-    itemImage?: string | null;
-    trackingNumber?: string | null;
-    carrier?: string | null;
-  };
-}
-
-export type ConversationType = 'dm' | 'group';
-
-export interface ChatAgentConfig {
-  instructions: string;
-  model: 'gpt-5.6-sol' | 'gpt-5.6-terra' | 'gpt-5.6-luna';
-  triggerMode: 'mention' | 'command' | 'always';
-  responseLength: 'concise' | 'balanced' | 'detailed';
-  tone: 'focused' | 'warm' | 'expert';
-  reasoningEffort: 'low' | 'medium' | 'high';
-  historyLimit: number;
-  starterPrompts: string[];
-}
-
-export interface ChatBot {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  commandHint: string;
-  category: 'moderation' | 'commerce' | 'automation' | 'assistant' | 'safety' | 'styling';
-  status: 'available' | 'local-only' | 'backend-required';
-  permissions: string[];
-  /** 'system' = built-in Thryftverse bot; 'custom' = user-created */
-  type?: 'system' | 'custom';
-  /** Present only for custom bots */
-  creatorId?: string;
-  /** Present only for custom bots */
-  ownerId?: string;
-  /** Present only for custom bots */
-  isDraft?: boolean;
-  /** Present only for custom bots */
-  isDisabled?: boolean;
-  /** How the bot executes: local, config-only, backend, ai */
-  runtimeMode?: string;
-  /** Avatar/icon emoji or ionicon name for custom bots */
-  icon?: string;
-  /** Server-owned AI behavior contract. Present for AI agents. */
-  agentConfig?: ChatAgentConfig;
-  /** True only when this environment can execute the selected runtime. */
-  runtimeReady?: boolean;
-  runtimeReadinessReason?: string;
-}
-
-export interface Conversation {
-  id: string;
-  type: ConversationType;
-  title?: string;
-  description?: string;
-  avatar?: string;
-  sellerId?: string;
-  itemId?: string;
-  ownerId?: string;
-  creatorId?: string;
-  participantIds?: string[];
-  participantProfiles?: Array<{
-    id: string;
-    username: string;
-    displayName?: string | null;
-    avatar?: string | null;
-    emailVerified?: boolean;
-  }>;
-  botIds?: string[];
-  lastMessage: string;
-  lastMessageTime: string;
-  unread: boolean;
-  messages: Message[];
-  isPinned?: boolean;
-  draftText?: string;
-}
-
-export interface Notification {
-  id: string;
-  itemImage: string;
-  text: string;
-  time: string;
-  type: 'new_item' | 'favourite' | 'system';
-}
-
-export interface Review {
-  id: string;
-  reviewerId: string;
-  reviewerName: string;
-  reviewerAvatar: string;
-  rating: number;
-  text: string;
-  date: string;
-  isAutomatic: boolean;
-}
+export type {
+  Address,
+  PaymentMethod,
+  Order,
+  Transaction,
+  ListingSeller,
+  Listing,
+  User,
+  MessageReaction,
+  Message,
+  ConversationType,
+  ChatAgentConfig,
+  ChatBot,
+  Conversation,
+  Notification,
+  Review,
+};
 
 // ─── MOCK USERS ───────────────────────────────────────────────────────────────
 export const MOCK_USERS: User[] = [
@@ -492,7 +303,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_guard',
     slug: 'guard',
-    name: 'Guard Bot',
+    name: 'Guard',
     description: 'Moderation helper for rules, join messages, and spam guardrails.',
     commandHint: '/guard status',
     category: 'moderation',
@@ -502,7 +313,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_trade',
     slug: 'tradeops',
-    name: 'TradeOps Bot',
+    name: 'TradeOps',
     description: 'Posts auction and co-own market alerts into your group.',
     commandHint: '/tradeops alerts on',
     category: 'commerce',
@@ -512,7 +323,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_brief',
     slug: 'brief',
-    name: 'Daily Brief Bot',
+    name: 'Daily Brief',
     description: 'Sends timed digest updates and pinned reminders.',
     commandHint: '/brief now',
     category: 'automation',
@@ -582,7 +393,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_ordersupport',
     slug: 'ordersupport',
-    name: 'Order Support Bot',
+    name: 'Order Support',
     description: 'Answers common order and delivery questions automatically.',
     commandHint: '/order status',
     category: 'assistant',
@@ -648,6 +459,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     id: 'c2',
     type: 'dm',
     sellerId: 'u3',
+    participantProfiles: [
+      { id: 'u3', username: 'dankdunksuk', displayName: null, avatar: null, emailVerified: true },
+    ],
     itemId: 'l6',
     lastMessage: 'Shout if you want more pics or questio...',
     lastMessageTime: 'a day ago',
@@ -660,8 +474,13 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     title: 'Thryft Snipers',
     ownerId: 'me',
     participantIds: ['me', 'u1', 'u3'],
+    participantProfiles: [
+      { id: 'me', username: 'thryftuser', displayName: null, avatar: null, emailVerified: true },
+      { id: 'u1', username: 'mariefullery', displayName: null, avatar: null, emailVerified: true },
+      { id: 'u3', username: 'dankdunksuk', displayName: null, avatar: null, emailVerified: true },
+    ],
     botIds: ['bot_trade'],
-    lastMessage: 'TradeOps Bot: New auction watchlist for tonight is live.',
+    lastMessage: 'TradeOps: New auction watchlist for tonight is live.',
     lastMessageTime: '20m ago',
     unread: true,
     messages: [
@@ -682,7 +501,7 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       {
         id: 'g1m3',
         senderId: 'bot_trade',
-        text: 'TradeOps Bot: New auction watchlist for tonight is live.',
+        text: 'TradeOps: New auction watchlist for tonight is live.',
         timestamp: '20m ago',
       },
     ],

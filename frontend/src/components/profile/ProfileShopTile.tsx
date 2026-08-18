@@ -26,9 +26,10 @@ interface ProfileShopTileProps {
 }
 
 /**
- * Shop tile — 4:5 portrait, price/brand/size·condition hierarchy.
+ * Shop tile — 3:4 portrait, price/brand hierarchy.
  * Sold treatment: quiet lower-edge marker, not aggressive all-caps stamp.
  * The garment stays readable; sold inventory feels historical, not disabled.
+ * 3-column density: price + brand only, size/condition omitted for scannability.
  */
 const ProfileShopTile = React.memo(function ProfileShopTile({
   item,
@@ -43,7 +44,7 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   const showSold = isSold || item.status === 'sold';
   return (
     <AnimatedPressable
-      style={[styles.gridCard, { width: cardWidth, marginBottom: Space.md }]}
+      style={[styles.gridCard, { width: cardWidth, marginBottom: Space.sm }]}
       activeOpacity={0.9}
       onPress={onPress}
       accessibilityRole="button"
@@ -59,6 +60,7 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
           style={styles.gridImage}
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
+          downscaleWidth={cardWidth}
         />
         {/* Quiet lower-edge sold marker — real short fade, image stays readable */}
         {showSold ? (
@@ -83,11 +85,6 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
       ) : (
         <Text style={styles.gridBrand} numberOfLines={1}>{item.title}</Text>
       )}
-      {(item.size || item.condition) ? (
-        <Text style={styles.gridMeta} numberOfLines={1}>
-          {[item.size, item.condition].filter(Boolean).join(' · ')}
-        </Text>
-      ) : null}
     </AnimatedPressable>
   );
 });
@@ -96,7 +93,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   gridCard: {},
   gridImageWrap: {
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -123,9 +120,8 @@ function createStyles(colors: ThemeColors) {
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  gridPrice: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 6 },
-  gridBrand: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
-  gridMeta: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: 1 },
+  gridPrice: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  gridBrand: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   });
 }
 

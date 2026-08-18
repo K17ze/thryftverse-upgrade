@@ -25,7 +25,7 @@ export function RetryState({ onRetry, message = 'Something went wrong.' }: Retry
       </Reanimated.View>
 
       <Reanimated.Text entering={enter} style={styles.title}>
-        Oops!
+        Couldn't load
       </Reanimated.Text>
 
       <Reanimated.Text entering={enter} style={styles.subtext}>

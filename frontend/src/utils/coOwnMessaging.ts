@@ -1,5 +1,5 @@
 import { createGroupConversationOnApi } from '../services/chatApi';
-import type { Conversation } from '../data/mockData';
+import type { Conversation } from '../domain';
 
 /**
  * Resolve or create a real backend conversation for Co-Own issuer messaging.

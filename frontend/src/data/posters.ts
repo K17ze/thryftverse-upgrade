@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { Ionicons } from '@expo/vector-icons';
-import { MOCK_LISTINGS, MOCK_USERS, User } from './mockData';
+import type { User } from '../domain/user';
+import { MOCK_LISTINGS, MOCK_USERS } from './mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 import { Type } from '../theme/designTokens';

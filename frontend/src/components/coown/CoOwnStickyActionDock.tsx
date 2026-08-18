@@ -32,6 +32,9 @@ export function CoOwnStickyActionDock({
         },
         style,
       ]}
+      accessible
+      accessibilityRole="toolbar"
+      accessibilityLabel="Trade actions"
     >
       {children}
     </View>

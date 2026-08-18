@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     borderRadius: Radius.xl,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.lg,
     alignItems: 'center',
     borderWidth: 1,

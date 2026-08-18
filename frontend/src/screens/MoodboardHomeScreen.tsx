@@ -33,6 +33,30 @@ import {
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
+// ── Helpers ──
+/**
+ * Relative-time formatter for "last updated" metadata.
+ * Returns compact strings: "now", "3d", "2w", "1mo", "1y".
+ */
+function formatRelativeTime(isoTimestamp: string): string {
+  const ts = Date.parse(isoTimestamp);
+  if (isNaN(ts)) return '';
+  const diff = Date.now() - ts;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  const years = Math.floor(days / 365);
+  return `${years}y`;
+}
+
 // ── Layout constants ──
 const { width: SCREEN_W } = Dimensions.get('window');
 const USER_CARD_WIDTH = 200;
@@ -133,14 +157,24 @@ const UserMoodboardCard = React.memo(function UserMoodboardCard({
       accessibilityHint="Opens the moodboard editor"
     >
       <View style={styles.userCardImageWrap}>
-        <CoverCollage moodboard={moodboard} width={USER_CARD_WIDTH} height={USER_CARD_HEIGHT - 48} />
+        <CoverCollage moodboard={moodboard} width={USER_CARD_WIDTH} height={USER_CARD_HEIGHT - 56} />
         <View style={styles.userCardMeta} pointerEvents="none">
           <Text style={styles.userCardTitle} numberOfLines={1}>
             {moodboard.title}
           </Text>
-          <Text style={styles.userCardCount} numberOfLines={1}>
-            {moodboard.items.length} {moodboard.items.length === 1 ? 'item' : 'items'}
-          </Text>
+          <View style={styles.userCardMetaRow}>
+            <Text style={styles.userCardCount} numberOfLines={1}>
+              {moodboard.items.length} {moodboard.items.length === 1 ? 'item' : 'items'}
+            </Text>
+            {moodboard.updatedAt ? (
+              <>
+                <Text style={styles.userCardMetaDot}>·</Text>
+                <Text style={styles.userCardUpdated} numberOfLines={1}>
+                  {formatRelativeTime(moodboard.updatedAt)}
+                </Text>
+              </>
+            ) : null}
+          </View>
         </View>
       </View>
     </AnimatedPressable>
@@ -206,7 +240,7 @@ function UserRailSkeleton() {
     >
       {Array.from({ length: 3 }).map((_, i) => (
         <View key={i} style={[styles.userCard, { width: USER_CARD_WIDTH }]}>
-          <PremiumSkeletonTile width="100%" height={USER_CARD_HEIGHT - 48} borderRadius={Radius.lg} />
+          <PremiumSkeletonTile width="100%" height={USER_CARD_HEIGHT - 56} borderRadius={Radius.lg} />
           <View style={styles.userCardMeta}>
             <PremiumSkeletonTile width="80%" height={14} borderRadius={Radius.sm} />
             <PremiumSkeletonTile width={50} height={11} borderRadius={Radius.sm} />
@@ -319,7 +353,7 @@ export default function MoodboardHomeScreen() {
       setUserMoodboards(userMbs);
       setPublicMoodboards(publicMbs);
     } catch (e) {
-      setError('We couldn\u2019t load moodboards. Please try again.');
+      setError('We couldn\u2019t load moodboards. Try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -473,7 +507,7 @@ export default function MoodboardHomeScreen() {
               accessibilityLabel="Create moodboard with Poster Studio"
               accessibilityHint="Opens the Poster Creator with moodboard collage templates"
             >
-              <Ionicons name="sparkles-outline" size={16} color={colors.brand} />
+              <Ionicons name="create-outline" size={16} color={colors.brand} />
               <Text style={styles.studioButtonText}>Studio</Text>
             </AnimatedPressable>
             <AnimatedPressable
@@ -549,7 +583,7 @@ export default function MoodboardHomeScreen() {
         {!loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
           <View style={styles.inlineEmptyWrap}>
             <View style={styles.inlineEmptyCard}>
-              <Ionicons name="sparkles-outline" size={28} color={colors.brand} />
+              <Ionicons name="grid-outline" size={28} color={colors.brand} />
               <Text style={styles.inlineEmptyTitle}>Create your first moodboard</Text>
               <Text style={styles.inlineEmptySubtitle}>
                 Arrange listings into a collage that expresses your style.
@@ -692,18 +726,18 @@ function useStyles() {
         sectionHeaderWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.sm,
+          paddingBottom: Space.md,
         },
         sectionEyebrow: {
-          fontSize: Type.meta.size,
+          fontSize: Type.metaElevated.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
           letterSpacing: Type.metaElevated.letterSpacing,
           marginBottom: Space.xs,
         },
         sectionTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
+          fontSize: Type.subtitle.size,
+          lineHeight: Type.subtitle.lineHeight,
           fontFamily: Typography.family.bold,
           color: colors.textPrimary,
           letterSpacing: Type.subtitle.letterSpacing,
@@ -726,6 +760,11 @@ function useStyles() {
           paddingVertical: Space.sm,
           gap: Space.xs - 2,
         },
+        userCardMetaRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs / 2 + 1,
+        },
         userCardTitle: {
           fontSize: Type.bodyEmphasis.size,
           fontFamily: Typography.family.semibold,
@@ -733,6 +772,16 @@ function useStyles() {
           letterSpacing: Type.body.letterSpacing,
         },
         userCardCount: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+        },
+        userCardMetaDot: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+        },
+        userCardUpdated: {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.regular,
           color: colors.textMuted,

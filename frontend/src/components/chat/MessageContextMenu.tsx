@@ -13,8 +13,9 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
+import { Motion } from '../../theme/motionTokens';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report' | 'translate';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -56,26 +57,27 @@ export function MessageContextMenu({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 150,
+          duration: Motion.duration.fast,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
           useNativeDriver: true,
-          friction: 8,
-          tension: 40,
+          damping: Motion.spring.sheet.damping,
+          stiffness: Motion.spring.sheet.stiffness,
+          mass: Motion.spring.sheet.mass,
         }),
       ]).start();
     } else {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: Motion.duration.fast,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 200,
+          duration: Motion.duration.slow,
           useNativeDriver: true,
         }),
       ]).start();
@@ -172,7 +174,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
-    paddingTop: Space.sm + 4,
+    paddingTop: Space.smMd,
     paddingBottom: Space.xl + 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
@@ -191,19 +193,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   previewRow: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    padding: Space.sm + 4,
-    marginBottom: Space.sm + 4,
+    padding: Space.smMd,
+    marginBottom: Space.smMd,
   },
   actionsList: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,

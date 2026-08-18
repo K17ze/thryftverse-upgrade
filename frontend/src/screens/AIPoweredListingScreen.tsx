@@ -10,6 +10,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,8 +19,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import Reanimated, {
-  FadeInDown,
-  FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -41,6 +41,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { haptics } from '../utils/haptics';
+import { makeStableId } from '../utils/createStableId';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   createListingOnApi,
@@ -180,7 +181,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       }));
       setPhotos((prev) => [...prev, ...assets].slice(0, 8));
     } catch {
-      showError('Pick failed', 'Could not pick photos. Please try again.');
+      showError('Pick failed', 'Could not pick photos. Try again.');
     }
   }, [showError]);
 
@@ -205,7 +206,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         [...prev, { uri: asset.uri, width: asset.width, height: asset.height }].slice(0, 8),
       );
     } catch {
-      showError('Capture failed', 'Could not take a photo. Please try again.');
+      showError('Capture failed', 'Could not take a photo. Try again.');
     }
   }, [showError]);
 
@@ -322,7 +323,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         .filter((it) => it.state === 'uploaded' && it.publicUrl)
         .map((it) => it.publicUrl!);
 
-      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const listingId = makeStableId('listing');
       await createListingOnApi({
         id: listingId,
         sellerId: currentUser.id,
@@ -380,7 +381,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       const rawMsg =
         typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string'
           ? (e as Error).message
-          : 'Failed to publish. Please try again.';
+          : 'Failed to publish. Try again.';
       setPublishError(isNetwork ? 'You appear to be offline. Check your connection and try again.' : rawMsg);
       haptics.error();
     } finally {
@@ -453,6 +454,15 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         <View style={styles.iconBtnPlaceholder} />
       </View>
 
+      {SMART_SELL_DEMO_MODE && (
+        <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
+          <Ionicons name="flask-outline" size={16} color={colors.warning} />
+          <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
+            Demo Mode — AI suggestions are illustrative and not sent to a backend.
+          </Text>
+        </View>
+      )}
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -520,15 +530,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
           {/* -- 6. SUGGESTED FIELDS -- */}
           {suggestion && !isAnalyzing && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeInDown.duration(320).springify().damping(18)}
-            >
+            <View>
               {/* AI confidence banner — truthful labelling (§11) */}
               <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Ionicons name="document-text-outline" size={16} color={colors.brand} />
                 <View style={styles.confidenceTextWrap}>
                   <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
-                    AI suggestions — please review
+                    Suggestions — review before publishing
                   </Text>
                   <Text style={[styles.confidenceSub, { color: colors.textSecondary }]}>
                     Confidence {confidencePct}% · heuristic preview, not image recognition
@@ -788,7 +796,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </Text>
               </View>
               <ListingQualityMeter score={qualityScore} />
-            </Reanimated.View>
+            </View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -804,7 +812,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             variant="primary"
             size="lg"
             accessibilityLabel="Publish AI-assisted listing"
-            icon={<Ionicons name="sparkles" size={18} color={colors.textInverse} />}
+            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
           />
         </View>
       )}
@@ -857,9 +865,8 @@ function PhotoCaptureSection({
       {photos.length > 0 && (
         <View style={styles.photoGrid}>
           {photos.map((photo, index) => (
-            <Reanimated.View
+            <View
               key={photo.uri}
-              entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(index * 40)}
               style={[styles.photoThumb, { width: thumbSize, height: thumbSize }]}
             >
               <Image source={{ uri: photo.uri }} style={styles.photoImage} />
@@ -884,10 +891,10 @@ function PhotoCaptureSection({
                 accessibilityLabel="Enhance photo"
                 accessibilityHint="Opens AI photo enhancement to improve this listing image"
               >
-                <Ionicons name="color-wand-outline" size={13} color={colors.brand} />
+                <Ionicons name="color-filter-outline" size={13} color={colors.brand} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
               </Pressable>
-            </Reanimated.View>
+            </View>
           ))}
         </View>
       )}
@@ -966,12 +973,11 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
   const dotStyle = useAnimatedStyle(() => ({ opacity: dotOpacity.value }));
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInUp.duration(200)}
+    <View
       style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
     >
       <View style={styles.analyzingHeader}>
-        <Ionicons name="sparkles" size={18} color={colors.brand} />
+        <Ionicons name="analytics-outline" size={18} color={colors.brand} />
         <Text style={[styles.analyzingTitle, { color: colors.textPrimary }]}>Analyzing photos…</Text>
       </View>
 
@@ -996,7 +1002,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       <Text style={[styles.analyzingHint, { color: colors.textMuted }]}>
         Detecting brand, category, colour and estimated value
       </Text>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1015,8 +1021,7 @@ function ListingFormSkeleton({
 }) {
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(240)}
+    <View
       accessibilityLabel="Loading AI suggestions"
       accessibilityState={{ busy: true }}
     >
@@ -1081,7 +1086,7 @@ function ListingFormSkeleton({
           />
         </View>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1099,21 +1104,20 @@ function EmptyState({
   reducedMotion: boolean;
 }) {
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+    <View
       style={styles.emptyState}
     >
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="sparkles-outline" size={32} color={colors.textMuted} />
+        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Snap to list
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
         Add photos above and AI will suggest a title, description, price and
-        category. You can edit everything before publishing.
+        category. Edit everything before publishing.
       </Text>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1167,7 +1171,7 @@ interface AIBadgeFieldProps {
   label: string;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
@@ -1177,8 +1181,8 @@ function AIBadgeField({ label, colors, styles, style, children }: AIBadgeFieldPr
       <View style={styles.fieldLabelRow}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
         <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="sparkles" size={10} color={colors.brand} />
-          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>AI</Text>
+          <Ionicons name="bulb-outline" size={10} color={colors.brand} />
+          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
         </View>
       </View>
       {children}
@@ -1265,6 +1269,20 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    demoBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: Stroke.standard,
+    },
+    demoBannerText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      lineHeight: Type.caption.lineHeight,
     },
     iconBtn: {
       width: Control.hit,

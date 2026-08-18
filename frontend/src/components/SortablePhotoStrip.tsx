@@ -7,9 +7,8 @@ import Reanimated, {
   useAnimatedStyle,
   useAnimatedReaction,
   runOnJS,
-  withTiming,
+  withSpring,
   SharedValue,
-  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -19,6 +18,7 @@ import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
@@ -110,6 +110,7 @@ interface ItemProps {
 function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true, reducedMotion = false }: ItemProps) {
   const isVideo = isVideoUri(id);
   const { colors } = useAppTheme();
+  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
@@ -121,10 +122,10 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     () => index,
     (currIndex) => {
       if (!isDragging.value) {
-        position.value = withTiming(currIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
+        position.value = withSpring(currIndex * TOTAL_SIZE, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press);
       }
     },
-    [index, reducedMotion]
+    [index, reducedMotion, spring]
   );
 
   const panGesture = Gesture.Pan()
@@ -139,12 +140,12 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
-      position.value = withTiming(newIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) }, () => {
+      position.value = withSpring(newIndex * TOTAL_SIZE, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press, () => {
         zIndex.value = 0;
       });
 
       if (newIndex !== index) {
-        // Trigger React re-order on JS thread
+        runOnJS(haptics.selection)();
         const newOrder = [...orderArray];
         const [moved] = newOrder.splice(index, 1);
         newOrder.splice(newIndex, 0, moved);
@@ -160,9 +161,9 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withTiming(isDragging.value ? 1.05 : 1, { duration: reducedMotion ? 0 : 120 }) }
+        { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press) }
       ],
-      shadowOpacity: withTiming(isDragging.value ? 0.3 : 0, { duration: reducedMotion ? 0 : 120 }),
+      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press),
     };
   });
 

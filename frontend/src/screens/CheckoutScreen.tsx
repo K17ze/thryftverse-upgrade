@@ -17,7 +17,6 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -33,6 +32,7 @@ import {
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -65,7 +65,9 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, Typography, Radius, Stroke, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { createStableId } from '../utils/createStableId';
 import {
   configureStripeMobile,
@@ -79,7 +81,9 @@ type CheckoutStage =
   | 'idle'
   | 'creating_order'
   | 'opening_payment'
+  | 'authenticating'
   | 'awaiting_payment'
+  | 'payment_succeeded'
   | 'payment_pending'
   | 'payment_failed';
 
@@ -221,11 +225,13 @@ function buildOrderSignature(params: {
 
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
-  creating_order: 'Creating your order…',
-  opening_payment: 'Preparing payment…',
-  awaiting_payment: 'Confirming payment…',
-  payment_pending: 'Payment is still pending.',
-  payment_failed: 'Payment failed. Try again.',
+  creating_order: 'Reviewing your order',
+  opening_payment: 'Processing payment',
+  authenticating: 'Confirm with your bank',
+  awaiting_payment: 'Processing payment',
+  payment_succeeded: 'Order confirmed',
+  payment_pending: 'Payment is pending. We’ll update this order when your bank confirms it.',
+  payment_failed: 'Payment didn’t go through',
 };
 
 export default function CheckoutScreen() {
@@ -245,10 +251,6 @@ export default function CheckoutScreen() {
     container: { backgroundColor: colors.background },
     header: { borderBottomColor: colors.border },
     headerTitle: { color: colors.textPrimary },
-    sectionDivider: { backgroundColor: colors.border },
-    priceBreakdownCard: {},
-    priceBreakdownTitle: { color: colors.textMuted },
-    priceDivider: { backgroundColor: colors.border },
     savingsBadge: { backgroundColor: `${colors.success}12` },
     savingsText: { color: colors.success },
     protectionIncludedText: { color: colors.success },
@@ -259,14 +261,10 @@ export default function CheckoutScreen() {
     balanceKnobOn: { backgroundColor: colors.textInverse },
     balanceLabel: { color: colors.textPrimary },
     balanceAmount: { color: colors.textMuted },
-    feedbackText: { color: colors.textSecondary },
-    feedbackTextError: { color: colors.danger },
     orderErrorText: { color: colors.danger },
     hintText: { color: colors.textMuted },
     termsText: { color: colors.textMuted },
     footer: { borderTopColor: colors.border, backgroundColor: colors.background },
-    footerTotalLabel: { color: colors.textSecondary },
-    footerTotalPrice: { color: colors.textPrimary },
     payBtn: { backgroundColor: colors.brand },
     payBtnText: { color: colors.textInverse },
     signedOutTitle: { color: colors.textPrimary },
@@ -281,26 +279,14 @@ export default function CheckoutScreen() {
     partialDataActionText: { color: colors.warning },
     applePayBtn: { backgroundColor: colors.brand },
     applePayBtnText: { color: colors.textInverse },
-    paymentCard: { borderColor: colors.border, backgroundColor: colors.surface },
-    paymentCardWarning: { borderColor: colors.danger, backgroundColor: `${colors.danger}0A` },
-    paymentCardIcon: {},
-    paymentCardIconWarning: {},
-    paymentCardLabel: { color: colors.textMuted },
-    paymentCardTitle: { color: colors.textPrimary },
-    paymentCardSubtitle: { color: colors.textSecondary },
-    paymentCardChange: { color: colors.brand },
-    paymentCardWarningText: { color: colors.danger },
     compactSummaryRow: { color: colors.textSecondary },
     compactSummaryValue: { color: colors.textPrimary },
     compactSummaryTotalLabel: { color: colors.textPrimary },
     compactSummaryTotalValue: { color: colors.textPrimary },
     compactSummaryDivider: { backgroundColor: colors.border },
     breakdownChevronText: { color: colors.textMuted },
-    trustBadgeText: { color: colors.textMuted },
-    trustBadgeDot: { backgroundColor: colors.textMuted },
     breakdownSheetTitle: { color: colors.textPrimary },
     breakdownSheetLabel: { color: colors.textSecondary },
-    breakdownSheetValue: { color: colors.textPrimary },
     breakdownSheetDivider: { backgroundColor: colors.border },
     breakdownSheetTotalLabel: { color: colors.textPrimary },
     breakdownSheetTotalValue: { color: colors.textPrimary },
@@ -353,7 +339,7 @@ export default function CheckoutScreen() {
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const { showError, showSuccess, showInfo } = useNotifications();
+  const { showError, showInfo } = useNotifications();
   const { formatFromFiat } = useFormattedPrice();
 
   const createdOrderIdRef = useRef<string | null>(null);
@@ -368,7 +354,7 @@ export default function CheckoutScreen() {
 
   const item = listings.find((l) => l.id === itemId);
 
-  const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'awaiting_payment';
+  const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment';
   const isInteractionLocked = isSubmitting || isCancellingOrder;
 
   // --- Eligibility ---
@@ -780,6 +766,10 @@ export default function CheckoutScreen() {
         throw new Error(sheetInitializationError.message);
       }
 
+      // Set authenticating stage — the PaymentSheet may trigger 3DS/SCA
+      // challenge during presentation. This stage makes the authentication
+      // step visible to the user (audit 09: canonical payment state).
+      setStage('authenticating');
       const { error: sheetPresentationError } = await presentPaymentSheet();
       if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
         setStage('idle');
@@ -818,7 +808,9 @@ export default function CheckoutScreen() {
       }
 
       if (settlementStatus === 'succeeded') {
-        showSuccess('Payment completed', 'Your payment was successful.');
+        // Brief success state so the user sees confirmation before navigation
+        // (audit 09: canonical payment state — succeeded is a visible state).
+        setStage('payment_succeeded');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
         // Performance mark: checkout flow complete (payment settled).
@@ -829,7 +821,6 @@ export default function CheckoutScreen() {
 
       if (settlementStatus === 'pending') {
         setStage('payment_pending');
-        showInfo('Payment processing', 'We will update your order shortly.');
         isSubmittingRef.current = false;
         handleSettlementNavigation('pending', orderId, attemptId);
         return;
@@ -838,9 +829,9 @@ export default function CheckoutScreen() {
       // Failed
       setStage('payment_failed');
       pendingIntentIdRef.current = null;
-      setOrderError('Payment could not be completed. Please try again.');
-      showError('Payment failed', 'Payment could not be completed. Please try again.');
-    } catch (error: any) {
+      setOrderError('Payment could not be completed. Try again.');
+      showError('Payment failed', 'Payment could not be completed. Try again.');
+    } catch (error: unknown) {
       if (
         !isMountedRef.current
         || paymentAttemptRef.current !== attemptId
@@ -849,10 +840,11 @@ export default function CheckoutScreen() {
       }
 
       setStage('payment_failed');
-      const isNetworkError = isOffline || error?.code === 'NETWORK_ERROR' || error?.code === 'ECONNABORTED';
+      const errorCode = (error as { code?: string })?.code;
+      const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
       const message = isNetworkError
         ? 'You appear to be offline. Check your connection and try again.'
-        : error?.message ?? 'Payment could not be completed. Please try again.';
+        : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
       setOrderError(message);
       showError('Payment failed', message);
     } finally {
@@ -867,7 +859,6 @@ export default function CheckoutScreen() {
     savedAddress?.id,
     savedPaymentMethod?.id,
     showError,
-    showSuccess,
     showInfo,
     handleSettlementNavigation,
     cancelStaleOrder,
@@ -1077,6 +1068,75 @@ export default function CheckoutScreen() {
     return sellerId === currentUser.id;
   }, [item, currentUser?.id]);
 
+  // --- Partial data state (§14) ---
+  // Computed before early returns so the useMemo hook order is stable
+  // regardless of which guard branch fires (Rules of Hooks).
+  const addressLoaded = backendAddresses.length > 0 || !!savedAddress?.id;
+  const paymentLoaded = backendPaymentMethods.length > 0 || !!savedPaymentMethod?.id;
+
+  const partialDataPrompt = useMemo(() => {
+    if (isHydrating || isInteractionLocked) return null;
+
+    // Shipping quote failed but address + payment are ready → proceed with
+    // standard (estimated) shipping. The carrier is still selected, only the
+    // live quote is unavailable.
+    if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
+      return {
+        icon: 'cube-outline' as const,
+        message: 'Shipping quote unavailable — proceeding with standard shipping.',
+        action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
+      };
+    }
+
+    // Address missing but payment methods loaded → prompt to add an address.
+    if (!addressLoaded && paymentLoaded) {
+      return {
+        icon: 'location-outline' as const,
+        message: 'Add a delivery address to continue.',
+        action: { label: 'Add address', onPress: () => handleAddressPress() },
+      };
+    }
+
+    // Payment methods missing but address loaded → prompt to add a payment method.
+    if (!paymentLoaded && addressLoaded) {
+      return {
+        icon: 'card-outline' as const,
+        message: 'Add a payment method to continue.',
+        action: {
+          label: 'Add payment',
+          onPress: () => {
+            haptics.tap();
+            if (!allowCardPayments && checkoutCapabilities) {
+              navigation.navigate('Payments');
+              return;
+            }
+            if (backendPaymentMethods.length > 1) {
+              setPaymentSelectorVisible(true);
+            } else {
+              setAddCardSheetVisible(true);
+            }
+          },
+        },
+      };
+    }
+
+    return null;
+  }, [
+    isHydrating,
+    isInteractionLocked,
+    shippingError,
+    addressLoaded,
+    paymentLoaded,
+    postageOption.carrierId,
+    hydrateCheckout,
+    handleAddressPress,
+    haptics,
+    allowCardPayments,
+    checkoutCapabilities,
+    navigation,
+    backendPaymentMethods.length,
+  ]);
+
   // --- Render ---
 
   if (!item) {
@@ -1179,6 +1239,19 @@ export default function CheckoutScreen() {
     );
   }
 
+  // ── Loading skeleton ──
+  // Show a skeleton that matches the final layout geometry when hydrating
+  // with no cached data (first load). Per AGENTS.md §14: "Skeletons should
+  // resemble the final layout. Do not use a generic centred spinner."
+  if (isHydrating && !savedAddress?.id && !savedPaymentMethod?.id && backendAddresses.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <CheckoutSkeleton colors={colors} />
+      </SafeAreaView>
+    );
+  }
+
   const resolvedSeller = item.seller ?? {
     id: item.sellerId ?? '',
     username: null,
@@ -1200,84 +1273,12 @@ export default function CheckoutScreen() {
     : 'Required for delivery';
 
   const payLabel = isSubmitting
-    ? STAGE_LABELS[stage] || 'Processing…'
+    ? STAGE_LABELS[stage] || 'Processing'
     : stage === 'payment_failed'
       ? 'Retry payment'
       : stage === 'payment_pending'
-        ? 'Waiting for confirmation…'
+        ? 'Waiting for confirmation'
         : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
-
-  // --- Partial data state (§14) ---
-  // Some checkout data is available but other parts are missing. The checkout
-  // remains usable — these are inline prompts, not full error states. Distinct
-  // from the row-level errorText (which surfaces fetch failures); these guide
-  // the user to complete the missing piece or proceed with a safe default.
-  const addressLoaded = backendAddresses.length > 0 || !!savedAddress?.id;
-  const paymentLoaded = backendPaymentMethods.length > 0 || !!savedPaymentMethod?.id;
-  const shippingReady = !!postageOption.carrierId && !!postageOption.quoteId;
-
-  const partialDataPrompt = useMemo(() => {
-    if (isHydrating || isInteractionLocked) return null;
-
-    // Shipping quote failed but address + payment are ready → proceed with
-    // standard (estimated) shipping. The carrier is still selected, only the
-    // live quote is unavailable.
-    if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
-      return {
-        icon: 'cube-outline' as const,
-        message: 'Shipping quote unavailable — proceeding with standard shipping.',
-        action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
-      };
-    }
-
-    // Address missing but payment methods loaded → prompt to add an address.
-    if (!addressLoaded && paymentLoaded) {
-      return {
-        icon: 'location-outline' as const,
-        message: 'Add a delivery address to continue. Your payment methods are ready.',
-        action: { label: 'Add address', onPress: () => handleAddressPress() },
-      };
-    }
-
-    // Payment methods missing but address loaded → prompt to add a payment method.
-    if (!paymentLoaded && addressLoaded) {
-      return {
-        icon: 'card-outline' as const,
-        message: 'Add a payment method to continue. Your delivery address is ready.',
-        action: {
-          label: 'Add payment',
-          onPress: () => {
-            haptics.tap();
-            if (!allowCardPayments && checkoutCapabilities) {
-              navigation.navigate('Payments');
-              return;
-            }
-            if (backendPaymentMethods.length > 1) {
-              setPaymentSelectorVisible(true);
-            } else {
-              setAddCardSheetVisible(true);
-            }
-          },
-        },
-      };
-    }
-
-    return null;
-  }, [
-    isHydrating,
-    isInteractionLocked,
-    shippingError,
-    addressLoaded,
-    paymentLoaded,
-    postageOption.carrierId,
-    hydrateCheckout,
-    handleAddressPress,
-    haptics,
-    allowCardPayments,
-    checkoutCapabilities,
-    navigation,
-    backendPaymentMethods.length,
-  ]);
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1344,7 +1345,7 @@ export default function CheckoutScreen() {
         }
       >
         {/* 2. Product and seller summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
         <CheckoutItemSummary
           title={item.title}
           imageUrl={getListingCoverUri(item.images, '')}
@@ -1356,13 +1357,11 @@ export default function CheckoutScreen() {
           priceLabel={formatFromFiat(item.price, 'GBP')}
           onPressSeller={
             resolvedSeller.id
-              ? () => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }
+              ? () => { haptics.tap(); openProfile(navigation, resolvedSeller.id, currentUser?.id); }
               : undefined
           }
           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
         />
-
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 3. Delivery address */}
         <CheckoutSelectionRow
@@ -1402,88 +1401,44 @@ export default function CheckoutScreen() {
           accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
         />
 
-        {/* 5. Payment method card */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.paymentCard,
-            t.paymentCard,
-            !savedPaymentMethod && styles.paymentCardWarning,
-            !savedPaymentMethod && t.paymentCardWarning,
-            pressed && styles.paymentCardPressed,
-          ]}
+        {/* 5. Payment method — unified with address/delivery row family */}
+        <CheckoutSelectionRow
+          label="Payment method"
+          title={savedPaymentMethod ? savedPaymentMethod.label : 'No payment method'}
+          subtitle={savedPaymentMethod?.details ?? undefined}
+          actionLabel={savedPaymentMethod ? 'Change' : 'Add'}
           onPress={handlePaymentPress}
-          accessibilityRole="button"
+          icon={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
+          isFilled={!!savedPaymentMethod}
+          warningText={
+            !savedPaymentMethod && !allowCardPayments && checkoutCapabilities
+              ? 'Cards unavailable in your region'
+              : undefined
+          }
+          errorText={suppressPaymentError ? undefined : (paymentError ?? undefined)}
           accessibilityLabel={
             savedPaymentMethod
               ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}. Change payment method.`
               : 'Add payment method'
           }
           accessibilityHint="Add or change your payment method"
-        >
-          <View style={styles.paymentCardLeft}>
-            <View style={[styles.paymentCardIcon, t.paymentCardIcon, !savedPaymentMethod && styles.paymentCardIconWarning, !savedPaymentMethod && t.paymentCardIconWarning]}>
-              <Ionicons
-                name={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
-                size={18}
-                color={savedPaymentMethod ? colors.brand : colors.danger}
-              />
-            </View>
-            <View style={styles.paymentCardTextCol}>
-              <Text style={[styles.paymentCardLabel, t.paymentCardLabel]}>Payment method</Text>
-              {savedPaymentMethod ? (
-                <>
-                  <Text style={[styles.paymentCardTitle, t.paymentCardTitle]} numberOfLines={1}>
-                    {savedPaymentMethod.label}
-                  </Text>
-                  {savedPaymentMethod.details ? (
-                    <Text style={[styles.paymentCardSubtitle, t.paymentCardSubtitle]} numberOfLines={1}>
-                      {savedPaymentMethod.details}
-                    </Text>
-                  ) : null}
-                </>
-              ) : (
-                <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>
-                  {!allowCardPayments && checkoutCapabilities
-                    ? 'Cards unavailable in your region'
-                    : 'No payment method — tap to add'}
-                </Text>
-              )}
-              {suppressPaymentError ? null : paymentError ? (
-                <View style={styles.paymentCardErrorRow}>
-                  <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
-                  <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>{paymentError}</Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-          <View style={styles.paymentCardRight}>
-            <Text style={[styles.paymentCardChange, t.paymentCardChange]}>
-              {savedPaymentMethod ? 'Change' : 'Add'}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </View>
-        </Pressable>
-        </Reanimated.View>
+        />
+        </View>
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
-
-        {/* 5b. Buyer protection strip — BEFORE price breakdown per Design.md:
-            "Trust information must appear before the irreversible payment step."
-            2026 research (Baymard): trust badges near the payment CTA lift
-            conversion up to 32% vs footer placement. Placing this above the
-            order summary ensures the user sees escrow protection before
-            reviewing costs and tapping Pay. */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        {/* 5b. Buyer protection strip — the single authored trust moment,
+            placed after selection rows and before the price breakdown.
+            Per Design.md: "Trust information must appear before the
+            irreversible payment step." The footer trust badges were removed
+            to avoid duplicate trust signalling — this strip carries the
+            escrow narrative; the breakdown sheet has the full policy. */}
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
         </View>
-        </Reanimated.View>
 
         {/* 6a. Balance-at-checkout toggle — kept inline so the user can
             apply wallet credit before reviewing the compact total in the
             sticky footer. */}
         {walletBalance > 0 && !balanceLoading && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <View style={styles.balanceRow}>
             <Pressable
               style={({ pressed }) => [styles.balanceToggle, t.balanceToggle, pressed && styles.balanceTogglePressed]}
@@ -1506,7 +1461,6 @@ export default function CheckoutScreen() {
               </View>
             </Pressable>
           </View>
-          </Reanimated.View>
         )}
 
         {useBalance && balanceApplied > 0 && (
@@ -1518,31 +1472,30 @@ export default function CheckoutScreen() {
           </View>
         )}
 
-        {/* 7. Transaction feedback */}
+        {/* 7. Transaction feedback — canonical PaymentStateBanner (audit P0) */}
         {stage !== 'idle' ? (
-          <View style={styles.feedbackRow}>
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color={colors.brand} />
-            ) : stage === 'payment_failed' ? (
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-            ) : stage === 'payment_pending' ? (
-              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-            ) : null}
-            <Text
-              style={[
-                styles.feedbackText,
-                t.feedbackText,
-                stage === 'payment_failed' && t.feedbackTextError,
-              ]}
-              accessibilityLiveRegion="polite"
-            >
-              {STAGE_LABELS[stage]}
-            </Text>
-          </View>
+          <PaymentStateBanner
+            stage={stage}
+            label={STAGE_LABELS[stage]}
+            colors={colors}
+            reducedMotion={reducedMotionEnabled}
+          />
         ) : null}
 
         {orderError ? (
-          <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
+          <View style={styles.orderErrorContainer}>
+            <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
+            {stage === 'payment_failed' && (
+              <Pressable
+                style={({ pressed }) => [styles.retryBtn, t.capabilityRetryBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => { haptics.tap(); handlePay(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry payment"
+              >
+                <Text style={[styles.retryBtnText, t.capabilityRetryText]}>Retry payment</Text>
+              </Pressable>
+            )}
+          </View>
         ) : null}
 
         {capabilityError ? (
@@ -1615,19 +1568,6 @@ export default function CheckoutScreen() {
           </View>
         </Pressable>
 
-        {/* Trust badges — reduce anxiety at the payment moment */}
-        <View style={styles.trustBadges}>
-          <View style={styles.trustBadgeItem}>
-            <Ionicons name="lock-closed" size={12} color={colors.success} />
-            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Secure payment</Text>
-          </View>
-          <View style={[styles.trustBadgeDot, t.trustBadgeDot]} />
-          <View style={styles.trustBadgeItem}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
-            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Buyer protection</Text>
-          </View>
-        </View>
-
         {/* Pay button row */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
@@ -1667,7 +1607,7 @@ export default function CheckoutScreen() {
             }}
           >
             {isSubmitting ? (
-              <ActivityIndicator size="small" color={colors.textInverse} />
+              <PulsingDot color={colors.textInverse} reducedMotion={reducedMotionEnabled} />
             ) : (
               <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
             )}
@@ -1677,7 +1617,7 @@ export default function CheckoutScreen() {
       </View>
 
       {/* Non-blocking progress overlay — keeps checkout visible (§14) */}
-      {(stage === 'creating_order' || stage === 'opening_payment') && (
+      {(stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating') && (
         <CheckoutProgressOverlay
           label={STAGE_LABELS[stage]}
           colors={colors}
@@ -1716,7 +1656,7 @@ export default function CheckoutScreen() {
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
               Includes buyer protection — funds held in escrow until you confirm
             </Text>
@@ -1754,6 +1694,200 @@ export default function CheckoutScreen() {
 }
 
 // ===========================================================================
+// PulsingDot — replaces ActivityIndicator in buttons with a calm pulsing dot.
+// Respects reduced motion (static dot when enabled).
+// ===========================================================================
+function PulsingDot({
+  color,
+  reducedMotion,
+  size = 8,
+}: {
+  color: string;
+  reducedMotion: boolean;
+  size?: number;
+}) {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+    return () => {
+      opacity.value = 1;
+    };
+  }, [opacity, reducedMotion]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: size, height: size, borderRadius: RadiusRoleValue.pillAvatar, backgroundColor: color },
+        reducedMotion ? undefined : dotStyle,
+      ]}
+    />
+  );
+}
+
+// ===========================================================================
+// PaymentStateBanner — canonical payment state component (§14, audit P0).
+// Replaces the generic ActivityIndicator with a state-specific banner that
+// has a colored accent bar, a pulsing dot (not spinner) for active states,
+// and state-specific icons for failed/pending states.
+// ===========================================================================
+function PaymentStateBanner({
+  stage,
+  label,
+  colors,
+  reducedMotion,
+}: {
+  stage: CheckoutStage;
+  label: string;
+  colors: ThemeColors;
+  reducedMotion: boolean;
+}) {
+  const dotOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reducedMotion || stage === 'idle') return;
+    if (stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment') {
+      dotOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      );
+    }
+    return () => {
+      dotOpacity.value = 1;
+    };
+  }, [dotOpacity, reducedMotion, stage]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: dotOpacity.value,
+  }));
+
+  const config = useMemo(() => {
+    switch (stage) {
+      case 'creating_order':
+      case 'opening_payment':
+      case 'authenticating':
+      case 'awaiting_payment':
+        return {
+          accentColor: colors.brand,
+          icon: null as React.ReactNode,
+          showDot: true,
+        };
+      case 'payment_succeeded':
+        return {
+          accentColor: colors.success,
+          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} />,
+          showDot: false,
+        };
+      case 'payment_failed':
+        return {
+          accentColor: colors.danger,
+          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} />,
+          showDot: false,
+        };
+      case 'payment_pending':
+        return {
+          accentColor: colors.textMuted,
+          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} />,
+          showDot: false,
+        };
+      default:
+        return {
+          accentColor: colors.brand,
+          icon: null as React.ReactNode,
+          showDot: false,
+        };
+    }
+  }, [stage, colors]);
+
+  return (
+    <View
+      style={[
+        paymentBannerStyles.container,
+        {
+          backgroundColor: `${config.accentColor}0A`,
+          borderColor: `${config.accentColor}20`,
+        },
+      ]}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
+    >
+      <View style={[paymentBannerStyles.accentBar, { backgroundColor: config.accentColor }]} />
+      <View style={paymentBannerStyles.content}>
+        {config.showDot ? (
+          <Reanimated.View
+            style={[paymentBannerStyles.dot, { backgroundColor: config.accentColor }, reducedMotion ? undefined : dotStyle]}
+          />
+        ) : (
+          config.icon
+        )}
+        <Text
+          style={[
+            paymentBannerStyles.label,
+            {
+              color: stage === 'payment_failed' ? colors.danger : stage === 'payment_succeeded' ? colors.success : colors.textSecondary,
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const paymentBannerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    borderWidth: Stroke.hairline,
+    overflow: 'hidden',
+    marginTop: Space.sm,
+  },
+  accentBar: {
+    width: 3,
+    flexShrink: 0,
+  },
+  content: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    flexShrink: 0,
+  },
+  label: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+  },
+});
+
+// ===========================================================================
 // Non-blocking progress overlay — shown during order creation / payment setup
 // Keeps the checkout context visible while communicating progress (§14).
 // ===========================================================================
@@ -1787,8 +1921,7 @@ function CheckoutProgressOverlay({
   }));
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(220)}
+    <View
       pointerEvents="none"
       style={[
         progressOverlayStyles.overlay,
@@ -1814,7 +1947,7 @@ function CheckoutProgressOverlay({
           ]}
         />
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1824,7 +1957,7 @@ const progressOverlayStyles = StyleSheet.create({
     top: 60,
     left: Space.md,
     right: Space.md,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
@@ -1842,12 +1975,12 @@ const progressOverlayStyles = StyleSheet.create({
   },
   label: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   track: {
     height: Space.xs - 1,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     overflow: 'hidden',
   },
   fill: {
@@ -1856,9 +1989,170 @@ const progressOverlayStyles = StyleSheet.create({
     bottom: 0,
     left: '-40%',
     width: '40%',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
 });
+
+// ===========================================================================
+// CheckoutSkeleton — matches the final checkout layout geometry so the
+// loading-to-populated transition has no layout shift. Per AGENTS.md §14:
+// "Skeletons should resemble the final layout."
+// ===========================================================================
+function CheckoutSkeleton({ colors }: { colors: ThemeColors }) {
+  const insets = useSafeAreaInsets();
+  const skeletonStyles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+      paddingTop: insets.top,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    headerSpacer: {
+      width: Control.hit,
+    },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      gap: Space.md,
+    },
+    itemSummaryBlock: {
+      flexDirection: 'row',
+      gap: Space.md,
+      paddingVertical: Space.sm,
+    },
+    skeletonImage: {
+      width: 72,
+      height: 72,
+      borderRadius: RadiusRoleValue.mediaThumbnail,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonTextCol: {
+      flex: 1,
+      gap: Space.xs + 2,
+      paddingVertical: Space.xs,
+    },
+    skeletonLine: {
+      height: 14,
+      borderRadius: RadiusRoleValue.compactControl,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonLineShort: {
+      width: '60%',
+    },
+    skeletonLineMedium: {
+      width: '80%',
+    },
+    skeletonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      paddingVertical: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    skeletonIcon: {
+      width: 22,
+      height: 22,
+      borderRadius: RadiusRoleValue.pillAvatar,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonRowText: {
+      flex: 1,
+      gap: Space.xs,
+    },
+    skeletonFooter: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm + 2,
+      paddingBottom: Math.max(insets.bottom, Space.md),
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+      gap: Space.sm,
+    },
+    skeletonPayBtn: {
+      height: 52,
+      borderRadius: RadiusRoleValue.pillAvatar,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonTotalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: Space.xs,
+    },
+  }), [colors, insets.top, insets.bottom]);
+
+  return (
+    <View style={skeletonStyles.container}>
+      <View style={skeletonStyles.header}>
+        <View style={{ width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
+        </View>
+        <Text style={skeletonStyles.headerTitle}>Checkout</Text>
+        <View style={skeletonStyles.headerSpacer} />
+      </View>
+      <View style={skeletonStyles.scrollContent}>
+        {/* Item summary skeleton */}
+        <View style={skeletonStyles.itemSummaryBlock}>
+          <View style={skeletonStyles.skeletonImage} />
+          <View style={skeletonStyles.skeletonTextCol}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineMedium]} />
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+          </View>
+        </View>
+        {/* Delivery address row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '90%' }]} />
+          </View>
+        </View>
+        {/* Delivery method row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '70%' }]} />
+          </View>
+        </View>
+        {/* Payment method row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '80%' }]} />
+          </View>
+        </View>
+      </View>
+      {/* Footer skeleton */}
+      <View style={skeletonStyles.skeletonFooter}>
+        <View style={skeletonStyles.skeletonTotalRow}>
+          <View style={[skeletonStyles.skeletonLine, { width: 50 }]} />
+          <View style={[skeletonStyles.skeletonLine, { width: 90 }]} />
+        </View>
+        <View style={skeletonStyles.skeletonPayBtn} />
+      </View>
+    </View>
+  );
+}
 
 function PriceRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   const { colors } = useAppTheme();
@@ -1869,24 +2163,24 @@ function PriceRow({ label, value, bold }: { label: string; value: string; bold?:
       paddingVertical: Space.xs + 2,
     },
     label: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
       color: colors.textSecondary,
     },
     labelBold: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
     value: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
     },
     valueBold: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: FontFamily.bold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
     },
@@ -1922,8 +2216,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
   },
   headerSpacer: {
     width: Control.hit,
@@ -1932,31 +2226,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
   },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
-  priceBreakdownCard: {
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    marginTop: Space.sm,
-  },
-  priceBreakdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginBottom: Space.sm + 2,
-  },
-  priceBreakdownTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
-  priceDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
   savingsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1964,12 +2233,13 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     alignSelf: 'flex-start',
   },
   savingsText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   protectionStripWrap: {
     marginTop: Space.sm,
@@ -1982,9 +2252,9 @@ const styles = StyleSheet.create({
   },
   protectionIncludedText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   balanceRow: {
     marginTop: Space.sm,
@@ -2004,7 +2274,7 @@ const styles = StyleSheet.create({
   balanceSwitch: {
     width: Space.xxl - Space.sm,
     height: Space.lg,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
     padding: Space.xs,
@@ -2012,7 +2282,7 @@ const styles = StyleSheet.create({
   balanceKnob: {
     width: Control.iconCompact,
     height: Control.iconCompact,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignSelf: 'flex-start',
   },
   balanceKnobOn: {
@@ -2023,31 +2293,43 @@ const styles = StyleSheet.create({
     gap: Space.xs - 3,
   },
   balanceLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   balanceAmount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
-  feedbackRow: {
+  orderErrorText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
+    paddingVertical: Space.sm,
+    flex: 1,
+    fontVariant: ['tabular-nums'],
+  },
+  orderErrorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.md,
+    paddingVertical: Space.xs,
   },
-  feedbackText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+  retryBtn: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: RadiusRoleValue.compactControl,
+    borderWidth: Stroke.standard,
+    minHeight: Control.chromeCompact,
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  orderErrorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    paddingVertical: Space.sm,
+  retryBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   hintText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     paddingVertical: Space.xs,
   },
   partialDataBanner: {
@@ -2058,26 +2340,27 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.hairline,
   },
   partialDataMessage: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
   },
   partialDataAction: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: Stroke.standard,
     minHeight: Control.chromeCompact,
     justifyContent: 'center',
   },
   partialDataActionText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   capabilityErrorRow: {
     flexDirection: 'row',
@@ -2088,19 +2371,19 @@ const styles = StyleSheet.create({
   capabilityRetryBtn: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: Stroke.standard,
     minHeight: Control.chromeCompact,
     justifyContent: 'center',
   },
   capabilityRetryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   termsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
     textAlign: 'center',
     paddingTop: Space.md,
   },
@@ -2112,6 +2395,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
+    ...Elevation.floating,
   },
   compactSummary: {
     paddingVertical: Space.sm,
@@ -2123,12 +2407,15 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs + 1,
   },
   compactSummaryLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   compactSummaryVal: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'],
   },
   compactSummaryDivider: {
@@ -2147,12 +2434,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   compactSummaryTotalLabel: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   compactSummaryTotalValue: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   breakdownChevron: {
@@ -2161,30 +2452,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   breakdownChevronText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-  trustBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.xs + 1,
-  },
-  trustBadgeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  trustBadgeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
-  trustBadgeDot: {
-    width: 3,
-    height: 3,
-    borderRadius: Radius.full,
-    opacity: 0.3,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
   footerPayRow: {
     flexDirection: 'row',
@@ -2193,80 +2462,13 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingTop: Space.xs,
   },
-  paymentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    marginTop: Space.sm,
-  },
-  paymentCardPressed: {
-    opacity: 0.7,
-  },
-  paymentCardWarning: {
-    borderWidth: Stroke.emphasis,
-  },
-  paymentCardLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-  },
-  paymentCardIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentCardIconWarning: {
-  },
-  paymentCardTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  paymentCardLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
-  paymentCardTitle: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
-  },
-  paymentCardSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
-  paymentCardWarningText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-  },
-  paymentCardErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  paymentCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  paymentCardChange: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-  },
   breakdownSheetContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
   },
   breakdownSheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
     marginBottom: Space.md,
   },
   breakdownSheetDivider: {
@@ -2280,12 +2482,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   breakdownSheetTotalLabel: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   breakdownSheetTotalValue: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   breakdownSheetPolicyRow: {
@@ -2296,20 +2499,9 @@ const styles = StyleSheet.create({
   },
   breakdownSheetPolicyText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-  },
-  footerTotalCol: {
-    flex: 1,
-  },
-  footerTotalLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
-  },
-  footerTotalPrice: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   payBtn: {
     flex: 1,
@@ -2320,8 +2512,8 @@ const styles = StyleSheet.create({
     minWidth: 180,
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
-    borderRadius: Radius.sm,
-    minHeight: Space.xxl,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    minHeight: 52,
   },
   applePayBtn: {
     flexDirection: 'row',
@@ -2329,13 +2521,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     minWidth: 140,
-    height: Space.xxl,
-    borderRadius: Radius.sm,
+    height: 52,
+    borderRadius: RadiusRoleValue.pillAvatar,
     marginBottom: Space.xs,
   },
   applePayBtnText: {
-    fontSize: Type.subtitle.size,
-    fontWeight: '600',
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   payBtnDisabled: {
     opacity: 0.5,
@@ -2345,8 +2538,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   payBtnText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   signedOutContainer: {
     flex: 1,
@@ -2356,21 +2550,21 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   signedOutTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
     textAlign: 'center',
   },
   signedOutBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.sm,
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2380,7 +2574,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   signedOutBtnText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
   },
 });

@@ -25,10 +25,17 @@ import Reanimated, {
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
-import { useStore } from '../store/useStore';
+// Note: useAnimatedScrollHandler + AnimatedFlashList crashes on web due to
+// Reanimated 4.x not backporting the FlashList scroll-event fix from 3.12.
+// On web we use a plain JS scroll handler + non-animated FlashList.
+// See: https://github.com/software-mansion/react-native-reanimated/issues/9266
+
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography, DockConstants, Elevation, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Elevation, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
+import { useStore } from '../store/useStore';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -47,6 +54,7 @@ import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
@@ -59,24 +67,27 @@ import { TabRail, SegmentedControl, type TabKey, type SegmentKey } from '../comp
 import { ProfileShopTile } from '../components/profile/ProfileShopTile';
 import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
-import { SellerResponseComposer } from '../components/profile/SellerResponseComposer';
-import { respondToReview } from '../services/reviewApi';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { SellerReputationCard } from '../components/seller/SellerReputationCard';
 
-const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
+// AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
+// Use plain FlashList on web; animated version on native for UI-thread perf.
+const AnimatedFlashList: any = Platform.OS === 'web'
+  ? FlashList
+  : Reanimated.createAnimatedComponent(FlashList);
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
 const COVER_HEIGHT = 160;
-const GRID_GAP = 8;
-const CARD_ASPECT = 1.25;
-const LOOK_GAP = 2;
+const GRID_GAP = 4;
+const CARD_ASPECT = 4 / 3;
+const SHOP_COLS = 3;
+const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
-type Tab = 'Shop' | 'Looks' | 'Reviews';
+type Tab = 'Shop' | 'Looks' | 'Collections' | 'Drops' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
@@ -89,16 +100,16 @@ function getCollapsedInitials(name: string): string {
 }
 
 export default function UserProfileScreen({ navigation, route }: Props) {
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // ALL HOOKS â€” unconditional, no early returns before this section ends
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // -----------------------------------------------------------------------
+  // ALL HOOKS - unconditional, no early returns before this section ends
+  // -----------------------------------------------------------------------
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
   const { colors, isDark } = useAppTheme();
 
-  // Themed color aliases — keep JSX readable, match old module-level consts
+  // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
   const BORDER = colors.border;
   const MUTED = colors.textMuted;
@@ -107,7 +118,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const BRAND = colors.brand;
   const TEXT_INVERSE = colors.textInverse;
 
-  // Themed color proxy — supplements module-level `styles` with color properties
+  // Themed color proxy - supplements module-level `styles` with color properties
   // that cannot live in StyleSheet.create (they depend on the active theme).
   const t = {
     container: { backgroundColor: BG },
@@ -123,20 +134,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBanner: { backgroundColor: SURFACE_ALT, borderColor: BORDER },
     awayBannerTitle: { color: TEXT },
     awayBannerSub: { color: MUTED },
-    shopPoliciesTitle: { color: MUTED },
-    shopPolicyItem: { backgroundColor: SURFACE_ALT },
-    shopPolicyText: { color: TEXT },
-    featuredTitle: { color: BRAND },
-    featuredImage: { backgroundColor: SURFACE_ALT },
-    featuredPrice: { color: TEXT },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
   };
 
-  const currentUser = useStore(s => s.currentUser);
-  const userAvatar = useStore(s => s.userAvatar);
-  const userCover = useStore(s => s.userCover);
-  const profileMediaOverrides = useStore(s => s.profileMediaOverrides);
 
   const [activeTab, setActiveTab] = useState<Tab>('Shop');
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
@@ -146,26 +147,41 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
   const [stickyRailVisible, setStickyRailVisible] = useState(false);
-  const [responseComposerState, setResponseComposerState] = useState<{
-    visible: boolean;
-    reviewId: string;
-    reviewerName?: string;
-    rating?: number;
-  }>({ visible: false, reviewId: '' });
 
-  const isMe = route.params?.isMe ?? false;
+  // UserProfile is a public-only projection. Self-navigation is normalised
+  // to the MyProfile tab by the openProfile() resolver before this screen
+  // mounts. If a self-ID somehow reaches this screen (e.g. stale deep
+  // link), redirect to the owner tab instead of rendering owner data.
   const userId = route.params?.userId;
-  const isSelfProfile = isMe || userId === currentUser?.id;
-  const targetUserId = isSelfProfile ? currentUser?.id : userId;
+  const targetUserId = userId;
+  const currentUserId = useStore(s => s.currentUser?.id);
+  useEffect(() => {
+    if (userId && currentUserId && userId === currentUserId) {
+      navigation.replace('MainTabs', { screen: 'Profile' });
+    }
+  }, [userId, currentUserId, navigation]);
 
-  const publicProfileQuery = usePublicProfileQuery(isSelfProfile ? null : userId);
-  const activeListingsQuery = useUserListingsInfinite(isSelfProfile ? null : targetUserId, 'active');
-  const soldListingsQuery = useUserListingsInfinite(isSelfProfile ? null : targetUserId, 'sold');
-  const looksQuery = useUserLooksInfinite(isSelfProfile ? null : targetUserId);
-  const reviewsQuery = useSellerReviewsInfinite(isSelfProfile ? null : targetUserId);
+  const publicProfileQuery = usePublicProfileQuery(userId);
+  const activeListingsQuery = useUserListingsInfinite(targetUserId, 'active');
+  const soldListingsQuery = useUserListingsInfinite(targetUserId, 'sold');
+  const looksQuery = useUserLooksInfinite(targetUserId);
+  const reviewsQuery = useSellerReviewsInfinite(targetUserId);
 
-  // Seller trust summary — verified badge, response time, dispatch time, completed sales
+  // Seller trust summary - verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
+
+  // Idle query placeholder for tabs that have no backend data source yet
+  // (Collections, Drops). Provides the same surface as React Query infinite
+  // hooks so the shared scroll/refresh/load-more logic works without branching.
+  const idleQuery = useMemo(() => ({
+    isRefetching: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {},
+    refetch: () => {},
+    isLoading: false,
+    error: null as unknown,
+  } as any), []);
 
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
@@ -174,7 +190,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
 
   // Responsive geometry
-  const cardWidth = useMemo(() => (screenWidth - Space.md * 2 - GRID_GAP) / 2, [screenWidth]);
+  const cardWidth = useMemo(() => (screenWidth - Space.md * 2 - GRID_GAP * (SHOP_COLS - 1)) / SHOP_COLS, [screenWidth]);
   const cardHeight = cardWidth * CARD_ASPECT;
   const lookTileWidth = useMemo(() => (screenWidth - Space.md * 2 - LOOK_GAP * (LOOK_COLS - 1)) / LOOK_COLS, [screenWidth]);
   const lookTileHeight = lookTileWidth * (4 / 3);
@@ -187,17 +203,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stats: PublicProfileStats | null = profileAggregate?.stats ?? null;
   const viewer: PublicProfileViewer | null = profileAggregate?.viewer ?? null;
 
-  const mediaOverride = (userId ? profileMediaOverrides[userId] : undefined) ?? (currentUser ? profileMediaOverrides[currentUser.id] : undefined) ?? null;
-  const targetProfile = isSelfProfile ? currentUser : publicProfile;
+  const targetProfile = publicProfile;
   const displayUsername = targetProfile?.username ?? 'Thryft user';
   const displayHandle = targetProfile ? `@${targetProfile.username}` : '';
-  const displayAvatar = isSelfProfile ? targetProfile?.avatar || userAvatar || mediaOverride?.avatar || undefined : targetProfile?.avatar || undefined;
-  const displayCover = isSelfProfile ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || '' : targetProfile?.coverPhoto || '';
+  const displayAvatar = targetProfile?.avatar || undefined;
+  const displayCover = targetProfile?.coverPhoto || '';
   const memberSince = targetProfile?.createdAt ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : undefined;
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
 
-  // Tab counts â€” ratingAverage consumed by ProfileHero via stats
+  // Tab counts - ratingAverage consumed by ProfileHero via stats
   const activeCount = stats?.activeListingCount ?? 0;
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
@@ -218,13 +233,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       for (const page of pages) for (const item of page.items) items.push(item);
       return items;
     }
+    if (activeTab === 'Collections' || activeTab === 'Drops') {
+      return [];
+    }
     const pages = reviewsQuery.data?.pages ?? [];
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
   }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
 
-  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
+  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : (activeTab === 'Collections' || activeTab === 'Drops') ? idleQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
@@ -236,7 +254,23 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
-  const scrollHandler = useAnimatedScrollHandler({
+  // -- Per-destination scroll offset preservation --
+  // Declared before the scroll handler so saveScrollOffset is accessible
+  // in the animatedScrollHandler closure (temporal dead zone safety).
+  const scrollOffsets = useRef<Record<string, number>>({});
+  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
+  const listRef = useRef<any>(null);
+  const pendingRestore = useRef<string | null>(null);
+  const isListReady = useRef(false);
+
+  const saveScrollOffset = useCallback((offset: number) => {
+    scrollOffsets.current[currentDestination] = offset;
+  }, [currentDestination]);
+
+  // Scroll handler - animated on native (UI-thread), plain JS on web.
+  // The web fallback is required because useAnimatedScrollHandler does not
+  // receive scroll events from FlashList in Reanimated 4.x (issue #9266).
+  const animatedScrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
       runOnJS(saveScrollOffset)(e.contentOffset.y);
@@ -258,6 +292,30 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       }
     },
   });
+
+  const webScrollHandler = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    scrollY.value = offsetY;
+    saveScrollOffset(offsetY);
+    const collapsedAt = COVER_HEIGHT - 60;
+    if (offsetY > collapsedAt && !collapsedShared.value) {
+      collapsedShared.value = true;
+      setCollapsedVisible(true);
+    } else if (offsetY <= collapsedAt && collapsedShared.value) {
+      collapsedShared.value = false;
+      setCollapsedVisible(false);
+    }
+    const stickyAt = stickyThreshold.value;
+    if (offsetY > stickyAt && !stickyShared.value) {
+      stickyShared.value = true;
+      setStickyRailVisible(true);
+    } else if (offsetY <= stickyAt && stickyShared.value) {
+      stickyShared.value = false;
+      setStickyRailVisible(false);
+    }
+  }, [stickyThreshold]);
+
+  const scrollHandler = Platform.OS === 'web' ? webScrollHandler : animatedScrollHandler;
 
   const topUtilityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
@@ -286,7 +344,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Handlers
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `${displayUsername} on Thryftverse â€” ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
+      await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
   }, [displayUsername, profileDeepLink]);
 
@@ -306,7 +364,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     navigation.navigate('NewMessage', { preselectedUserId: targetUserId, preselectedDisplayName: displayUsername });
   }, [displayUsername, navigation, targetUserId, viewer]);
 
-  const handleEditProfile = useCallback(() => navigation.navigate('EditProfile', {}), [navigation]);
   const handleFollowToggle = useCallback(() => { if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing); }, [targetUserId, viewer, followMutation]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
@@ -321,22 +378,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   }, [blockMutation, showToast]);
   const openConnections = useCallback((segment: 'followers' | 'following') => setConnectionsSheet({ visible: true, segment }), []);
   const handleLoadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) activeQuery.fetchNextPage(); }, [hasNextPage, isFetchingNextPage, activeQuery]);
-  const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
+  const handleRefresh = useCallback(() => { activeQuery.refetch(); publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // â”€â”€ Per-destination scroll offset preservation â”€â”€
-  // No overlay reset on tab switch â€” overlay state is derived from the real scroll offset.
-  const scrollOffsets = useRef<Record<string, number>>({});
-  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
-  const listRef = useRef<any>(null);
-  const pendingRestore = useRef<string | null>(null);
-  const isListReady = useRef(false);
-
-  const saveScrollOffset = useCallback((offset: number) => {
-    scrollOffsets.current[currentDestination] = offset;
-  }, [currentDestination]);
-
-  // When destination changes, queue a restore â€” no setTimeout during render
+  // When destination changes, queue a restore - no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
     if (prevDestination.current !== currentDestination) {
@@ -368,7 +413,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           setStickyRailVisible(shouldSticky);
         }
       } else {
-        // No previous offset â€” if currently collapsed, start at sticky threshold
+        // No previous offset - if currently collapsed, start at sticky threshold
         if (collapsedShared.value) {
           const stickyAt = stickyThreshold.value;
           if (stickyAt < 9999 && listRef.current) {
@@ -392,37 +437,35 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return (
       <ProfileReviewRow
         item={reviewItem}
-        onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })}
+        onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
         onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
-        onRespond={isSelfProfile && !reviewItem.sellerResponse ? (reviewId, reviewerName, rating) => {
-          setResponseComposerState({ visible: true, reviewId, reviewerName, rating });
-        } : undefined}
+        onRespond={undefined}
       />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, isSelfProfile]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // DERIVED RENDER STATE â€” after all hooks
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // -----------------------------------------------------------------------
+  // DERIVED RENDER STATE - after all hooks
+  // -----------------------------------------------------------------------
   const isBlockedByTarget = viewer?.isBlockedByTarget && !viewer.isSelf;
   const isBlocked = viewer?.isBlocked ?? false;
   const canMessage = viewer?.canMessage ?? false;
 
-  // State labels â€” rendered by ProfileStates subcomponents:
+  // State labels - rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
   // canMessage gates the Message button (ProfileHero)
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // CONDITIONAL RENDERS â€” loading, error, unavailable, blocked
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // -----------------------------------------------------------------------
+  // CONDITIONAL RENDERS - loading, error, unavailable, blocked
+  // -----------------------------------------------------------------------
   if (isLoadingProfile && !targetProfile) {
-    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
+    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Shop' | 'Looks' | 'Reviews'} />;
   }
   if (profileError && !targetProfile) {
     return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
-  if (!targetProfile && !isSelfProfile) {
+  if (!targetProfile) {
     // Renders "Profile unavailable" state
     return <ProfileUnavailableState onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
@@ -431,10 +474,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileBlockedState onBack={() => navigation.goBack()} onShare={handleShare} coverHeight={COVER_HEIGHT} />;
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // -----------------------------------------------------------------------
   // MAIN RENDER
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : 2;
+  // -----------------------------------------------------------------------
+  const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -443,7 +486,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         displayUsername={displayUsername}
         displayAvatar={displayAvatar}
         displayCover={displayCover}
-        isSelfProfile={isSelfProfile}
+        isSelfProfile={false}
         viewer={viewer}
         stats={stats}
         activeCount={activeCount}
@@ -459,20 +502,19 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onFollowToggle={handleFollowToggle}
         onMessage={handleMessageProfile}
         onMore={handleMore}
-        onEditProfile={handleEditProfile}
         onShare={handleShare}
         onOpenConnections={openConnections}
         onTabSelect={(t) => setActiveTab(t)}
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
 
-      {/* Away-mode banner — shown when seller has holiday mode enabled */}
+      {/* Away-mode banner - shown when seller has holiday mode enabled */}
       {sellerTrust?.holidayMode === true ? (
         <View style={[styles.awayBanner, t.awayBanner]}>
           <Ionicons name="pause-circle" size={18} color={MUTED} />
           <View style={styles.awayBannerTextWrap}>
             <Text style={[styles.awayBannerTitle, t.awayBannerTitle]}>
-              {isSelfProfile ? 'Your shop is on holiday' : 'This shop is on holiday'}
+              This shop is on holiday
             </Text>
             <Text style={[styles.awayBannerSub, t.awayBannerSub]}>
               {sellerTrust.awayMessage?.trim()
@@ -483,10 +525,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {/* Seller reputation metrics — prominent trust display */}
+      {/* Seller reputation metrics - prominent trust display */}
       <SellerReputationCard seller={sellerTrust ?? null} />
 
-      {/* Tab rail â€” measures Y for sticky threshold */}
+
+      {/* Tab rail - measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
@@ -494,7 +537,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             { key: 'Looks', label: 'Looks', count: lookCount },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
-          activeKey={activeTab}
+          activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
           reducedMotion={reducedMotion}
         />
@@ -515,71 +558,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <ReviewSummaryBlock summary={reviewSummary} />
       ) : null}
 
-      {/* Shop policies — shown on Shop tab, derived from seller trust data */}
-      {activeTab === 'Shop' && sellerTrust ? (
-        <View style={styles.shopPoliciesSection}>
-          <Text style={[styles.shopPoliciesTitle, t.shopPoliciesTitle]}>Shop policies</Text>
-          <View style={styles.shopPoliciesGrid}>
-            {sellerTrust.dispatchTimeLabel ? (
-              <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-                <Ionicons name="cube-outline" size={14} color={MUTED} />
-                <Text style={[styles.shopPolicyText, t.shopPolicyText]}>{sellerTrust.dispatchTimeLabel}</Text>
-              </View>
-            ) : null}
-            {sellerTrust.responseTimeLabel ? (
-              <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-                <Ionicons name="time-outline" size={14} color={MUTED} />
-                <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Replies {sellerTrust.responseTimeLabel}</Text>
-              </View>
-            ) : null}
-            <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
-              <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Buyer protection</Text>
-            </View>
-            <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="return-down-back-outline" size={14} color={MUTED} />
-              <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Returns accepted</Text>
-            </View>
-          </View>
-        </View>
-      ) : null}
 
-      {/* Featured listings — pinned top items from the seller's active inventory */}
-      {activeTab === 'Shop' && shopSegment === 'forsale' && listData.length > 0 && (
-        <View style={styles.featuredSection}>
-          <View style={styles.featuredHeader}>
-            <Ionicons name="star-outline" size={14} color={BRAND} />
-            <Text style={[styles.featuredTitle, t.featuredTitle]}>Featured</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredScroll}
-          >
-            {listData.slice(0, 5).map((item) => {
-              const listing = item as ListingApiItem;
-              return (
-                <Pressable
-                  key={listing.id}
-                  style={styles.featuredCard}
-                  onPress={() => navigation.push('ItemDetail', { itemId: listing.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${listing.title}`}
-                >
-                  {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={[styles.featuredImage, t.featuredImage]} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.featuredImage, t.featuredImage, styles.featuredImagePlaceholder]}>
-                      <Ionicons name="shirt-outline" size={20} color={MUTED} />
-                    </View>
-                  )}
-                  <Text style={[styles.featuredPrice, t.featuredPrice]}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 
@@ -637,7 +616,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Top utility controls â€” overlay cover, fade out on scroll */}
+      {/* Top utility controls - overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
@@ -665,23 +644,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             >
               <Ionicons name="share-outline" size={18} color={TEXT_INVERSE} />
             </AnimatedPressable>
-            {!isSelfProfile && (
-              <AnimatedPressable
-                style={styles.topUtilityIconBtn}
-                activeOpacity={0.9}
-                onPress={handleMore}
-                accessibilityLabel="More options"
-                accessibilityRole="button"
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
-              </AnimatedPressable>
-            )}
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              activeOpacity={0.9}
+              onPress={handleMore}
+              accessibilityLabel="More options"
+              accessibilityRole="button"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
+            </AnimatedPressable>
           </View>
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header â€” total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
+      {/* Collapsed header - total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
         style={[styles.collapsedHeader, t.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
@@ -700,7 +677,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             <CachedImage
               uri={displayAvatar}
               style={styles.collapsedAvatar}
-              containerStyle={{ width: 28, height: 28, borderRadius: Radius.full }}
+              containerStyle={{ width: 28, height: 28, borderRadius: RadiusRoleValue.pillAvatar }}
               contentFit="cover"
             />
           ) : (
@@ -715,7 +692,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </Text>
         </View>
         <View style={styles.collapsedRight}>
-          {!isSelfProfile && viewer ? (
+          {viewer ? (
             <AnimatedPressable
               style={[styles.collapsedFollowBtn, viewer.isFollowing ? [styles.collapsedFollowingBtn, t.collapsedFollowingBtn] : [styles.collapsedFollowActiveBtn, t.collapsedFollowActiveBtn], (followMutation.isPending || isBlocked) && styles.btnDisabled]}
               onPress={handleFollowToggle}
@@ -741,7 +718,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Sticky tab rail â€” external overlay, appears when original scrolls past */}
+      {/* Sticky tab rail - external overlay, appears when original scrolls past */}
       <Reanimated.View
         style={[styles.stickyRailWrap, t.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
@@ -752,7 +729,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             { key: 'Looks', label: 'Looks', count: lookCount },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
-          activeKey={activeTab}
+          activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
           reducedMotion={reducedMotion}
         />
@@ -768,33 +745,71 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </Reanimated.View>
 
-      {/* Content list â€” cover scrolls naturally as first header item */}
-      <AnimatedFlashList
-        ref={listRef}
-        data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
-        renderItem={renderItem}
-        keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-        ListFooterComponent={listFooter}
-        numColumns={numColumns}
-        columnWrapperStyle={numColumns > 1 ? { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } : undefined}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-        key={`list-${numColumns}`}
-        onContentSizeChange={handleContentSizeChange}
-      />
+      {/* Content list - cover scrolls naturally as first header item.
+          On native: FlashList for virtualization + recycling.
+          On web: ScrollView + map because FlashList v2 crashes on web
+          ("Changing onViewableItemsChanged on the fly is not supported"
+          - FlashList v2 internally passes a new callback to FlatList). */}
+      {Platform.OS === 'web' ? (
+        <ScrollView
+          ref={(r: any) => { if (r && listRef.current !== r) listRef.current = r; }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler as any}
+          scrollEventThrottle={16}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
+          onContentSizeChange={handleContentSizeChange}
+        >
+          {listHeader}
+          {listEmpty}
+          {listData.length > 0 && (
+            numColumns > 1 ? (
+              <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP }}>
+                {listData.map((item, index) => {
+                  const rendered = renderItem({ item });
+                  return rendered ? <View key={(item as { id?: string }).id ?? `item-${index}`} style={{ width: cardWidth }}>{rendered}</View> : null;
+                })}
+              </View>
+            ) : (
+              <View>
+                {listData.map((item, index) => {
+                  const rendered = renderItem({ item });
+                  return rendered ? <View key={(item as { id?: string }).id ?? `item-${index}`}>{rendered}</View> : null;
+                })}
+              </View>
+            )
+          )}
+          {listFooter}
+        </ScrollView>
+      ) : (
+        <AnimatedFlashList
+          ref={listRef}
+          data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
+          renderItem={renderItem}
+          keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
+          numColumns={numColumns}
+          {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } } : {})}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
+          key={`list-${numColumns}`}
+          onContentSizeChange={handleContentSizeChange}
+        />
+      )}
 
       {/* Sheets */}
       <ProfileMoreSheet
         visible={moreSheetVisible}
         onDismiss={() => setMoreSheetVisible(false)}
-        isSelfProfile={isSelfProfile}
+        isSelfProfile={false}
         isBlocked={isBlocked}
         onShare={handleShare}
         onCopyLink={handleCopyLink}
@@ -830,21 +845,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         initialSegment={connectionsSheet.segment}
         followerCount={stats?.followerCount ?? 0}
         followingCount={stats?.followingCount ?? 0}
-        onOpenProfile={(id) => navigation.push('UserProfile', { userId: id })}
-      />
-
-      {/* Seller response composer — for own profile reviews */}
-      <SellerResponseComposer
-        visible={responseComposerState.visible}
-        reviewId={responseComposerState.reviewId}
-        reviewerName={responseComposerState.reviewerName}
-        rating={responseComposerState.rating}
-        onClose={() => setResponseComposerState(s => ({ ...s, visible: false }))}
-        onSubmit={async (reviewId, text) => {
-          await respondToReview(reviewId, text);
-          // Refresh reviews to show the new response
-          reviewsQuery.refetch();
-        }}
+        onOpenProfile={(id) => openProfile(navigation, id, currentUserId)}
       />
     </View>
   );
@@ -856,7 +857,7 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: Space.sm },
   topUtilityIconBtn: {
-    width: Control.hit, height: Control.hit, borderRadius: Radius.lg,
+    width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.sheetDialog,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -867,19 +868,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Elevation.card,
   },
-  collapsedBackBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedBackBtn: { width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.xs },
-  collapsedAvatar: { width: Space.lg + Space.xs, height: Space.lg + Space.xs, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatar: { width: Space.lg + Space.xs, height: Space.lg + Space.xs, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   collapsedAvatarMonogram: {},
-  collapsedAvatarInitials: { fontSize: Type.caption.size, fontFamily: Typography.family.bold },
-  collapsedTitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, letterSpacing: Type.bodyLarge.letterSpacing - 0.1, flexShrink: 1 },
+  collapsedAvatarInitials: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.bold },
+  collapsedTitle: { fontSize: TypographyV2.priceList.size, fontFamily: FontFamily.semibold, letterSpacing: TypographyV2.priceList.letterSpacing - 0.1, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
-  collapsedFollowBtn: { height: Control.hit, paddingHorizontal: Space.md + 2, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: Control.hit, paddingHorizontal: Space.md + 2, borderRadius: RadiusRoleValue.sheetDialog, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
   collapsedFollowActiveBtn: {},
-  collapsedFollowText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold },
+  collapsedFollowText: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.semibold },
   collapsedFollowActiveText: {},
-  collapsedIconBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedIconBtn: { width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -891,95 +892,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm + 2,
     marginHorizontal: Space.md,
+    marginTop: Space.sm,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
+    paddingVertical: Space.md - 2,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
     flex: 1,
-    gap: Space.xs - 2,
+    gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   awayBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 1,
-  },
-  shopPoliciesSection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  shopPoliciesTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
-    marginBottom: Space.xs,
-  },
-  shopPoliciesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-  },
-  shopPolicyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.md,
-  },
-  shopPolicyText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
-  featuredSection: {
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  featuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-  },
-  featuredTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
-  },
-  featuredScroll: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  featuredCard: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    gap: Space.xs,
-  },
-  featuredImage: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.lg,
-    borderRadius: Radius.md,
-  },
-  featuredImagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight + 1,
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
-  listStateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
-  listStateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, textAlign: 'center' },
+  listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
+  listStateSub: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.regular, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });

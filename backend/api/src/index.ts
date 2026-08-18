@@ -261,6 +261,7 @@ import {
   type IndexedListing,
 } from './lib/searchIndex.js';
 import { logger } from './lib/logger.js';
+import { validateListingActivation } from './lib/listingCategoryPolicy.js';
 
 const app = Fastify({
   logger: {
@@ -379,8 +380,12 @@ void app.register(helmet, {
 
 // CORS — env-driven allowlist. Defaults to empty (no browser origins) which is
 // correct for a native-mobile API. Set CORS_ALLOWED_ORIGINS to enable web clients.
+// In development, when no origins are configured, allow all origins so the Expo
+// web target / browser preview can reach the API without extra env setup.
 void app.register(cors, {
-  origin: config.corsAllowedOrigins.length > 0 ? config.corsAllowedOrigins : false,
+  origin: config.corsAllowedOrigins.length > 0
+    ? config.corsAllowedOrigins
+    : config.nodeEnv === 'development' ? true : false,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
@@ -15296,6 +15301,57 @@ app.delete('/co-own/price-alerts/:id', async (request, reply) => {
   return { ok: true };
 });
 
+// PATCH /co-own/price-alerts/:id — toggle active state of a Co-Own price alert
+app.patch('/co-own/price-alerts/:id', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ id: z.string().min(1) });
+  const { id } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    active: z.boolean(),
+  });
+  const { active } = bodySchema.parse(request.body ?? {});
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    condition: string;
+    target_price_gbp_minor: string | number;
+    active: boolean;
+    triggered_at: string | null;
+    created_at: string;
+  }>(
+    `UPDATE coown_price_alerts
+     SET active = $3, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2
+     RETURNING id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at`,
+    [id, request.authUser.userId, active]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Alert not found' };
+  }
+
+  const row = result.rows[0];
+  return {
+    ok: true,
+    alert: {
+      id: row.id,
+      assetId: row.asset_id,
+      condition: row.condition,
+      targetPriceGbpMinor: Number(row.target_price_gbp_minor),
+      active: row.active,
+      triggeredAt: row.triggered_at,
+      createdAt: row.created_at,
+    },
+  };
+});
+
 /* ── Co-Own Price History (OHLCV) ── */
 
 // GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
@@ -16508,18 +16564,34 @@ app.get('/users/search', async (request, reply) => {
   const querySchema = z.object({
     q: z.string().trim().min(2).max(50),
     limit: z.coerce.number().int().min(1).max(20).default(20),
+    cursor: z.string().optional(),
   });
-  const { q, limit } = querySchema.parse(request.query ?? {});
+  const { q, limit, cursor } = querySchema.parse(request.query ?? {});
 
   const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null }>(
     `
-      SELECT id, username, display_name, avatar
-      FROM users
-      WHERE username ILIKE $1
-      ORDER BY username ASC
-      LIMIT $2
+      WITH params AS (SELECT $1::text AS q)
+      SELECT u.id, u.username, u.display_name, u.avatar
+      FROM users u, params
+      WHERE u.id <> $2
+        AND u.id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = $2)
+        AND u.is_erased = FALSE
+        AND u.deleted_at IS NULL
+        AND u.search_visibility = 'visible'
+        AND (u.username ILIKE '%' || params.q || '%' OR u.display_name ILIKE '%' || params.q || '%')
+        AND ($3::text IS NULL OR u.username > $3)
+      ORDER BY
+        CASE
+          WHEN LOWER(u.username) = LOWER(params.q) THEN 1
+          WHEN LOWER(u.username) LIKE LOWER(params.q) || '%' THEN 2
+          WHEN LOWER(u.display_name) LIKE LOWER(params.q) || '%' THEN 3
+          WHEN LOWER(u.username) LIKE '%' || LOWER(params.q) || '%' THEN 4
+          ELSE 5
+        END,
+        u.username ASC
+      LIMIT $4
     `,
-    [`%${q}%`, limit]
+    [q, request.authUser.userId, cursor ?? null, limit]
   );
 
   return {
@@ -16530,6 +16602,7 @@ app.get('/users/search', async (request, reply) => {
       displayName: row.display_name,
       avatar: row.avatar,
     })),
+    nextCursor: result.rows.length === limit ? result.rows[result.rows.length - 1].username : undefined,
   };
 });
 
@@ -18819,6 +18892,10 @@ async function computeSearchResults(
     created_at: string;
     rank_score: string;
     seller_username: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    category: string | null;
   }>(
     `
       SELECT
@@ -18830,7 +18907,11 @@ async function computeSearchResults(
         l.image_url,
         l.created_at::text,
         ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score,
-        u.username AS seller_username
+        u.username AS seller_username,
+        l.brand,
+        l.size,
+        l.condition,
+        l.category
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE l.status = 'active'
@@ -18866,6 +18947,13 @@ async function computeSearchResults(
         imageUrl: row.image_url,
         rank: Number(row.rank_score),
         createdAt: row.created_at,
+        // Commerce facts are passed through as-is (including null). The
+        // frontend renders only known facts and never fabricates a brand,
+        // size, or condition (audit P0.4).
+        brand: row.brand,
+        size: row.size,
+        condition: row.condition,
+        category: row.category,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -18890,10 +18978,15 @@ async function computeSearchResults(
     image_url: string | null;
     created_at: string;
     seller_username: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    category: string | null;
   }>(
     `
       SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp::text, l.image_url, l.created_at::text,
-        u.username AS seller_username
+        u.username AS seller_username,
+        l.brand, l.size, l.condition, l.category
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE l.status = 'active'
@@ -18930,6 +19023,12 @@ async function computeSearchResults(
       imageUrl: row.image_url,
       rank: 0,
       createdAt: row.created_at,
+      // Commerce facts passed through as-is (including null) so the
+      // frontend renders only known facts (audit P0.4).
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      category: row.category,
       seller: row.seller_username
         ? {
             id: row.seller_id,
@@ -20584,6 +20683,33 @@ app.post('/listings', {
   if (payload.imageUrl && !payload.coverFinalizationId) {
     reply.code(422);
     return { ok: false, error: 'A verified cover upload is required' };
+  }
+
+  // Category-aware activation validation — only for active listings.
+  // Drafts bypass validation so sellers can save incomplete work.
+  const targetStatus = payload.status ?? 'active';
+  if (targetStatus === 'active') {
+    const validation = validateListingActivation({
+      title: payload.title,
+      description: payload.description,
+      price: payload.priceGbp,
+      category: payload.category,
+      subcategory: null,
+      brand: payload.brand,
+      size: payload.size,
+      condition: payload.condition,
+      images: payload.imageUrl ? [payload.imageUrl] : null,
+      shippingMethod: payload.shippingMethod,
+      shippingPayer: payload.shippingPayer,
+    });
+    if (!validation.valid) {
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'Category validation failed',
+        missingRequired: validation.missingRequired,
+      };
+    }
   }
 
   let resolvedCoverImageUrl = payload.imageUrl ?? null;
@@ -22320,6 +22446,136 @@ app.delete('/listings/:listingId', async (request, reply) => {
   return { ok: true };
 });
 
+// ── Seller Hub Overview ────────────────────────────────────────────────
+// Server-backed aggregate that computes real money, tasks, and inventory
+// from the orders, listing_offers, and listings tables.
+// Per closure program 05_SELLER_HUB_AND_PROFILE_OS: no frontend
+// approximation of financial KPIs.
+app.get('/seller-hub/overview', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const sellerId = request.authUser.userId;
+
+  // Inventory counts from listings (real statuses)
+  const inventoryResult = await readDb.query<{
+    active: string;
+    drafts: string;
+    paused: string;
+    sold: string;
+    active_value: string | null;
+  }>(
+    `
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'active') AS active,
+        COUNT(*) FILTER (WHERE status = 'draft') AS drafts,
+        COUNT(*) FILTER (WHERE status = 'paused') AS paused,
+        COUNT(*) FILTER (WHERE status = 'sold') AS sold,
+        COALESCE(SUM(price_gbp) FILTER (WHERE status = 'active'), 0) AS active_value
+      FROM listings
+      WHERE seller_id = $1 AND status != 'deleted'
+    `,
+    [sellerId]
+  );
+
+  // Order tasks: orders that need shipping (status = 'paid')
+  const shipOrdersResult = await readDb.query<{ count: string; oldest_created: string | null }>(
+    `
+      SELECT COUNT(*) AS count, MIN(created_at)::text AS oldest_created
+      FROM orders
+      WHERE seller_id = $1 AND status = 'paid'
+    `,
+    [sellerId]
+  );
+
+  // Offer tasks: pending offers on seller's listings
+  const offersResult = await readDb.query<{ count: string }>(
+    `
+      SELECT COUNT(*) AS count
+      FROM listing_offers
+      WHERE seller_id = $1 AND status = 'pending' AND expires_at > NOW()
+    `,
+    [sellerId]
+  );
+
+  // Sales performance (last 30 days) — real settled order totals
+  const performanceResult = await readDb.query<{
+    gross_sales: string | null;
+    orders: string;
+  }>(
+    `
+      SELECT
+        COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+        COUNT(*) AS orders
+      FROM orders
+      WHERE seller_id = $1
+        AND status IN ('paid', 'shipped', 'delivered')
+        AND created_at >= NOW() - INTERVAL '30 days'
+    `,
+    [sellerId]
+  );
+
+  // Listing issues: active listings missing required fields (title, price, or image)
+  const listingIssuesResult = await readDb.query<{ count: string }>(
+    `
+      SELECT COUNT(*) AS count
+      FROM listings
+      WHERE seller_id = $1
+        AND status = 'active'
+        AND (title IS NULL OR title = '' OR price_gbp IS NULL OR price_gbp <= 0 OR image_url IS NULL)
+    `,
+    [sellerId]
+  );
+
+  const inventory = inventoryResult.rows[0] ?? { active: '0', drafts: '0', paused: '0', sold: '0', active_value: '0' };
+  const shipOrders = shipOrdersResult.rows[0] ?? { count: '0', oldest_created: null };
+  const offers = offersResult.rows[0] ?? { count: '0' };
+  const performance = performanceResult.rows[0] ?? { gross_sales: '0', orders: '0' };
+  const listingIssues = listingIssuesResult.rows[0] ?? { count: '0' };
+
+  // Build tasks array (only include tasks with count > 0)
+  const tasks: Array<
+    | { type: 'ship_order'; count: number; oldestDueAt?: string }
+    | { type: 'respond_offer'; count: number }
+    | { type: 'listing_issue'; count: number }
+  > = [];
+
+  const shipCount = parseInt(shipOrders.count, 10) || 0;
+  if (shipCount > 0) {
+    tasks.push({ type: 'ship_order', count: shipCount, oldestDueAt: shipOrders.oldest_created ?? undefined });
+  }
+  const offerCount = parseInt(offers.count, 10) || 0;
+  if (offerCount > 0) {
+    tasks.push({ type: 'respond_offer', count: offerCount });
+  }
+  const issueCount = parseInt(listingIssues.count, 10) || 0;
+  if (issueCount > 0) {
+    tasks.push({ type: 'listing_issue', count: issueCount });
+  }
+
+  return {
+    ok: true,
+    overview: {
+      generatedAt: new Date().toISOString(),
+      inventory: {
+        active: parseInt(inventory.active, 10) || 0,
+        drafts: parseInt(inventory.drafts, 10) || 0,
+        paused: parseInt(inventory.paused, 10) || 0,
+        sold: parseInt(inventory.sold, 10) || 0,
+        listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
+      },
+      tasks,
+      performance: {
+        period: '30d' as const,
+        grossSalesGbp: parseFloat(String(performance.gross_sales ?? '0')) || 0,
+        orders: parseInt(performance.orders, 10) || 0,
+      },
+    },
+  };
+});
+
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const querySchema = z.object({
@@ -23899,6 +24155,175 @@ app.post('/chat/conversations/:conversationId/members', async (request) => {
     ok: true,
     conversationId,
     addedMemberIds,
+    participantIds,
+  };
+});
+
+app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    memberUserId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
+
+  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+
+  // Prevent removing the group owner — they must transfer ownership first.
+  if (conversation.owner_id === memberUserId) {
+    throw createApiError('CHAT_CANNOT_REMOVE_OWNER', 'The group owner cannot be removed. Transfer ownership first.', {
+      conversationId,
+      memberUserId,
+    });
+  }
+
+  const client = await db.connect();
+  let removed = false;
+  let participantIds: string[] = [];
+  let updateMessage: { id: string; createdAt: string } | null = null;
+
+  try {
+    await client.query('BEGIN');
+
+    const deleteResult = await client.query<{ user_id: string }>(
+      `
+        DELETE FROM chat_members
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING user_id
+      `,
+      [conversationId, memberUserId]
+    );
+
+    removed = (deleteResult.rowCount ?? 0) > 0;
+
+    if (removed) {
+      updateMessage = await appendSystemChatMessage(client, {
+        conversationId,
+        text: 'A member was removed from the group.',
+        metadata: {
+          event: 'group_member_removed',
+          actorUserId,
+          memberUserId,
+        },
+      });
+
+      await client.query(
+        `
+          UPDATE chat_conversations
+          SET updated_at = NOW()
+          WHERE id = $1
+        `,
+        [conversationId]
+      );
+    }
+
+    participantIds = await listChatParticipantIds(client, conversationId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (updateMessage) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.removed',
+      payload: {
+        conversationId,
+        actorUserId,
+        memberUserId,
+        messageId: updateMessage.id,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    removed,
+    participantIds,
+  };
+});
+
+app.delete('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+
+  // Verify the user is a member of the conversation before leaving.
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const client = await db.connect();
+  let participantIds: string[] = [];
+  let updateMessage: { id: string; createdAt: string } | null = null;
+
+  try {
+    await client.query('BEGIN');
+
+    const deleteResult = await client.query<{ user_id: string }>(
+      `
+        DELETE FROM chat_members
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING user_id
+      `,
+      [conversationId, actorUserId]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError('CHAT_CONVERSATION_NOT_FOUND', 'You are not a member of this conversation', {
+        conversationId,
+        actorUserId,
+      });
+    }
+
+    updateMessage = await appendSystemChatMessage(client, {
+      conversationId,
+      text: conversation.type === 'group' ? 'A member left the group.' : 'A participant left the conversation.',
+      metadata: {
+        event: conversation.type === 'group' ? 'group_member_left' : 'conversation_participant_left',
+        actorUserId,
+      },
+    });
+
+    await client.query(
+      `
+        UPDATE chat_conversations
+        SET updated_at = NOW()
+        WHERE id = $1
+      `,
+      [conversationId]
+    );
+
+    participantIds = await listChatParticipantIds(client, conversationId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (updateMessage) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.left',
+      payload: {
+        conversationId,
+        actorUserId,
+        messageId: updateMessage.id,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    left: true,
     participantIds,
   };
 });
@@ -25547,6 +25972,77 @@ app.get('/chat/conversations/:conversationId/members', async (request) => {
       role: row.role,
       joinedAt: row.joined_at,
     })),
+  };
+});
+
+// ── Conversation participant summary ────────────────────────────────────
+// Returns participant list with profile info and last-read timestamps.
+// Used by the chat info screen to show who is in a conversation.
+app.get('/chat/conversations/:conversationId/participants', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+
+  // Verify conversation exists and the requesting user is a participant
+  const convCheck = await db.query<{ id: string }>(
+    `SELECT id FROM chat_conversations WHERE id = $1 LIMIT 1`,
+    [conversationId]
+  );
+  if (!convCheck.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Conversation not found' };
+  }
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const result = await db.query<{
+    user_id: string;
+    role: string;
+    joined_at: string;
+    last_read_at: string | null;
+    username: string | null;
+    display_name: string | null;
+    avatar: string | null;
+    last_activity_at: string | null;
+  }>(
+    `
+      SELECT
+        cm.user_id,
+        cm.role,
+        cm.joined_at::text,
+        cm.last_read_at::text AS last_read_at,
+        u.username,
+        u.display_name,
+        u.avatar,
+        (
+          SELECT MAX(m.created_at)::text
+          FROM chat_messages m
+          WHERE m.conversation_id = cm.conversation_id
+        ) AS last_activity_at
+      FROM chat_members cm
+      LEFT JOIN users u ON u.id = cm.user_id
+      WHERE cm.conversation_id = $1
+      ORDER BY cm.joined_at ASC
+    `,
+    [conversationId]
+  );
+
+  return {
+    ok: true,
+    conversationId,
+    participantCount: result.rowCount,
+    participants: result.rows.map((row) => ({
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+      role: row.role,
+      joinedAt: row.joined_at,
+      lastReadAt: row.last_read_at,
+    })),
+    lastActivityAt: result.rows[0]?.last_activity_at ?? null,
   };
 });
 

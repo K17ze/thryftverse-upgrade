@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,34 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  AccessibilityInfo,
+  Platform,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   withSpring,
   withTiming,
+  withDelay,
   useAnimatedStyle,
+  useAnimatedReaction,
   Easing as ReEasing,
+  runOnJS,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, Control } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { LiquidGlassBackdrop } from '../LiquidGlassBackdrop';
 import type { PosterReactionType } from '../../services/postersApi';
 
-// Spring config for reaction tray entrance
-const SPRING_CONFIG = Motion.spring.entrance;
+/** Spring config shape returned by useMotionConfig().spring.* */
+type SpringConfig = { damping: number; stiffness: number; mass: number };
 
 // Character limit for reply input
 const REPLY_MAX_LENGTH = 500;
@@ -33,9 +42,9 @@ const REPLY_COUNTER_THRESHOLD = 400;
 /**
  * Native emoji reaction glyphs.
  *
- * Benchmark (Instagram/Snapchat 2026): quick reactions use real emoji, not
- * outline icons. ThryftVerse's commerce-native reactions map to emoji that
- * communicate the commerce-aware intent (want = shopping bag, style = sparkles).
+ * Quick reactions use real emoji, not outline icons. ThryftVerse's
+ * commerce-native reactions map to emoji that communicate the
+ * commerce-aware intent (want = shopping bag, style = sparkles).
  */
 const REACTIONS: Array<{ type: PosterReactionType; glyph: string; label: string }> = [
   { type: 'love', glyph: '❤️', label: 'Love' },
@@ -46,7 +55,7 @@ const REACTIONS: Array<{ type: PosterReactionType; glyph: string; label: string 
   { type: 'laugh', glyph: '😂', label: 'Laugh' },
 ];
 
-// Quick reply suggestions — Instagram pattern: tappable chips above the input
+// Quick reply suggestions — tappable chips above the input
 // for fast engagement. Commerce-aware suggestions.
 const QUICK_REPLIES: Array<{ emoji: string; text: string }> = [
   { emoji: '❤️', text: 'Love this!' },
@@ -85,15 +94,39 @@ export function PosterReactionReplyBar({
 }: PosterReactionReplyBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring, isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [replyText, setReplyText] = useState('');
   const [showReactions, setShowReactions] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // Reanimated shared values for reaction tray entry
   const trayScaleSV = useSharedValue(0);
   const trayOpacitySV = useSharedValue(0);
+
+  // Spring entrance for the entire bar
+  const barEntranceY = useSharedValue(reducedMotion ? 0 : 20);
+  const barEntranceOpacity = useSharedValue(reducedMotion ? 1 : 0);
+
+  // Drag-to-select: track horizontal pan position for the reaction tray
+  const dragX = useSharedValue(0);
+  const dragSelectedIndex = useSharedValue(-1);
+  const reactionLayoutX = useRef(0);
+
+  React.useEffect(() => {
+    if (!reducedMotion) {
+      barEntranceY.value = withSpring(0, spring.entrance as SpringConfig);
+      barEntranceOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+    }
+  }, [reducedMotion, spring, barEntranceY, barEntranceOpacity]);
+
+  const barEntranceStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: barEntranceY.value }],
+    opacity: barEntranceOpacity.value,
+  }));
 
   const handleSendReply = useCallback(async () => {
     const trimmed = replyText.trim();
@@ -101,19 +134,21 @@ export function PosterReactionReplyBar({
     setIsSending(true);
     try {
       onReply(trimmed);
+      haptic.success();
+      AccessibilityInfo.announceForAccessibility('Reply sent');
       setReplyText('');
       setShowQuickReplies(false);
     } finally {
       setIsSending(false);
     }
-  }, [replyText, isSending, onReply]);
+  }, [replyText, isSending, onReply, haptic]);
 
   const toggleReactions = useCallback(() => {
     if (!showReactions) {
       haptic.selection();
       setShowReactions(true);
       // Spring in — Reanimated with spring config
-      trayScaleSV.value = withSpring(1, SPRING_CONFIG);
+      trayScaleSV.value = withSpring(1, spring.entrance as SpringConfig);
       trayOpacitySV.value = withTiming(1, { duration: 150, easing: ReEasing.out(ReEasing.ease) });
     } else {
       // Fade out then hide — use setTimeout to hide after the animation completes
@@ -123,26 +158,71 @@ export function PosterReactionReplyBar({
         trayScaleSV.value = 0;
       }, 130);
     }
-  }, [showReactions, trayScaleSV, trayOpacitySV, haptic]);
+  }, [showReactions, trayScaleSV, trayOpacitySV, haptic, spring]);
 
   const handleQuickReply = (text: string) => {
+    haptic.selection();
+    AccessibilityInfo.announceForAccessibility('Quick reply sent');
     onReply(text);
     setShowQuickReplies(false);
   };
+
+  const handleReactionSelect = useCallback((r: typeof REACTIONS[number]) => {
+    if (viewerReaction === r.type) {
+      onRemoveReaction();
+      AccessibilityInfo.announceForAccessibility(`${r.label} reaction removed`);
+    } else {
+      onReaction(r.type);
+      AccessibilityInfo.announceForAccessibility(`${r.label} reaction sent`);
+    }
+    setShowReactions(false);
+  }, [viewerReaction, onReaction, onRemoveReaction]);
 
   const trayAnimatedStyle = useAnimatedStyle(() => ({
     opacity: trayOpacitySV.value,
     transform: [{ scale: trayScaleSV.value }],
   }));
 
+  // ── Drag-to-select gesture ───────────────────────────────────────────
+  // Pan horizontally over the reaction tray to scrub through reactions.
+  // The selected reaction follows the drag with a spring, and haptic fires
+  // when the selection crosses to a new reaction.
+  const dragGesture = React.useMemo(() => {
+    if (!isEnabled) return null;
+    return Gesture.Pan()
+      .activateAfterLongPress(50)
+      .onUpdate((e) => {
+        'worklet';
+        dragX.value = e.translationX;
+        // Calculate which reaction the drag is over
+        const reactionWidth = Control.hit;
+        const startX = reactionLayoutX.current;
+        const idx = Math.max(0, Math.min(REACTIONS.length - 1, Math.floor((e.absoluteX - startX) / reactionWidth)));
+        if (idx !== dragSelectedIndex.value) {
+          dragSelectedIndex.value = idx;
+          runOnJS(haptic.selection)();
+        }
+      })
+      .onEnd(() => {
+        'worklet';
+        const idx = dragSelectedIndex.value;
+        dragX.value = withSpring(0, spring.tap as SpringConfig);
+        if (idx >= 0 && idx < REACTIONS.length) {
+          const r = REACTIONS[idx];
+          runOnJS(handleReactionSelect)(r);
+        }
+        dragSelectedIndex.value = -1;
+      });
+  }, [isEnabled, dragX, dragSelectedIndex, haptic, spring, handleReactionSelect]);
+
   const showCounter = replyText.length > REPLY_COUNTER_THRESHOLD;
 
   // ── Owner view ───────────────────────────────────────────────────────
-  // Instagram pattern: owner sees viewer count + "View activity" CTA,
+  // Owner sees viewer count + "View activity" CTA,
   // plus share. No reply bar (owners don't reply to their own story).
   if (isOwner) {
     return (
-      <View style={styles.container}>
+      <Reanimated.View style={[styles.container, barEntranceStyle]}>
         <View style={styles.ownerRow}>
           {onShowActivity && (
             <AnimatedPressable
@@ -176,59 +256,53 @@ export function PosterReactionReplyBar({
             </AnimatedPressable>
           )}
         </View>
-      </View>
+      </Reanimated.View>
     );
   }
 
   // ── Viewer view ──────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <Reanimated.View style={[styles.container, barEntranceStyle]}>
       {/* Floating emoji tray — no container, no card-on-card.
           Emoji sit directly on the media surface, matching Instagram's
-          floating quick-reaction pattern. Animated with spring on entry. */}
+          floating quick-reaction pattern. Animated with spring on entry.
+          Supports drag-to-select: pan horizontally to scrub through reactions
+          with spring follow and haptic on selection change. */}
       {showReactions && allowReactions && (
-        <Reanimated.View
-          style={[styles.reactionTray, trayAnimatedStyle]}
-        >
-          {/* Frosted glass pill behind the floating emoji — true
-              glassmorphism (Liquid Glass on iOS 26, BlurView fallback
-              elsewhere) so the tray reads as frosted glass floating
-              over the media, not a flat shadowed row. */}
-          <LiquidGlassBackdrop
-            intensity={35}
-            tint="light"
-            absoluteFill
-            style={styles.reactionTrayGlass}
-          />
-          {REACTIONS.map((r) => (
-            <AnimatedPressable
-              key={r.type}
-              onPress={() => {
-                if (viewerReaction === r.type) {
-                  onRemoveReaction();
-                } else {
-                  onReaction(r.type);
-                }
-                setShowReactions(false);
-              }}
-              style={[
-                styles.reactionBtn,
-                viewerReaction === r.type && styles.reactionActive,
-              ]}
-              scaleValue={0.97}
-              activeOpacity={0.85}
-              hapticFeedback="light"
-              accessibilityLabel={`${r.label} reaction`}
-              accessibilityRole="button"
-              accessibilityHint="Toggle this reaction on the story"
-            >
-              <Text style={styles.reactionGlyph}>{r.glyph}</Text>
-            </AnimatedPressable>
-          ))}
-        </Reanimated.View>
+        <GestureDetector gesture={dragGesture ?? Gesture.Pan().enabled(false)}>
+          <Reanimated.View
+            style={[styles.reactionTray, trayAnimatedStyle]}
+            onLayout={(e) => {
+              reactionLayoutX.current = e.nativeEvent.layout.x;
+            }}
+          >
+            {/* Frosted glass pill behind the floating emoji — true
+                glassmorphism (Liquid Glass on iOS 26, BlurView fallback
+                elsewhere) so the tray reads as frosted glass floating
+                over the media, not a flat shadowed row. */}
+            <LiquidGlassBackdrop
+              intensity={35}
+              tint="light"
+              absoluteFill
+              style={styles.reactionTrayGlass}
+            />
+            {REACTIONS.map((r, i) => (
+              <ReactionButton
+                key={r.type}
+                reaction={r}
+                index={i}
+                isActive={viewerReaction === r.type}
+                dragSelectedIndex={dragSelectedIndex}
+                springConfig={spring.press as SpringConfig}
+                reducedMotion={reducedMotion}
+                onPress={() => handleReactionSelect(r)}
+              />
+            ))}
+          </Reanimated.View>
+        </GestureDetector>
       )}
 
-      {/* Quick reply suggestion chips — Instagram pattern.
+      {/* Quick reply suggestion chips.
           Horizontal scroll of tappable chips above the input for fast engagement. */}
       {showQuickReplies && allowReplies && (
         <ScrollView
@@ -261,8 +335,8 @@ export function PosterReactionReplyBar({
           <AnimatedPressable
             onPress={toggleReactions}
             style={styles.iconBtn}
-            scaleValue={0.97}
-            activeOpacity={0.85}
+            scaleValue={0.88}
+            activeOpacity={0.8}
             hapticFeedback="light"
             accessibilityLabel="Show reactions"
             accessibilityRole="button"
@@ -273,7 +347,7 @@ export function PosterReactionReplyBar({
         )}
 
         {allowReplies && (
-          <View style={styles.replyInputWrap}>
+          <View style={[styles.replyInputWrap, isInputFocused && styles.replyInputWrapFocused]}>
             {/* True frosted-glass pill (Liquid Glass on iOS 26, BlurView
                 fallback elsewhere) replacing the flat semi-transparent
                 fill. The hairline border remains for glass-edge depth. */}
@@ -292,13 +366,20 @@ export function PosterReactionReplyBar({
                 setReplyText(text);
                 setShowQuickReplies(text.length === 0);
               }}
-              onFocus={() => setShowQuickReplies(replyText.length === 0)}
-              onBlur={() => setShowQuickReplies(false)}
+              onFocus={() => {
+                setShowQuickReplies(replyText.length === 0);
+                setIsInputFocused(true);
+              }}
+              onBlur={() => {
+                setShowQuickReplies(false);
+                setIsInputFocused(false);
+              }}
               maxLength={REPLY_MAX_LENGTH}
               returnKeyType="send"
               onSubmitEditing={handleSendReply}
               editable={!isSending}
               accessibilityLabel="Reply to story"
+              accessibilityHint="Type a reply and press send"
             />
             {showCounter && (
               <Text
@@ -330,7 +411,7 @@ export function PosterReactionReplyBar({
             {isSending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name="send" size={Control.iconCompact} color="#fff" />
+              <Ionicons name="send" size={Control.icon} color="#fff" />
             )}
           </AnimatedPressable>
         )}
@@ -352,7 +433,75 @@ export function PosterReactionReplyBar({
           </AnimatedPressable>
         )}
       </View>
-    </View>
+    </Reanimated.View>
+  );
+}
+
+/**
+ * Individual reaction button with spring scale on press and drag-follow.
+ * When the drag-to-select gesture is active, the button under the drag
+ * finger scales up with a spring for visual feedback.
+ */
+function ReactionButton({
+  reaction,
+  index,
+  isActive,
+  dragSelectedIndex,
+  springConfig,
+  reducedMotion,
+  onPress,
+}: {
+  reaction: { type: PosterReactionType; glyph: string; label: string };
+  index: number;
+  isActive: boolean;
+  dragSelectedIndex: SharedValue<number>;
+  springConfig: SpringConfig;
+  reducedMotion: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // Spring scale — grows when this button is the drag-selected one
+  const scaleSV = useSharedValue(1);
+
+  // React to drag-selected index changes
+  useAnimatedReaction(
+    () => dragSelectedIndex.value === index,
+    (isSelected, wasSelected) => {
+      if (isSelected !== wasSelected) {
+        if (isSelected) {
+          scaleSV.value = withSpring(1.3, springConfig);
+        } else {
+          scaleSV.value = withSpring(1, springConfig);
+        }
+      }
+    },
+    [index, springConfig]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      style={[
+        styles.reactionBtn,
+        isActive && styles.reactionActive,
+      ]}
+      scaleValue={0.82}
+      activeOpacity={0.7}
+      hapticFeedback="light"
+      accessibilityLabel={`${reaction.label} reaction`}
+      accessibilityRole="button"
+      accessibilityHint="Toggle this reaction on the story"
+    >
+      <Reanimated.View style={animatedStyle}>
+        <Text style={styles.reactionGlyph}>{reaction.glyph}</Text>
+      </Reanimated.View>
+    </AnimatedPressable>
   );
 }
 
@@ -370,7 +519,7 @@ function createStyles(colors: any) {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
-      gap: Space.sm,
+      gap: Space.xs,
       paddingVertical: Space.xs,
       paddingHorizontal: Space.sm,
       borderRadius: Radius.full,
@@ -388,19 +537,23 @@ function createStyles(colors: any) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: 'rgba(255,255,255,0.2)',
     },
+    // Reaction emoji button — 44pt hit target with a 26pt glyph.
+    // The visible glyph is smaller than the hit area so the emoji
+    // reads as floating, not boxed (per §4 icon grammar).
     reactionBtn: {
-      width: 40,
-      height: 40,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
     reactionActive: {
-      backgroundColor: 'rgba(255,255,255,0.18)',
+      backgroundColor: 'rgba(255,255,255,0.22)',
     },
+    // 26pt emoji — within Instagram's 24-28pt band, evenly spaced.
     reactionGlyph: {
-      fontSize: Type.bodyLarge.size + 6,
-      lineHeight: 28,
+      fontSize: 26,
+      lineHeight: 30,
       textAlign: 'center',
     },
     // ── Quick reply chips ─────────────────────────────────────────────
@@ -442,12 +595,15 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       alignItems: 'center',
     },
+    // Reaction toggle glyph — deliberately smaller (24pt) than the
+    // tray emoji so the reply input remains the primary element and
+    // the reaction toggle reads as a secondary control.
     iconEmoji: {
-      fontSize: Type.bodyLarge.size + 6,
-      lineHeight: 26,
+      fontSize: 24,
+      lineHeight: 28,
       textAlign: 'center',
     },
-    // Reply input wrapper — frosted glass pill (Instagram pattern).
+    // Reply input wrapper — frosted glass pill.
     // The blur is supplied by LiquidGlassBackdrop; the hairline border
     // remains to define the glass edge against any media.
     replyInputWrap: {
@@ -459,9 +615,20 @@ function createStyles(colors: any) {
       borderColor: 'rgba(255,255,255,0.25)',
       overflow: 'hidden',
     },
-    // Glass background layer for the reply input pill.
+    // Focus state — 2pt white at 0.3 opacity per §4 stroke grammar
+    // (2pt reserved for focus/selection). The subtle highlight makes
+    // the active input boundary unmistakable without shouting.
+    replyInputWrapFocused: {
+      borderColor: 'rgba(255,255,255,0.3)',
+      borderWidth: 2,
+    },
+    // Glass background layer for the reply input pill. The blur is
+    // supplied by LiquidGlassBackdrop; the underlying fill is a subtle
+    // rgba(255,255,255,0.08) so the pill reads cleanly even when the
+    // blur fallback renders a flat tint.
     replyInputGlass: {
       borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.08)',
     },
     replyInput: {
       height: Control.hit,
@@ -469,7 +636,7 @@ function createStyles(colors: any) {
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
       paddingVertical: 0,
-      color: 'rgba(255,255,255,0.9)',
+      color: 'rgba(255,255,255,0.95)',
       fontFamily: Typography.family.regular,
       fontSize: Type.bodyEmphasis.size,
     },
@@ -485,16 +652,19 @@ function createStyles(colors: any) {
     replyCounterLimit: {
       color: 'rgba(255,120,120,0.85)',
     },
+    // Send button — a white paper-plane glyph on a
+    // transparent 44pt hit target (no filled circle). The icon is the
+    // affordance; the brand accent is reserved for the icon tint so the
+    // control stays restrained and the reply input remains primary.
     sendBtn: {
-      width: 36,
-      height: 36,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.brand,
     },
     sendBtnSending: {
-      opacity: 0.7,
+      opacity: 0.6,
     },
     // Owner row — hairline separator from the reply area for visual separation
     ownerRow: {

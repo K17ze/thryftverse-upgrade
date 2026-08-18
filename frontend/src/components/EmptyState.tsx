@@ -78,7 +78,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {ctaLabel && onCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={[styles.cta, compact && styles.ctaCompact]} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
+          <AnimatedPressable style={[styles.cta, compact && styles.ctaCompact]} onPress={onCtaPress} hapticFeedback="selection">
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
@@ -86,7 +86,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {secondaryCtaLabel && onSecondaryCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} activeOpacity={0.8} hapticFeedback="light">
+          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} hapticFeedback="light">
             <Text style={styles.ctaSecondaryText}>{secondaryCtaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
@@ -101,7 +101,6 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
                 key={i}
                 style={styles.chip}
                 onPress={action.onPress}
-                activeOpacity={0.8}
                 hapticFeedback="light"
               >
                 <Text style={styles.chipText}>{action.label}</Text>
@@ -114,21 +113,156 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
   );
 }
 
+// ── Preset templates ─────────────────────────────────────────────────────────
+// Common empty-state configurations that can be spread into <EmptyState {...preset} />.
+// These encode UX-research-backed copy and icon choices for the three most
+// common empty-state scenarios in the app.
+
+export interface EmptyStatePreset {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+}
+
+/**
+ * "Nothing here yet" — for screens where the user hasn't created or saved
+ * any content (e.g. empty closet, no listings, no collections).
+ * The CTA should be the primary creation action.
+ */
+export const EMPTY_PRESET_FIRST_TIME: EmptyStatePreset = {
+  icon: 'cube-outline',
+  title: 'Nothing here yet',
+  subtitle: 'Your saves and creations will show up here once you get started.',
+};
+
+/**
+ * "No results" — for search and filter screens where the user's query
+ * returned no matches. The CTA should clear filters or broaden the search.
+ */
+export const EMPTY_PRESET_NO_RESULTS: EmptyStatePreset = {
+  icon: 'search-outline',
+  title: 'No matches found',
+  subtitle: 'Try adjusting your filters or search for something different.',
+};
+
+/**
+ * "All caught up" — for feed and notification screens where there's no
+ * new content to show. This is a positive empty state — the user has
+ * seen everything available.
+ */
+export const EMPTY_PRESET_CAUGHT_UP: EmptyStatePreset = {
+  icon: 'checkmark-done-outline',
+  title: "You're all caught up",
+  subtitle: 'Check back later for new activity.',
+};
+
+/**
+ * "No search results" — for search screens with a specific query.
+ * Use by spreading {...EMPTY_PRESET_SEARCH_NO_RESULTS(query)}.
+ */
+export const EMPTY_PRESET_SEARCH_NO_RESULTS = (query: string): EmptyStatePreset => ({
+  icon: 'search-outline',
+  title: `No matches for "${query}"`,
+  subtitle: 'Try broader terms or clear your filters to see more items.',
+});
+
+/**
+ * "No filtered results" — for browse/discover with active filters.
+ */
+export const EMPTY_PRESET_FILTERED_NO_RESULTS: EmptyStatePreset = {
+  icon: 'filter-outline',
+  title: 'No items match your filters',
+  subtitle: 'Try adjusting your filters or clearing them to see all items.',
+};
+
+/**
+ * "No listings yet" — for seller's own shop with no listings.
+ */
+export const EMPTY_PRESET_NO_LISTINGS: EmptyStatePreset = {
+  icon: 'pricetag-outline',
+  title: 'Your shop is empty',
+  subtitle: 'List your first item to start selling. It takes less than a minute.',
+};
+
+/**
+ * "No sold items" — for seller's sold items list.
+ */
+export const EMPTY_PRESET_NO_SALES: EmptyStatePreset = {
+  icon: 'checkmark-done-outline',
+  title: 'No sales yet',
+  subtitle: 'Your sold items will appear here once you make your first sale.',
+};
+
+/**
+ * "No followers" — for profile followers list.
+ */
+export const EMPTY_PRESET_NO_FOLLOWERS: EmptyStatePreset = {
+  icon: 'people-outline',
+  title: 'No followers yet',
+  subtitle: 'Share your profile and list great items to attract followers.',
+};
+
+/**
+ * "No following" — for profile following list.
+ */
+export const EMPTY_PRESET_NO_FOLLOWING: EmptyStatePreset = {
+  icon: 'people-outline',
+  title: "You're not following anyone",
+  subtitle: 'Discover sellers you love and follow them to see their latest items.',
+};
+
+/**
+ * "No messages" — for inbox with no conversations.
+ */
+export const EMPTY_PRESET_NO_MESSAGES: EmptyStatePreset = {
+  icon: 'chatbubble-outline',
+  title: 'No messages yet',
+  subtitle: 'Start a conversation with a seller or buyer to see your messages here.',
+};
+
+/**
+ * "No notifications" — for notifications screen.
+ */
+export const EMPTY_PRESET_NO_NOTIFICATIONS: EmptyStatePreset = {
+  icon: 'notifications-outline',
+  title: 'No notifications',
+  subtitle: "You're all caught up. We'll notify you when there's something new.",
+};
+
+/**
+ * "No wishlist items" — for saved/favorited items.
+ */
+export const EMPTY_PRESET_NO_WISHLIST: EmptyStatePreset = {
+  icon: 'heart-outline',
+  title: 'No saved items yet',
+  subtitle: 'Tap the heart on any item to save it here for later.',
+};
+
+/**
+ * "No orders" — for order history.
+ */
+export const EMPTY_PRESET_NO_ORDERS: EmptyStatePreset = {
+  icon: 'cube-outline',
+  title: 'No orders yet',
+  subtitle: 'Your purchase history will appear here once you buy your first item.',
+};
+
+
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-    gap: 10,
+    paddingHorizontal: Space.xl + Space.sm,
+    paddingVertical: Space.xxl + Space.sm,
+    gap: Space.sm + 2,
   },
   containerCompact: {
     flex: 0,
     minHeight: 228,
     paddingHorizontal: Space.lg,
-    paddingVertical: 28,
-    gap: 6,
+    paddingVertical: Space.md + Space.sm,
+    gap: Space.xs + 2,
   },
   iconRing: {
     width: 96,
@@ -156,7 +290,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   titleCompact: {
     fontSize: Type.subtitle.size,
-    lineHeight: 22,
+    lineHeight: Type.subtitle.lineHeight,
   },
   subtitle: {
     fontSize: Type.body.size,
@@ -164,18 +298,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     letterSpacing: 0.08,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: Type.body.lineHeight + 1,
     maxWidth: 260,
   },
   subtitleCompact: {
     fontSize: Type.captionElevated.size,
-    lineHeight: 19,
+    lineHeight: Type.captionElevated.lineHeight + 1,
     maxWidth: 310,
   },
   hintWrap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
     maxWidth: 280,
   },
@@ -184,19 +318,19 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   cta: {
-    marginTop: 20,
+    marginTop: Space.md + 4,
     backgroundColor: colors.textPrimary,
     paddingHorizontal: Space.xl,
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     borderRadius: Radius.xxl,
   },
   ctaCompact: {
     minHeight: 44,
-    marginTop: 12,
-    paddingVertical: 11,
+    marginTop: Space.smMd,
+    paddingVertical: Space.sm + 3,
     borderRadius: Radius.xl,
   },
   ctaText: {
@@ -206,9 +340,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     color: colors.background,
   },
   ctaSecondary: {
-    marginTop: 10,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    marginTop: Space.sm + 2,
+    paddingHorizontal: Space.md + Space.sm,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.border,
@@ -219,9 +353,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     color: colors.textPrimary,
   },
   suggestedWrap: {
-    marginTop: 20,
+    marginTop: Space.md + 4,
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   suggestedLabel: {
     fontSize: Type.meta.size,
@@ -234,11 +368,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
+    gap: Space.sm,
+    paddingHorizontal: Space.md + 4,
   },
   chip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.sm + 6,
     paddingVertical: Space.sm,
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,

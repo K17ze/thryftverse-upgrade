@@ -1,7 +1,7 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 interface SavedSearchAlertResult {
   newMatches: number;

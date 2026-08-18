@@ -11,13 +11,12 @@ import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import type { SupportTicket } from '../store/useStore';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
 
@@ -59,7 +58,6 @@ export default function ResolutionCentreScreen() {
 
   const supportTickets = useStore((state) => state.supportTickets);
   const loadSupportTicketsFromApi = useStore((state) => state.loadSupportTicketsFromApi);
-  const reducedMotionEnabled = useReducedMotion();
 
   useFocusEffect(
     useCallback(() => {
@@ -88,6 +86,38 @@ export default function ResolutionCentreScreen() {
 
   const openCount = supportTickets.filter((t) => t.status === 'open').length;
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible ticket rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderTicketItem = useCallback(({ item }: { item: SupportTicket; index: number }) => {
+    const statusCfg = statusConfig[item.status] ?? statusConfig.open;
+    return (
+      <View>
+        <Pressable
+          style={styles.ticketCard}
+          onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
+        >
+          <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
+            <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
+          </View>
+          <View style={styles.ticketInfo}>
+            <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
+            <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
+            <View style={styles.ticketMetaRow}>
+              <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
+                <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              </View>
+              <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      </View>
+    );
+  }, [statusConfig, navigation, styles, colors.textMuted]);
+
   return (
     <FlagshipScreen
       header={
@@ -98,7 +128,6 @@ export default function ResolutionCentreScreen() {
       }
     >
       {/* Hero summary — open ticket count */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: openCount > 0 ? colors.brand : colors.surfaceAlt }]}>
@@ -114,7 +143,6 @@ export default function ResolutionCentreScreen() {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* Filter rail */}
       <ScrollView
@@ -169,34 +197,7 @@ export default function ResolutionCentreScreen() {
           }
           // Performance: support ticket lists can grow long; FlashList v2
           // handles recycling automatically.
-          renderItem={({ item, index }) => {
-            const statusCfg = statusConfig[item.status] ?? statusConfig.open;
-            return (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(Math.min(index, 8) * 40)}>
-                <Pressable
-                  style={styles.ticketCard}
-                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
-                >
-                  <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
-                    <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
-                  </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
-                    <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
-                    <View style={styles.ticketMetaRow}>
-                      <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
-                        <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
-                      </View>
-                      <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                </Pressable>
-              </Reanimated.View>
-            );
-          }}
+          renderItem={renderTicketItem}
         />
       )}
     </FlagshipScreen>
@@ -278,7 +279,7 @@ function createStyles(colors: ThemeColors) {
   ticketCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     marginBottom: Space.sm,

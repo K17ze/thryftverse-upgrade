@@ -341,6 +341,7 @@ export function CoOwnPriceChart({
                   onPress={() => handlePeriodChange(p)}
                   activeOpacity={0.8}
                   scaleValue={0.97}
+                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={`Price chart period: ${p}`}
                   accessibilityState={{ selected: isActive }}

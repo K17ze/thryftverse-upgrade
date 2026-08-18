@@ -5,6 +5,7 @@
 
 import type React from 'react';
 import { seededRandom } from '../utils/seededRandom';
+import { makeStableId } from '../utils/createStableId';
 import type { Ionicons } from '@expo/vector-icons';
 
 export type OutfitSlot = 'top' | 'bottom' | 'shoes' | 'outerwear' | 'accessory';
@@ -273,7 +274,7 @@ export function generateOutfitName(items: Record<OutfitSlot, StyleItem | undefin
 export function createOutfit(items: Record<OutfitSlot, StyleItem | undefined>): Outfit {
   const scoreResult = scoreOutfit(items);
   return {
-    id: `outfit_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    id: makeStableId('outfit', 6),
     name: generateOutfitName(items),
     items,
     score: scoreResult.score,

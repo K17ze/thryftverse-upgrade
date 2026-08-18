@@ -1,16 +1,15 @@
 import React from 'react';
-import { View, StyleSheet, Text, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated from 'react-native-reanimated';
-import { FadeIn, SlideInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Elevation, DockConstants } from '../../../theme/designTokens';
+import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { CachedImage } from '../../CachedImage';
 import type { CommerceDetailDockLayout } from './types';
-import { COMMERCE_DETAIL_COMPACT_WIDTH } from './types';
 
 /**
  * Sticky state/action dock — the bottom dock that holds the current
@@ -73,20 +72,16 @@ export interface CommerceDetailStateDockProps {
    * disclosure"). Used for blocked-state explanation. */
   subtitle?: string;
   /** Optional product thumbnail rendered on the left edge. Anchors the
-   * user to the product when they've scrolled past the hero image.
-   * Research (ecomsdesignpro): "A small thumbnail helps, especially
-   * when users scroll far past the hero image." */
+   *  user to the product when they've scrolled past the hero image. */
   thumbnailUri?: string;
   /** Optional shipping hint shown below the price (e.g. "+ £3.99 shipping"
-   *  or "Free shipping"). Competitor pattern (Vinted/Depop): shipping
-   *  context next to the price in the dock reduces checkout abandonment. */
+   *  or "Free shipping"). */
   shippingHint?: string;
-  /** When true, renders a buyer protection strip above the dock with a
-   *  shield icon and "Buyer protection" text. Per Design.md trust/commerce
-   *  card micro spec: "Buyer protection strip: colors.surface background,
-   *  Radius.lg, shield icon 20pt, Type.captionElevated text, placed above
-   *  the action dock." Only render when protection is actually available. */
+  /** When true, renders a buyer protection strip above the dock. Only
+   *  render when protection is actually available. */
   showProtectionStrip?: boolean;
+  /** Detected commerce tier for category-adaptive trust strip copy. */
+  commerceTier?: 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
   /** Primary action (max 1). Required when no blocked state is shown. */
   primaryAction?: CommerceDetailStateDockAction;
   /** Secondary action (max 1). */
@@ -105,11 +100,6 @@ export interface CommerceDetailStateDockProps {
   layout?: CommerceDetailDockLayout;
 }
 
-/** Compact width threshold below which `auto` layout stacks actions.
- *  Aligned with the shared product-detail compact width so identity,
- *  media and dock all switch behaviour at the same breakpoint. */
-const COMPACT_STACK_THRESHOLD = COMMERCE_DETAIL_COMPACT_WIDTH;
-
 export function CommerceDetailStateDock({
   value,
   originalValue,
@@ -119,6 +109,7 @@ export function CommerceDetailStateDock({
   thumbnailUri,
   shippingHint,
   showProtectionStrip = false,
+  commerceTier,
   primaryAction,
   secondaryAction,
   elevated = false,
@@ -130,7 +121,7 @@ export function CommerceDetailStateDock({
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
   const safeBottom = bottomInset ?? insets.bottom;
-  const { width: screenWidth } = useWindowDimensions();
+  const { isCommerceCompact } = useBreakpoint();
 
   // Per spec 05 §4: auto stacks on compact widths to prevent label
   // truncation and giant pill overflow.
@@ -138,7 +129,7 @@ export function CommerceDetailStateDock({
   const primaryIsEmphasized = primaryAction?.primary !== false;
   const shouldStack =
     layout === 'stacked' ||
-    (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD);
+    (layout === 'auto' && hasSecondary && isCommerceCompact);
 
   const handlePress = (action: CommerceDetailStateDockAction) => {
     if (action.disabled || action.loading) return;
@@ -161,26 +152,62 @@ export function CommerceDetailStateDock({
         },
       ]}
     >
-      {/* ── Buyer protection strip (top section of the unified dock) ──
-          Per Design.md trust/commerce card micro spec: shield icon,
-          Type.captionElevated text, placed at the top of the action dock.
-          Research (Vinted/Depop): trust signal at the payment decision
-          point increases conversion more than any other single change.
-          Flattened per AGENTS.md §4 — no separate surface; a hairline
-          borderBottom divides it from the action row. */}
-      {showProtectionStrip && !stateBadge && (
-        <View
-          style={[
-            styles.protectionStrip,
-            { borderBottomColor: colors.borderSubtle },
-          ]}
-        >
-          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-          <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
-            Buyer protection
-          </Text>
-        </View>
-      )}
+      {/* ── Trust strip (top section of the unified dock) ──
+          Flattened into the dock surface — no separate surface; a hairline
+          borderBottom divides it from the action row.
+          Copy is tier-adaptive and descriptive, not a service promise. */}
+      {(() => {
+        if (stateBadge) return null;
+        if (commerceTier === 'brokered') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="eye-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Brokered asset — enquire to arrange viewing
+              </Text>
+            </View>
+          );
+        }
+        if (commerceTier === 'authenticated_luxury') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                High-value item — authentication may be available
+              </Text>
+            </View>
+          );
+        }
+        if (commerceTier === 'specialist') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="ribbon-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Contact seller for details
+              </Text>
+            </View>
+          );
+        }
+        if (showProtectionStrip) {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Buyer protection
+              </Text>
+            </View>
+          );
+        }
+        return null;
+      })()}
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {/* Product thumbnail — anchors the user to the product when
@@ -328,13 +355,12 @@ export function CommerceDetailStateDock({
     return <View style={styles.wrapper}>{content}</View>;
   }
 
+  // Single FadeIn entry transition — no spring. The dock fades in over
+  // 280ms when the Buy Now section becomes active.
   return (
-    <Reanimated.View
-      entering={SlideInDown.duration(280)}
-      style={styles.wrapper}
-    >
+    <Animated.View style={styles.wrapper} entering={FadeIn.duration(280)}>
       {content}
-    </Reanimated.View>
+    </Animated.View>
   );
 }
 
@@ -347,9 +373,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   // ── Buyer protection strip ──
-  // Per Design.md: colors.surface background, Radius.lg, shield icon,
-  // Type.captionElevated text. Sits above the dock as a trust signal
-  // at the payment decision point.
+  // Flattened into the dock surface with a hairline divider.
   protectionStrip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -403,21 +427,17 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     flexShrink: 1,
   },
-  // Product thumbnail — 40x40, medium radius. Quiet, no border.
-  // Research (ecomdesignpro 2026): "40-48px with 8px radius, optional
-  // on mobile." Radius.md (8px) matches the primary action radius for
-  // visual coherence within the dock.
+  // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
+  // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {
-    width: 40,
-    height: 40,
+    width: CommerceLayout.dockThumbnailSize,
+    height: CommerceLayout.dockThumbnailSize,
     borderRadius: Radius.md,
     flexShrink: 0,
   },
   value: {
     // Per Design.md: price-list (20px) is the correct size for dock
     // values. price-large (28px) is reserved for checkout totals.
-    // Research (ecomdesignpro 2026): "Keep the bar short, usually 64
-    // to 80 px tall" — a 28px price dominates a 72px dock.
     fontSize: Type.priceList.size,
     lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
@@ -459,9 +479,9 @@ const styles = StyleSheet.create({
   },
   // Per Design.md button-primary spec: full-pill (Radius.full), 52px
   // height, brand fill, body-strong typography. The dock micro spec
-  // confirms: "Primary CTA: full-pill." Competitors (Vinted, Depop,
-  // Vestiaire) all use full-pill primary buttons in their sticky docks.
-  // The previous 8px rectangle looked weak and non-premium.
+  // confirms: "Primary CTA: full-pill." Primary action uses full-pill
+  // treatment for clear hierarchy. The previous 8px rectangle looked
+  // weak and non-premium.
   primaryAction: {
     minHeight: DockConstants.primaryButtonHeight,
     paddingHorizontal: Space.xl,
@@ -488,7 +508,8 @@ const styles = StyleSheet.create({
   },
   // Per Design.md: secondary is a quiet text control, not a full
   // outlined button. Reduces visual noise so the primary action
-  // dominates. Competitor pattern (Depop): secondary is a text link.
+  // dominates. Secondary action is a text link to reduce visual
+  // competition.
   secondaryAction: {
     minHeight: DockConstants.secondaryButtonHeight,
     paddingHorizontal: Space.md,
@@ -529,9 +550,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   // Shipping hint — quiet, muted, shown below the price when shipping
-  // context is available. Competitor pattern (Vinted/Depop): "+ £3.99
-  // shipping" or "Free shipping" next to the price reduces checkout
-  // abandonment by setting expectations early.
+  // context is available. Shipping cost shown inline with price for
+  // transparency.
   shippingHint: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,

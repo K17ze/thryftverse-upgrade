@@ -21,16 +21,13 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
@@ -69,7 +66,6 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [orders, setOrders] = React.useState<CoOwnRecurringOrder[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -155,12 +151,15 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Auto-Invest" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Auto-Invest" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <CoOwnActivitySkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -168,34 +167,36 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const inactiveOrders = orders.filter((o) => !o.active);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Auto-Invest" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
-        showsVerticalScrollIndicator={false}
+    <>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Auto-Invest" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Hero summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="repeat" size={22} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Auto-invest plans</Text>
-                <Text style={styles.heroSubtitle}>
-                  {activeOrders.length === 0
-                    ? 'No active plans'
-                    : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
-                </Text>
-              </View>
+        <View style={styles.heroCard}>
+          <View style={styles.heroIconRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="repeat" size={22} color={colors.brand} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={styles.heroTitle}>Auto-invest plans</Text>
+              <Text style={styles.heroSubtitle}>
+                {activeOrders.length === 0
+                  ? 'No active plans'
+                  : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
+              </Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         <Text style={styles.introText}>
-          Set up recurring purchases to automatically buy units on a schedule. You can cancel at any time.
+          Set up recurring purchases to automatically buy units on a schedule. Cancel at any time.
         </Text>
 
         {error ? (
@@ -216,18 +217,15 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           <>
             {/* Active orders */}
             {activeOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Active</Text>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{activeOrders.length}</Text>
                   </View>
                 </View>
-                {activeOrders.map((order, idx) => (
-                  <Reanimated.View
-                    key={order.id}
-                    entering={FadeInDown.duration(300).delay((idx + 2) * 60)}
-                  >
+                {activeOrders.map((order) => (
+                  <View key={order.id}>
                     <View style={styles.orderCard}>
                       <Pressable
                         style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
@@ -278,25 +276,22 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                         <Ionicons name="close-circle-outline" size={24} color={colors.danger} />
                       </Pressable>
                     </View>
-                  </Reanimated.View>
+                  </View>
                 ))}
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Cancelled</Text>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{inactiveOrders.length}</Text>
                   </View>
                 </View>
-                {inactiveOrders.map((order, idx) => (
-                  <Reanimated.View
-                    key={order.id}
-                    entering={FadeInDown.duration(300).delay((idx + 4) * 60)}
-                  >
+                {inactiveOrders.map((order) => (
+                  <View key={order.id}>
                     <View style={[styles.orderCard, { opacity: 0.55 }]}>
                       <View style={styles.orderInfo}>
                         <View style={styles.orderHeader}>
@@ -320,9 +315,9 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                         </View>
                       </View>
                     </View>
-                  </Reanimated.View>
+                  </View>
                 ))}
-              </Reanimated.View>
+              </View>
             )}
           </>
         )}
@@ -337,15 +332,16 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         />
 
         <View style={{ height: Space.xxl }} />
-      </ScrollView>
+        </ScrollView>
+      </FlagshipScreen>
 
       {/* Create Modal */}
       <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => setShowCreate(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons name="add-circle" size={22} color={colors.textInverse} />
+              <View style={[styles.modalIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="add-circle" size={22} color={colors.brand} />
               </View>
               <View style={styles.modalHeaderText}>
                 <Text style={styles.modalTitle}>New auto-invest plan</Text>
@@ -424,13 +420,12 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
@@ -451,7 +446,7 @@ function createStyles(colors: ThemeColors) {
     heroIcon: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
+      borderRadius: Radius.lg,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -461,19 +456,23 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       letterSpacing: Type.subtitle.letterSpacing,
+      lineHeight: Type.subtitle.lineHeight,
     },
     heroSubtitle: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
     },
 
     introText: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.md,
     },
@@ -488,11 +487,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     sectionTitle: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
+      letterSpacing: Type.metaElevated.letterSpacing,
+      lineHeight: Type.metaElevated.lineHeight,
       opacity: 0.7,
     },
     sectionCount: {
@@ -504,9 +504,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     sectionCountText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.metaElevated.letterSpacing,
     },
 
     // Order cards
@@ -535,21 +537,28 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     freqBadgeText: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.bold,
       color: colors.brand,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.captionElevated.letterSpacing,
     },
     orderHeaderText: { flex: 1 },
     orderAsset: {
       fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      lineHeight: Type.bodyEmphasis.lineHeight,
     },
     orderDetail: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
+      fontVariant: ['tabular-nums'],
     },
     orderMetaRow: {
       flexDirection: 'row',
@@ -558,20 +567,27 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs + 2,
     },
     orderMaxPrice: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       fontVariant: ['tabular-nums'],
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     orderNext: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
       color: colors.brand,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     orderExecutions: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     cancelButton: { padding: Space.sm },
 
@@ -596,8 +612,8 @@ function createStyles(colors: ThemeColors) {
     modalIconWrap: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brand,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -607,17 +623,22 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       letterSpacing: Type.subtitle.letterSpacing,
+      lineHeight: Type.subtitle.lineHeight,
     },
     modalSubtitle: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
     },
     inputLabel: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.sm + 2,
       marginBottom: Space.xs,
     },
@@ -631,6 +652,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
+      letterSpacing: Type.body.letterSpacing,
     },
     frequencyRow: {
       flexDirection: 'row',
@@ -646,9 +668,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     frequencyText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     modalActions: {
       flexDirection: 'row',

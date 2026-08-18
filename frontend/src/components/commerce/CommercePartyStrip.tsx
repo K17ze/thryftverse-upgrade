@@ -92,7 +92,7 @@ export function CommercePartyStrip({
                 <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               )}
               {showIssuerVerified && (
-                <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
+                <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
               )}
             </View>
             {party.location ? (
@@ -226,17 +226,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: Space.xs,
     marginTop: Space.xs,
   },
   badge: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 2,
+    paddingVertical: Space.xs / 2,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
@@ -283,7 +283,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     marginTop: Space.sm,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   factItem: {
     fontSize: Type.caption.size,

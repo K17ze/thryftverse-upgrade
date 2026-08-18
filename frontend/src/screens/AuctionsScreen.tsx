@@ -4,9 +4,10 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
+import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -35,7 +36,6 @@ import {
   type AuctionBidActivity,
 } from '../services/marketApi';
 import { t } from '../i18n';
-import { Motion } from '../constants/motion';
 import { Space, Radius, Type, Stroke, Control, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -103,29 +103,10 @@ function getTimerUrgency(msToEnd: number): TimerUrgency {
 }
 
 function FeaturedLiveDot({ reducedMotion, color }: { reducedMotion: boolean; color: string }) {
-  const opacity = useSharedValue(1);
-  React.useEffect(() => {
-    if (reducedMotion) {
-      opacity.value = 1;
-      return;
-    }
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-  }, [opacity, reducedMotion]);
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
   return (
-    <Reanimated.View
+    <View
       style={[
         { width: Space.xs + 2, height: Space.xs + 2, borderRadius: Radius.md, backgroundColor: color },
-        dotStyle,
       ]}
     />
   );
@@ -156,6 +137,7 @@ export default function AuctionsScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
+  const currentUser = useStore((state) => state.currentUser);
 
   const [nowTs, setNowTs] = React.useState(Date.now());
   const [refreshing, setRefreshing] = React.useState(false);
@@ -420,9 +402,9 @@ export default function AuctionsScreen() {
     }
   };
 
-  const navigateToDetail = (auction: AuctionViewModel) => {
+  const navigateToDetail = useCallback((auction: AuctionViewModel) => {
     navigation.navigate('AuctionDetail', { auctionId: auction.id });
-  };
+  }, [navigation]);
 
   const openBidHistory = async (auction: AuctionViewModel) => {
     setBidHistoryAuction(auction);
@@ -487,6 +469,31 @@ export default function AuctionsScreen() {
         </AnimatedPressable>
       ))}
     </View>
+  );
+
+  // FlashList v2 performance: memoized renderItem for upcoming auctions rail
+  // prevents full re-render of all visible cards on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderUpcomingItem = useCallback(
+    ({ item }: { item: AuctionViewModel }) => (
+      <AnimatedPressable
+        style={styles.upcomingCard}
+        activeOpacity={0.9}
+        onPress={() => navigateToDetail(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open upcoming auction ${item.title}`}
+      >
+        <SharedTransitionView style={styles.upcomingImageFrame} sharedTransitionTag={`image-${item.listingId}-0`}>
+          <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={styles.upcomingImageContainer} contentFit="cover" downscaleWidth={160} />
+        </SharedTransitionView>
+        <View style={styles.upcomingMeta}>
+          <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+          <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
+          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
+        </View>
+      </AnimatedPressable>
+    ),
+    [styles, navigateToDetail, t, formatFromFiat],
   );
 
   const renderFeaturedAuction = () => {
@@ -570,7 +577,7 @@ export default function AuctionsScreen() {
 
   const renderHeader = () => (
     <View>
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <View>
         <MetricGrid
           metrics={[
             { label: 'Live', value: String(liveAuctions.length) },
@@ -580,9 +587,9 @@ export default function AuctionsScreen() {
           columns={3}
           style={{ marginTop: Space.sm }}
         />
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <View>
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}
@@ -594,7 +601,7 @@ export default function AuctionsScreen() {
           onSubmitEditing={() => void syncAuctions()}
         />
       </View>
-      </Reanimated.View>
+      </View>
 
       {renderStatusFilter()}
       {renderSortBar()}
@@ -611,7 +618,7 @@ export default function AuctionsScreen() {
             onPress={() => navigation.navigate('MyBids')}
             accessibilityRole="button"
             accessibilityLabel="My Bids"
-            accessibilityHint="View your active bids"
+            accessibilityHint="Active bids"
           >
             <Ionicons name="list-outline" size={15} color={colors.brand} />
             <Meta style={styles.myBidsBtnText}>My Bids</Meta>
@@ -652,24 +659,7 @@ export default function AuctionsScreen() {
             keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalListContent}
-            renderItem={({ item }) => (
-              <AnimatedPressable
-                style={styles.upcomingCard}
-                activeOpacity={0.9}
-                onPress={() => navigateToDetail(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Open upcoming auction ${item.title}`}
-              >
-                <SharedTransitionView style={styles.upcomingImageFrame} sharedTransitionTag={`image-${item.listingId}-0`}>
-                  <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={styles.upcomingImageContainer} contentFit="cover" />
-                </SharedTransitionView>
-                <View style={styles.upcomingMeta}>
-                  <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-                  <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
-                  <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
-                </View>
-              </AnimatedPressable>
-            )}
+            renderItem={renderUpcomingItem}
           />
         </View>
       )}
@@ -711,54 +701,43 @@ export default function AuctionsScreen() {
     return auctions;
   }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
 
-  const renderAuctionCard = useCallback(({ item, index }: { item: AuctionViewModel; index: number }) => {
+  const renderAuctionCard = useCallback(({ item }: { item: AuctionViewModel }) => {
     const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .duration(Motion.list.enterDuration)
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+      <AuctionCard
+        id={item.id}
+        title={item.title}
+        image={item.image}
+        sellerName={sellerLabel}
+        sellerId={item.sellerId}
+        currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+        bidCount={item.bidCount}
+        timeRemaining={formatCountdown(item.msToEnd ?? 0)}
+        progress={item.progress ?? 0}
+        isLive={item.lifecycle === 'live'}
+        isWatching={item.isWatched}
+        viewerState={item.viewerState}
+        timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
+        endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
+        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+        onPress={() => navigateToDetail(item)}
+        onBid={() => openBidComposer(item)}
+        onBuyNow={() => void handleBuyNow(item)}
+        onToggleWatch={() => void handleToggleWatch(item)}
+        onPressSeller={() => openProfile(navigation, item.sellerId, currentUser?.id)}
+        onMessageSeller={() =>
+          navigation.navigate('Chat', {
+            conversationId: `${item.sellerId}_${item.listingId}`,
+            focusQuery: sellerLabel,
+            partnerUserId: item.sellerId,
+          })
         }
-      >
-        <AuctionCard
-          id={item.id}
-          title={item.title}
-          image={item.image}
-          sellerName={sellerLabel}
-          sellerId={item.sellerId}
-          currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
-          bidCount={item.bidCount}
-          timeRemaining={formatCountdown(item.msToEnd ?? 0)}
-          progress={item.progress ?? 0}
-          isLive={item.lifecycle === 'live'}
-          isWatching={item.isWatched}
-          viewerState={item.viewerState}
-          timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
-          endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
-          buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
-          onPress={() => navigateToDetail(item)}
-          onBid={() => openBidComposer(item)}
-          onBuyNow={() => void handleBuyNow(item)}
-          onToggleWatch={() => void handleToggleWatch(item)}
-          onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
-          onMessageSeller={() =>
-            navigation.navigate('Chat', {
-              conversationId: `${item.sellerId}_${item.listingId}`,
-              focusQuery: sellerLabel,
-              partnerUserId: item.sellerId,
-            })
-          }
-          onViewBidHistory={() => void openBidHistory(item)}
-          isBuyNowLoading={buyNowAuctionId === item.id}
-          isBidSubmitting={isSubmittingBid}
-        />
-      </Reanimated.View>
+        onViewBidHistory={() => void openBidHistory(item)}
+        isBuyNowLoading={buyNowAuctionId === item.id}
+        isBidSubmitting={isSubmittingBid}
+      />
     );
   }, [
-    reducedMotionEnabled,
     formatFromFiat,
     navigateToDetail,
     openBidComposer,
@@ -942,7 +921,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 2,
   },
   sortChipActive: {
@@ -952,6 +931,7 @@ function createStyles(colors: ThemeColors) {
   sortChipText: {
     color: colors.textSecondary,
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
   sortChipTextActive: {
     color: colors.textInverse,
@@ -978,6 +958,7 @@ function createStyles(colors: ThemeColors) {
   statusChipText: {
     color: colors.textSecondary,
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
   statusChipTextActive: {
     color: colors.textInverse,
@@ -1002,7 +983,7 @@ function createStyles(colors: ThemeColors) {
   launchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chromeCompact + 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
   },
   actionBtnRow: {
     flexDirection: 'row',
@@ -1034,7 +1015,11 @@ function createStyles(colors: ThemeColors) {
   featuredLabel: {
     marginBottom: Space.sm,
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textSecondary,
+    textTransform: 'uppercase',
   },
   featuredCard: {
     borderRadius: Radius.lg,
@@ -1099,29 +1084,43 @@ function createStyles(colors: ThemeColors) {
   endingSoonText: {
     color: '#fff',
     fontSize: Type.meta.size - 3,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.5,
   },
   featuredLiveText: {
     color: colors.textInverse,
     fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.5,
   },
   featuredMeta: {
-    padding: Space.md,
+    padding: Space.md + 2,
   },
   featuredTitle: {
-    marginBottom: Space.sm,
-    fontSize: Type.bodyLarge.size,
+    marginBottom: Space.sm + 2,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   featuredStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: Space.sm,
   },
   featuredStatLabel: {
-    fontSize: Type.meta.size,
-    marginBottom: Space.xs / 2,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    color: colors.textSecondary,
+    marginBottom: Space.xs / 2 + 1,
+    textTransform: 'uppercase',
   },
   featuredStatValue: {
-    fontSize: Type.body.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   featuredTimer: {
     color: colors.danger,
@@ -1162,7 +1161,9 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sectionTitle: {},
+  sectionTitle: {
+    fontFamily: Typography.family.semibold,
+  },
   horizontalListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -1190,16 +1191,20 @@ function createStyles(colors: ThemeColors) {
     height: '100%',
   },
   upcomingMeta: {
-    padding: Space.sm + 2,
+    padding: Space.sm + 4,
   },
   upcomingTitle: {
-    marginBottom: Space.xs,
+    marginBottom: Space.xs + 1,
+    fontFamily: Typography.family.semibold,
   },
   upcomingTimer: {
     color: colors.brand,
     marginBottom: Space.xs / 2,
+    fontVariant: ['tabular-nums'],
   },
-  upcomingBid: {},
+  upcomingBid: {
+    fontVariant: ['tabular-nums'],
+  },
   loadingWrap: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -1224,7 +1229,9 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   bidHistoryTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
     marginBottom: Space.xs / 2,
   },
   bidHistorySubtitle: {
@@ -1284,9 +1291,14 @@ function createStyles(colors: ThemeColors) {
   },
   bidHistoryMinNextBidLabel: {
     color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
   },
   bidHistoryMinNextBidValue: {
     color: colors.brand,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   bidHistoryList: {
     flex: 1,
@@ -1295,7 +1307,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -1312,13 +1324,19 @@ function createStyles(colors: ThemeColors) {
   },
   bidHistoryRowLabel: {
     color: colors.textSecondary,
-    marginBottom: 2,
+    marginBottom: 3,
+    fontFamily: Typography.family.medium,
   },
   bidHistoryRowBidder: {
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   bidHistoryRowAmount: {
     color: colors.textPrimary,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   });
 }

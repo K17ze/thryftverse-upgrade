@@ -4,7 +4,7 @@ import {
   StyleSheet,
   ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Reanimated, {
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Reanimated, {
   useAnimatedScrollHandler,
   interpolate,
   Extrapolation,
+  runOnJS,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
@@ -32,6 +33,9 @@ export interface FlagshipScreenProps {
    *  Use this when the child screen owns its own ScrollView (scrollEnabled={false})
    *  and needs to ensure the last form field clears the footer. */
   footerInsetHeight?: number;
+  /** When true, the scroll content also respects the bottom safe-area inset
+   *  (useful for full-bleed scroll surfaces without a sticky footer). */
+  respectBottomInset?: boolean;
 }
 
 export function FlagshipScreen({
@@ -45,16 +49,26 @@ export function FlagshipScreen({
   onScroll,
   scrollRef,
   footerInsetHeight,
+  respectBottomInset = false,
 }: FlagshipScreenProps) {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const scrollY = useSharedValue(0);
+
+  // Stable JS callback reference for the worklet → JS bridge.
+  const jsOnScrollRef = React.useRef(onScroll);
+  jsOnScrollRef.current = onScroll;
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
-      if (onScroll) {
-        onScroll(event.contentOffset.y);
+      // Marshal the JS callback off the UI thread. Calling a raw JS function
+      // inside a worklet would either throw or silently marshal per call;
+      // runOnJS makes the bridge explicit and keeps the UI thread responsive.
+      const cb = jsOnScrollRef.current;
+      if (cb) {
+        runOnJS(cb)(event.contentOffset.y);
       }
     },
   });
@@ -80,6 +94,12 @@ export function FlagshipScreen({
     };
   });
 
+  // Bottom inset for scroll content. When a sticky footer is present it owns
+  // its own bottom safe-area padding (FlagshipStickyFooter), so we only add
+  // the system inset when explicitly requested for full-bleed scroll surfaces.
+  const bottomInset = respectBottomInset ? insets.bottom : 0;
+  const trailingSpace = footerInsetHeight ?? (stickyFooter ? Space.xxl : Space.xl);
+
   const innerContent = (
     <View style={[styles.container, { backgroundColor: colors.background }, style]}>
       {header && (
@@ -97,7 +117,7 @@ export function FlagshipScreen({
           scrollEventThrottle={16}
         >
           {children}
-          <View style={{ height: footerInsetHeight ?? (stickyFooter ? Space.xxl : Space.xl) }} />
+          <View style={{ height: trailingSpace + bottomInset }} />
         </Reanimated.ScrollView>
       ) : (
         <View style={[styles.content, contentStyle]}>{children}</View>

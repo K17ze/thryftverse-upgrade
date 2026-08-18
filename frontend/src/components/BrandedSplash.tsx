@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
-  FadeInDown,
   FadeIn,
   useSharedValue,
   useAnimatedStyle,
@@ -59,17 +58,12 @@ export function BrandedSplash({ onFinish }: BrandedSplashProps) {
       <Reanimated.View style={[styles.centerWrap, pulseStyle]} entering={wrapperEnterAnimation}>
         <View style={styles.brandRow}>
           {WORDMARK.split('').map((letter, index) => (
-            <Reanimated.Text
+            <Text
               key={`${letter}_${index}`}
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown.duration(320).delay(Math.min(index, 12) * 45)
-              }
               style={styles.brandLetter}
             >
               {letter}
-            </Reanimated.Text>
+            </Text>
           ))}
         </View>
         <Reanimated.Text entering={taglineEnterAnimation} style={styles.tagline}>

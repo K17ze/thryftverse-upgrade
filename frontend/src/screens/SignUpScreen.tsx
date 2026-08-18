@@ -14,7 +14,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
@@ -31,6 +31,28 @@ export default function SignUpScreen() {
   const [passwordError, setPasswordError] = useState('');
   const reducedMotionEnabled = useReducedMotion();
   const canSubmit = username.trim().length > 0 && email.trim().length > 0 && password.length > 0 && !isSubmitting;
+
+  // Password strength — computed from length, character variety, and common
+  // pattern checks. Provides real-time behavioral feedback (§27.1) so the
+  // user knows their password meets requirements before submitting.
+  const passwordStrength = useMemo(() => {
+    const len = password.length;
+    if (len === 0) return { level: 0, label: '', color: colors.textMuted };
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    const variety = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
+    let score = 0;
+    if (len >= 8) score++;
+    if (len >= 12) score++;
+    if (variety >= 3) score++;
+    if (variety >= 4 && len >= 10) score++;
+    if (score <= 1) return { level: 1, label: 'Weak', color: colors.danger };
+    if (score === 2) return { level: 2, label: 'Fair', color: colors.warning };
+    if (score === 3) return { level: 3, label: 'Good', color: colors.bronze };
+    return { level: 4, label: 'Strong', color: colors.success };
+  }, [password, colors]);
 
   const errorPulse = useSharedValue(1);
 
@@ -65,7 +87,7 @@ export default function SignUpScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedUsername || !normalizedEmail || !password) {
-      setErrorMsg('Please fill in all details.');
+      setErrorMsg('Fill in all details.');
       setUsernameError(!normalizedUsername ? 'Username is required.' : '');
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');
@@ -123,8 +145,14 @@ export default function SignUpScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        <AnimatedPressable
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          accessibilityHint="Returns to the previous screen"
+        >
+          <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -136,7 +164,10 @@ export default function SignUpScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={styles.title}>Join{'\n'}the movement.</Text>
+            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Join{'\n'}the movement.</Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>
+              Create your account to discover, buy, sell, and co-own unique pieces.
+            </Text>
 
             <View style={styles.form}>
               <AppInput
@@ -190,11 +221,42 @@ export default function SignUpScreen() {
                 }}
                 containerStyle={styles.inputGroup}
               />
+              {/* Password strength indicator — behavioral-level feedback
+                  (§27.1). Shows the user how strong their password is as
+                  they type, reducing anxiety about meeting hidden
+                  requirements. Only visible when password is non-empty. */}
+              {password.length > 0 && (
+                <View
+                  style={styles.passwordStrength}
+                  accessibilityRole="text"
+                  accessibilityLabel={`Password strength: ${passwordStrength.label}`}
+                >
+                  <View style={styles.strengthBars}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.strengthBar,
+                          {
+                            backgroundColor:
+                              i < passwordStrength.level
+                                ? passwordStrength.color
+                                : colors.surfaceAlt,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={[styles.strengthLabel, { color: passwordStrength.color }]} maxFontSizeMultiplier={1.3}>
+                    {passwordStrength.label}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.termsText}>
+            <Text style={styles.termsText} maxFontSizeMultiplier={1.3}>
               By signing up, you agree to our Terms of Service and Privacy Policy.
             </Text>
 
@@ -204,6 +266,7 @@ export default function SignUpScreen() {
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
                 style={styles.errorText}
+                maxFontSizeMultiplier={1.4}
               >
                 {errorMsg}
               </Reanimated.Text>
@@ -231,7 +294,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.lg },
-  backBtn: { width: 44, height: 44, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.xxl, alignItems: 'center', justifyContent: 'center' },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -242,16 +305,40 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
+  title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing, marginBottom: Space.md },
+  subtitle: { fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.xl + 8 },
 
   form: { marginBottom: Space.lg + 6 },
   inputGroup: { marginBottom: Space.lg - 2 },
 
+  passwordStrength: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginTop: -Space.xs,
+    marginBottom: Space.lg - 6,
+  },
+  strengthBars: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    flex: 1,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: Radius.sm,
+  },
+  strengthLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
+  },
+
   footer: { paddingBottom: Space.sm, position: 'relative' },
   termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
   errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  primaryBtn: { backgroundColor: colors.brand, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
+  primaryText: { color: colors.textInverse, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
 });
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Stroke, Type } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -17,7 +17,8 @@ interface Props {
   accessibilityLabel?: string;
   accessibilityHint?: string;
   rightElement?: React.ReactNode;
-  /** Icon name from Ionicons — displayed in a tinted circle to aid scanning */
+  /** Icon name from Ionicons — displayed as a direct glyph (no decorative
+   *  circle). Brand-tinted when filled, muted when empty. */
   icon?: IoniconName;
   /** Whether the row has a value selected (affects icon tint and action style) */
   isFilled?: boolean;
@@ -43,7 +44,7 @@ export function CheckoutSelectionRow({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
-    <View style={[styles.wrapper, isFilled && styles.wrapperFilled]}>
+    <View style={styles.wrapper}>
       <Pressable
         onPress={onPress ?? (() => {})}
         disabled={!onPress}
@@ -55,10 +56,10 @@ export function CheckoutSelectionRow({
       >
         <View style={styles.left}>
           {icon && (
-            <View style={[styles.iconWrap, !isFilled && styles.iconWrapEmpty]}>
+            <View style={styles.iconSlot}>
               <Ionicons
                 name={icon}
-                size={16}
+                size={20}
                 color={isFilled ? colors.brand : colors.textMuted}
               />
             </View>
@@ -69,7 +70,7 @@ export function CheckoutSelectionRow({
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             {warningText ? (
               <View style={styles.alertRow}>
-                <Ionicons name="warning-outline" size={12} color="#B8860B" />
+                <Ionicons name="warning-outline" size={12} color={colors.warning} />
                 <Text style={styles.warningText}>{warningText}</Text>
               </View>
             ) : null}
@@ -104,11 +105,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  wrapperFilled: {
-    borderLeftWidth: Stroke.standard,
-    borderLeftColor: colors.brand,
-    paddingLeft: Space.sm,
-  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -125,17 +121,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm + 2,
   },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
+  iconSlot: {
+    width: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-  },
-  iconWrapEmpty: {
-    backgroundColor: colors.surfaceAlt,
+    marginTop: 3,
   },
   textCol: {
     flex: 1,
@@ -172,7 +162,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   warningText: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: '#B8860B',
+    color: colors.warning,
   },
   errorText: {
     fontSize: Type.captionElevated.size,

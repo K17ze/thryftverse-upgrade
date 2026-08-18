@@ -18,7 +18,7 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
 
   const isMet = status === 'met';
   const iconName = isMet ? 'shield-checkmark-outline' : 'shield-half-outline';
-  const color = isMet ? colors.success : '#E8A93C';
+  const color = isMet ? colors.success : colors.warning;
   const label = isMet ? 'Reserve met' : 'Reserve not met';
   const explanation = isMet
     ? 'The seller\u2019s minimum price has been reached.'
@@ -30,7 +30,12 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
   const pillPaddingV = compact ? 2 : 3;
 
   return (
-    <View style={styles.wrapper}>
+    <View
+      style={styles.wrapper}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={label}
+    >
       <View
         style={[
           styles.pill,

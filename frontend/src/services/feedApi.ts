@@ -1,4 +1,4 @@
-import { Listing, ListingSeller } from '../data/mockData';
+import type { Listing, ListingSeller } from '../domain';
 import { fetchJson } from '../lib/apiClient';
 import { mapBackendListings, friendlyBackendError } from './listingMapper';
 
@@ -87,6 +87,8 @@ export interface SearchApiResult {
     seller?: ListingSeller | null;
     brand?: string | null;
     size?: string | null;
+    condition?: string | null;
+    category?: string | null;
   }>;
   fallback?: boolean;
   error?: string;

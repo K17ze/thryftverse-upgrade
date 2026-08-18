@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -14,6 +13,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
+import type { Listing } from '../domain';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
@@ -21,8 +21,6 @@ import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
@@ -57,7 +55,6 @@ export default function CreateAuctionScreen() {
   const { currencyCode, goldRates } = useCurrencyContext();
   const { listings, refreshListings } = useBackendData();
   const queryClient = useQueryClient();
-  const reducedMotionEnabled = useReducedMotion();
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -193,13 +190,13 @@ export default function CreateAuctionScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
       void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
-      show('Failed to launch auction. Please try again.', 'error');
+      show('Failed to launch auction. Try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderListingCard = ({ item }: { item: any }) => {
+  const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
     return (
       <AnimatedPressable
@@ -279,7 +276,7 @@ export default function CreateAuctionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {!sellerListings.length ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+          <View>
             <EmptyState
               icon="pricetag-outline"
               title="No listings available"
@@ -287,15 +284,15 @@ export default function CreateAuctionScreen() {
               ctaLabel="Create Listing"
               onCtaPress={() => navigation.navigate('Sell')}
             />
-          </Reanimated.View>
+          </View>
         ) : (
           <>
             {/* ── Stage 0: Select listing ── */}
             {stage === 0 && (
               <>
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                <View>
                   <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
-                </Reanimated.View>
+                </View>
 
                 <FlashList
                   data={sellerListings}
@@ -306,7 +303,7 @@ export default function CreateAuctionScreen() {
                   renderItem={renderListingCard}
                 />
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                <View>
                   <TradeCard variant="elevated" style={styles.previewCard}>
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
@@ -318,14 +315,14 @@ export default function CreateAuctionScreen() {
                       </Meta>
                     </View>
                   </TradeCard>
-                </Reanimated.View>
+                </View>
               </>
             )}
 
             {/* ── Stage 1: Configure ── */}
             {stage === 1 && (
               <>
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <Meta style={styles.sectionLabel}>START WINDOW</Meta>
                     <View style={styles.windowRow}>
@@ -350,9 +347,9 @@ export default function CreateAuctionScreen() {
                       ))}
                     </View>
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <Meta style={styles.sectionLabel}>DURATION</Meta>
                     <View style={styles.windowRow}>
@@ -377,9 +374,9 @@ export default function CreateAuctionScreen() {
                       ))}
                     </View>
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <Meta style={styles.sectionLabel}>STARTING BID</Meta>
                     <AppInput
@@ -392,9 +389,9 @@ export default function CreateAuctionScreen() {
                       containerStyle={styles.input}
                     />
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <Meta style={styles.sectionLabel}>RESERVE PRICE (OPTIONAL)</Meta>
                     <AppInput
@@ -409,9 +406,9 @@ export default function CreateAuctionScreen() {
                       containerStyle={styles.input}
                     />
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
                       <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
@@ -440,19 +437,19 @@ export default function CreateAuctionScreen() {
                       />
                     )}
                   </TradeCard>
-                </Reanimated.View>
+                </View>
               </>
             )}
 
             {/* ── Stage 2: Review & Launch ── */}
             {stage === 2 && (
               <>
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
+                <View>
                   <Headline style={styles.reviewHeadline}>Review your auction</Headline>
                   <Meta style={styles.reviewSubheadline}>Confirm the details below before launching.</Meta>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(100)}>
+                <View>
                   <TradeCard variant="elevated" style={styles.previewCard}>
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
@@ -464,9 +461,9 @@ export default function CreateAuctionScreen() {
                       </Meta>
                     </View>
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                <View>
                   <TradeCard style={styles.formCard}>
                     <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
                     <View style={styles.termsRow}>
@@ -525,9 +522,9 @@ export default function CreateAuctionScreen() {
                       </View>
                     </View>
                   </TradeCard>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(200)}>
+                <View>
                   <View style={styles.termsCard}>
                     <Meta style={styles.termsSectionLabel}>TERMS & FEES</Meta>
                     <View style={styles.termsInlineRow}>
@@ -541,12 +538,12 @@ export default function CreateAuctionScreen() {
                       <Text style={styles.termsInlineValue}>After auction ends</Text>
                     </View>
                   </View>
-                </Reanimated.View>
+                </View>
 
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
+                <View>
                   <AppButton
                     title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-                    icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={colors.background} />}
+                    icon={isSubmitting ? undefined : <Ionicons name="speedometer-outline" size={16} color={colors.background} />}
                     onPress={launchAuction}
                     variant="primary"
                     size="md"
@@ -556,7 +553,7 @@ export default function CreateAuctionScreen() {
                     hapticFeedback="medium"
                     accessibilityLabel="Launch auction"
                   />
-                </Reanimated.View>
+                </View>
               </>
             )}
 
@@ -593,10 +590,7 @@ export default function CreateAuctionScreen() {
       {resultData && (
         <View style={styles.resultOverlay}>
           <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
-            style={styles.resultCard}
-          >
+          <View style={styles.resultCard}>
             {/* Success mark — refined, not a giant icon */}
             <View style={styles.resultIconWrap}>
               <Ionicons name="checkmark" size={28} color={colors.success} />
@@ -683,7 +677,7 @@ export default function CreateAuctionScreen() {
                 accessibilityLabel="Close and go back"
               />
             </View>
-          </Reanimated.View>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -699,7 +693,7 @@ function createStyles(colors: ThemeColors) {
   headerLaunchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chrome - 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
   },
   content: {
     paddingBottom: Space.xl,
@@ -722,18 +716,10 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
-      android: { elevation: 2 },
-    }),
   },
   listingCardSelected: {
     borderColor: colors.brand,
     borderWidth: Stroke.emphasis,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 12 },
-      android: { elevation: 6 },
-    }),
   },
   listingImageContainer: {
     width: '100%',
@@ -806,7 +792,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     minHeight: Control.hit,
   },
   windowChipActive: {
@@ -835,7 +821,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 1,
     minWidth: Space.xxl,
     alignItems: 'center',

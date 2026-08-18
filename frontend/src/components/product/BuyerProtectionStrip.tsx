@@ -37,7 +37,7 @@ export function BuyerProtectionStrip({
   if (compact) {
     return (
       <View style={styles.compactContainer}>
-        <Ionicons name="shield-checkmark" size={14} color={colors.success} />
+        <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
         <Text style={styles.compactText} numberOfLines={1}>
           {text}
         </Text>
@@ -48,7 +48,7 @@ export function BuyerProtectionStrip({
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Ionicons name="shield-checkmark" size={18} color={colors.success} />
+        <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
       </View>
       <View style={styles.textWrap}>
         <Text style={styles.title}>{label}</Text>

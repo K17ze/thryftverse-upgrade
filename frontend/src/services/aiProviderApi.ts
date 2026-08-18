@@ -6,16 +6,15 @@
  * locally on-device only:
  *  - When `expo-secure-store` (hardware-backed Keychain / Keystore) is
  *    available, keys are stored there encrypted at rest.
- *  - Otherwise keys fall back to AsyncStorage (still on-device, but not
- *    hardware-backed). The caller is told which store was used so the UI can
- *    be truthful about the storage class (AGENTS.md §11).
+ *  - Otherwise keys are held in process-memory only for the current
+ *    session. They are NEVER written to AsyncStorage or any other
+ *    plaintext app-storage. The caller is told which store was used
+ *    ('secure' | 'session') so the UI can be truthful (AGENTS.md §11).
  *
  * Per AGENTS.md §11 (Truthful UI):
- *  - `testApiKey` validates the key FORMAT only (prefix + length). It does NOT
- *    make a real network call. The result is labelled "Key saved locally" /
- *    "Valid format" — never "Connected to provider" — because no live request
- *    was sent. A real implementation would call the provider's /models
- *    endpoint; that is intentionally out of scope for this demo build.
+ *  - `testApiKey` performs a real provider round-trip (GET /models or
+ *    equivalent minimal endpoint) to verify the key is authorised. The
+ *    result is labelled "Connected" only after a successful live response.
  *  - We never fabricate a successful provider round-trip.
  *
  * Supported providers: 'openai' | 'anthropic' | 'gemini' | 'custom'.
@@ -58,17 +57,48 @@ export interface StoredProviderKey {
   /** Optional custom base URL (custom provider only). */
   baseUrl?: string;
   /** Where the key was actually persisted. */
-  storageClass: 'secure' | 'async';
+  storageClass: 'secure' | 'session';
   /** ISO timestamp of when the key was saved. */
   savedAt: string;
 }
 
 export type TestResult =
-  | { status: 'valid'; message: string }
+  | { status: 'valid'; message: string; models?: DiscoveredModel[] }
   | { status: 'invalid'; message: string };
 
 export interface ConnectedProvider extends StoredProviderKey {
   config: ProviderConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic model discovery (provider-authoritative)
+// ---------------------------------------------------------------------------
+
+/**
+ * A model discovered from the provider's API. The provider is the
+ * source-of-truth for which models exist — we do not ship a hardcoded
+ * consumer catalogue (spec 04: "Providers change faster than app releases").
+ */
+export interface DiscoveredModel {
+  /** Provider-authoritative model id (e.g. "gpt-4o"). */
+  providerModelId: string;
+  /** Human-readable display name. Falls back to the id when absent. */
+  displayName: string;
+  capabilities: {
+    text: boolean;
+    vision: boolean;
+    toolCalling: boolean;
+    structuredOutput: boolean;
+    reasoning?: boolean;
+  };
+  /** True when the provider marks the model as deprecated/sunset. */
+  deprecated?: boolean;
+}
+
+/** Cached discovery result so we don't re-fetch on every render. */
+interface CachedDiscovery {
+  models: DiscoveredModel[];
+  discoveredAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,36 +109,38 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
   openai: {
     id: 'openai',
     name: 'OpenAI',
-    description: 'GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo and o-series reasoning models.',
+    // No hardcoded model catalogue — models are discovered dynamically from
+    // the provider's /v1/models endpoint (spec 04: provider-authoritative).
+    description: 'OpenAI chat and reasoning models. Available models are discovered from your account.',
     icon: 'cube-outline',
     keyPrefixes: ['sk-'],
     minKeyLength: 20,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1', 'o1-mini', 'o3-mini'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'sk-...',
   },
   anthropic: {
     id: 'anthropic',
     name: 'Anthropic Claude',
-    description: 'Claude 3.5 Sonnet, Claude 3 Opus and Haiku chat models.',
+    description: 'Anthropic Claude chat models. Available models are discovered from your account.',
     icon: 'chatbubbles-outline',
     keyPrefixes: ['sk-ant-'],
     minKeyLength: 40,
-    models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'sk-ant-...',
   },
   gemini: {
     id: 'gemini',
     name: 'Google Gemini',
-    description: 'Gemini 1.5 Pro / Flash and Gemini 2.0 Flash multimodal models.',
-    icon: 'sparkles-outline',
+    description: 'Google Gemini multimodal models. Available models are discovered from your account.',
+    icon: 'globe-outline',
     // Google API keys are commonly prefixed with 'AIza' but the platform does
     // not strictly enforce it; we accept the prefix when present and otherwise
     // only enforce length.
     keyPrefixes: ['AIza'],
     minKeyLength: 30,
-    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'AIza...',
   },
@@ -119,13 +151,67 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     icon: 'server-outline',
     keyPrefixes: [],
     minKeyLength: 8,
-    models: ['Configured by your endpoint'],
+    models: [],
     supportsBaseUrl: true,
     keyPlaceholder: 'API key (optional for local servers)',
   },
 };
 
 export const PROVIDER_ORDER: AIProvider[] = ['openai', 'anthropic', 'gemini', 'custom'];
+
+// ---------------------------------------------------------------------------
+// Session-memory fallback (used only when secure storage is unavailable)
+// ---------------------------------------------------------------------------
+
+const sessionKeyStore = new Map<AIProvider, string>();
+const sessionBaseUrlStore = new Map<AIProvider, string>();
+
+// ---------------------------------------------------------------------------
+// Model discovery cache (AsyncStorage — not secret, safe to persist)
+// ---------------------------------------------------------------------------
+
+const DISCOVERY_CACHE_PREFIX = '@thryftverse_ai_provider/discovery/';
+const DISCOVERY_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+
+function discoveryCacheKey(provider: AIProvider): string {
+  return `${DISCOVERY_CACHE_PREFIX}${provider}`;
+}
+
+async function getCachedDiscovery(provider: AIProvider): Promise<DiscoveredModel[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(discoveryCacheKey(provider));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedDiscovery;
+    const age = Date.now() - new Date(cached.discoveredAt).getTime();
+    if (age > DISCOVERY_TTL_MS) return null;
+    return cached.models;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedDiscovery(provider: AIProvider, models: DiscoveredModel[]): Promise<void> {
+  try {
+    const entry: CachedDiscovery = { models, discoveredAt: new Date().toISOString() };
+    await AsyncStorage.setItem(discoveryCacheKey(provider), JSON.stringify(entry));
+  } catch {
+    // Cache failure is non-fatal — discovery still works without cache.
+  }
+}
+
+export async function clearDiscoveryCache(provider?: AIProvider): Promise<void> {
+  try {
+    if (provider) {
+      await AsyncStorage.removeItem(discoveryCacheKey(provider));
+    } else {
+      for (const p of PROVIDER_ORDER) {
+        await AsyncStorage.removeItem(discoveryCacheKey(p)).catch(() => {});
+      }
+    }
+  } catch {
+    // Non-fatal.
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Storage keys
@@ -147,7 +233,7 @@ function metaStorageKey(provider: AIProvider): string {
 }
 
 interface ProviderMeta {
-  storageClass: 'secure' | 'async';
+  storageClass: 'secure' | 'session';
   savedAt: string;
 }
 
@@ -191,14 +277,91 @@ export function validateBaseUrl(url: string): boolean {
   }
 }
 
+/**
+ * Returns `true` when the host is a private/loopback/reserved address that
+ * must not be reachable from a production build (SSRF guard). Hostnames that
+ * are not numeric IPs are considered public — only literal IP ranges and
+ * the well-known loopback name are blocked.
+ */
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1') return true;
+  const parts = h.split('.');
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const [a, b] = parts.map(Number);
+    if (a === 0) return true;                       // 0.0.0.0/8
+    if (a === 10) return true;                      // 10.0.0.0/8 private
+    if (a === 127) return true;                     // 127.0.0.0/8 loopback
+    if (a === 169 && b === 254) return true;        // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+    if (a === 192 && b === 168) return true;        // 192.168.0.0/16 private
+    if (a === 255) return true;                     // 255.255.255.255 broadcast
+  }
+  return false;
+}
+
+/**
+ * Validate a custom provider endpoint URL for transport safety and SSRF.
+ *
+ * - In production (`!__DEV__`), `http://` is rejected — HTTPS is the default.
+ * - In `__DEV__`, `http://` is allowed but a warning is logged so local
+ *   development servers (Ollama, LM Studio, etc.) keep working.
+ * - In production, private/loopback hosts are rejected to prevent SSRF
+ *   (`127.x`, `10.x`, `172.16–31.x`, `192.168.x`, `localhost`).
+ * - Throws an `Error` on rejection; returns `true` when the URL is acceptable.
+ *
+ * Exported so the hardening tests can exercise it directly.
+ */
+export function validateProviderEndpoint(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error('Endpoint URL is required.');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Endpoint URL is not a valid URL.');
+  }
+  if (!parsed.hostname) {
+    throw new Error('Endpoint URL must include a host.');
+  }
+
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+  if (parsed.protocol === 'http:') {
+    if (!isDev) {
+      throw new Error('Custom endpoints must use HTTPS in production.');
+    }
+    // Dev only — allow but warn so it is obvious this never ships.
+    console.warn(
+      '[aiProviderApi] Insecure http:// custom endpoint allowed in dev only:',
+      trimmed,
+    );
+  } else if (parsed.protocol !== 'https:') {
+    throw new Error(
+      `Unsupported endpoint protocol "${parsed.protocol}". Use https://.`,
+    );
+  }
+
+  // SSRF guard — only enforced in production. In dev, pointing at a local
+  // server (e.g. http://localhost:1234) is the common case.
+  if (!isDev && isPrivateHost(parsed.hostname)) {
+    throw new Error('Private/loopback endpoints are not allowed in production.');
+  }
+
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Save an API key for a provider. Uses hardware-backed SecureStore when
- * available, otherwise falls back to AsyncStorage. The storage class used is
- * recorded so the UI can truthfully report where the key lives.
+ * available. When secure storage is unavailable, the key is held in
+ * process-memory only for the current session — NEVER written to
+ * AsyncStorage or any plaintext app-storage (Phase 3 P0 security invariant).
  */
 export async function saveApiKey(
   provider: AIProvider,
@@ -209,7 +372,7 @@ export async function saveApiKey(
   const trimmedBaseUrl = baseUrl?.trim() || undefined;
 
   const secureAvailable = await isSecureStorageAvailable();
-  const storageClass: 'secure' | 'async' = secureAvailable ? 'secure' : 'async';
+  const storageClass: 'secure' | 'session' = secureAvailable ? 'secure' : 'session';
   const savedAt = new Date().toISOString();
 
   if (secureAvailable) {
@@ -220,14 +383,16 @@ export async function saveApiKey(
       await secureStorage.deleteItem(baseUrlStorageKey(provider)).catch(() => {});
     }
   } else {
-    await AsyncStorage.setItem(storageKey(provider), trimmedKey);
+    // Session-memory fallback: key lives only for the app process lifetime.
+    sessionKeyStore.set(provider, trimmedKey);
     if (trimmedBaseUrl) {
-      await AsyncStorage.setItem(baseUrlStorageKey(provider), trimmedBaseUrl);
+      sessionBaseUrlStore.set(provider, trimmedBaseUrl);
     } else {
-      await AsyncStorage.removeItem(baseUrlStorageKey(provider)).catch(() => {});
+      sessionBaseUrlStore.delete(provider);
     }
   }
 
+  // Metadata (storage class + timestamp) is not secret — safe in AsyncStorage.
   const meta: ProviderMeta = { storageClass, savedAt };
   await AsyncStorage.setItem(metaStorageKey(provider), JSON.stringify(meta));
 
@@ -253,8 +418,8 @@ export async function getApiKey(provider: AIProvider): Promise<StoredProviderKey
     apiKey = await secureStorage.getItem(storageKey(provider));
     baseUrl = await secureStorage.getItem(baseUrlStorageKey(provider));
   } else {
-    apiKey = await AsyncStorage.getItem(storageKey(provider));
-    baseUrl = await AsyncStorage.getItem(baseUrlStorageKey(provider));
+    apiKey = sessionKeyStore.get(provider) ?? null;
+    baseUrl = sessionBaseUrlStore.get(provider) ?? null;
   }
 
   if (!apiKey && !baseUrl) return null;
@@ -271,7 +436,7 @@ export async function getApiKey(provider: AIProvider): Promise<StoredProviderKey
     provider,
     apiKey: apiKey ?? '',
     baseUrl: baseUrl ?? undefined,
-    storageClass: meta?.storageClass ?? (secureAvailable ? 'secure' : 'async'),
+    storageClass: meta?.storageClass ?? (secureAvailable ? 'secure' : 'session'),
     savedAt: meta?.savedAt ?? new Date(0).toISOString(),
   };
 }
@@ -285,18 +450,287 @@ export async function removeApiKey(provider: AIProvider): Promise<void> {
     await secureStorage.deleteItem(storageKey(provider)).catch(() => {});
     await secureStorage.deleteItem(baseUrlStorageKey(provider)).catch(() => {});
   } else {
-    await AsyncStorage.removeItem(storageKey(provider)).catch(() => {});
-    await AsyncStorage.removeItem(baseUrlStorageKey(provider)).catch(() => {});
+    sessionKeyStore.delete(provider);
+    sessionBaseUrlStore.delete(provider);
   }
   await AsyncStorage.removeItem(metaStorageKey(provider)).catch(() => {});
+  // Clear the model discovery cache so stale models don't persist after
+  // disconnect (spec 04: model list is provider-authoritative).
+  await AsyncStorage.removeItem(discoveryCacheKey(provider)).catch(() => {});
 }
 
 /**
- * Test an API key. Per AGENTS.md §11 this validates the key FORMAT only — it
- * does not make a real network call to the provider. The result message is
- * truthful about what was checked.
+ * Probe a provider endpoint to verify the API key is authorised.
+ * Makes a minimal real HTTP request (GET /models or equivalent).
+ * Returns a structured result so the UI can show truthful status.
+ * When the probe succeeds, the response body is parsed to discover the
+ * provider-authoritative model list (spec 04: dynamic model discovery).
+ */
+async function probeProviderConnection(
+  provider: AIProvider,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<{ ok: boolean; message: string; models?: DiscoveredModel[] }> {
+  const trimmedKey = apiKey.trim();
+  const trimmedBase = baseUrl?.trim() || undefined;
+  const timeoutMs = 10000;
+
+  try {
+    let url: string;
+    let headers: Record<string, string>;
+
+    switch (provider) {
+      case 'openai':
+        url = trimmedBase ?? 'https://api.openai.com/v1/models';
+        headers = { Authorization: `Bearer ${trimmedKey}` };
+        break;
+      case 'anthropic':
+        url = trimmedBase ?? 'https://api.anthropic.com/v1/models';
+        headers = {
+          'x-api-key': trimmedKey,
+          'anthropic-version': '2023-06-01',
+        };
+        break;
+      case 'gemini':
+        url = trimmedBase
+          ? `${trimmedBase.replace(/\/$/, '')}/models`
+          : `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmedKey)}`;
+        headers = {};
+        break;
+      case 'custom':
+        if (!trimmedBase) {
+          return { ok: false, message: 'Custom endpoint requires a base URL.' };
+        }
+        url = `${trimmedBase.replace(/\/$/, '')}/models`;
+        headers = trimmedKey ? { Authorization: `Bearer ${trimmedKey}` } : {};
+        break;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, message: 'Authentication failed — key rejected by provider.' };
+    }
+    if (response.status === 429) {
+      return { ok: false, message: 'Rate limited — try again in a moment.' };
+    }
+    if (response.status >= 500) {
+      return { ok: false, message: 'Provider unavailable — try again later.' };
+    }
+    if (!response.ok) {
+      return { ok: false, message: `Provider returned HTTP ${response.status}.` };
+    }
+
+    // Parse the model list from the provider's response. This is the
+    // provider-authoritative source — we do not rely on a hardcoded
+    // catalogue (spec 04: dynamic model discovery).
+    let models: DiscoveredModel[] = [];
+    try {
+      const body = await response.json();
+      models = parseProviderModels(provider, body);
+    } catch {
+      // The probe succeeded (HTTP 200) but the body was not JSON or did
+      // not contain a recognisable model list. The connection is still
+      // valid — we just have no discovered models to report.
+    }
+
+    return { ok: true, message: 'Connected — key verified by provider.', models };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, message: 'Request timed out — check your connection.' };
+    }
+    return { ok: false, message: 'Endpoint unreachable — check the URL or your network.' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider model-list parsing — normalises each provider's /models response
+// into the common DiscoveredModel shape (spec 04).
+// ---------------------------------------------------------------------------
+
+/**
+ * Conservative default capability set used when the provider does not
+ * expose authoritative per-model capability metadata. We assume MINIMAL
+ * capabilities — never infer vision / tool-use / structured-output from
+ * the model id, because model IDs are not a reliable capability signal
+ * and overclaiming breaks truthful UI (AGENTS.md §11).
  *
- * If `persistOnValid` is true (default), a valid key is saved before returning.
+ * Only `text` is assumed `true` (a model that cannot produce text is not a
+ * chat model). `vision`, `toolCalling`, `structuredOutput` and `reasoning`
+ * are all `false` until the provider explicitly says otherwise.
+ *
+ * Exported so the hardening tests can exercise it directly.
+ */
+export function defaultCapabilities(): DiscoveredModel['capabilities'] {
+  return {
+    text: true,
+    vision: false,
+    toolCalling: false,
+    structuredOutput: false,
+    reasoning: false,
+  };
+}
+
+/**
+ * Read capability flags from a provider model object when it exposes
+ * authoritative per-model capability metadata. Returns `null` when no
+ * capability metadata is present — callers then fall back to the safe
+ * `defaultCapabilities()`. We never infer capabilities from the model id.
+ */
+function capabilitiesFromMetadata(m: any): DiscoveredModel['capabilities'] | null {
+  if (!m || typeof m !== 'object') return null;
+  const caps = m.capabilities ?? m.capability ?? m.supports;
+  if (!caps || typeof caps !== 'object') return null;
+  const pick = (key: string): boolean | undefined => {
+    const v = (caps as any)[key];
+    return typeof v === 'boolean' ? v : undefined;
+  };
+  const text = pick('text') ?? pick('input') ?? pick('completion');
+  const vision = pick('vision') ?? pick('image_input') ?? pick('images');
+  const toolCalling = pick('toolCalling') ?? pick('tool_use') ?? pick('tools') ?? pick('functionCalling');
+  const structuredOutput = pick('structuredOutput') ?? pick('structured_output') ?? pick('json_mode');
+  const reasoning = pick('reasoning');
+  // Only treat as authoritative if at least one flag was explicitly set.
+  if (
+    text === undefined &&
+    vision === undefined &&
+    toolCalling === undefined &&
+    structuredOutput === undefined &&
+    reasoning === undefined
+  ) {
+    return null;
+  }
+  return {
+    text: text ?? true,
+    vision: vision ?? false,
+    toolCalling: toolCalling ?? false,
+    structuredOutput: structuredOutput ?? false,
+    reasoning: reasoning ?? false,
+  };
+}
+
+/**
+ * Parse a provider's /models response body into a normalised list of
+ * DiscoveredModel entries. Each provider uses a slightly different schema,
+ * so we handle them individually and fall back gracefully. Capabilities
+ * are only set from authoritative provider metadata — never inferred from
+ * the model id (AGENTS.md §11 truthful UI).
+ */
+function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredModel[] {
+  if (!body || typeof body !== 'object') return [];
+
+  try {
+    switch (provider) {
+      case 'openai':
+      case 'custom': {
+        // OpenAI-compatible: { data: [{ id, ... }] }
+        const data = (body as any).data;
+        if (!Array.isArray(data)) return [];
+        return data
+          .map((m: any): DiscoveredModel | null => {
+            const id = typeof m?.id === 'string' ? m.id : null;
+            if (!id) return null;
+            return {
+              providerModelId: id,
+              displayName: id,
+              capabilities: capabilitiesFromMetadata(m) ?? defaultCapabilities(),
+              deprecated: m?.deprecated === true,
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      case 'anthropic': {
+        // Anthropic: { data: [{ id, display_name, ... }] } or { models: [...] }
+        const data = (body as any).data ?? (body as any).models;
+        if (!Array.isArray(data)) return [];
+        return data
+          .map((m: any): DiscoveredModel | null => {
+            const id = typeof m?.id === 'string' ? m.id : null;
+            if (!id) return null;
+            return {
+              providerModelId: id,
+              displayName: typeof m?.display_name === 'string' ? m.display_name : id,
+              capabilities: capabilitiesFromMetadata(m) ?? defaultCapabilities(),
+              deprecated: m?.deprecated === true,
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      case 'gemini': {
+        // Gemini: { models: [{ name: "models/gemini-1.5-pro", supportedGenerationMethods: [...] }] }
+        const models = (body as any).models;
+        if (!Array.isArray(models)) return [];
+        return models
+          .map((m: any): DiscoveredModel | null => {
+            const rawName = typeof m?.name === 'string' ? m.name : null;
+            if (!rawName) return null;
+            // Gemini returns "models/gemini-1.5-pro" — strip the prefix.
+            const id = rawName.replace(/^models\//, '');
+            // `supportedGenerationMethods` is authoritative provider metadata
+            // for which generation modes the model supports. We only derive
+            // `text` from it (generateContent => text). Vision, tool-calling
+            // and structured-output are NOT encoded in this list, so we leave
+            // them as safe defaults rather than guessing from the model id.
+            const methods: string[] = Array.isArray(m?.supportedGenerationMethods)
+              ? m.supportedGenerationMethods
+              : [];
+            const fromMeta = capabilitiesFromMetadata(m);
+            const caps: DiscoveredModel['capabilities'] = fromMeta ?? {
+              ...defaultCapabilities(),
+              text: methods.length === 0 || methods.includes('generateContent'),
+            };
+            return {
+              providerModelId: id,
+              displayName: id,
+              capabilities: caps,
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      default:
+        return [];
+    }
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Discover available models from a connected provider. Uses the cached
+ * result when fresh (within TTL), otherwise makes a live request to the
+ * provider's /models endpoint. Returns an empty array when the provider
+ * is not connected or the request fails — the caller should show a
+ * truthful empty state, not a hardcoded fallback list (spec 04).
+ */
+export async function discoverModels(provider: AIProvider): Promise<DiscoveredModel[]> {
+  // Check cache first.
+  const cached = await getCachedDiscovery(provider);
+  if (cached && cached.length > 0) return cached;
+
+  // Need a stored key to make the request.
+  const stored = await getApiKey(provider);
+  if (!stored || !stored.apiKey) return [];
+
+  const probe = await probeProviderConnection(provider, stored.apiKey, stored.baseUrl);
+  if (!probe.ok || !probe.models || probe.models.length === 0) return [];
+
+  await setCachedDiscovery(provider, probe.models);
+  return probe.models;
+}
+
+/**
+ * Test an API key by performing a real provider round-trip.
+ * The key is only saved if the provider confirms it is authorised.
+ *
+ * If `persistOnValid` is true (default), a verified key is saved before returning.
  */
 export async function testApiKey(
   provider: AIProvider,
@@ -324,13 +758,25 @@ export async function testApiKey(
     };
   }
 
+  const probe = await probeProviderConnection(provider, trimmedKey, baseUrl);
+  if (!probe.ok) {
+    return { status: 'invalid', message: probe.message };
+  }
+
   if (persistOnValid) {
     await saveApiKey(provider, trimmedKey, baseUrl?.trim() || undefined);
   }
 
+  // Cache discovered models so the UI can show the provider-authoritative
+  // list without re-fetching on every render (spec 04).
+  if (probe.models && probe.models.length > 0) {
+    await setCachedDiscovery(provider, probe.models);
+  }
+
   return {
     status: 'valid',
-    message: 'Valid format. Key saved locally — no live request was sent.',
+    message: probe.message,
+    models: probe.models,
   };
 }
 

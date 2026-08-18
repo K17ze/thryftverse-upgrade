@@ -13,17 +13,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius, Stroke, Control } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 
@@ -40,6 +39,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { calculateListingQuality } from '../utils/listingQuality';
+import {
+  evaluateListingCompleteness,
+  type ListingFieldValues,
+  type ListingFieldKey,
+} from '../contracts/listingCategoryPolicy';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -109,7 +113,6 @@ export default function EditListingScreen() {
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,6 +226,26 @@ export default function EditListingScreen() {
   }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
 
   /* ── media handling ── */
+  const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
+    setMediaItems((prev) => {
+      if (prev.some((m) => m.uri === asset.uri)) return prev;
+      const draftItem: ListingMediaDraftItem = {
+        id: asset.id,
+        uri: asset.uri,
+        kind: asset.kind,
+        source: 'local',
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        fileSize: asset.fileSize,
+        width: asset.width,
+        height: asset.height,
+        durationMs: asset.durationMs,
+        status: 'draft',
+      };
+      return [...prev, draftItem].slice(0, 10);
+    });
+  }, []);
+
   const handlePickFromLibrary = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -231,14 +254,24 @@ export default function EditListingScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
         quality: 0.9,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
-        const existing = mediaItems.map((m) => ({ id: m.id, uri: m.uri, fileName: m.fileName || 'existing', mimeType: m.mimeType || 'image/jpeg', kind: m.kind }));
+        const existing = mediaItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -246,17 +279,9 @@ export default function EditListingScreen() {
           if (skipped) setErrorMsg(skipped);
         }
 
-        const newItems: ListingMediaDraftItem[] = validation.assets.map((asset) => ({
-          id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          kind: 'image' as const,
-          source: 'local' as const,
-          status: 'draft' as const,
-          fileName: asset.fileName,
-          mimeType: asset.mimeType,
-        }));
-
-        setMediaItems((prev) => [...prev, ...newItems].slice(0, 10));
+        for (const asset of validation.assets) {
+          appendPhotoAsset(asset);
+        }
         if (validation.assets.length > 0) {
           haptics.success();
         }
@@ -264,7 +289,7 @@ export default function EditListingScreen() {
     } catch {
       setErrorMsg('Could not open photo library. Try again.');
     }
-  }, [mediaItems]);
+  }, [appendPhotoAsset, mediaItems]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -274,27 +299,28 @@ export default function EditListingScreen() {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
-        const existing = mediaItems.map((m) => ({ id: m.id, uri: m.uri, fileName: m.fileName || 'existing', mimeType: m.mimeType || 'image/jpeg', kind: m.kind }));
+        const existing = mediaItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
         }
         for (const a of validation.assets) {
-          const newItem: ListingMediaDraftItem = {
-            id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            uri: a.uri,
-            kind: 'image' as const,
-            source: 'local' as const,
-            status: 'draft' as const,
-            fileName: a.fileName,
-            mimeType: a.mimeType,
-          };
-          setMediaItems((prev) => [...prev, newItem].slice(0, 10));
+          appendPhotoAsset(a);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -303,7 +329,7 @@ export default function EditListingScreen() {
     } catch {
       setErrorMsg('Could not open camera. Try again.');
     }
-  }, [mediaItems]);
+  }, [appendPhotoAsset, mediaItems]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     const item = mediaItems.find((m) => m.id === itemId);
@@ -343,21 +369,75 @@ export default function EditListingScreen() {
   }, [mediaItems]);
 
   /* ── validation ── */
+  // Category-aware validation: use the completeness result's missing
+  // required fields instead of universal brand/size assumptions.
+  // Brandless vintage and sizeless home goods are valid when the policy
+  // says so.
+  const editCompleteness = useMemo(() => {
+    const numericPrice = Number(sanitizeDecimalInput(price));
+    const values: ListingFieldValues = {
+      title: title.trim() || null,
+      description: description.trim() || null,
+      price: numericPrice > 0 ? numericPrice : null,
+      category: category || null,
+      brand: brand || null,
+      size: size || null,
+      condition: condition || null,
+      images: mediaItems.length > 0 ? mediaItems.map((m) => m.publicUrl || m.uri) : null,
+      shippingMethod: shippingMethod || null,
+      shippingPayer: shippingPayer || null,
+    };
+    return evaluateListingCompleteness(values);
+  }, [title, description, price, category, brand, size, condition, mediaItems, shippingMethod, shippingPayer]);
+
+  const editFieldLabelMap: Record<ListingFieldKey, string> = {
+    title: 'title',
+    description: 'description',
+    price: 'price',
+    category: 'category',
+    subcategory: 'subcategory',
+    brand: 'brand',
+    size: 'size',
+    condition: 'condition',
+    images: 'photos',
+    shippingMethod: 'shipping method',
+    shippingPayer: 'shipping payer',
+  };
+
+  const editCompletenessLabel = editCompleteness.canActivate
+    ? 'Ready to publish'
+    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`;
+
+  const editRecommendedLabel = editCompleteness.missingRecommended.length > 0
+    ? `Suggested: ${editCompleteness.missingRecommended.map((f) => editFieldLabelMap[f]).join(', ')}`
+    : null;
+
   const validate = useCallback(() => {
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
 
-    if (!trimmedTitle) return 'Please provide a title.';
-    if (!category) return 'Please select a category.';
-    if (!brand) return 'Please select a brand.';
-    if (!size) return 'Please select a size.';
-    if (!condition) return 'Please select a condition.';
-    if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
-    if (mediaItems.length === 0) return 'Add at least one photo.';
+    // Category-aware: check missingRequired from the policy, not universal
+    // brand/size requirements.
+    for (const field of editCompleteness.missingRequired) {
+      switch (field) {
+        case 'title': if (!trimmedTitle) return 'Add a title.'; break;
+        case 'category': if (!category) return 'Select a category.'; break;
+        case 'brand': if (!brand) return 'Select a brand.'; break;
+        case 'size': if (!size) return 'Select a size.'; break;
+        case 'condition': if (!condition) return 'Select a condition.'; break;
+        case 'images': if (mediaItems.length === 0) return 'Add at least one photo.'; break;
+        case 'description':
+          if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
+          break;
+        case 'price':
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
+          break;
+        default: break;
+      }
+    }
     return '';
-  }, [title, category, brand, size, condition, description, price, mediaItems]);
+  }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
 
   /* ── save handler ── */
   const handleSave = useCallback(async () => {
@@ -388,11 +468,13 @@ export default function EditListingScreen() {
         const assets = newLocalItems.map((m) => ({
           id: m.id,
           uri: m.uri,
-          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-          mimeType: m.mimeType || 'image/jpeg',
+          fileName: m.fileName ?? m.uri.split('/').pop() ?? 'photo.jpg',
+          mimeType: m.mimeType ?? 'image/jpeg',
           kind: m.kind,
+          fileSize: m.fileSize,
           width: m.width,
           height: m.height,
+          durationMs: m.durationMs,
         }));
         queue.addAssets(assets);
         await queue.run();
@@ -468,8 +550,8 @@ export default function EditListingScreen() {
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');
-      setErrorMsg('Failed to update listing. Please try again.');
-      showToast('Failed to update listing. Please try again.', 'error');
+      setErrorMsg('Failed to update listing. Try again.');
+      showToast('Failed to update listing. Try again.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -698,7 +780,6 @@ export default function EditListingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
           {isOwner ? (
             <ListingMediaStudio
               items={mediaItems}
@@ -729,7 +810,6 @@ export default function EditListingScreen() {
               lockedNote="You do not have permission to edit this listing."
             />
           )}
-          </Reanimated.View>
 
           {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
           <View style={[styles.photoGuideCard, t.photoGuideCard]}>
@@ -778,7 +858,7 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 4. DETAILS ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -836,6 +916,8 @@ export default function EditListingScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
                   {brand ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : editCompleteness.policy.brandlessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -859,6 +941,8 @@ export default function EditListingScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
                   {size ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : editCompleteness.policy.sizelessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -892,10 +976,10 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-          </Reanimated.View>
+          </View>
 
           {/* ── 5. PRICING ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
@@ -990,10 +1074,10 @@ export default function EditListingScreen() {
                 />
               </View>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* ── 6. DESCRIPTION ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
@@ -1019,10 +1103,10 @@ export default function EditListingScreen() {
                 {description.trim().length} characters{description.trim().length < 10 ? ' · min 10' : description.length < 60 ? ' · add more detail' : ''}
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* ── 7. SHIPPING ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <Pressable
@@ -1055,7 +1139,7 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
             </Pressable>
-          </Reanimated.View>
+          </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
@@ -1064,6 +1148,27 @@ export default function EditListingScreen() {
               <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
+
+          {/* ── Category-aware completeness indicator ──
+              Per Phase 5 WP7: truthful completeness based on the category
+              policy. Flat inline — no card chrome (§4 surface budget). */}
+          <View style={styles.completenessRow}>
+            <Ionicons
+              name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
+              size={15}
+              color={editCompleteness.canActivate ? colors.success : colors.warning}
+            />
+            <View style={styles.completenessTextWrap}>
+              <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
+                {editCompletenessLabel}
+              </Text>
+              {editRecommendedLabel && !editCompleteness.canActivate ? (
+                <Text style={[styles.completenessHint, { color: colors.textMuted }]}>
+                  {editRecommendedLabel}
+                </Text>
+              ) : null}
+            </View>
+          </View>
 
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
@@ -1378,6 +1483,27 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   fieldRequiredHint: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+  },
+
+  /* -- category-aware completeness indicator (flat inline) -- */
+  completenessRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  completenessTextWrap: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  completenessLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  completenessHint: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
   },

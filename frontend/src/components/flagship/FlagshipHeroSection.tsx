@@ -1,12 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, { FadeInUp } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipHeroSectionProps {
   imageUri?: string;
@@ -28,7 +26,6 @@ export function FlagshipHeroSection({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
-  const reducedMotion = useReducedMotion();
 
   return (
     <View style={[styles.root, { width, height }]}>
@@ -38,24 +35,26 @@ export function FlagshipHeroSection({
         <View style={[styles.imageFallback, { width, height }]} />
       )}
 
+      {/* Authored scrim — bottom-weighted for text legibility */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.55)']}
+        colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
+        locations={[0.3, 0.6, 1.0]}
         style={[StyleSheet.absoluteFill, { width, height }]}
       />
 
       <View style={styles.textWrap}>
-        <Reanimated.Text entering={reducedMotion ? undefined : FadeInUp.duration(500)} style={styles.title}>
+        <Text style={styles.title}>
           {title}
-        </Reanimated.Text>
+        </Text>
         {subtitle && (
-          <Reanimated.Text entering={reducedMotion ? undefined : FadeInUp.delay(100).duration(500)} style={styles.subtitle}>
+          <Text style={styles.subtitle}>
             {subtitle}
-          </Reanimated.Text>
+          </Text>
         )}
         {ctaLabel && onCta && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeInUp.delay(180).duration(500)} style={styles.ctaWrap}>
+          <View style={styles.ctaWrap}>
             <AppButton title={ctaLabel} variant="primary" onPress={onCta} size="sm" />
-          </Reanimated.View>
+          </View>
         )}
       </View>
     </View>
@@ -81,23 +80,17 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   title: {
     fontSize: Type.display.size,
-    fontWeight: '800',
+    lineHeight: 38,
+    fontFamily: FontFamily.bold,
     color: '#fff',
-    letterSpacing: -0.8,
-    lineHeight: 40,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    letterSpacing: -0.5,
   },
   subtitle: {
     marginTop: Space.xs,
     fontSize: Type.body.size,
-    fontWeight: '400',
-    color: 'rgba(255,255,255,0.92)',
     lineHeight: 22,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.88)',
   },
   ctaWrap: {
     marginTop: Space.md,

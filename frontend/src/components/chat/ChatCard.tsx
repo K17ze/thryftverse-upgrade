@@ -69,10 +69,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Radius.md,
   },
   elevated: {
-    shadowColor: Elevation.card.shadowColor,
-    shadowOffset: Elevation.card.shadowOffset,
-    shadowOpacity: Elevation.card.shadowOpacity,
-    shadowRadius: Elevation.card.shadowRadius,
-    elevation: Elevation.card.elevation,
+    shadowColor: Elevation.subtle.shadowColor,
+    shadowOffset: Elevation.subtle.shadowOffset,
+    shadowOpacity: Elevation.subtle.shadowOpacity,
+    shadowRadius: Elevation.subtle.shadowRadius,
+    elevation: Elevation.subtle.elevation,
   },
 });

@@ -47,7 +47,7 @@ export function ProfileMediaEditor({
         </View>
         <View style={styles.actionRow}>
           <Pressable
-            style={styles.actionBtn}
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
             onPress={onRetry}
             accessibilityRole="button"
             accessibilityLabel={`Retry ${label.toLowerCase()} upload`}
@@ -55,7 +55,7 @@ export function ProfileMediaEditor({
             <Text style={styles.actionText}>Retry</Text>
           </Pressable>
           <Pressable
-            style={styles.actionBtn}
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.6 }]}
             onPress={onRevert}
             accessibilityRole="button"
             accessibilityLabel={`Revert ${label.toLowerCase()} to previous`}

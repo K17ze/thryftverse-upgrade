@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -16,8 +15,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toIze, formatIzeAmount } from '../utils/currency';
@@ -125,7 +122,6 @@ export default function MyBidsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates, displayMode } = useCurrencyContext();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [filter, setFilter] = React.useState<BidFilter>('all');
   const [endingSoonest, setEndingSoonest] = React.useState(false);
@@ -194,104 +190,93 @@ export default function MyBidsScreen() {
     void fetchItems(filter, nextCursor);
   }, [nextCursor, isLoadingMore, fetchItems, filter]);
 
-  const renderBidItem = useCallback(({ item, index }: { item: ActivityItem; index: number }) => {
+  const renderBidItem = useCallback(({ item }: { item: ActivityItem }) => {
     const stateInfo = getStateInfo(item.bidState, colors);
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .duration(Motion.list.enterDuration)
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-        }
+      <AnimatedPressable
+        style={styles.activityRow}
+        onPress={() => navigation.navigate('AuctionDetail', {
+          auctionId: item.auctionId,
+          // One-tap rebid: auto-open BidSheet when the user is outbid
+          openBidSheet: item.bidState === 'outbid',
+        })}
+        activeOpacity={0.92}
+        scaleValue={0.985}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, 'GBP')}`}
+        accessibilityHint={item.bidState === 'outbid' ? 'Opens auction with bid sheet ready to place a new bid' : 'Opens auction details'}
       >
-        <AnimatedPressable
-          style={styles.activityRow}
-          onPress={() => navigation.navigate('AuctionDetail', {
-            auctionId: item.auctionId,
-            // One-tap rebid: auto-open BidSheet when the user is outbid
-            openBidSheet: item.bidState === 'outbid',
-          })}
-          activeOpacity={0.92}
-          scaleValue={0.985}
-          accessibilityRole="button"
-          accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, 'GBP')}`}
-          accessibilityHint={item.bidState === 'outbid' ? 'Opens auction with bid sheet ready to place a new bid' : 'Opens auction details'}
-        >
-          {/* Edge-aligned imagery */}
-          <View style={styles.activityImageWrap}>
-            {item.imageUrl ? (
-              <CachedImage
-                uri={item.imageUrl}
-                style={styles.activityImage}
-                containerStyle={styles.activityImageContainer}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.activityImagePlaceholder}>
-                <Ionicons name="image-outline" size={18} color={colors.textMuted} />
+        {/* Edge-aligned imagery */}
+        <View style={styles.activityImageWrap}>
+          {item.imageUrl ? (
+            <CachedImage
+              uri={item.imageUrl}
+              style={styles.activityImage}
+              containerStyle={styles.activityImageContainer}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.activityImagePlaceholder}>
+              <Ionicons name="image-outline" size={18} color={colors.textMuted} />
+            </View>
+          )}
+        </View>
+
+        {/* Content — answers all activity questions */}
+        <View style={styles.activityBody}>
+          <BodyEmphasis style={styles.activityTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+          <View style={styles.activityStateRow}>
+            <Ionicons name={stateInfo.icon} size={14} color={stateInfo.color} />
+            <Text style={[styles.activityState, { color: stateInfo.color }]}>
+              {stateInfo.label}
+            </Text>
+          </View>
+          <View style={styles.activityPriceRow}>
+            {item.amountGbp > 0 && (
+              <View>
+                <Meta style={styles.activityPriceLabel}>Your bid</Meta>
+                <Body style={styles.activityPriceValue}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
+                {displayMode !== 'ize' && (
+                  <Text style={styles.activityIzeText}>
+                    {formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))}
+                  </Text>
+                )}
+              </View>
+            )}
+            {item.currentBidGbp > 0 && (
+              <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
+                <Meta style={styles.activityPriceLabel}>Current</Meta>
+                <Body style={styles.activityPriceValue}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
+                {displayMode !== 'ize' && (
+                  <Text style={styles.activityIzeText}>
+                    {formatIzeAmount(toIze(item.currentBidGbp, 'GBP', goldRates))}
+                  </Text>
+                )}
               </View>
             )}
           </View>
-
-          {/* Content — answers all activity questions */}
-          <View style={styles.activityBody}>
-            <BodyEmphasis style={styles.activityTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-            <View style={styles.activityStateRow}>
-              <Ionicons name={stateInfo.icon} size={12} color={stateInfo.color} />
-              <Text style={[styles.activityState, { color: stateInfo.color }]}>
-                {stateInfo.label}
-              </Text>
+          <View style={styles.activityMetaRow}>
+            <View style={styles.activityMetaCol}>
+              <Meta style={styles.activityMetaLabel}>Time</Meta>
+              <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
             </View>
-            <View style={styles.activityPriceRow}>
-              {item.amountGbp > 0 && (
-                <View>
-                  <Meta style={styles.activityPriceLabel}>Your bid</Meta>
-                  <Body style={styles.activityPriceValue}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
-                  {displayMode !== 'ize' && (
-                    <Text style={styles.activityIzeText}>
-                      {formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))}
-                    </Text>
-                  )}
-                </View>
-              )}
-              {item.currentBidGbp > 0 && (
-                <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
-                  <Meta style={styles.activityPriceLabel}>Current</Meta>
-                  <Body style={styles.activityPriceValue}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
-                  {displayMode !== 'ize' && (
-                    <Text style={styles.activityIzeText}>
-                      {formatIzeAmount(toIze(item.currentBidGbp, 'GBP', goldRates))}
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-            <View style={styles.activityMetaRow}>
+            {(item.bidState === 'won' || item.bidState === 'lost') && (
               <View style={styles.activityMetaCol}>
-                <Meta style={styles.activityMetaLabel}>Time</Meta>
-                <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
+                <Meta style={styles.activityMetaLabel}>Result</Meta>
+                <Text style={[styles.activityMetaValue, { color: stateInfo.color }]}>
+                  {item.bidState === 'won' ? 'Won' : 'Lost'}
+                </Text>
               </View>
-              {(item.bidState === 'won' || item.bidState === 'lost') && (
-                <View style={styles.activityMetaCol}>
-                  <Meta style={styles.activityMetaLabel}>Result</Meta>
-                  <Text style={[styles.activityMetaValue, { color: stateInfo.color }]}>
-                    {item.bidState === 'won' ? 'Won' : 'Lost'}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.activityNextRow}>
-                <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
-                <Ionicons name="chevron-forward" size={11} color={colors.brand} />
-              </View>
+            )}
+            <View style={styles.activityNextRow}>
+              <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
             </View>
           </View>
-        </AnimatedPressable>
-      </Reanimated.View>
+        </View>
+      </AnimatedPressable>
     );
   }, [
-    reducedMotionEnabled,
     colors,
     styles,
     navigation,
@@ -307,14 +292,11 @@ export default function MyBidsScreen() {
       <TradeHeader title="Auction Activity" onBack={() => navigation.goBack()} />
 
       {/* State rail — separated bid filters and watching */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.stateRailContent}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.stateRailContent}
-        >
           {BID_FILTERS.map((opt) => (
             <Pressable
               key={opt.value}
@@ -351,7 +333,7 @@ export default function MyBidsScreen() {
                 accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
                 accessibilityState={{ checked: endingSoonest }}
               >
-                <Ionicons name="time-outline" size={13} color={endingSoonest ? colors.textInverse : colors.textMuted} />
+                <Ionicons name="time-outline" size={14} color={endingSoonest ? colors.textInverse : colors.textMuted} />
                 <Text style={[styles.stateRailText, endingSoonest && styles.stateRailTextActive]}>
                   Ending soonest
                 </Text>
@@ -359,7 +341,6 @@ export default function MyBidsScreen() {
             </>
           )}
         </ScrollView>
-      </Reanimated.View>
 
       <FlashList
         data={sortedItems}
@@ -388,7 +369,7 @@ export default function MyBidsScreen() {
             <EmptyState
               icon="hammer-outline"
               title={filter === 'won' ? 'No wins yet' : filter === 'lost' ? 'No lost bids' : filter === 'leading' ? 'Not leading any bids' : filter === 'outbid' ? 'No outbid bids' : filter === 'watching' ? 'Not watching anything' : 'No activity yet'}
-              subtitle={filter === 'won' ? 'Auctions you win will appear here.' : filter === 'lost' ? 'Bids you did not win will appear here.' : filter === 'leading' ? 'Auctions where you have the top bid will appear here.' : filter === 'outbid' ? 'Auctions where someone outbid you will appear here.' : filter === 'watching' ? 'Auctions you watch will appear here.' : 'Bids you place on auctions will appear here.'}
+              subtitle={filter === 'won' ? 'Auctions you win appear here.' : filter === 'lost' ? "Bids you didn't win appear here." : filter === 'leading' ? 'Auctions where you have the top bid appear here.' : filter === 'outbid' ? 'Auctions where someone outbid you appear here.' : filter === 'watching' ? 'Auctions you watch appear here.' : 'Bids you place appear here.'}
             />
           )
         }

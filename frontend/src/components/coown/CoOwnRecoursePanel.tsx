@@ -8,6 +8,7 @@ import type {
   CoOwnSellerLiability,
   CoOwnVerificationDemand,
 } from '../../services/marketApi';
+import { formatShortDate } from '../../utils/dateFormat';
 
 export interface CoOwnRecoursePanelProps {
   recourseAgreementSigned: boolean;
@@ -215,7 +216,7 @@ export function CoOwnRecoursePanel({
           accessibilityRole="button"
           accessibilityLabel="Respond to verification request"
         >
-          <Ionicons name="shield-checkmark-outline" size={16} color={colors.warning} />
+          <Ionicons name="checkmark-circle-outline" size={16} color={colors.warning} />
           <Text style={[styles.demandButtonText, { color: colors.warning }]}>
             Respond to verification ({activeVerificationDemands} pending)
           </Text>
@@ -249,7 +250,7 @@ export function CoOwnRecoursePanel({
                 {d.demandType} · {d.status}
               </Text>
               <Text style={[styles.demandDate, { color: colors.textMuted }]}>
-                {new Date(d.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                {formatShortDate(d.createdAt)}
               </Text>
             </View>
           ))}

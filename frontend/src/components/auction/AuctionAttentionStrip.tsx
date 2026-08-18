@@ -153,9 +153,10 @@ const styles = StyleSheet.create({
   message: {
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size,
+    fontVariant: ['tabular-nums'],
   },
   actionBtn: {
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',

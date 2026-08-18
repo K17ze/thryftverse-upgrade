@@ -11,26 +11,23 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, DockConstants, Stroke, LetterSpacing } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnMarketHeader,
   CoOwnStickyActionDock,
   CoOwnCorporateActionRow,
   CoOwnStateCanvas,
   type CoOwnCorporateActionType,
   type CoOwnCorporateActionStatus,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnAssetDetailSkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
@@ -69,8 +66,7 @@ function formatAmount(minor: number | null): string | null {
 export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -187,29 +183,35 @@ export default function CorporateActionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Corporate action"
-          subtitle={dateLabel}
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Corporate action"
+            subtitle={dateLabel}
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <View style={styles.loadingContainer}>
           <CoOwnAssetDetailSkeleton />
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (error && !fetchedAction) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Corporate action"
-          subtitle={dateLabel}
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Corporate action"
+            subtitle={dateLabel}
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <CoOwnStateCanvas
           variant="error"
           title="Couldn't load corporate action"
@@ -217,20 +219,21 @@ export default function CorporateActionDetailScreen() {
           actionLabel="Retry"
           onAction={() => { haptics.tap(); setLoading(true); void loadAction(); }}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Corporate action"
-        subtitle={displayDateLabel}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Corporate action"
+          subtitle={displayDateLabel}
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
         showsVerticalScrollIndicator={false}
@@ -245,7 +248,7 @@ export default function CorporateActionDetailScreen() {
         }
       >
         {/* Event summary — the corporate action row as a non-interactive card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <CoOwnCorporateActionRow
             type={typedActionType}
             status={typedStatus}
@@ -255,29 +258,29 @@ export default function CorporateActionDetailScreen() {
             recordDateLabel={displayRecordDate ?? undefined}
             paymentDateLabel={displayPaymentDate ?? undefined}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Title (from backend if available) */}
         {fetchedAction && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
+          <View>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About this event</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
               {description}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Key dates */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
             <View style={styles.dateRow}>
@@ -303,10 +306,10 @@ export default function CorporateActionDetailScreen() {
               </View>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Effect */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -323,10 +326,10 @@ export default function CorporateActionDetailScreen() {
               </Text>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Status */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -339,11 +342,11 @@ export default function CorporateActionDetailScreen() {
               {!['pending', 'announced', 'effective', 'completed', 'cancelled', 'open'].includes(displayStatus) && displayStatus}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Governance voting — flagship treatment with tally bars, quorum, voting power */}
         {isGovernanceAction && actionId && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+          <View>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.voteHeaderRow}>
                 <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>
@@ -352,7 +355,7 @@ export default function CorporateActionDetailScreen() {
                 <View style={styles.voteHeaderText}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 2 }]}>Cast your vote</Text>
                   <Text style={[styles.voteHeaderSubtitle, { color: colors.textSecondary }]}>
-                    {myVote ? 'You can change your vote while open' : 'Your voting power is proportional to your holdings'}
+                    {myVote ? 'Change your vote while the poll is open' : 'Your voting power is proportional to your holdings'}
                   </Text>
                 </View>
               </View>
@@ -444,7 +447,7 @@ export default function CorporateActionDetailScreen() {
                 })}
               </View>
             </View>
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
 
@@ -459,13 +462,12 @@ export default function CorporateActionDetailScreen() {
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

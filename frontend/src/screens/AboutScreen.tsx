@@ -1,28 +1,64 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Linking,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'About'>;
 
+// Number of taps on the version row required to toggle developer mode.
+const DEVELOPER_MODE_TAP_THRESHOLD = 7;
+// Reset the tap counter after this many milliseconds of inactivity.
+const DEVELOPER_MODE_TAP_RESET_MS = 1500;
+
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
+  const haptic = useHaptic();
+  const { developerMode, setDeveloperMode } = useSettingsPreferences();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const versionTapCountRef = useRef(0);
+  const lastVersionTapRef = useRef(0);
+
+  const handleVersionTap = () => {
+    const now = Date.now();
+    // Reset the counter if too much time has passed since the last tap.
+    if (now - lastVersionTapRef.current > DEVELOPER_MODE_TAP_RESET_MS) {
+      versionTapCountRef.current = 0;
+    }
+    lastVersionTapRef.current = now;
+    versionTapCountRef.current += 1;
+
+    // Light haptic on each tap toward the threshold for tactile feedback.
+    haptic.light();
+
+    if (versionTapCountRef.current >= DEVELOPER_MODE_TAP_THRESHOLD) {
+      versionTapCountRef.current = 0;
+      const nextMode = !developerMode;
+      setDeveloperMode(nextMode);
+      haptic.medium();
+      show(
+        nextMode
+          ? 'Developer mode enabled — Advanced & developer settings are now visible.'
+          : 'Developer mode disabled.',
+        nextMode ? 'success' : 'info',
+      );
+    }
+  };
 
   const handleOpenExternal = async (url: string) => {
     try {
@@ -34,20 +70,33 @@ export default function AboutScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
-        {/* Hero summary — brand identity */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.heroCard}>
+        {/* Hero summary — brand identity. Tapping the version row 7 times
+            toggles developer mode, which reveals the "Advanced & developer"
+            section in Settings. The tap target is intentionally undiscoverable
+            so ordinary consumers never encounter developer tooling. */}
+        <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <View style={styles.brandIcon}>
               <Ionicons name="shirt-outline" size={32} color={colors.brand} />
             </View>
             <View style={styles.heroText}>
               <Text style={styles.brandName}>Thryftverse</Text>
-              <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
+              <Pressable
+                onPress={handleVersionTap}
+                accessibilityRole="text"
+                accessibilityLabel="Thryftverse version"
+                hitSlop={8}
+              >
+                <Text style={styles.brandVersion}>
+                  Version 1.0.0 (Build 2026.06.05)
+                  {developerMode ? ' · Developer' : ''}
+                </Text>
+              </Pressable>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <View>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -74,7 +123,7 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={[styles.rowRoot, styles.rowBorder]}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color={colors.textPrimary} />
+                  <Ionicons name="lock-closed-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Privacy Policy</Text>
@@ -99,9 +148,9 @@ export default function AboutScreen({ navigation }: Props) {
               </View>
             </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <View>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -121,7 +170,7 @@ export default function AboutScreen({ navigation }: Props) {
               </View>
             </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: Space.xl }} />
     </FlagshipScreen>
@@ -167,7 +216,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     marginTop: Space.lg,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -183,7 +232,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
     minHeight: Control.hit + Space.sm + Space.xs,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -18,6 +18,7 @@ import {
   Type,
   Control,
 } from '../../theme/designTokens';
+import { formatRelativeTime } from '../../utils/dateFormat';
 
 export interface SearchHistoryItem {
   term: string;
@@ -34,18 +35,6 @@ export interface SearchHistoryManagerProps {
   onDone: () => void;
 }
 
-function formatTimestamp(ts: number): string {
-  const now = Date.now();
-  const diff = now - ts;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
 
 export function SearchHistoryManager({
   items,
@@ -155,7 +144,7 @@ export function SearchHistoryManager({
               <View style={styles.rowTextWrap}>
                 <Text style={styles.rowTerm} numberOfLines={1}>{item.term}</Text>
                 <Text style={styles.rowMeta}>
-                  {item.pinned ? 'Pinned' : formatTimestamp(item.timestamp)}
+                  {item.pinned ? 'Pinned' : formatRelativeTime(item.timestamp)}
                 </Text>
               </View>
             </View>
@@ -208,7 +197,7 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.subtitle.letterSpacing,
     },
     doneBtn: {
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,

@@ -234,7 +234,7 @@ export function CoOwnAssetDossier({
           {(appraisal.rangeLow != null && appraisal.rangeHigh != null) && (
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Range</Text>
-              <Text style={[styles.infoValue, { color: colors.textSecondary }]}>
+              <Text style={[styles.infoValue, { color: colors.textSecondary, fontVariant: ['tabular-nums'] as ['tabular-nums'] }]}>
                 {appraisal.rangeLow.toLocaleString('en-GB')} – {appraisal.rangeHigh.toLocaleString('en-GB')} {appraisal.currency}
               </Text>
             </View>
@@ -339,6 +339,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   provenanceNote: {
     fontSize: Type.caption.size,
@@ -359,6 +360,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });
 

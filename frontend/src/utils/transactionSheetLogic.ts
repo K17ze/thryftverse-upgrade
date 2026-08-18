@@ -80,7 +80,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'seller_restricted',
-        message: 'You cannot bid on your own auction.',
+        message: 'Sellers can\'t bid on their own auctions.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -94,7 +94,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'auction_cancelled',
-        message: 'This auction has been cancelled.',
+        message: 'This auction was cancelled.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -108,7 +108,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'auction_settled',
-        message: 'This auction has been settled.',
+        message: 'This auction has ended and settled.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -122,7 +122,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'auction_ended',
-        message: 'This auction has ended. Bidding is no longer available.',
+        message: 'Bidding closed — this auction has ended.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -136,7 +136,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'auction_not_started',
-        message: 'This auction has not started yet.',
+        message: 'Auction hasn\'t started yet — check back soon.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -151,7 +151,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'invalid_amount',
-        message: 'Enter a valid bid amount.',
+        message: 'Enter a bid amount.',
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,
@@ -166,7 +166,7 @@ export function validateBidEntry(
       gbpAmount: null,
       error: {
         kind: 'invalid_amount',
-        message: 'Invalid bid amount for this currency.',
+        message: 'Couldn\'t convert bid to this currency.',
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,
@@ -237,7 +237,7 @@ export function mapApiErrorToTransactionError(
   if (isNetworkError) {
     return {
       kind: 'network_failure',
-      message: 'Network error. Your bid may have been processed. Check your connection and try again with the same bid.',
+      message: 'Connection failed. Your bid may have gone through — check your bids before retrying.',
       canRetry: true,
       transactionPossible: true,
       isAmbiguous: true,
@@ -248,7 +248,7 @@ export function mapApiErrorToTransactionError(
   if (parsedStatus === 401) {
     return {
       kind: 'auth_required',
-      message: 'Your session has expired. Sign in again to continue.',
+      message: 'Session expired — sign in to continue.',
       canRetry: false,
       transactionPossible: false,
       isAmbiguous: false,
@@ -259,7 +259,7 @@ export function mapApiErrorToTransactionError(
   if (parsedCode === 'AML_BLOCKED') {
     return {
       kind: 'aml_blocked',
-      message: parsedMessage || 'Bid blocked by AML controls. Please contact support for manual review.',
+      message: parsedMessage || 'Bid blocked by security checks. Contact support for help.',
       canRetry: false,
       transactionPossible: false,
       isAmbiguous: false,
@@ -270,7 +270,7 @@ export function mapApiErrorToTransactionError(
   if (parsedStatus === 403) {
     return {
       kind: 'eligibility_blocked',
-      message: parsedMessage || 'You are not eligible to bid on this auction.',
+      message: parsedMessage || 'You\'re not eligible to bid on this auction.',
       canRetry: false,
       transactionPossible: false,
       isAmbiguous: false,
@@ -282,7 +282,7 @@ export function mapApiErrorToTransactionError(
     if (parsedCode === 'SELLER_RESTRICTED' || parsedMessage.toLowerCase().includes('seller')) {
       return {
         kind: 'seller_restricted',
-        message: 'You cannot bid on your own auction.',
+        message: 'Sellers can\'t bid on their own auctions.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -307,7 +307,7 @@ export function mapApiErrorToTransactionError(
     if (parsedMessage.toLowerCase().includes('ended') || parsedMessage.toLowerCase().includes('closed')) {
       return {
         kind: 'auction_ended',
-        message: 'This auction has ended. Bidding is no longer available.',
+        message: 'Bidding closed — this auction has ended.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -316,7 +316,7 @@ export function mapApiErrorToTransactionError(
     if (parsedMessage.toLowerCase().includes('cancelled')) {
       return {
         kind: 'auction_cancelled',
-        message: 'This auction has been cancelled.',
+        message: 'This auction was cancelled.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -354,7 +354,7 @@ export function mapApiErrorToTransactionError(
         ?? (parsedMessage.match(/([\d.]+)/)?.[1] ? Number(parsedMessage.match(/([\d.]+)/)![1]) : undefined);
       return {
         kind: 'buy_now_price_changed',
-        message: 'The Buy Now price has changed. Please review the updated price.',
+        message: 'The Buy Now price has changed. Review the updated price.',
         currentBuyNowPriceGbp: updatedPrice,
         canRetry: true,
         transactionPossible: true,
@@ -365,7 +365,7 @@ export function mapApiErrorToTransactionError(
     if (parsedCode === 'IDEMPOTENCY_KEY_REUSED') {
       return {
         kind: 'idempotency_key_reused',
-        message: 'This action was already submitted with different details. Please try again.',
+        message: 'This action was already submitted with different details. Try again.',
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,
@@ -375,7 +375,7 @@ export function mapApiErrorToTransactionError(
     if (parsedCode === 'AUCTION_CANCELLED' || parsedMessage.toLowerCase().includes('cancelled')) {
       return {
         kind: 'auction_cancelled',
-        message: 'This auction has been cancelled.',
+        message: 'This auction was cancelled.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -384,7 +384,7 @@ export function mapApiErrorToTransactionError(
     if (parsedCode === 'AUCTION_SETTLED' || parsedMessage.toLowerCase().includes('settled')) {
       return {
         kind: 'auction_settled',
-        message: 'This auction has been settled.',
+        message: 'This auction has ended and settled.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -393,7 +393,7 @@ export function mapApiErrorToTransactionError(
     if (parsedCode === 'AUCTION_NOT_STARTED' || parsedMessage.toLowerCase().includes('not started')) {
       return {
         kind: 'auction_not_started',
-        message: 'This auction has not started yet.',
+        message: 'Auction hasn\'t started yet — check back soon.',
         canRetry: false,
         transactionPossible: false,
         isAmbiguous: false,
@@ -402,7 +402,7 @@ export function mapApiErrorToTransactionError(
     // Default 409 — auction ended
     return {
       kind: 'auction_ended',
-      message: parsedMessage || 'This auction has ended. Bidding is no longer available.',
+      message: parsedMessage || 'Bidding closed — this auction has ended.',
       canRetry: false,
       transactionPossible: false,
       isAmbiguous: false,
@@ -413,7 +413,7 @@ export function mapApiErrorToTransactionError(
   if (parsedStatus !== undefined && parsedStatus >= 500) {
     return {
       kind: 'unknown_backend',
-      message: 'Server error. Your bid may have been processed. Please check your activity before retrying.',
+      message: 'Server error. Your bid may have been processed. Check your activity before retrying.',
       canRetry: true,
       transactionPossible: true,
       isAmbiguous: true,

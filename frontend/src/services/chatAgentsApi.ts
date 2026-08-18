@@ -1,11 +1,10 @@
 /**
  * Chat Agents API — AI agents that can be deployed into conversations.
  *
- * This service powers the "AI agents in chat" surface (Mercari ChatGPT,
- * Depop AI replies, Poshmark Smart Sell class of features). It is a
- * self-contained demo-mode service: every response is mock data clearly
- * labelled with `isDemo: true` so the UI never fabricates real AI output
- * (AGENTS.md §11 — Truthful UI).
+ * This service powers the "AI agents in chat" surface. In development
+ * (`__DEV__`), it returns mock data clearly labelled with `isDemo: true`.
+ * In production, demo mode is disabled and agent functions return honest
+ * "unavailable" states instead of fabricated AI output (AGENTS.md §11).
  *
  * Agent types:
  *  - shopping_assistant: helps buyers find items, suggests search terms
@@ -21,11 +20,20 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { recordAgentActivity } from './agentActivityLedger';
+import { makeStableId } from '../utils/createStableId';
+import {
+  executeToolCall,
+  isFinancialCapability,
+  type ToolCallRequest,
+} from '../platform/agents/agentRuntime';
 
 // ---------------------------------------------------------------------------
-// Demo mode flag — every mock response is labelled with isDemo: true.
+// Demo mode flag — when true, mock responses are generated for development.
+// In production, demo mode is disabled and agent functions return honest
+// "unavailable" states instead of fabricated AI output (AGENTS.md §11).
 // ---------------------------------------------------------------------------
-export const CHAT_AGENTS_DEMO_MODE = true;
+export const CHAT_AGENTS_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -170,7 +178,7 @@ function agentByType(type: ChatAgentType): ChatAgent | undefined {
 }
 
 function makeId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return makeStableId(prefix);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +208,15 @@ export function deployAgent(
   if (!ids.includes(agent.id)) {
     setDeployedIds(conversationId, [...ids, agent.id]);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_deployed',
+    agent: agent.name,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Deployed ${agent.name} into conversation`,
+    resultStatus: 'success',
+  });
   return { ...agent };
 }
 
@@ -217,6 +234,15 @@ export function deployCustomAgent(
   if (!ids.includes(agent.id)) {
     setDeployedIds(conversationId, [...ids, agent.id]);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_deployed',
+    agent: agent.name,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Deployed custom agent ${agent.name} into conversation`,
+    resultStatus: 'success',
+  });
   return { ...agent };
 }
 
@@ -234,12 +260,63 @@ export function getDeployedAgents(conversationId: string): ChatAgent[] {
  * Removes a deployed agent from a conversation.
  */
 export function removeAgent(conversationId: string, agentId: string): void {
+  const agent = agentById(agentId);
   const ids = getDeployedIds(conversationId).filter((id) => id !== agentId);
   if (ids.length === 0) {
     deployedAgentsByConversation.delete(conversationId);
   } else {
     setDeployedIds(conversationId, ids);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_removed',
+    agent: agent?.name ?? agentId,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Removed ${agent?.name ?? agentId} from conversation`,
+    resultStatus: 'success',
+  });
+}
+
+/**
+ * Pause all running agent sessions across every conversation with one
+ * action (spec 22 acceptance: "Pause all agents exists").
+ *
+ * Clears the in-memory deployment registry so no agent is actively
+ * deployed in any conversation. Returns the number of agent sessions
+ * that were paused. Records the action in the activity ledger.
+ */
+export function pauseAllAgents(): number {
+  let pausedCount = 0;
+  for (const ids of deployedAgentsByConversation.values()) {
+    pausedCount += ids.length;
+  }
+  deployedAgentsByConversation.clear();
+
+  if (pausedCount > 0) {
+    void recordAgentActivity({
+      type: 'all_agents_paused',
+      runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+      summary: `Paused all agents (${pausedCount} session${pausedCount === 1 ? '' : 's'})`,
+      resultStatus: 'paused',
+    });
+  }
+
+  return pausedCount;
+}
+
+/**
+ * Returns the total number of currently deployed agent sessions across
+ * all conversations. Used by the UI to show a truthful count on the
+ * "Pause all agents" control (AGENTS.md §11 — truthful disabled state
+ * when no agents are running).
+ */
+export function getActiveAgentSessionCount(): number {
+  let count = 0;
+  for (const ids of deployedAgentsByConversation.values()) {
+    count += ids.length;
+  }
+  return count;
 }
 
 /**
@@ -460,7 +537,7 @@ export function createCustomAgent(config: CustomAgentConfig): ChatAgent {
     id: makeId('custom_agent'),
     type: 'custom',
     name: config.name.trim(),
-    avatar: config.avatar && config.avatar.length > 0 ? config.avatar : 'sparkles-outline',
+    avatar: config.avatar && config.avatar.length > 0 ? config.avatar : 'person-circle-outline',
     description: config.description.trim(),
     capabilities: config.capabilities,
     isDemo: true,
@@ -562,4 +639,40 @@ function customAgentResponse(agent: ChatAgent, userMessage: string): string {
     return 'Thanks for your message — I\'ve reviewed the context and I\'m ready to help with the next step.';
   }
   return 'I\'m here to help with that. Give me a bit more detail and I\'ll suggest the best next step.';
+}
+
+// ---------------------------------------------------------------------------
+// Agent action runtime — capability-broker-gated tool execution (spec 05).
+// ---------------------------------------------------------------------------
+
+/**
+ * When an agent wants to perform an action (not just generate text), it
+ * calls this function. The runtime checks the capability broker and either
+ * auto-approves (Tier A with grant / autoApproveTierA), asks the user
+ * (Tier B/C/D without grant), or denies (financial capabilities can never
+ * bypass the canonical transaction UI).
+ *
+ * Financial / high-risk capabilities are rejected here before reaching the
+ * broker — agents must always route the user through the real transaction
+ * screens (offer sheet, bid sheet, checkout, withdrawal flow, etc.).
+ */
+export async function agentRequestAction(
+  conversationId: string,
+  request: ToolCallRequest,
+): Promise<{ approved: boolean; executed: boolean; error?: string }> {
+  // Financial capabilities can NEVER bypass canonical UI.
+  if (isFinancialCapability(request.capability)) {
+    return {
+      approved: false,
+      executed: false,
+      error: 'Financial actions require canonical transaction UI',
+    };
+  }
+
+  const result = await executeToolCall(request, { autoApproveTierA: true });
+  return {
+    approved: result.approved,
+    executed: result.executed,
+    error: result.error,
+  };
 }

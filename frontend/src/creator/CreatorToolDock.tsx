@@ -1,14 +1,24 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
+import { ToolButton, type RailTool } from './dock/ToolButton';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
@@ -17,15 +27,6 @@ import type { AssetPickerMode } from './CreatorAssetPicker';
 // Primary tools (Media, Text) get filled icon backgrounds.
 // Secondary tools (stickers) get outline icons only.
 // Groups are separated by subtle dividers, not flat scrolly bars.
-
-interface RailTool {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  action: () => void;
-  danger?: boolean;
-  /** Primary tools get a filled icon background — visual weight */
-  primary?: boolean;
-}
 
 interface ToolGroup {
   tools: RailTool[];
@@ -74,11 +75,66 @@ export function CreatorToolDock({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
+  const { spring, duration } = useMotionConfig();
   const isLook = (documentType ?? document.type) === 'look';
   const isPoster = (documentType ?? document.type) === 'poster';
+  const [secondaryExpanded, setSecondaryExpanded] = useState(false);
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
+  const [secondaryWidth, setSecondaryWidth] = useState(0);
+
+  // ── Shared values for animations ──────────────────────────────────
+  const dockTranslateY = useSharedValue(reduceMotion ? 0 : 120);
+  const dockOpacity = useSharedValue(reduceMotion ? 1 : 0);
+  const secondaryExpandSV = useSharedValue(0); // 0 = collapsed, 1 = expanded
+  const contextTransitionSV = useSharedValue(0); // 0 = settled, animates on context change
+  const prevSelectionModeRef = useRef(false);
 
   const isSelectionMode = !!selectedLayer;
+
+  // ── Dock slide-in animation on mount ──────────────────────────────
+  // Uses the entrance spring token — smooth, confident sheet/modal motion.
+  useEffect(() => {
+    if (reduceMotion) {
+      dockTranslateY.value = 0;
+      dockOpacity.value = 1;
+    } else {
+      dockTranslateY.value = withSpring(0, spring.entrance);
+      const fadeMs = (duration as { normal: number }).normal;
+      dockOpacity.value = withTiming(1, { duration: fadeMs, easing: Easing.out(Easing.cubic) });
+    }
+    haptic.light();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Contextual tool switching: spring transition on selection change ──
+  // Uses the press spring token — slightly softer, for context transitions.
+  useEffect(() => {
+    if (prevSelectionModeRef.current !== isSelectionMode) {
+      prevSelectionModeRef.current = isSelectionMode;
+      if (!reduceMotion) {
+        contextTransitionSV.value = 0;
+        contextTransitionSV.value = withSpring(1, spring.press);
+        haptic.light();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelectionMode]);
+
+  // ── Secondary expand/collapse animation ───────────────────────────
+  // Uses the lift spring token — playful but controlled card lift motion.
+  const toggleSecondary = useCallback(() => {
+    setSecondaryExpanded((prev) => {
+      const next = !prev;
+      if (reduceMotion) {
+        secondaryExpandSV.value = next ? 1 : 0;
+      } else {
+        secondaryExpandSV.value = withSpring(next ? 1 : 0, spring.lift);
+      }
+      haptic.light();
+      return next;
+    });
+  }, [reduceMotion, secondaryExpandSV, haptic, spring]);
 
   // Build contextual tools based on selection state and mode.
   // Poster mode uses an Instagram Stories tool set; Look mode keeps the
@@ -92,15 +148,12 @@ export function CreatorToolDock({
   const primaryTools = tools.filter(t => t.primary);
   const secondaryTools = tools.filter(t => !t.primary);
   const hasDivider = !isSelectionMode && primaryTools.length > 0 && secondaryTools.length > 0;
+  // In selection mode, show all tools directly (no expand/collapse needed).
+  const showSecondaryToggle = !isSelectionMode && secondaryTools.length > 0;
 
   const handleToolPress = useCallback((tool: RailTool) => {
-    if (tool.danger) {
-      haptic.medium();
-    } else {
-      haptic.selection();
-    }
     tool.action();
-  }, [haptic]);
+  }, []);
 
   const handlePublish = useCallback(() => {
     haptic.medium();
@@ -112,114 +165,148 @@ export function CreatorToolDock({
     onMore();
   }, [haptic, onMore]);
 
+  const handleLongPressTooltip = useCallback((label: string) => {
+    setHoveredTool(label);
+  }, []);
+
   // ── Mode-aware visual hierarchy ────────────────────────────────────
-  // Instagram-style: primary tools are larger pill buttons with filled
-  // backgrounds; secondary tools are smaller, transparent, label-less.
-  // Selection mode collapses to a single compact tier.
-  const primarySize = 48;
-  const secondarySize = 44;
-  const toolSize = isSelectionMode
-    ? 44
-    : (tool: RailTool) => (tool.primary ? primarySize : secondarySize);
-  const toolRadius = Radius.full;
+  // Instagram-style: primary tools are larger (46pt) with filled backgrounds
+  // and gradient rings; secondary tools are smaller (40pt), transparent.
+  // Selection mode collapses to a single compact tier (44pt).
+  const primarySize = 46;
+  const secondarySize = 40;
+  const selectionSize = 44;
   const primaryIconSize = 24;
   const secondaryIconSize = 22;
+  const selectionIconSize = 22;
   const toolGap = isSelectionMode ? Space.xs : Space.sm;
 
-  // Floating (glass) dock keeps its own translucent palette.
-  const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
-  const dangerIconColor = floating ? '#E06666' : colors.danger;
-  const dangerLabelColor = floating ? 'rgba(224,102,102,0.85)' : colors.danger;
+  const labelColor = colors.textSecondary;
+  const dangerIconColor = colors.danger;
+  const dangerLabelColor = colors.danger;
 
   const getToolBg = (tool: RailTool): string => {
-    if (floating) {
-      if (tool.danger) return 'transparent';
-      // Active (primary) tools get a filled white tint; secondary tools stay transparent.
-      return tool.primary ? 'rgba(255,255,255,0.18)' : 'transparent';
-    }
     if (tool.danger) return 'transparent';
     if (isSelectionMode) return colors.surface;
-    return tool.primary ? colors.brand : colors.surfaceAlt;
+    return tool.primary ? colors.brand : 'transparent';
   };
 
   const getToolIconColor = (tool: RailTool): string => {
     if (tool.danger) return dangerIconColor;
-    if (floating) {
-      // Primary (active) tools render solid white; secondary tools render at 85%.
-      return tool.primary ? '#fff' : 'rgba(255,255,255,0.85)';
-    }
     if (isSelectionMode) return colors.textPrimary;
-    return tool.primary ? colors.textInverse : colors.textPrimary;
+    return tool.primary ? colors.textInverse : colors.textSecondary;
+  };
+
+  const getToolSize = (tool: RailTool): number => {
+    if (isSelectionMode) return selectionSize;
+    return tool.primary ? primarySize : secondarySize;
   };
 
   const getToolIconSize = (tool: RailTool): number => {
-    if (isSelectionMode) return 22;
+    if (isSelectionMode) return selectionIconSize;
     return tool.primary ? primaryIconSize : secondaryIconSize;
   };
 
-  // Render a single tool button — shared by both dock variants.
+  // Render a single tool button using the extracted ToolButton component.
   const renderTool = (tool: RailTool) => {
-    const size = typeof toolSize === 'function' ? toolSize(tool) : toolSize;
-    // Only primary tools show a caption label (Instagram pattern); secondary
-    // tools are icon-only to keep the dock minimal and contextual.
-    const showLabel = tool.primary || isSelectionMode;
+    const isActive = !!tool.primary && !isSelectionMode && !tool.danger;
     return (
-      <PressScale
+      <ToolButton
         key={tool.label}
+        tool={tool}
+        isActive={isActive}
+        size={getToolSize(tool)}
+        iconSize={getToolIconSize(tool)}
+        iconColor={getToolIconColor(tool)}
+        bgColor={getToolBg(tool)}
+        labelColor={labelColor}
+        floating={floating}
+        colors={colors}
         onPress={() => handleToolPress(tool)}
-        onLongPress={() => setHoveredTool(tool.label)}
-        onPressOut={() => setHoveredTool(null)}
-        style={styles.toolBtn}
-        accessibilityLabel={tool.label}
-        hitSlop={8}
-      >
-        <View
-          style={[
-            styles.toolIconWrap,
-            {
-              width: size,
-              height: size,
-              borderRadius: toolRadius,
-              backgroundColor: getToolBg(tool),
-            },
-          ]}
-        >
-          <Ionicons
-            name={tool.icon}
-            size={getToolIconSize(tool)}
-            color={getToolIconColor(tool)}
-          />
-        </View>
-        {showLabel ? (
-          <Text
-            style={[
-              styles.toolLabel,
-              { color: tool.danger ? dangerLabelColor : labelColor },
-              tool.primary && styles.toolLabelPrimary,
-            ]}
-            numberOfLines={1}
-          >
-            {tool.label}
-          </Text>
-        ) : null}
-      </PressScale>
+        onLongPressTooltip={handleLongPressTooltip}
+      />
     );
   };
 
-  // Render the tool list with an optional divider between primary/secondary.
-  const renderToolList = () => {
-    if (!hasDivider) {
-      return tools.map(renderTool);
+  // ── Secondary tools container with spring expand/collapse ─────────
+  const secondaryAnimStyle = useAnimatedStyle(() => ({
+    maxWidth: secondaryWidth > 0 ? secondaryWidth * secondaryExpandSV.value : 999 * secondaryExpandSV.value,
+    opacity: secondaryExpandSV.value,
+    transform: [{ translateX: -16 * (1 - secondaryExpandSV.value) }],
+    overflow: 'hidden' as const,
+  }));
+
+  // ── Context transition: subtle slide + fade on tool set change ─────
+  const contextStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: 8 * (1 - contextTransitionSV.value) }],
+    opacity: contextTransitionSV.value,
+  }));
+
+  // ── Dock slide-in style ────────────────────────────────────────────
+  const dockStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dockTranslateY.value }],
+    opacity: dockOpacity.value,
+  }));
+
+  const handleSecondaryLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && w !== secondaryWidth) {
+      setSecondaryWidth(w);
     }
-    return [
-      ...primaryTools.map(renderTool),
-      <View key="__divider" style={[styles.groupDivider, { backgroundColor: colors.border }]} />,
-      ...secondaryTools.map(renderTool),
-    ];
+  }, [secondaryWidth]);
+
+  // Render the tool list with optional divider and expandable secondary tools.
+  const renderToolList = () => {
+    if (isSelectionMode || !hasDivider) {
+      return (
+        <Reanimated.View style={contextStyle}>
+          {tools.map(renderTool)}
+        </Reanimated.View>
+      );
+    }
+    return (
+      <Reanimated.View style={contextStyle}>
+        {primaryTools.map(renderTool)}
+        {showSecondaryToggle && (
+          <>
+            {/* Subtle visual separator between primary and secondary groups —
+                a short hairline, not a full divider line. */}
+            <View style={[styles.groupDivider, { backgroundColor: floating ? colors.glassBorder : colors.border }]} />
+            {/* Expand/collapse toggle for secondary tools — refined chevron
+                with a generous 44pt hit area showing only a 20pt glyph. */}
+            <PressScale
+              onPress={toggleSecondary}
+              style={styles.expandToggle}
+              accessibilityLabel={secondaryExpanded ? 'Show fewer tools' : 'Show more tools'}
+              accessibilityHint="Expands or collapses the secondary tool tray"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: secondaryExpanded }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons
+                name={secondaryExpanded ? 'chevron-back-outline' : 'chevron-forward-outline'}
+                size={20}
+                color={floating ? colors.textInverse : colors.textSecondary}
+              />
+            </PressScale>
+            {/* Secondary tools — spring expand/collapse */}
+            <Reanimated.View
+              style={[styles.secondaryContainer, secondaryAnimStyle]}
+              onLayout={handleSecondaryLayout}
+              pointerEvents={secondaryExpanded ? 'auto' : 'none'}
+            >
+              <View style={styles.secondaryInner}>
+                {secondaryTools.map(renderTool)}
+              </View>
+            </Reanimated.View>
+          </>
+        )}
+      </Reanimated.View>
+    );
   };
 
   return (
-    <View
+    <Reanimated.View
       style={[
         styles.container,
         floating
@@ -227,9 +314,10 @@ export function CreatorToolDock({
           : {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
-              paddingTop: Space.sm,
+              paddingTop: Space.md,
               paddingBottom: Math.max(insets.bottom, Space.sm),
             },
+        dockStyle,
       ]}
     >
       {floating ? (
@@ -241,8 +329,8 @@ export function CreatorToolDock({
             styles.blurPill,
             {
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: 'rgba(255,255,255,0.15)',
-              shadowColor: '#000',
+              borderColor: colors.glassBorder,
+              shadowColor: colors.shadow,
               shadowOpacity: 0.3,
               shadowRadius: 20,
               shadowOffset: { width: 0, height: 8 },
@@ -279,34 +367,36 @@ export function CreatorToolDock({
       )}
 
       {/* Primary action — separated from editing tools */}
-      <View style={[styles.actions, { borderLeftColor: floating ? 'rgba(255,255,255,0.15)' : colors.border }]}>
+      <View style={[styles.actions, { borderLeftColor: floating ? colors.glassBorder : colors.border }]}>
         <PressScale
           onPress={handleMore}
           style={styles.actionBtn}
           accessibilityLabel="More options"
-          hitSlop={12}
+          accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? '#fff' : colors.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? colors.textInverse : colors.textSecondary} />
         </PressScale>
         {/* Publish button — always visible, floating or solid */}
         <PressScale
           onPress={handlePublish}
           style={[styles.publishBtn, { backgroundColor: colors.brand }]}
           accessibilityLabel="Next"
+          accessibilityHint="Opens the publish sheet to review and publish your creation"
           scale={0.97}
-          hitSlop={16}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
         </PressScale>
       </View>
 
-      {/* Long-press tooltip label — centered below the dock */}
+      {/* Long-press tooltip label — centered below the dock (legacy fallback) */}
       {hoveredTool ? (
-        <Text style={[styles.hoverLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.hoverLabel, { color: floating ? colors.textInverse : colors.textSecondary }]} numberOfLines={1}>
           {hoveredTool}
         </Text>
       ) : null}
-    </View>
+    </Reanimated.View>
   );
 }
 
@@ -325,16 +415,22 @@ function buildDefaultTools(
   onLayoutPresets?: () => void,
 ): RailTool[] {
   if (isLook) {
-    // Look: collage-first, product-tagging, editorial layouts.
-    // Primary tools (Media, Text) lead with brand fill; secondary tools follow.
+    // Look: collage-first tool set. Per audit doc 02/05:
+    // Visible by default: add item/media, cutout, text, product, background, more.
+    // Primary tools (Media, Text) lead with brand fill; secondary tools
+    // (cutout, product, background, layout, draw, gif, music) follow a
+    // divider and are revealed via the chevron "more" toggle. Draw, GIF,
+    // and Music are preserved behind "more" rather than removed — they
+    // are real creator capabilities useful for collage composition.
     return [
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+      { icon: 'crop-outline', label: 'Crop', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
+      { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
       { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
       { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
-      { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }
@@ -393,17 +489,23 @@ function buildSelectionTools(
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'media') {
     if (isLook) {
-      // Look media: crop + cutout (collage-specific)
-      // Use dedicated crop/cutout handlers when available; fall back to edit
+      // Look media selection: swap, remove background/refine cutout, flip.
+      // Per Phase D spec: swap, remove background/refine cutout,
+      // duplicate, forward/back, flip.
+      tools.push({
+        icon: 'swap-horizontal-outline',
+        label: 'Swap',
+        action: () => onEditLayer(layer),
+      });
       tools.push({
         icon: 'crop-outline',
         label: 'Crop',
-        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
+        action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
       });
       tools.push({
-        icon: 'cut-outline',
-        label: 'Cutout',
-        action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
+        icon: 'crop-outline',
+        label: 'Refine',
+        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
       });
     } else {
       // Poster media: replace + trim (story-specific)
@@ -449,6 +551,11 @@ function buildSelectionTools(
   // Layer ordering
   tools.push({ icon: 'arrow-up', label: 'Forward', action: () => onReorderLayer(layer.id, 'forward') });
   tools.push({ icon: 'arrow-down', label: 'Back', action: () => onReorderLayer(layer.id, 'backward') });
+
+  // Flip (Look only — collage direct manipulation)
+  if (isLook && layer.type === 'media') {
+    tools.push({ icon: 'swap-horizontal', label: 'Flip', action: () => onEditLayer(layer) });
+  }
 
   // Duplicate
   tools.push({ icon: 'copy-outline', label: 'Copy', action: () => onDuplicateLayer(layer.id) });
@@ -496,37 +603,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.xs,
   },
-  toolBtn: {
-    alignItems: 'center',
+  // ── Expand/collapse toggle for secondary tools ──
+  // 44pt hit target showing only a 20pt chevron — transparent by default
+  // per the containment rule (ordinary controls default to transparent).
+  expandToggle: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    minWidth: 56,
-    minHeight: 56,
-    paddingHorizontal: Space.xs + 2,
+    alignItems: 'center',
     borderRadius: Radius.full,
-    gap: 4,
   },
-  toolIconWrap: {
+  // ── Secondary tools container ──
+  // Wraps secondary tools with animated maxWidth + opacity for spring expand.
+  secondaryContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  // Thin vertical divider between primary and secondary tool groups.
+  secondaryInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  // Subtle vertical separator between primary and secondary tool groups —
+  // a short hairline (20pt tall) rather than a full-height divider line.
   groupDivider: {
-    width: 1,
-    height: 24,
+    width: StyleSheet.hairlineWidth,
+    height: 20,
     marginHorizontal: Space.xs,
   },
-  toolLabel: {
-    fontSize: 9,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  toolLabelPrimary: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 9.5,
-  },
-  // Long-press tooltip label — centered below the dock.
+  // Long-press tooltip label — centered below the dock (legacy fallback).
   hoverLabel: {
     position: 'absolute',
     bottom: 2,

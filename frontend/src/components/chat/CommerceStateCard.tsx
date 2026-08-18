@@ -6,6 +6,7 @@ import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
+import { formatShortDateTime } from '../../utils/dateFormat';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,14 +139,8 @@ export function CommerceStateCard({
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return null;
-    const parsed = new Date(timestamp);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const formatted = formatShortDateTime(timestamp);
+    return formatted || null;
   }, [timestamp]);
 
   return (

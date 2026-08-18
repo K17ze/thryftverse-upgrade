@@ -1,4 +1,4 @@
-import type { Conversation, Message } from '../data/mockData';
+import type { Conversation, Message } from '../domain';
 import { classifyConversation } from './conversationClassification';
 
 export type SafetyWarningLevel = 'info' | 'caution' | 'danger';

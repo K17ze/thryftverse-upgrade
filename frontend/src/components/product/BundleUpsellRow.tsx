@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 

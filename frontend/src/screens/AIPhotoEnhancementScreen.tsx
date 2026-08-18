@@ -14,9 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Reanimated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -31,8 +28,11 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AITrustSignal } from '../components/ai/AITrustSignal';
 import { EmptyState as CanonicalEmptyState } from '../components/EmptyState';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import {
   AI_PHOTO_DEMO_MODE,
   fetchEnhancementOptions,
@@ -63,6 +63,7 @@ type ScreenPhase =
 
 export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
@@ -106,7 +107,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       const msg =
         typeof e === 'object' && e && 'message' in e
           ? (e as Error).message
-          : 'Could not load enhancement options. Please try again.';
+          : 'Could not load enhancement options. Try again.';
       setError(msg);
       setPhase('error');
     }
@@ -126,6 +127,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const handleSelectOption = useCallback(
     (option: EnhancementOption) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptic.patterns.tabSwitch();
       setSelectedOptionId(option.id);
       setSelectedPresetId(null);
       if (option.type === 'background_replace') {
@@ -134,20 +136,22 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         setShowBackgroundPicker(false);
       }
     },
-    [],
+    [haptic],
   );
 
   const handleSelectPreset = useCallback((preset: EnhancementPreset) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.tabSwitch();
     setSelectedPresetId(preset.id);
     setSelectedOptionId(null);
     setShowBackgroundPicker(false);
-  }, []);
+  }, [haptic]);
 
   const handleSelectScene = useCallback((scene: BackgroundScene) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.tabSwitch();
     setSelectedSceneId(scene.id);
-  }, []);
+  }, [haptic]);
 
   // -- Apply enhancement ---------------------------------------------------
   const handleApply = useCallback(async () => {
@@ -175,27 +179,29 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       setShowAfter(true);
       setPhase('applied');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic.patterns.save();
     } catch (e: unknown) {
       const msg =
         typeof e === 'object' && e && 'message' in e
           ? (e as Error).message
-          : 'Enhancement failed. Please try again.';
+          : 'Enhancement failed. Try again.';
       setError(msg);
       setPhase('error');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     } finally {
       setIsApplying(false);
     }
-  }, [imageUri, isOffline, selectedOptionId, selectedPresetId, selectedSceneId, showBackgroundPicker]);
+  }, [imageUri, isOffline, selectedOptionId, selectedPresetId, selectedSceneId, showBackgroundPicker, haptic]);
 
   // -- Revert --------------------------------------------------------------
   const handleRevert = useCallback(async () => {
     if (!result) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.toggle();
     setShowAfter(false);
     setResult(null);
     setPhase('populated');
-  }, [result]);
+  }, [result, haptic]);
 
   // -- Save (return to listing flow) ---------------------------------------
   const handleSave = useCallback(() => {
@@ -279,8 +285,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       >
         {/* -- Image preview (top ~50% of screen) -- */}
         <View style={styles.previewWrap}>
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+          <View
             style={styles.previewFrame}
           >
             <Image
@@ -332,7 +337,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 </Pressable>
               )}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Processing overlay */}
           {isApplying && (
@@ -362,9 +367,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
         {/* -- Enhancement options rail -- */}
         {(phase === 'populated' || phase === 'applied') && options.length > 0 && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280)}
-          >
+          <View>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
               Enhancements
             </Text>
@@ -412,13 +415,12 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
               );
             })}
             </ScrollView>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Presets section -- */}
         {(phase === 'populated' || phase === 'applied') && presets.length > 0 && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280).delay(60)}
+          <View
             style={styles.presetsSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -468,13 +470,12 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 {selectedPreset.description}
               </Text>
             )}
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Background scene picker -- */}
         {showBackgroundPicker && scenes.length > 0 && (phase === 'populated' || phase === 'applied') && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+          <View
             style={styles.scenePickerSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -520,23 +521,22 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Applied result message (truthful demo) -- */}
         {/* 15 = 8% opacity, 40 = 25% opacity (hex alpha suffix) */}
         {phase === 'applied' && result && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInUp.duration(240)}
+          <View
             style={[styles.appliedMessage, { backgroundColor: `${colors.warning}15`, borderColor: `${colors.warning}40` }]}
           >
             <Ionicons name="information-circle-outline" size={18} color={colors.warning} />
             <Text style={[styles.appliedMessageText, { color: colors.textPrimary }]}>
               {AI_PHOTO_DEMO_MODE
                 ? 'Demo: No changes were made to your image. Connect the AI service to enable real enhancement.'
-                : 'Enhancement applied. You can compare, revert, or save.'}
+                : 'Enhancement applied. Compare, revert, or save.'}
             </Text>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- AI trust signal (confidence + source + undo) -- */}
@@ -600,7 +600,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 AI_PHOTO_DEMO_MODE ? 'Preview enhancement in demo mode' : 'Apply enhancement'
               }
               accessibilityHint="Applies the selected enhancement to the photo"
-              icon={<Ionicons name="sparkles" size={16} color={colors.textInverse} />}
+              icon={<Ionicons name="color-filter-outline" size={16} color={colors.textInverse} />}
               style={styles.footerPrimaryBtn}
             />
           </View>
@@ -703,12 +703,12 @@ function LoadingSkeleton({ colors, styles }: { colors: ThemeColors; styles: Retu
   return (
     <View style={styles.skeletonWrap}>
       {/* Options rail skeleton */}
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
       {/* Presets skeleton */}
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 120, height: 36, marginTop: Space.md }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 120, height: 36 }]} />
+      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} style={{ marginTop: Space.md }} />
+      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} />
     </View>
   );
 }
@@ -728,7 +728,7 @@ function ProcessingOverlay({ colors, styles, reducedMotion }: ProcessingOverlayP
 
   useEffect(() => {
     if (reducedMotion) return;
-    scanY.value = withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) });
+    scanY.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) });
   }, [reducedMotion, scanY]);
 
   const scanStyle = useAnimatedStyle(() => ({

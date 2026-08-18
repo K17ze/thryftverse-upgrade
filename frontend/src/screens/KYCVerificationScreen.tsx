@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
@@ -24,7 +23,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   createKycSession,
@@ -46,7 +44,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const updateCoOwnCompliance = useStore((state) => state.updateCoOwnCompliance);
@@ -206,7 +203,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       return;
     }
     if (!currentUser?.id) {
-      show('Please log in to submit verification.', 'error');
+      show('Log in to submit verification.', 'error');
       return;
     }
     haptic.medium();
@@ -232,7 +229,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       }
 
       setSubmitted(true);
-      show('Verification submitted. We will review within 24 hours.', 'success');
+      show('Verification submitted. We\'ll review within 24 hours.', 'success');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
@@ -247,16 +244,15 @@ export default function KYCVerificationScreen({ navigation }: Props) {
   if (submitted) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Verification" onBack={() => navigation.goBack()} />}>
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+        <View
           style={styles.submittedWrap}
         >
-          <View style={[styles.submittedIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="hourglass-outline" size={40} color={colors.warning} />
+          <View style={[styles.submittedIcon, { backgroundColor: colors.warning + '18' }]}>
+            <Ionicons name="hourglass-outline" size={44} color={colors.warning} />
           </View>
           <Text style={styles.submittedTitle}>Verification in review</Text>
           <Text style={styles.submittedBody}>
-            We have received your submission and are reviewing your identity. This typically takes within 24 hours. You will be notified once the review is complete.
+            We have received your submission and are reviewing your identity. This typically takes within 24 hours. You'll be notified once the review is complete.
           </Text>
           <View style={[styles.submittedTimeline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SubmittedStep icon="checkmark-circle" label="Identity details" status="complete" colors={colors} styles={styles} />
@@ -273,7 +269,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
             accessibilityLabel="View verification status"
             hapticFeedback="light"
           />
-        </Reanimated.View>
+        </View>
       </FlagshipScreen>
     );
   }
@@ -291,6 +287,29 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <View style={styles.root}>
+        {/* ── Privacy reassurance banner ──
+            KYC is the highest-trust
+            moment in onboarding. A visible privacy statement before the form
+            reduces abandonment by addressing the user's primary concern
+            ("what happens to my data?") before they encounter the camera.
+            Research (FinAuth 2026): "Say what you do with the data. Verification
+            asks for trust; visible privacy practice earns it back." */}
+        <View style={[styles.privacyBanner, { backgroundColor: colors.commerceTrust + '12', borderBottomColor: colors.commerceTrust + '20' }]}>
+          <View style={styles.privacyBannerContent}>
+            <View style={[styles.privacyIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+              <Ionicons name="lock-closed" size={16} color={colors.commerceTrust} />
+            </View>
+            <View style={styles.privacyTextWrap}>
+              <Text style={[styles.privacyTitle, { color: colors.textPrimary }]}>
+                Your data is encrypted and secure
+              </Text>
+              <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
+                Documents are used only for identity verification and deleted after review.
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* ── Step indicator ── */}
         <StepIndicator currentStep={step} colors={colors} styles={styles} />
 
@@ -314,7 +333,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               phone={phone}
               setPhone={setPhone}
               errors={errors1}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 2 && (
@@ -329,7 +347,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               onCapture={capturePhoto}
               onClearFront={() => setDocumentFrontUri(null)}
               onClearBack={() => setDocumentBackUri(null)}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 3 && (
@@ -340,7 +357,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               errors={errors3}
               onCapture={() => capturePhoto('selfie')}
               onClear={() => setSelfieUri(null)}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 4 && (
@@ -356,7 +372,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               businessAddress={businessAddress}
               setBusinessAddress={setBusinessAddress}
               errors={errors4}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 5 && (
@@ -377,7 +392,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               setTermsAccepted={setTermsAccepted}
               errors={errors5}
               submitError={submitError}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
         </ScrollView>
@@ -386,7 +400,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           {step < TOTAL_STEPS ? (
             <AppButton
-              title={step === 4 && !isBusiness ? 'Skip & continue' : 'Continue'}
+              title={step === 4 && !isBusiness ? 'Skip & continue' : 'Next step'}
               variant="primary"
               size="lg"
               onPress={handleNext}
@@ -501,7 +515,6 @@ function StepIdentity({
   phone,
   setPhone,
   errors,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -514,7 +527,6 @@ function StepIdentity({
   phone: string;
   setPhone: (v: string) => void;
   errors: Record<string, string>;
-  reducedMotionEnabled: boolean;
 }) {
   const formatDob = (text: string) => {
     const digits = text.replace(/\D/g, '').slice(0, 8);
@@ -525,7 +537,7 @@ function StepIdentity({
   };
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Identity information</Text>
       <Text style={styles.stepSubtitle}>
         Enter your legal details exactly as they appear on your document.
@@ -578,7 +590,7 @@ function StepIdentity({
           Your information is encrypted and used only for identity verification.
         </Text>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -594,7 +606,6 @@ function StepDocument({
   onCapture,
   onClearFront,
   onClearBack,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -606,12 +617,11 @@ function StepDocument({
   onCapture: (target: 'docFront' | 'docBack') => void;
   onClearFront: () => void;
   onClearBack: () => void;
-  reducedMotionEnabled: boolean;
 }) {
   const needsBack = documentType !== 'passport';
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Document verification</Text>
       <Text style={styles.stepSubtitle}>
         Choose your document type and capture a clear photo.
@@ -632,7 +642,7 @@ function StepDocument({
       <View style={[styles.qualityNote, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="sunny-outline" size={14} color={colors.warning} />
         <Text style={styles.qualityNoteText}>
-          Make sure the document is well-lit and all text is readable.
+          Ensure the document is well-lit and all text is readable.
         </Text>
       </View>
 
@@ -661,7 +671,7 @@ function StepDocument({
           icon="card-outline"
         />
       ) : null}
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -673,7 +683,6 @@ function StepSelfie({
   errors,
   onCapture,
   onClear,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -681,13 +690,12 @@ function StepSelfie({
   errors: Record<string, string>;
   onCapture: () => void;
   onClear: () => void;
-  reducedMotionEnabled: boolean;
 }) {
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Selfie verification</Text>
       <Text style={styles.stepSubtitle}>
-        We will verify your identity by comparing your selfie to your document photo.
+        We'll verify your identity by comparing your selfie to your document photo.
       </Text>
 
       <View style={[styles.livenessNote, { backgroundColor: colors.surfaceAlt }]}>
@@ -708,7 +716,7 @@ function StepSelfie({
         icon="person-circle-outline"
         circular
       />
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -725,7 +733,6 @@ function StepBusiness({
   businessAddress,
   setBusinessAddress,
   errors,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -738,10 +745,9 @@ function StepBusiness({
   businessAddress: string;
   setBusinessAddress: (v: string) => void;
   errors: Record<string, string>;
-  reducedMotionEnabled: boolean;
 }) {
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Business information</Text>
       <Text style={styles.stepSubtitle}>
         Optional — tell us if you are selling as a business or an individual.
@@ -816,11 +822,11 @@ function StepBusiness({
         <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
           <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
           <Text style={styles.trustNoteText}>
-            You can add business details later if your selling activity changes.
+            Add business details later if your selling activity changes.
           </Text>
         </View>
       )}
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -842,7 +848,6 @@ function StepReview({
   setTermsAccepted,
   errors,
   submitError,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -860,7 +865,6 @@ function StepReview({
   setTermsAccepted: (v: boolean) => void;
   errors: Record<string, string>;
   submitError: string | null;
-  reducedMotionEnabled: boolean;
 }) {
   const docLabel =
     documentType === 'passport' ? 'Passport'
@@ -868,10 +872,10 @@ function StepReview({
     : 'National ID';
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Review & submit</Text>
       <Text style={styles.stepSubtitle}>
-        Please confirm the information below before submitting.
+        Confirm the information below before submitting.
       </Text>
 
       {/* Summary — read-only */}
@@ -940,10 +944,10 @@ function StepReview({
       <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="time-outline" size={14} color={colors.warning} />
         <Text style={styles.trustNoteText}>
-          Review typically takes within 24 hours. We will notify you when it is complete.
+          Review typically takes within 24 hours. We'll notify you when it is complete.
         </Text>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1014,11 +1018,13 @@ function CaptureTile({
         style={[styles.captureTile, { backgroundColor: colors.surfaceAlt, borderColor: error ? colors.danger : colors.border }]}
         accessibilityRole="button"
         accessibilityLabel={`Capture ${label}`}
+        accessibilityHint="Opens the camera to take a photo"
       >
         <View style={[styles.captureIconWrap, circular && { borderRadius: Radius.full }]}>
-          <Ionicons name={icon} size={28} color={colors.textMuted} />
+          <Ionicons name={icon} size={32} color={colors.textMuted} />
         </View>
         <Text style={styles.captureTileText}>Tap to capture</Text>
+        <Text style={styles.captureTileHint}>Use good lighting · fill the frame</Text>
       </Pressable>
       {error ? <Text style={styles.captureError}>{error}</Text> : null}
     </View>
@@ -1073,6 +1079,39 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
       flex: 1,
+    },
+    // Privacy reassurance banner
+    privacyBanner: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    privacyBannerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+    },
+    privacyIcon: {
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    privacyTextWrap: {
+      flex: 1,
+    },
+    privacyTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+    },
+    privacyBody: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
+      marginTop: Space.xs / 2,
     },
     // Step indicator
     stepIndicatorWrap: {
@@ -1207,6 +1246,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
+    },
+    captureTileHint: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      opacity: 0.7,
+      letterSpacing: 0.1,
     },
     captureError: {
       fontSize: Type.meta.size,

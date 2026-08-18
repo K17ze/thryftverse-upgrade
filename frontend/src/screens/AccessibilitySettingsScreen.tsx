@@ -18,20 +18,17 @@ import {
   Switch,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
+import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
+import type { TextSize } from '../preferences/accessibilityPreferences';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccessibilitySettings'>;
-
-type TextSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 const TEXT_SIZES: { value: TextSize; label: string; sample: number }[] = [
   { value: 'small', label: 'Small', sample: 13 },
@@ -54,13 +51,24 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
+  const {
+    textSize,
+    reducedMotion,
+    highContrast,
+    boldText,
+    screenReaderHints,
+    setTextSize: setContextTextSize,
+    setReducedMotion: setContextReducedMotion,
+    setHighContrast: setContextHighContrast,
+    setBoldText: setContextBoldText,
+    setScreenReaderHints: setContextScreenReaderHints,
+  } = useAccessibilityPreferences();
 
-  // Local state — persisted via AsyncStorage in a real implementation
-  const [textSize, setTextSize] = React.useState<TextSize>('medium');
-  const [reducedMotion, setReducedMotion] = React.useState(false);
-  const [highContrast, setHighContrast] = React.useState(false);
-  const [screenReaderHints, setScreenReaderHints] = React.useState(true);
+  // Live preview text — shows the user exactly how their selected text size
+  // and bold setting will look in context.
+  // immediate feedback on settings reduces uncertainty and builds confidence
+  // that the change is real.
+  const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? Type.body.size;
 
   const motionToggles: ToggleConfig[] = [
     {
@@ -70,7 +78,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'pause',
       iconColor: colors.commerceTrust,
       value: reducedMotion,
-      onToggle: (v) => { haptic.selection(); setReducedMotion(v); },
+      onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); },
     },
   ];
 
@@ -82,7 +90,16 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'contrast',
       iconColor: colors.antiqueGold,
       value: highContrast,
-      onToggle: (v) => { haptic.selection(); setHighContrast(v); },
+      onToggle: (v) => { haptic.selection(); setContextHighContrast(v); },
+    },
+    {
+      key: 'boldText',
+      label: 'Bold text',
+      description: 'Make all text heavier for better readability',
+      icon: 'text',
+      iconColor: colors.brand,
+      value: boldText,
+      onToggle: (v) => { haptic.selection(); setContextBoldText(v); },
     },
   ];
 
@@ -94,7 +111,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'volume-medium',
       iconColor: colors.bronze,
       value: screenReaderHints,
-      onToggle: (v) => { haptic.selection(); setScreenReaderHints(v); },
+      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); },
     },
   ];
 
@@ -121,14 +138,16 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Accessibility" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      scrollEnabled={false}
+      header={<FlagshipHeader title="Accessibility" onBack={() => navigation.goBack()} />}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -142,10 +161,10 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Text Size — visual segmented selector */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+        <View>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Text size</Text>
             <Text style={styles.sectionDescription}>
@@ -161,7 +180,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                       styles.textSizeOption,
                       isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
                     ]}
-                    onPress={() => { haptic.selection(); setTextSize(option.value); }}
+                    onPress={() => { haptic.selection(); setContextTextSize(option.value); }}
                     accessibilityRole="button"
                     accessibilityLabel={`Text size ${option.label}`}
                     accessibilityState={{ selected: isSelected }}
@@ -187,35 +206,55 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                 );
               })}
             </View>
+
+            {/* Live preview — shows how body text will look at the selected
+                size and weight. This is the immediate feedback that makes
+                the setting feel real and trustworthy. */}
+            <View style={[styles.previewCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={styles.previewLabel}>Preview</Text>
+              <Text
+                style={[
+                  styles.previewText,
+                  {
+                    fontSize: previewFontSize,
+                    fontFamily: boldText ? Typography.family.bold : Typography.family.regular,
+                    color: colors.textPrimary,
+                    lineHeight: previewFontSize + 6,
+                  },
+                ]}
+              >
+                Browse curated fashion from independent sellers. Every piece is hand-listed — no mass-market noise, just the good stuff.
+              </Text>
+            </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Motion */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+        <View>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Motion</Text>
             {motionToggles.map(renderToggleRow)}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Display */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+        <View>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Display</Text>
             {displayToggles.map(renderToggleRow)}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Screen Reader */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(320)}>
+        <View>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Screen reader</Text>
             {readerToggles.map(renderToggleRow)}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Info note — elevated card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(400)}>
+        <View>
           <View style={styles.noteCard}>
             <View style={styles.noteIconWrap}>
               <Ionicons name="information-circle" size={18} color={colors.textMuted} />
@@ -227,17 +266,16 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Hero summary
@@ -321,6 +359,23 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
+    },
+    previewCard: {
+      marginTop: Space.md,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+    },
+    previewLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: LetterSpacing.caps,
+      marginBottom: Space.sm,
+    },
+    previewText: {
+      letterSpacing: -0.2,
     },
 
     // Toggle rows

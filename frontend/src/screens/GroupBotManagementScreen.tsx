@@ -86,7 +86,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
             undeployBotFromConversation(conversationId, botId);
             show(`${botName} removed`, 'info');
           } catch {
-            show('Failed to remove agent. Please try again.', 'error');
+            show('Failed to remove agent. Try again.', 'error');
           } finally {
             setPendingBotId(null);
           }
@@ -103,7 +103,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       deployBotToConversation(conversationId, botId);
       show('Agent connected', 'success');
     } catch {
-      show('Failed to connect agent. Please try again.', 'error');
+      show('Failed to connect agent. Try again.', 'error');
     } finally {
       setPendingBotId(null);
     }
@@ -134,7 +134,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               scaleValue={0.92}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="My agents"
+              accessibilityLabel="Your agents"
             >
               <View style={styles.headerAction}>
                 <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
@@ -165,7 +165,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <EmptyState
             icon="hardware-chip-outline"
-            title="No bots configured"
+            title="No agents configured"
             subtitle="No agents are ready to connect."
           />
         )}
@@ -310,8 +310,8 @@ function createStyles(colors: ThemeColors) {
     minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 4,
-    gap: Space.sm + 4,
+    paddingVertical: Space.smMd,
+    gap: Space.smMd,
   },
   agentIcon: {
     width: Space.xl + Space.xs,

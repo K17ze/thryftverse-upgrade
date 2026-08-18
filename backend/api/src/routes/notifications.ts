@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { upgradeNotificationEventV2 } from "../lib/notificationEventRegistry.js";
 
 type NotificationInput = {
   userId: string;
@@ -293,27 +294,32 @@ export const registerNotificationRoutes = ({
       params,
     );
 
-    const items = result.rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      channel: row.channel,
-      title: row.title,
-      body: row.body,
-      payload: row.payload,
-      status: row.status,
-      providerMessageId: row.provider_message_id,
-      providerError: row.provider_error,
-      createdAt: row.created_at,
-      sentAt: row.sent_at,
-      eventType: row.event_type,
-      actorUserId: row.actor_user_id,
-      actorUsername: row.actor_username,
-      actorDisplayName: row.actor_display_name,
-      actorAvatar: row.actor_avatar,
-      readAt: row.read_at,
-      imageUrl: row.image_url,
-      route: row.route,
-    }));
+    const items = result.rows.map((row) => {
+      const base = {
+        id: row.id,
+        userId: row.user_id,
+        channel: row.channel,
+        title: row.title,
+        body: row.body,
+        payload: row.payload,
+        status: row.status,
+        providerMessageId: row.provider_message_id,
+        providerError: row.provider_error,
+        createdAt: row.created_at,
+        sentAt: row.sent_at,
+        eventType: row.event_type,
+        actorUserId: row.actor_user_id,
+        actorUsername: row.actor_username,
+        actorDisplayName: row.actor_display_name,
+        actorAvatar: row.actor_avatar,
+        readAt: row.read_at,
+        imageUrl: row.image_url,
+        route: row.route,
+      };
+      // Phase 5 V2: include structured semantic fields so the frontend
+      // never needs to infer category from title/body text.
+      return upgradeNotificationEventV2(base);
+    });
 
     const last = items.length === limit ? items.at(-1) : undefined;
     const nextCursor = last

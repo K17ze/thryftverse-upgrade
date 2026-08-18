@@ -1,10 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Type , Space, Radius  } from '../../theme/designTokens';
-import { Motion } from '../../constants/motion';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { TradeCard } from './TradeCard';
 import { Meta, BodyEmphasis } from '../ui/Text';
 
@@ -35,22 +32,14 @@ function resolveToneColor(tone: MetricItem['tone'], colors: ThemeColors) {
 
 export function MetricGrid({ metrics, columns = 3, style }: MetricGridProps) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
 
   return (
     <View style={[styles.container, style]}>
       <View style={[styles.row, { gap: Space.sm }]}>
         {metrics.map((metric, index) => (
-          <Reanimated.View
+          <View
             key={`${metric.label}-${index}`}
             style={[styles.cell, { flex: 1 / columns }]}
-            entering={
-              reducedMotionEnabled
-                ? undefined
-                : FadeInDown
-                    .duration(Motion.list.enterDuration)
-                    .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-            }
           >
             <TradeCard variant="surface" style={styles.card}>
               {metric.icon && (
@@ -66,7 +55,7 @@ export function MetricGrid({ metrics, columns = 3, style }: MetricGridProps) {
                 {metric.label}
               </Meta>
             </TradeCard>
-          </Reanimated.View>
+          </View>
         ))}
       </View>
     </View>
@@ -87,7 +76,7 @@ const styles = StyleSheet.create({
   card: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.sm,
     minHeight: 72,
   },

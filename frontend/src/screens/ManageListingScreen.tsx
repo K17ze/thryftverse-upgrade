@@ -8,7 +8,6 @@ import {
   Alert,
   Dimensions,
   Share,
-  Switch,
   Pressable,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,19 +20,29 @@ import Reanimated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { FlagshipActionCluster } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ProductDetailSkeleton } from '../components/product/ProductDetailSkeleton';
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipNavigationRow } from '../components/flagship/FlagshipNavigationRow';
+import { FlagshipMetricLine } from '../components/flagship/FlagshipMetricLine';
+import { FlagshipFormSection } from '../components/flagship/FlagshipFormSection';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
-import { OfferToLikersSheet } from '../components/product/OfferToLikersSheet';
-import { BoostListingSheet, type BoostTier } from '../components/product/BoostListingSheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import {
+  Space,
+  Radius,
+  Type,
+  Typography,
+  Stroke,
+  Control,
+  LetterSpacing,
+  Numeric,
+  FontFamily,
+} from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -63,12 +72,6 @@ export default function ManageListingScreen() {
   const [isNotFound, setIsNotFound] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
   const [imgIndex, setImgIndex] = React.useState(0);
-  const [offerToLikersVisible, setOfferToLikersVisible] = React.useState(false);
-  const [boostSheetVisible, setBoostSheetVisible] = React.useState(false);
-  const [boostedUntil, setBoostedUntil] = React.useState<string | null>(null);
-  const [autoAcceptThreshold, setAutoAcceptThreshold] = React.useState(0);
-  const [minimumOfferGbp, setMinimumOfferGbp] = React.useState(0);
-  const [isUpdatingOfferSettings, setIsUpdatingOfferSettings] = React.useState(false);
   const currentUser = useStore((s) => s.currentUser);
 
   React.useEffect(() => {
@@ -99,6 +102,24 @@ export default function ManageListingScreen() {
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
+  });
+
+  // ── Animated header styles ──
+  // Must be called unconditionally before any early returns (Rules of Hooks).
+  const headerBgStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { backgroundColor: colors.background };
+    }
+    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
+    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
+  });
+
+  const headerTitleStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { opacity: 1 };
+    }
+    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
   });
 
   const images = React.useMemo(() => {
@@ -175,71 +196,16 @@ export default function ManageListingScreen() {
     );
   }
 
-  const headerBgStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { backgroundColor: colors.background };
-    }
-    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
-  });
-
-  const headerTitleStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { opacity: 1 };
-    }
-    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
-
-  const handleShare = React.useCallback(async () => {
+  // Regular function (not useCallback) — defined after early returns where
+  // `item` is guaranteed non-null. Using useCallback here would violate the
+  // Rules of Hooks (hooks must not be called after conditional returns).
+  const handleShare = async () => {
     try {
       await Share.share({
         message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}.`,
       });
     } catch {
       // silently fail
-    }
-  }, [item.title, item.priceGbp, formatFromFiat]);
-
-  const handleBumpListing = () => {
-    setBoostSheetVisible(true);
-  };
-
-  const handleBoostConfirm = async ({ tier }: { tier: BoostTier }) => {
-    const until = new Date(Date.now() + tier.durationHours * 3600000).toISOString();
-    try {
-      // Persist the boost intent via the listing API. The backend may not
-      // yet support a dedicated boost field, so we pass the description
-      // through (matching the offer-settings pattern) to ensure the request
-      // is genuine rather than fabricating a local-only success.
-      await patchListingOnApi(itemId, { description: item.description });
-      setBoostedUntil(until);
-      setBoostSheetVisible(false);
-      show(`Listing boosted for ${tier.label}. Increased visibility active.`, 'success');
-    } catch {
-      show('Failed to apply boost. Please try again.', 'error');
-    }
-  };
-
-  const handleSaveOfferSettings = async () => {
-    setIsUpdatingOfferSettings(true);
-    try {
-      await patchListingOnApi(itemId, {
-        // Store offer floor settings — backend may not yet support these fields
-        description: item.description, // pass-through to satisfy API
-      });
-      show(
-        autoAcceptThreshold > 0
-          ? `Auto-accept set for offers ≥ ${autoAcceptThreshold}% of asking price.`
-          : minimumOfferGbp > 0
-            ? `Minimum offer set at ${formatFromFiat(minimumOfferGbp, 'GBP', { displayMode: 'fiat' })}.`
-            : 'Offer floors cleared.',
-        'success',
-      );
-    } catch {
-      show('Failed to save offer settings', 'error');
-    } finally {
-      setIsUpdatingOfferSettings(false);
     }
   };
 
@@ -313,6 +279,43 @@ export default function ManageListingScreen() {
     }
   };
 
+  const handleOverflowMenu = () => {
+    Alert.alert('More actions', undefined, [
+      ...(status === 'active'
+        ? [
+            { text: 'Pause listing', onPress: handlePause },
+            { text: 'Mark as sold', onPress: handleMarkSold },
+          ]
+        : status === 'paused'
+          ? [
+              { text: 'Reactivate listing', onPress: handleReactivate },
+              { text: 'Mark as sold', onPress: handleMarkSold },
+            ]
+          : status === 'sold'
+            ? [{ text: 'Reactivate listing', onPress: handleReactivate }]
+            : []),
+      { text: 'Delete listing', style: 'destructive' as const, onPress: handleDeleteListing },
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  };
+
+  // Status metadata for the flat identity block.
+  const statusLabel = isSold ? 'Sold' : isPaused ? 'Paused' : 'Active';
+  // Per 2026 best practices: Active (success), Paused (warning), Sold (brand).
+  const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
+
+  // ── Real engagement data (from backend engagement summary) ──
+  // The single-listing API returns engagement as a nested object, NOT as
+  // top-level likes/saves/offersCount. Reads fall back to top-level fields
+  // only for older payloads; views is intentionally omitted (not returned
+  // by the backend engagement query — was fabricated in a prior build).
+  const engagement = item.engagement ?? null;
+  const likesCount = engagement?.likes ?? item.likes ?? 0;
+  const savesCount = engagement?.saves ?? item.saves ?? 0;
+  const questionCount = engagement?.questionCount ?? 0;
+  const answeredQuestionCount = engagement?.answeredQuestionCount ?? 0;
+  const activeOfferCount = engagement?.activeOfferCount ?? item.offersCount ?? item.offers ?? 0;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
@@ -322,10 +325,10 @@ export default function ManageListingScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Reanimated.View style={headerTitleStyle}>
-          <Text style={styles.hdrTitle} numberOfLines={1}>Manage</Text>
+          <Text style={styles.hdrTitle} numberOfLines={1}>Manage listing</Text>
         </Reanimated.View>
-        <AnimatedPressable style={styles.hdrBtn} onPress={handleShare} accessibilityLabel="Share listing" accessibilityRole="button">
-          <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+        <AnimatedPressable style={styles.hdrBtn} onPress={handleOverflowMenu} accessibilityLabel="More actions" accessibilityRole="button" accessibilityHint="Pause, reactivate, mark as sold or delete this listing">
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -335,7 +338,7 @@ export default function ManageListingScreen() {
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 24 }}
       >
-        {/* Hero Carousel */}
+        {/* ── Media carousel ── */}
         <View style={styles.heroWrap}>
           <ScrollView
             horizontal
@@ -353,11 +356,6 @@ export default function ManageListingScreen() {
           </ScrollView>
           <View style={styles.heroOverlay} />
 
-          <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: isSold ? colors.danger : isPaused ? colors.warning : colors.success }]} />
-            <Text style={styles.statusPillText}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
-          </View>
-
           {images.length > 1 && (
             <View style={styles.dotRow}>
               {images.map((_u: string, i: number) => (
@@ -367,36 +365,28 @@ export default function ManageListingScreen() {
           )}
         </View>
 
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.infoPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
+        {/* ── Flat identity block (no floating card over media) ── */}
+        <View style={styles.identityBlock}>
+          <Text style={styles.identityTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
 
-          {/* Attribute row — flattened per AGENTS.md §4 (no card-on-card).
-              Previous version used surfaceAlt-filled chips inside the
-              infoCard surface. Now a flat row with hairline dividers,
-              matching the buyer-side identity block pattern. */}
-          <View style={styles.attrRow}>
-            <View style={styles.attrCell}>
-              <Text style={styles.attrLabel}>Brand</Text>
-              <Text style={styles.attrValue} numberOfLines={1}>{item.brand ?? '-'}</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusPillFlat, { backgroundColor: `${statusColor}1A` }]}>
+              <View style={[styles.statusDotFlat, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusPillFlatText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
-            <View style={[styles.attrDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={styles.attrCell}>
-              <Text style={styles.attrLabel}>Size</Text>
-              <Text style={styles.attrValue} numberOfLines={1}>{item.size ?? '-'}</Text>
-            </View>
-            <View style={[styles.attrDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={styles.attrCell}>
-              <Text style={styles.attrLabel}>Condition</Text>
-              <Text style={styles.attrValue} numberOfLines={1}>{item.condition ?? '-'}</Text>
-            </View>
+            <Text style={styles.statusMeta}>
+              {activeOfferCount > 0 ? `${activeOfferCount} offer${activeOfferCount === 1 ? '' : 's'}` : 'No offers yet'}
+              {' · '}
+              {savesCount} save{savesCount === 1 ? '' : 's'}
+              {questionCount > 0 ? ` · ${questionCount} question${questionCount === 1 ? '' : 's'}` : ''}
+            </Text>
           </View>
         </View>
 
-        {/* Primary Edit Button */}
+        {/* ── Primary CTA: Edit listing ── */}
         <AppButton
-          title="Edit Listing"
+          title="Edit listing"
           icon={<Ionicons name="create-outline" size={18} color={colors.background} />}
           variant="primary"
           size="lg"
@@ -407,545 +397,364 @@ export default function ManageListingScreen() {
           hapticFeedback="light"
         />
 
-        {/* Action Cluster */}
-        <FlagshipActionCluster
-          actions={[
-            { icon: <Ionicons name="image-outline" size={20} color={colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
-            { icon: <Ionicons name="share-outline" size={20} color={colors.textPrimary} />, label: 'Share', onPress: handleShare },
-            { icon: <Ionicons name="eye-outline" size={20} color={colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
-            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
-          ]}
-          style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
-        />
-
-        {/* Listing Health */}
-        {(item.views !== undefined || item.likes !== undefined || item.saves !== undefined) && (
-          <View style={styles.healthCard}>
-            <Text style={styles.healthTitle}>Listing Health</Text>
-            <View style={styles.healthRow}>
-              {item.views !== undefined && (
-                <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.views}</Text>
-                  <Text style={styles.healthLabel}>Views</Text>
-                </View>
-              )}
-              {item.likes !== undefined && (
-                <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.likes}</Text>
-                  <Text style={styles.healthLabel}>Likes</Text>
-                </View>
-              )}
-              {item.saves !== undefined && (
-                <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.saves}</Text>
-                  <Text style={styles.healthLabel}>Saves</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Offer Floor Settings */}
-        {status === 'active' && (
-          <View style={styles.card}>
-            <Text style={styles.healthTitle}>Offer preferences</Text>
-            <Text style={styles.offerFloorDescription}>
-              Set rules to automatically accept or reject incoming offers.
-            </Text>
-
-            {/* Auto-accept threshold */}
-            <View style={styles.offerFloorRow}>
-              <View style={styles.offerFloorInfo}>
-                <Text style={styles.offerFloorLabel}>Auto-accept threshold</Text>
-                <Text style={styles.offerFloorSub}>
-                  Offers at or above this percentage of asking price are auto-accepted.
-                </Text>
-              </View>
-              <View style={styles.thresholdChips}>
-                {[0, 80, 90, 95].map((pct) => (
-                  <Pressable
-                    key={pct}
-                    onPress={() => { setAutoAcceptThreshold(pct); }}
-                    style={({ pressed }) => [
-                      styles.thresholdChip,
-                      autoAcceptThreshold === pct && styles.thresholdChipActive,
-                      pressed && { opacity: 0.7 },
-                    ]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: autoAcceptThreshold === pct }}
-                    accessibilityLabel={pct === 0 ? 'No auto-accept' : `Auto-accept at ${pct}%`}
-                  >
-                    <Text style={[styles.thresholdChipText, autoAcceptThreshold === pct && styles.thresholdChipTextActive]}>
-                      {pct === 0 ? 'Off' : `${pct}%`}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Minimum offer floor */}
-            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
-              <View style={styles.offerFloorInfo}>
-                <Text style={styles.offerFloorLabel}>Minimum offer</Text>
-                <Text style={styles.offerFloorSub}>
-                  Offers below this amount are auto-declined.
-                </Text>
-              </View>
-              <View style={styles.thresholdChips}>
-                {[0, 5, 10, 15].map((gbp) => (
-                  <Pressable
-                    key={gbp}
-                    onPress={() => { setMinimumOfferGbp(gbp); }}
-                    style={({ pressed }) => [
-                      styles.thresholdChip,
-                      minimumOfferGbp === gbp && styles.thresholdChipActive,
-                      pressed && { opacity: 0.7 },
-                    ]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: minimumOfferGbp === gbp }}
-                    accessibilityLabel={gbp === 0 ? 'No minimum' : `Minimum £${gbp}`}
-                  >
-                    <Text style={[styles.thresholdChipText, minimumOfferGbp === gbp && styles.thresholdChipTextActive]}>
-                      {gbp === 0 ? 'None' : `£${gbp}`}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <AppButton
-              title={isUpdatingOfferSettings ? 'Saving…' : 'Save offer preferences'}
-              variant="secondary"
-              size="sm"
-              style={{ marginTop: Space.sm, width: '100%' }}
-              onPress={handleSaveOfferSettings}
-              disabled={isUpdatingOfferSettings}
-              loading={isUpdatingOfferSettings}
-              hapticFeedback="light"
-              accessibilityLabel="Save offer preferences"
-            />
-          </View>
-        )}
-
-        {/* Status Actions */}
-        <View style={styles.card}>
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleLeft}>
-              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? colors.danger + '20' : isPaused ? colors.warning + '20' : colors.success + '20' }]}>
-                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? colors.danger : isPaused ? colors.warning : colors.success} />
-              </View>
-              <View>
-                <Text style={styles.toggleTitle}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
-                <Text style={styles.toggleSub}>
-                  {isSold ? 'Buyers cannot purchase this item' : isPaused ? 'Hidden from buyers temporarily' : 'Visible to buyers in search and browse'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {status === 'active' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppButton title="Pause" variant="secondary" size="sm" style={{ flex: 1 }} onPress={handlePause} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
-            </View>
-          )}
-          {status === 'paused' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} hapticFeedback="medium" />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} hapticFeedback="medium" />
-            </View>
-          )}
-          {status === 'sold' && (
-            <View style={{ paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} hapticFeedback="medium" />
-            </View>
-          )}
+        {/* ── Transparent action cluster: Poster, Share, Preview ──
+            Per AGENTS.md §4: transparent 44pt targets, 20–24pt glyphs, no
+            grey circles. Hit area separated from visible shape. */}
+        <View style={styles.iconActionsRow}>
+          <AnimatedPressable
+            style={styles.iconAction}
+            onPress={() => navigation.navigate('CreatorStudio', { type: 'poster' })}
+            accessibilityLabel="Create poster"
+            accessibilityRole="button"
+            accessibilityHint="Generate a promotional poster for this listing"
+            hapticFeedback="light"
+          >
+            <Ionicons name="image-outline" size={22} color={colors.brand} />
+            <Text style={styles.iconActionLabel}>Poster</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.iconAction}
+            onPress={handleShare}
+            accessibilityLabel="Share listing"
+            accessibilityRole="button"
+            accessibilityHint="Share this listing"
+            hapticFeedback="light"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.iconActionLabel}>Share</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.iconAction}
+            onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+            accessibilityLabel="Preview listing"
+            accessibilityRole="button"
+            accessibilityHint="View this listing as buyers see it"
+            hapticFeedback="light"
+          >
+            <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.iconActionLabel}>Preview</Text>
+          </AnimatedPressable>
         </View>
 
-        {/* Delete */}
-        <AnimatedPressable
-          style={styles.deleteRow}
-          activeOpacity={0.8}
-          onPress={handleDeleteListing}
-          hapticFeedback="medium"
-          accessibilityLabel="Delete this listing permanently"
-          accessibilityRole="button"
-          accessibilityHint="This action cannot be undone"
+        {/* ── Buyer activity / performance (real metrics only) ──
+            Views intentionally omitted — not returned by the backend
+            engagement query (was fabricated in a prior build). Likes, saves,
+            questions and offers are all real and sourced from engagement.
+            Flat composition: FlagshipFormSection variant="flat" + metric
+            lines + disclosure rows. No cards, no borders. */}
+        <FlagshipFormSection
+          variant="flat"
+          title="Buyer activity"
+          style={styles.metricsSection}
         >
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          <Text style={styles.deleteText}>Delete this listing</Text>
-        </AnimatedPressable>
+          <FlagshipMetricLine label="Likes" value={String(likesCount)} />
+          <FlagshipMetricLine label="Saves" value={String(savesCount)} separated />
+          <FlagshipMetricLine
+            label="Questions"
+            value={String(questionCount)}
+            subLabel={answeredQuestionCount > 0 ? `${answeredQuestionCount} answered` : undefined}
+            separated
+          />
+          <FlagshipMetricLine label="Active offers" value={String(activeOfferCount)} separated />
+          <FlagshipNavigationRow
+            title="View analytics"
+            subtitle="Performance across all your listings"
+            icon="analytics-outline"
+            onPress={() => navigation.navigate('SellerAnalytics')}
+            accessibilityLabel="View analytics"
+            accessibilityHint="Open seller analytics for performance insights"
+          />
+          {questionCount > 0 ? (
+            <FlagshipNavigationRow
+              title="View questions"
+              subtitle={`${questionCount} buyer question${questionCount === 1 ? '' : 's'} to review`}
+              icon="chatbubble-outline"
+              onPress={() => navigation.navigate('Inbox')}
+              accessibilityLabel="View questions"
+              accessibilityHint="Open your inbox to review and answer buyer questions"
+            />
+          ) : null}
+        </FlagshipFormSection>
+
+        {/* ── Progressive disclosure rows ── */}
+        <View style={styles.disclosureGroup}>
+          <Text style={styles.sectionLabel}>Listing details</Text>
+          <FlagshipNavigationRow
+            title="Price & offers"
+            subtitle={activeOfferCount > 0 ? `${activeOfferCount} offer${activeOfferCount === 1 ? '' : 's'} received` : 'No offers yet'}
+            icon="pricetag-outline"
+            onPress={() => navigation.navigate('EditListing', { itemId, focus: 'price' })}
+            accessibilityLabel="Price and offers"
+            accessibilityHint="Edit price and review offers"
+          />
+          <FlagshipNavigationRow
+            title="Delivery"
+            subtitle={item.shippingType ? item.shippingType : 'Shipping options'}
+            icon="cube-outline"
+            onPress={() => navigation.navigate('EditListing', { itemId, focus: 'shipping' })}
+            accessibilityLabel="Delivery"
+            accessibilityHint="Edit shipping and delivery options"
+          />
+          <FlagshipNavigationRow
+            title="Format"
+            subtitle={item.isAuction ? 'Auction' : 'Fixed price'}
+            icon={item.isAuction ? 'hammer-outline' : 'pricetag-outline'}
+            onPress={() => navigation.navigate('EditListing', { itemId, focus: 'format' })}
+            accessibilityLabel="Listing format"
+            accessibilityHint="Edit listing format — auction or fixed price"
+          />
+        </View>
+
+        {/* ── Terminal / overflow section: destructive & state controls ── */}
+        <View style={styles.moreSection}>
+          <Text style={styles.sectionLabel}>More</Text>
+          {status === 'active' && (
+            <>
+              <FlagshipNavigationRow
+                title="Pause listing"
+                subtitle="Hide from buyers temporarily"
+                icon="pause-outline"
+                onPress={handlePause}
+                accessibilityLabel="Pause listing"
+                accessibilityHint="Temporarily hide this listing from buyers"
+              />
+              <FlagshipNavigationRow
+                title="Mark as sold"
+                subtitle="No longer available for purchase"
+                icon="checkmark-circle-outline"
+                danger
+                onPress={handleMarkSold}
+                accessibilityLabel="Mark as sold"
+                accessibilityHint="Mark this listing as sold"
+              />
+            </>
+          )}
+          {status === 'paused' && (
+            <>
+              <FlagshipNavigationRow
+                title="Reactivate listing"
+                subtitle="Make visible to buyers again"
+                icon="play-circle-outline"
+                onPress={handleReactivate}
+                accessibilityLabel="Reactivate listing"
+                accessibilityHint="Make this listing visible to buyers again"
+              />
+              <FlagshipNavigationRow
+                title="Mark as sold"
+                subtitle="No longer available for purchase"
+                icon="checkmark-circle-outline"
+                danger
+                onPress={handleMarkSold}
+                accessibilityLabel="Mark as sold"
+                accessibilityHint="Mark this listing as sold"
+              />
+            </>
+          )}
+          {status === 'sold' && (
+            <FlagshipNavigationRow
+              title="Reactivate listing"
+              subtitle="Make available for purchase again"
+              icon="play-circle-outline"
+              onPress={handleReactivate}
+              accessibilityLabel="Reactivate listing"
+              accessibilityHint="Make this listing available for purchase again"
+            />
+          )}
+          {/* Delete — clearly separated as the terminal action */}
+          <FlagshipNavigationRow
+            title="Delete listing"
+            subtitle="Permanently remove this listing"
+            icon="trash-outline"
+            danger
+            separator={false}
+            onPress={handleDeleteListing}
+            accessibilityLabel="Delete listing"
+            accessibilityHint="This action cannot be undone"
+          />
+        </View>
       </Reanimated.ScrollView>
-
-      {/* Offer to likers sheet */}
-      <OfferToLikersSheet
-        visible={offerToLikersVisible}
-        listing={item ? {
-          id: item.id,
-          title: item.title,
-          price: item.price,
-          image: item.images?.[0],
-          likes: item.likes ?? 0,
-        } : null}
-        onClose={() => setOfferToLikersVisible(false)}
-        onSend={({ offerPrice, discountPercent, includeFreeShipping, expiryHours, likerCount }) => {
-          setOfferToLikersVisible(false);
-          show(
-            `Offer sent to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'} · ${discountPercent}% off${includeFreeShipping ? ' + free shipping' : ''}`,
-            'success',
-          );
-        }}
-      />
-
-      {/* Boost listing sheet */}
-      <BoostListingSheet
-        visible={boostSheetVisible}
-        listing={item ? {
-          id: item.id,
-          title: item.title,
-          price: item.priceGbp ?? item.price ?? 0,
-          image: item.images?.[0],
-        } : null}
-        currentBoostedUntil={boostedUntil}
-        onClose={() => setBoostSheetVisible(false)}
-        onBoost={handleBoostConfirm}
-      />
     </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.background },
 
-  floatingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  hdrBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hdrTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    maxWidth: SCREEN_W * 0.5,
-  },
+    floatingHeader: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+    },
+    hdrBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    hdrTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      maxWidth: SCREEN_W * 0.5,
+    },
 
-  heroWrap: {
-    width: SCREEN_W,
-    height: SCREEN_W,
-    position: 'relative',
-    backgroundColor: colors.surface,
-  },
-  heroImage: {
-    width: SCREEN_W,
-    height: SCREEN_W,
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-  },
-  statusPill: {
-    position: 'absolute',
-    top: 68,
-    left: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
-  statusDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.full,
-  },
-  statusPillText: {
-    color: colors.textInverse,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: LetterSpacing.wide + 0.18,
-  },
-  dotRow: {
-    position: 'absolute',
-    bottom: Space.md,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.xs,
-  },
-  dot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-  },
-  dotActive: {
-    backgroundColor: colors.textInverse,
-    width: Control.iconCompact,
-  },
+    // ── Media carousel ──
+    heroWrap: {
+      width: SCREEN_W,
+      height: SCREEN_W,
+      position: 'relative',
+      backgroundColor: colors.surface,
+    },
+    heroImage: {
+      width: SCREEN_W,
+      height: SCREEN_W,
+    },
+    heroOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0,0,0,0.06)',
+    },
+    dotRow: {
+      position: 'absolute',
+      bottom: Space.md,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Space.xs,
+    },
+    dot: {
+      width: Space.xs + 2,
+      height: Space.xs + 2,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.45)',
+    },
+    dotActive: {
+      backgroundColor: colors.textInverse,
+      width: Control.iconCompact,
+    },
 
-  infoCard: {
-    marginTop: -Space.lg,
-    marginHorizontal: Space.md,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.xxl,
-    padding: Space.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  infoTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    lineHeight: Type.priceList.lineHeight + Space.xs,
-    marginBottom: Space.sm,
-  },
-  infoPrice: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.bold,
-    color: colors.brand,
-    letterSpacing: Type.priceLarge.letterSpacing,
-    marginBottom: Space.md,
-  },
-  // Attribute row — flat cells with hairline dividers (no card-on-card).
-  // Per AGENTS.md §4: nested surfaceAlt chips inside the infoCard surface
-  // were a card-on-card violation. Cells now share the parent surface;
-  // vertical hairlines separate them.
-  attrRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    marginTop: Space.sm,
-  },
-  attrCell: {
-    flex: 1,
-    paddingVertical: Space.xs,
-    alignItems: 'center',
-  },
-  attrDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-  },
-  attrLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.22,
-    marginBottom: Space.xs,
-  },
-  attrValue: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    // ── Flat identity block ──
+    // Per AGENTS.md §4: no floating white card over media. Title, price and
+    // status metadata sit directly on the canvas with flat typography.
+    identityBlock: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.lg,
+      paddingBottom: Space.sm,
+    },
+    identityTitle: {
+      fontSize: Type.itemTitle.size,
+      lineHeight: Type.itemTitle.lineHeight,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.itemTitle.letterSpacing,
+    },
+    identityPrice: {
+      ...Numeric.priceList,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+      marginTop: Space.xs,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      marginTop: Space.sm,
+    },
+    statusPillFlat: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm + Space.xxs,
+      paddingVertical: Space.xxs + 1,
+    },
+    statusDotFlat: {
+      width: Space.xs + 2,
+      height: Space.xs + 2,
+      borderRadius: Radius.full,
+    },
+    statusPillFlatText: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: LetterSpacing.wide,
+    },
+    statusMeta: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      flexShrink: 1,
+    },
 
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.xl,
-    backgroundColor: colors.textPrimary,
-  },
-  editBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
-    color: colors.background,
-  },
+    // ── Primary CTA ──
+    editBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      marginHorizontal: Space.md,
+      marginTop: Space.md,
+      paddingVertical: Space.md,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.textPrimary,
+    },
 
-  iconActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
-    marginBottom: Space.xs,
-  },
-  iconAction: {
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  iconCircle: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconActionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    // ── Transparent action cluster ──
+    // Per AGENTS.md §4: transparent 44pt targets, 20–24pt glyphs, no grey
+    // circles. Hit area separated from visible shape.
+    iconActionsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginHorizontal: Space.md,
+      marginTop: Space.md,
+      marginBottom: Space.xs,
+    },
+    iconAction: {
+      alignItems: 'center',
+      gap: Space.xs,
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+    },
+    iconActionLabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+    },
 
-  card: {
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.xxl,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.md,
-    overflow: 'hidden',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.md,
-  },
-  toggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  toggleIconWrap: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
-  toggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    marginTop: Space.xs,
-  },
+    // ── Section labels (flat, no card) ──
+    sectionLabel: {
+      fontSize: Type.metaElevated.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: LetterSpacing.caps,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.lg,
+      paddingBottom: Space.xs,
+    },
 
-  deleteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  healthCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-  },
-  healthTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm,
-  },
-  healthRow: {
-    flexDirection: 'row',
-    gap: Space.lg,
-  },
-  healthItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  healthValue: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  healthLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    marginTop: Space.xs,
-  },
-  deleteText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
-  offerFloorDescription: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    marginBottom: Space.sm,
-  },
-  offerFloorRow: {
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  offerFloorInfo: {
-    gap: Space.xs,
-  },
-  offerFloorLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  offerFloorSub: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  thresholdChips: {
-    flexDirection: 'row',
-    gap: Space.xs,
-    flexWrap: 'wrap',
-    marginTop: Space.xs,
-  },
-  thresholdChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: Control.hit,
-  },
-  thresholdChipActive: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}15`,
-  },
-  thresholdChipText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
-  thresholdChipTextActive: {
-    color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
+    // ── Metrics section ──
+    metricsSection: {
+      marginTop: Space.sm,
+    },
+
+    // ── Disclosure group ──
+    disclosureGroup: {
+      marginTop: Space.sm,
+    },
+
+    // ── More / terminal section ──
+    moreSection: {
+      marginTop: Space.lg,
+    },
   });
 }

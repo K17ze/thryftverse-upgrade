@@ -346,7 +346,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {status === 'empty' && (
             <View style={styles.emptyStateWrap}>
               <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="sparkles-outline" size={28} color={colors.textMuted} />
+                <Ionicons name="git-network-outline" size={28} color={colors.textMuted} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
                 No topics yet
@@ -634,7 +634,7 @@ function HowItWorks({
             Your feed is shaped by topics and signals. Topics are the interests we've learned from your activity — some you told us explicitly, others we inferred from your behaviour. Signals are the individual actions (saves, searches, follows) that feed into those topics.
           </Text>
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            You can adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics derived from purchase or browse history cannot be removed because they reflect your real activity.
+            Adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics derived from purchase or browse history cannot be removed because they reflect your real activity.
           </Text>
           {ALGORITHM_DEMO_MODE && (
             <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
@@ -1409,7 +1409,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     retryBtn: {
       paddingHorizontal: Space.lg,
-      paddingVertical: Space.sm + 4,
+      paddingVertical: Space.smMd,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
     },
