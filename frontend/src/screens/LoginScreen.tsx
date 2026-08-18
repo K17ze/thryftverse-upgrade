@@ -302,19 +302,6 @@ export default function LoginScreen() {
             <Text style={styles.title} maxFontSizeMultiplier={1.3}>Welcome back</Text>
             <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Log in to continue buying, selling, and trading.</Text>
 
-            {/* Trust reassurance — calm, reflective-level signal (§27.7).
-                A small lock icon + line communicates security without
-                overwhelming the form. Shown only when no 2FA challenge
-                is active to avoid visual noise during recovery. */}
-            {!requiresTwoFactor && !otpChallengeId && (
-              <View style={styles.trustReassure}>
-                <Ionicons name="lock-closed-outline" size={13} color={colors.textMuted} />
-                <Text style={styles.trustReassureText} maxFontSizeMultiplier={1.3}>
-                  Your login is encrypted and secure
-                </Text>
-              </View>
-            )}
-
             <View style={styles.form}>
               <AppInput
                 label="Email"
@@ -426,11 +413,53 @@ export default function LoginScreen() {
                 <Text style={styles.forgotText} maxFontSizeMultiplier={1.3}>Forgot password?</Text>
               </AnimatedPressable>
 
+              {/* Primary action — visually dominant, placed immediately after
+                  the password field so the recommended path is obvious.
+                  Per the research, the flat column of three equally-weighted
+                  buttons was ambiguous; the primary "Log In" must dominate. */}
+              <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
+                <AppButton
+                  title={isSubmitting ? 'Signing in...' : 'Log In'}
+                  style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
+                  titleStyle={styles.primaryText}
+                  variant="primary"
+                  size="lg"
+                  onPress={handleLogin}
+                  disabled={!canSubmit}
+                  loading={isSubmitting}
+                  accessibilityLabel="Log in"
+                  hapticFeedback="medium"
+                />
+              </Reanimated.View>
+
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>or</Text>
+                <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>more options</Text>
                 <View style={styles.dividerLine} />
               </View>
+
+              {/* Passkey sign-in — truthful placeholder.
+                  The backend does not yet support WebAuthn/FIDO2 passkeys,
+                  so this surfaces the option honestly as "coming soon"
+                  rather than fabricating a working passkey flow (§11). */}
+              <AnimatedPressable
+                style={styles.passkeyBtn}
+                onPress={() => {
+                  setInfoMsg('Passkey sign-in is coming soon. Use email, OTP, or magic link for now.');
+                  setErrorMsg('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with passkey"
+                accessibilityHint="Passkey sign-in is coming soon"
+              >
+                <Ionicons name="key-outline" size={18} color={colors.textPrimary} />
+                <Text style={styles.passkeyBtnText} maxFontSizeMultiplier={1.3}>
+                  Sign in with passkey
+                </Text>
+                <View style={styles.passkeyBadge}>
+                  <Text style={styles.passkeyBadgeText} maxFontSizeMultiplier={1.2}>Soon</Text>
+                </View>
+              </AnimatedPressable>
 
               <AppButton
                 title={isOtpSending ? 'Sending OTP...' : 'Send OTP to Email'}
@@ -516,21 +545,6 @@ export default function LoginScreen() {
               </Reanimated.Text>
             )}
 
-            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
-              <AppButton
-                title={isSubmitting ? 'Signing in...' : 'Log In'}
-                style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
-                titleStyle={styles.primaryText}
-                variant="primary"
-                size="md"
-                onPress={handleLogin}
-                disabled={!canSubmit}
-                loading={isSubmitting}
-                accessibilityLabel="Log in"
-                hapticFeedback="medium"
-              />
-            </Reanimated.View>
-
             <View style={styles.switchRow}>
               <Text style={styles.switchText} maxFontSizeMultiplier={1.3}>New to Thryftverse?</Text>
               <AnimatedPressable
@@ -567,24 +581,13 @@ function createStyles(colors: ThemeColors) {
   },
   title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing },
   subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.md },
-  trustReassure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginBottom: Space.lg,
-  },
-  trustReassureText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    letterSpacing: 0.1,
-  },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
   forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0, marginTop: Space.md + 2 },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.smMd,
@@ -603,6 +606,35 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps,
+  },
+  passkeyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: Space.sm + 2,
+  },
+  passkeyBtnText: {
+    color: colors.textPrimary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  passkeyBadge: {
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
+    borderRadius: Radius.sm,
+    backgroundColor: `${colors.brand}1A`,
+  },
+  passkeyBadgeText: {
+    color: colors.brand,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
   otpRequestBtn: {
     minHeight: Control.hit + 2,
@@ -677,7 +709,6 @@ function createStyles(colors: ThemeColors) {
   footer: { paddingTop: Space.sm, position: 'relative' },
   infoText: { color: colors.success, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {

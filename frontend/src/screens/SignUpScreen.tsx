@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Keyboard, Linking } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -173,6 +173,7 @@ export default function SignUpScreen() {
               <AppInput
                 label="Username"
                 placeholder="Pick a unique username"
+                helperText="Your public handle — how other members find and tag you. Not your login."
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
@@ -257,7 +258,21 @@ export default function SignUpScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.termsText} maxFontSizeMultiplier={1.3}>
-              By signing up, you agree to our Terms of Service and Privacy Policy.
+              By signing up, you agree to our{' '}
+              <Text
+                style={styles.termsLink}
+                onPress={() => void Linking.openURL('https://thryftverse.app/terms')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text
+                style={styles.termsLink}
+                onPress={() => void Linking.openURL('https://thryftverse.app/privacy')}
+              >
+                Privacy Policy
+              </Text>
+              .
             </Text>
 
             {!!errorMsg && (
@@ -336,6 +351,7 @@ function createStyles(colors: ThemeColors) {
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
   termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
+  termsLink: { fontFamily: Typography.family.semibold, color: colors.textSecondary, textDecorationLine: 'underline' },
   errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.brand, height: 56, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },

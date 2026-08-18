@@ -11,7 +11,7 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, FontFamily } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, LetterSpacing } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -134,22 +134,22 @@ export default function AgeVerificationScreen({ navigation }: Props) {
             style={[styles.title, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
-            Get started
+            ThryftVerse
           </Text>
           <Text
             style={[styles.subtitle, { color: colors.textSecondary }]}
           >
-            ThryftVerse is a marketplace for adults. Confirm you are at least 18 years old.
+            A marketplace for fashion, auctions, and co-ownership. 18+ only.
           </Text>
 
           <View style={styles.actions}>
             <AppButton
-              title="I am 18 or older"
+              title="Confirm I am 18 or older"
               variant="primary"
               size="lg"
               onPress={handleConfirm18}
               hapticFeedback="medium"
-              accessibilityLabel="I am 18 or older"
+              accessibilityLabel="Confirm I am 18 or older"
               accessibilityHint="Confirms you are at least 18 and continues to the marketplace"
               accessibilityRole="button"
               style={styles.button}
@@ -166,6 +166,17 @@ export default function AgeVerificationScreen({ navigation }: Props) {
               style={styles.button}
             />
           </View>
+
+          {/* Data-transparency microcopy (ICO 2026). The gate stores only a
+              boolean 18+ confirmation in hardware-backed SecureStore — never
+              the user's date of birth. Being explicit about this meets
+              data-protection transparency expectations. */}
+          <Text
+            style={[styles.microcopy, { color: colors.textMuted }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            We store only your 18+ confirmation on this device — not your date of birth.
+          </Text>
         </View>
       ) : (
         <Reanimated.View
@@ -185,17 +196,29 @@ export default function AgeVerificationScreen({ navigation }: Props) {
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             We're sorry, but ThryftVerse is only available to users 18 and older.
           </Text>
-          <AppButton
-            title="Close app"
-            variant="secondary"
-            size="lg"
-            onPress={handleCloseApp}
-            hapticFeedback="medium"
-            accessibilityLabel="Close app"
-            accessibilityHint="Closes the application"
-            accessibilityRole="button"
-            style={styles.button}
-          />
+          {Platform.OS === 'android' ? (
+            <AppButton
+              title="Close app"
+              variant="secondary"
+              size="lg"
+              onPress={handleCloseApp}
+              hapticFeedback="medium"
+              accessibilityLabel="Close app"
+              accessibilityHint="Closes the application"
+              accessibilityRole="button"
+              style={styles.button}
+            />
+          ) : (
+            // iOS — BackHandler.exitApp is a no-op, so we do not show a
+            // button that represents an action it cannot perform (§11).
+            // Instead, honest guidance tells the user how to leave.
+            <Text
+              style={[styles.iosCloseHint, { color: colors.textMuted }]}
+              maxFontSizeMultiplier={1.3}
+            >
+              You can close the app by swiping up from the bottom of your screen.
+            </Text>
+          )}
         </Reanimated.View>
       )}
     </SafeAreaView>
@@ -226,10 +249,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontFamily: TypeStyles.display.fontFamily,
-    fontSize: Type.display.size,
-    lineHeight: Type.display.lineHeight,
-    letterSpacing: Type.display.letterSpacing,
+    fontFamily: Typography.family.extrabold,
+    fontSize: Type.display.size + 4,
+    lineHeight: Type.display.lineHeight + 6,
+    letterSpacing: LetterSpacing.tight,
     textAlign: 'center',
     marginBottom: Space.md,
   },
@@ -250,6 +273,26 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
+  },
+  microcopy: {
+    fontFamily: FontFamily.regular,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight + 2,
+    letterSpacing: Type.meta.letterSpacing,
+    textAlign: 'center',
+    marginTop: Space.lg,
+    maxWidth: 300,
+    alignSelf: 'center',
+  },
+  iosCloseHint: {
+    fontFamily: FontFamily.regular,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 4,
+    letterSpacing: Type.body.letterSpacing,
+    textAlign: 'center',
+    marginTop: Space.lg,
+    maxWidth: 300,
+    alignSelf: 'center',
   },
   deniedIcon: {
     width: Space.xxl + Space.lg,

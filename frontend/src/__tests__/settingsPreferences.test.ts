@@ -103,6 +103,7 @@ describe('settings preference persistence', () => {
       filterPresets: [],
       analyticsOptOut: true,
       developerMode: false,
+      biometricEnabled: true,
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(

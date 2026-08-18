@@ -26,6 +26,7 @@ import {
   updateThemePreference,
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -116,6 +117,8 @@ export default function SettingsScreen({ navigation }: Props) {
     analyticsOptOut,
     setAnalyticsOptOut,
     developerMode,
+    biometricEnabled,
+    setBiometricEnabled,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -125,6 +128,11 @@ export default function SettingsScreen({ navigation }: Props) {
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
+
+  // Probe biometric hardware availability so the toggle subtitle is truthful —
+  // "Not available on this device" when the device has no enrolled biometric,
+  // rather than showing a toggle that silently does nothing.
+  const { isAvailable: isBiometricAvailable } = useBiometricGate();
 
   // Track persist-store hydration so the screen can show a skeleton until the
   // user/session data is available instead of flashing "Not signed in".
@@ -396,6 +404,20 @@ export default function SettingsScreen({ navigation }: Props) {
               title="Change password"
               subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
               onPress={() => navigation.navigate('ChangePassword')}
+            />
+            <SettingsRow
+              icon="finger-print-outline"
+              title="Biometric lock"
+              subtitle={
+                !isBiometricAvailable
+                  ? 'Not available on this device'
+                  : biometricEnabled
+                    ? 'Face ID, Touch ID & fingerprint for sensitive actions'
+                    : 'Disabled — sensitive screens use password only'
+              }
+              toggleValue={biometricEnabled && isBiometricAvailable}
+              onToggle={(v) => setBiometricEnabled(v)}
+              disabled={!isBiometricAvailable}
             />
             <SettingsRow
               icon="link-outline"

@@ -221,12 +221,9 @@ export default function AuthLandingScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <SafeAreaView style={styles.safeArea}>
-        {/* Top - animated brand wordmark */}
-        <View
-          style={styles.topSection}
-        >
-          <Text style={styles.logo} maxFontSizeMultiplier={1.3}>entry 01</Text>
-        </View>
+        {/* Middle - main copy. The brand wordmark "THRYFT" is the value
+            proposition; no unexplained eyebrow chrome competing for the
+            text budget (§4). */}
 
         {/* Middle - main copy */}
         <View style={styles.content}>
@@ -244,30 +241,30 @@ export default function AuthLandingScreen() {
             buy, sell, trade. no noise.
           </Text>
 
-          {/* Trust signals — compact value props with refined icon treatment.
-              Trust signals at the entry
-              point reduce anxiety and communicate competence before the user
-              commits to an action. Icons at 18pt sit above the reading flow
-              without competing with the primary CTA. */}
+          {/* Trust signals — a single line of honest proof, not a flat row
+              of decorative icons. Per §11 and 2026 research (Landra), trust
+              signals must be proof, not claims. The buyer-protection text
+              links to the real policy so it is an actionable destination,
+              not dead text. We do not fabricate seller counts or transaction
+              volumes — the proof is qualitative and verifiable. */}
           <View
             style={styles.trustRow}
             accessibilityRole="text"
-            accessibilityLabel="Buyer protection, make offers, and co-own trading"
+            accessibilityLabel="From independent sellers and creators. Buyer protection on every purchase."
           >
-            <View style={styles.trustItem}>
-              <Ionicons name="checkmark-circle-outline" size={18} color="rgba(245,239,230,0.65)" />
-              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Buyer protection</Text>
-            </View>
-            <View style={styles.trustDot} />
-            <View style={styles.trustItem}>
-              <Ionicons name="pricetag-outline" size={18} color="rgba(245,239,230,0.65)" />
-              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Make offers</Text>
-            </View>
-            <View style={styles.trustDot} />
-            <View style={styles.trustItem}>
-              <Ionicons name="swap-horizontal-outline" size={18} color="rgba(245,239,230,0.65)" />
-              <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Co-Own trading</Text>
-            </View>
+            <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>
+              From independent sellers and creators ·{' '}
+            </Text>
+            <Pressable
+              onPress={() => void Linking.openURL('https://thryftverse.app/buyer-protection')}
+              accessibilityRole="link"
+              accessibilityLabel="Buyer protection policy"
+              accessibilityHint="Opens the buyer protection policy in your browser"
+            >
+              <Text style={styles.trustLink} maxFontSizeMultiplier={1.3}>
+                Buyer protection on every purchase
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -315,18 +312,19 @@ export default function AuthLandingScreen() {
             </AnimatedPressable>
           </View>
 
-          <View style={styles.glassCard}>
-            <AnimatedPressable
-              style={styles.secondaryBtnGlass}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('Login')}
-              accessibilityRole="button"
-              accessibilityLabel="I already have an account"
-              accessibilityHint="Opens the login screen"
-            >
-              <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>i already have an account</Text>
-            </AnimatedPressable>
-          </View>
+          {/* Secondary CTA — flattened (§4: no card-on-card). A transparent
+              pressable with a text label, separated from the primary CTA by
+              spacing alone. No glass wrapper, no nested surface. */}
+          <AnimatedPressable
+            style={styles.secondaryBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Login')}
+            accessibilityRole="button"
+            accessibilityLabel="I already have an account"
+            accessibilityHint="Opens the login screen"
+          >
+            <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>i already have an account</Text>
+          </AnimatedPressable>
 
           {/* Divider — separates email path from social auth */}
           <View style={styles.socialDivider}>
@@ -377,8 +375,25 @@ export default function AuthLandingScreen() {
             </Text>
           )}
 
+          {/* Terms — navigable links (§11). "Terms of Service" and
+              "Privacy Policy" open the real documents, so the control has
+              an actionable destination rather than being dead text. */}
           <Text style={styles.termsText} maxFontSizeMultiplier={1.3}>
-            by continuing, you agree to our terms of service and privacy policy.
+            by continuing, you agree to our{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => void Linking.openURL('https://thryftverse.app/terms')}
+            >
+              terms of service
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => void Linking.openURL('https://thryftverse.app/privacy')}
+            >
+              privacy policy
+            </Text>
+            .
           </Text>
 
           {__DEV__ && (
@@ -445,17 +460,6 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     justifyContent: 'space-between',
   },
-  topSection: {
-    paddingHorizontal: Space.lg - 2,
-    paddingTop: Space.smMd,
-  },
-  logo: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: 'rgba(232,220,200,0.9)',
-    letterSpacing: Space.xs - 1.2,
-    textTransform: 'uppercase',
-  },
   content: {
     paddingHorizontal: Space.lg - 2,
     paddingBottom: Space.md + 2,
@@ -478,14 +482,8 @@ function createStyles(colors: ThemeColors) {
   trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.md + 4,
     flexWrap: 'wrap',
-  },
-  trustItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1,
+    marginTop: Space.md + 4,
   },
   trustText: {
     fontSize: Type.meta.size,
@@ -493,11 +491,12 @@ function createStyles(colors: ThemeColors) {
     color: 'rgba(245,239,230,0.65)',
     letterSpacing: 0.2,
   },
-  trustDot: {
-    width: Space.xs - 1,
-    height: Space.xs - 1,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(245,239,230,0.3)',
+  trustLink: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(245,239,230,0.85)',
+    letterSpacing: 0.2,
+    textDecorationLine: 'underline',
   },
   footer: {
     paddingHorizontal: Space.lg + 4,
@@ -537,30 +536,12 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
-  glassCard: {
-    marginHorizontal: 0,
-    padding: 0,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    borderRadius: Radius.lg,
-  },
-  secondaryBtnGlass: {
+  secondaryBtn: {
     height: Space.xl + Space.xl + 4,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.md,
-  },
-  secondaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    height: Space.xl + Space.xl + 4,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(232,220,200,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   secondaryText: {
     color: 'rgba(245,239,230,0.85)',
@@ -618,6 +599,11 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'center',
     lineHeight: Type.caption.lineHeight,
     marginTop: Space.xs,
+  },
+  termsLink: {
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: Typography.family.semibold,
+    textDecorationLine: 'underline',
   },
   devBypassBtn: {
     marginTop: Space.smMd,

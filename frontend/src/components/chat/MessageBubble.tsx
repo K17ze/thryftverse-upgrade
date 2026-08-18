@@ -1,8 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  withTiming,
+  withSpring,
+  type EntryExitAnimationFunction,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 
@@ -34,6 +41,10 @@ interface MessageBubbleProps {
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
   showAvatar?: boolean;
+  /** When true, the bubble fades in + scales up on mount (new messages only).
+   *  Historical messages pass `false` so they do not re-animate on scroll or
+   *  initial load (AGENTS.md §16). */
+  isNew?: boolean;
   /** When true, shows a "Translated" badge above the message text */
   isTranslated?: boolean;
   /** When true, renders a subtle AI visual distinction (neutral icon, tinted bubble, AI badge). */
@@ -71,6 +82,7 @@ function MessageBubbleBase({
   isFirstInCluster = true,
   isLastInCluster = true,
   showAvatar = false,
+  isNew = false,
   isTranslated = false,
   isAgent = false,
   agentAvatar,
@@ -84,7 +96,45 @@ function MessageBubbleBase({
   onReplyPress,
 }: MessageBubbleProps) {
   const { colors, isDark } = useAppTheme();
+  const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // Bubble enter animation — fade in + scale-up (spring, 250ms).
+  // Only applied to genuinely new messages; historical messages pass
+  // isNew=false so they never re-animate on scroll or initial mount
+  // (AGENTS.md §16, WhatsApp 2026 bubble animation).
+  const bubbleEntering: EntryExitAnimationFunction | undefined =
+    motionEnabled && isNew
+      ? () => {
+          'worklet';
+          return {
+            animations: {
+              opacity: withTiming(1, { duration: Motion.duration.slow }),
+              transform: [{ scale: withSpring(1, spring.settle) }],
+            },
+            initialValues: {
+              opacity: 0,
+              transform: [{ scale: 0.92 }],
+            },
+          };
+        }
+      : undefined;
+
+  // Reaction badge pop-in — spring-scale (0.8 → 1.0, 200ms).
+  // Matches iMessage tapback pop. Respects reduced-motion (no animation).
+  const reactionEntering: EntryExitAnimationFunction | undefined = motionEnabled
+    ? () => {
+        'worklet';
+        return {
+          animations: {
+            transform: [{ scale: withSpring(1, spring.tap) }],
+          },
+          initialValues: {
+            transform: [{ scale: 0.8 }],
+          },
+        };
+      }
+    : undefined;
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
   const isMedia = !!mediaUri;
@@ -127,7 +177,7 @@ function MessageBubbleBase({
     : { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
 
   return (
-    <View style={[styles.row, isMe && styles.rowRight]}>
+    <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
       {showAvatar && !isMe ? (
         isAgent ? (
           <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
@@ -303,15 +353,15 @@ function MessageBubbleBase({
         {reactions && reactions.length > 0 ? (
           <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]}>
             {reactions.slice(0, 3).map((r, i) => (
-              <View key={i} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
+              <Reanimated.View key={i} entering={reactionEntering} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                 {r.count > 1 ? <Text style={styles.reactionCount}>{r.count}</Text> : null}
-              </View>
+              </Reanimated.View>
             ))}
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </Reanimated.View>
   );
 }
 

@@ -52,8 +52,6 @@ import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
 
-import { TypingIndicator } from "../components/chat/TypingIndicator";
-
 import { MessageBubble } from "../components/chat/MessageBubble";
 
 import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
@@ -389,20 +387,6 @@ export default function ChatScreen({ navigation, route }: Props) {
       fontFamily: Typography.family.semibold,
     },
 
-    typingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      gap: Space.xs + 1,
-    },
-
-    typingText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-
     unreadDividerWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -731,6 +715,27 @@ export default function ChatScreen({ navigation, route }: Props) {
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  // Track which message IDs have already been rendered so only genuinely
+  // new messages (added after initial load) get the bubble enter animation.
+  // On the first render where messages exist, all are marked as known so
+  // historical messages never animate on mount (AGENTS.md §16). The ref is
+  // updated after each render via the effect below.
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  const knownInitializedRef = useRef(false);
+  if (!knownInitializedRef.current && messages.length > 0) {
+    knownMessageIdsRef.current = new Set(messages.map((m) => m.id));
+    knownInitializedRef.current = true;
+  }
+  useEffect(() => {
+    if (messages.length > 0) {
+      knownMessageIdsRef.current = new Set(messages.map((m) => m.id));
+    }
+  }, [messages]);
+  const isNewMessage = useCallback(
+    (id: string) => !knownMessageIdsRef.current.has(id),
+    [],
+  );
+
   const {
     input,
     setInput,
@@ -797,6 +802,10 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     setIsTyping(false);
+    // Reset new-message tracking so the new conversation's historical
+    // messages do not trigger bubble enter animations.
+    knownMessageIdsRef.current = new Set(messagesRef.current.map((m) => m.id));
+    knownInitializedRef.current = messagesRef.current.length > 0;
   }, [conversationId]);
 
   // Reset per-session dismissals when the conversation changes.
@@ -1442,6 +1451,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
+            isNew={isNewMessage(msg.id)}
           />
           {!isMedia && !isVoice &&
             (() => {
@@ -1507,9 +1517,11 @@ export default function ChatScreen({ navigation, route }: Props) {
   const topBarTitle = isGroup
     ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
-  const topBarSubtitle = isGroup
-    ? `${conversation?.participantIds?.length ?? 0} members`
-    : t('chat.marketplaceChatLabel');
+  const topBarSubtitle = isTyping
+    ? 'typing…'
+    : isGroup
+      ? `${conversation?.participantIds?.length ?? 0} members`
+      : t('chat.marketplaceChatLabel');
   const topBarInitials = isGroup
     ? (conversation?.title
         ?.split(" ")
@@ -1887,12 +1899,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             { paddingBottom: Math.max(insets.bottom, Space.sm) + Space.sm },
           ]}
         >
-          {isTyping ? (
-            <View style={styles.typingRow}>
-              <TypingIndicator />
-              <Text style={styles.typingText}>typing…</Text>
-            </View>
-          ) : null}
           {/* P0-8: Composer-stack height enforcement. Multiple contextual
               banners can stack above the input bar (reply, reactions,
               offline, undo). On small devices the stack can push the input

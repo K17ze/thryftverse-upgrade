@@ -42,6 +42,15 @@ export interface SettingsPreferences {
    * Defaults to false so ordinary consumers never see developer tooling.
    */
   developerMode: boolean;
+  /**
+   * Biometric auth gating — when true (default), sensitive screens
+   * (wallet, payments, withdrawals, account deletion) require Face ID /
+   * Touch ID / fingerprint re-authentication before revealing content.
+   * When false, the biometric gate is skipped and content is shown with
+   * a truthful warning. The user can disable this if their device
+   * biometrics are unreliable or they prefer password-only auth.
+   */
+  biometricEnabled: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -102,6 +111,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   filterPresets: [],
   analyticsOptOut: false,
   developerMode: false,
+  biometricEnabled: true,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -168,6 +178,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.developerMode === 'boolean'
           ? parsed.developerMode
           : DEFAULT_SETTINGS_PREFERENCES.developerMode,
+      biometricEnabled:
+        typeof parsed.biometricEnabled === 'boolean'
+          ? parsed.biometricEnabled
+          : DEFAULT_SETTINGS_PREFERENCES.biometricEnabled,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

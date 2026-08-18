@@ -29,6 +29,7 @@ interface SettingsPreferencesContextValue {
   isHydrated: boolean;
   analyticsOptOut: boolean;
   developerMode: boolean;
+  biometricEnabled: boolean;
   setLanguage: (language: SupportedLanguageOption) => void;
   setEmailNotificationsEnabled: (enabled: boolean) => void;
   toggleEmailNotifications: () => void;
@@ -44,6 +45,7 @@ interface SettingsPreferencesContextValue {
   toggleAnalyticsOptOut: () => void;
   setDeveloperMode: (enabled: boolean) => void;
   toggleDeveloperMode: () => void;
+  setBiometricEnabled: (enabled: boolean) => void;
 }
 
 const DEFAULT_LANGUAGE = LANGUAGE_OPTIONS[0];
@@ -64,6 +66,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   );
   const [analyticsOptOut, setAnalyticsOptOutState] = React.useState(false);
   const [developerMode, setDeveloperModeState] = React.useState(false);
+  const [biometricEnabled, setBiometricEnabledState] = React.useState(true);
   const [isHydrated, setIsHydrated] = React.useState(false);
 
   React.useEffect(() => {
@@ -86,6 +89,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setPushNotificationToggles(storedPushToggles);
         setAnalyticsOptOutState(settingsPreferences.analyticsOptOut);
         setDeveloperModeState(settingsPreferences.developerMode);
+        setBiometricEnabledState(settingsPreferences.biometricEnabled);
         // Sync the telemetry module so opt-out is respected before the
         // first React re-render commits.
         setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
@@ -121,10 +125,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       filterPresets,
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -227,6 +232,10 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setDeveloperModeState((prev) => !prev);
   }, []);
 
+  const setBiometricEnabled = React.useCallback((enabled: boolean) => {
+    setBiometricEnabledState(enabled);
+  }, []);
+
   const pushEnabledCount = React.useMemo(
     () => countEnabledPushNotificationToggles(pushNotificationToggles),
     [pushNotificationToggles]
@@ -245,6 +254,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       isHydrated,
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
       setLanguage,
       setEmailNotificationsEnabled,
       toggleEmailNotifications,
@@ -259,10 +269,12 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       toggleAnalyticsOptOut,
       setDeveloperMode,
       toggleDeveloperMode,
+      setBiometricEnabled,
     }),
     [
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
       emailNotificationsEnabled,
       filterPresets,
       isHydrated,
@@ -276,6 +288,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setAllPushNotificationToggles,
       setAnalyticsOptOutPref,
       setDeveloperMode,
+      setBiometricEnabled,
       setMySizes,
       setPushNotificationToggle,
       setQuietHours,

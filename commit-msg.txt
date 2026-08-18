@@ -1,0 +1,31 @@
+Wave 5: Intimacy surfaces — chat presence/typing, onboarding auth, passkeys
+
+Chat (subagent 1288830f):
+- ChatTopBar: added truthful presence dot (only shown when backend provides
+  isOnline=true; no fabricated green dot per AGENTS.md §11)
+- ChatScreen: typing indicator moved to header subtitle (not separate row);
+  removed fabricated typing row; isTyping stays false unless real event
+- MessageBubble: added bubble enter animation (fade+spring, 280ms) only for
+  genuinely new messages; reaction badge spring pop; respects reduced-motion
+- Message states verified truthful (sending/sent/delivered/read/failed)
+
+Onboarding auth (subagent bf95b3cc):
+- AgeVerification: "ThryftVerse" brand wordmark replaces generic "Get started";
+  truthful iOS close-app guidance; data-transparency microcopy
+- Onboarding: refined slide copy, honest proof points, demoted icon panel
+- AuthLanding: removed decorative eyebrow, flattened glass card, honest trust row
+- Login: primary CTA moved up, OTP/magic link demoted, removed redundant trust claim
+- SignUp: username helper text clarifies what it's for
+- ForgotPassword: added spam-folder hint + resend action
+- Success: timeline derived from real order.status (no fabricated isComplete)
+
+Passkeys + biometrics (subagent 8f8c5ece):
+- LoginScreen: truthful "Sign in with passkey" (coming soon, no fabrication)
+- SettingsScreen: biometric lock toggle with truthful hardware availability
+- useBiometricGate: respects biometricEnabled preference
+- SettingsPreferences: added biometricEnabled field with persistence
+- Inbox list composition verified correct (flat list, hairlines, dot unread)
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

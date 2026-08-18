@@ -14,6 +14,13 @@ interface ChatTopBarProps {
   initials?: string;
   /** Show a verified badge next to the title (trusted seller/partner) */
   isVerified?: boolean;
+  /**
+   * Real-time online presence. Only pass `true` when the backend provides
+   * a real-time presence signal for this participant. When `undefined` or
+   * `false`, no presence dot is rendered (AGENTS.md §11 — never fabricate
+   * presence).
+   */
+  isOnline?: boolean;
   onBack: () => void;
   onSearch?: () => void;
   onInfo?: () => void;
@@ -34,6 +41,7 @@ export function ChatTopBar({
   avatarUrl,
   initials,
   isVerified = false,
+  isOnline = false,
   onBack,
   onSearch,
   onInfo,
@@ -143,6 +151,11 @@ export function ChatTopBar({
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}
+              {isOnline ? (
+                <View style={[styles.presenceDotOuter, { backgroundColor: colors.success }]}>
+                  <View style={[styles.presenceDot, { backgroundColor: colors.background }]} />
+                </View>
+              ) : null}
             </View>
             <View style={styles.titleWrap}>
               <View style={styles.titleRow}>
@@ -283,6 +296,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   avatarImage: {
     width: 40,
     height: 40,
+    borderRadius: Radius.full,
+  },
+  presenceDotOuter: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  presenceDot: {
+    width: 8,
+    height: 8,
     borderRadius: Radius.full,
   },
   avatarText: {
