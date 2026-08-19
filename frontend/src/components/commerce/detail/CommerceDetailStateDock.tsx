@@ -78,6 +78,10 @@ export interface CommerceDetailStateDockProps {
   /** Optional shipping hint shown below the price (e.g. "+ £3.99 shipping"
    *  or "Free shipping"). */
   shippingHint?: string;
+  /** Optional low-stock indicator shown near the primary CTA (e.g.
+   *  "Only 2 left"). Only pass when real inventory data is available —
+   *  the dock never fabricates stock counts. */
+  lowStockHint?: string;
   /** When true, renders a buyer protection strip above the dock. Only
    *  render when protection is actually available. */
   showProtectionStrip?: boolean;
@@ -109,6 +113,7 @@ export function CommerceDetailStateDock({
   subtitle,
   thumbnailUri,
   shippingHint,
+  lowStockHint,
   showProtectionStrip = false,
   commerceTier,
   primaryAction,
@@ -285,6 +290,21 @@ export function CommerceDetailStateDock({
         </View>
 
         <View style={shouldStack ? styles.actionClusterStacked : styles.actionCluster}>
+          {/* ── Low-stock indicator ──
+              Subtle warning text shown above the primary CTA when real
+              inventory data indicates low stock. Only rendered when the
+              caller passes a truthful count — the dock never fabricates
+              stock. Positioned within the action cluster so it sits
+              directly beside/above the Buy Now button. */}
+          {lowStockHint && !stateBadge ? (
+            <Text
+              style={[styles.lowStockHint, { color: colors.warning }]}
+              numberOfLines={1}
+              accessibilityRole="text"
+            >
+              {lowStockHint}
+            </Text>
+          ) : null}
           {secondaryAction ? (
             <Pressable
               onPress={() => handlePress(secondaryAction)}
@@ -588,5 +608,15 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
+  },
+  // ── Low-stock indicator ──
+  // Subtle warning text shown above the primary CTA when real inventory
+  // data indicates low stock. 12sp, warning color, single line — quiet
+  // urgency that doesn't disrupt the dock layout.
+  lowStockHint: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

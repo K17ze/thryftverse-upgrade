@@ -225,7 +225,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       const pages = query.data?.pages ?? [];
       const items: ListingApiItem[] = [];
       for (const page of pages) for (const item of page.items) items.push(item);
-      return items;
+      // Pinned/featured listings appear first in the Shop grid (2026 pattern).
+      // Stable sort preserves backend ordering for non-featured items.
+      return items.sort((a, b) => {
+        const af = a.featured === true ? 0 : 1;
+        const bf = b.featured === true ? 0 : 1;
+        return af - bf;
+      });
     }
     if (activeTab === 'Looks') {
       const pages = looksQuery.data?.pages ?? [];

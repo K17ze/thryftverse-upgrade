@@ -121,10 +121,22 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
     formattedPrice,
     item.price.originalMinor ? `was ${formattedOriginalPrice}` : '',
     item.context?.text ?? '',
+    item.likes > 10 ? `${item.likes} likes` : '',
     item.saved ? 'saved' : '',
   ]
     .filter(Boolean)
     .join(', ');
+
+  // Social proof: show likes count only for items with significant
+  // engagement (> 10 likes) to avoid noise on low-engagement tiles.
+  // 2026 research: subtle social proof below price drives discovery
+  // engagement without cluttering the tile.
+  const showLikes = item.likes > 10;
+  const likesLabel = showLikes
+    ? item.likes > 999
+      ? `${(item.likes / 1000).toFixed(1)}k likes`
+      : `${item.likes} likes`
+    : null;
 
   return (
     <View style={[styles.card, { width: tileWidth }]}>
@@ -228,6 +240,14 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                 {item.context.text}
               </Text>
             )}
+            {likesLabel && (
+              <View style={styles.likesRow} pointerEvents="none">
+                <Ionicons name="heart" size={10} color={colors.textMuted} />
+                <Text style={styles.likesText} numberOfLines={1}>
+                  {likesLabel}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -244,6 +264,14 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
               <Text style={styles.contextText} numberOfLines={1}>
                 {item.context.text}
               </Text>
+            )}
+            {likesLabel && (
+              <View style={styles.likesRow} pointerEvents="none">
+                <Ionicons name="heart" size={10} color={colors.textMuted} />
+                <Text style={styles.likesText} numberOfLines={1}>
+                  {likesLabel}
+                </Text>
+              </View>
             )}
           </View>
         )}
@@ -375,6 +403,21 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       marginTop: Space.xxs,
+    } as TextStyle,
+    // Social proof: subtle likes row — 12sp muted with small heart glyph.
+    // Only shown when likes > 10 to avoid noise on low-engagement tiles.
+    likesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      marginTop: Space.xxs,
+    },
+    likesText: {
+      fontSize: 12,
+      lineHeight: 16,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
     } as TextStyle,
     // ── Overlay price (video tiles only) ──
     bottomScrim: {

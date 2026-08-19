@@ -39,4 +39,6 @@ export interface Listing {
   createdAt?: string;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }

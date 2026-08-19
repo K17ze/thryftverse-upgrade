@@ -53,6 +53,8 @@ export const Radius = {
   lg: 12,
   /** 16px - Large cards, containers */
   xl: 16,
+  /** 20px - Chat bubbles (WhatsApp 2026 fully-rounded look) */
+  chat: 20,
   /** 24px - Navigation docks and genuinely dominant panels only */
   xxl: 24,
   /** 999px - Pills, avatars, floating buttons, tags */

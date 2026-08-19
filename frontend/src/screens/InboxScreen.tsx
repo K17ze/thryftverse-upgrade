@@ -389,7 +389,7 @@ export default function InboxScreen() {
     ) : (
       <AvatarRing
         uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? counterpartySummary?.avatar ?? undefined : undefined)}
-        size={40}
+        size={44}
         isUnread={item.unread}
             ringWidth={2}
         fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}

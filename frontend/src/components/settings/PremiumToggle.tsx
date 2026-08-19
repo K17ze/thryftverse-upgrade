@@ -16,9 +16,11 @@ interface PremiumToggleProps {
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
+  /** Accessibility label — should include the setting name and current state. */
+  accessibilityLabel?: string;
 }
 
-export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
+export function PremiumToggle({ value, onValueChange, disabled = false, accessibilityLabel }: PremiumToggleProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -52,7 +54,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-      accessibilityLabel={value ? 'Toggle on' : 'Toggle off'}
+      accessibilityLabel={accessibilityLabel ?? (value ? 'Toggle on' : 'Toggle off')}
       style={({ pressed }) => [{ opacity: disabled ? 0.5 : 1 }, pressed && { opacity: 0.6 }]}
     >
       <Reanimated.View style={[styles.track, trackStyle]}>

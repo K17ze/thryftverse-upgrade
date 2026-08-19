@@ -433,7 +433,7 @@ export default function SettingsScreen({ navigation }: Props) {
           ) : null}
 
           {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
-          <SettingsSection title="Your account" icon="person-circle-outline" noCard grouped>
+          <SettingsSection title="Your account">
             <SettingsRow
               icon="shield-checkmark-outline"
               iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
@@ -514,7 +514,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
-          <SettingsSection title="Buying & selling" icon="bag-outline" noCard grouped>
+          <SettingsSection title="Buying & selling">
             <SettingsRow
               icon="location-outline"
               title="Saved addresses"
@@ -577,7 +577,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── NOTIFICATIONS ── */}
-          <SettingsSection title="Notifications" icon="notifications-outline" noCard grouped>
+          <SettingsSection title="Notifications">
             <SettingsRow
               icon="notifications"
               title="Enable notifications"
@@ -609,7 +609,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
-          <SettingsSection title="Experience" icon="color-palette-outline" noCard grouped>
+          <SettingsSection title="Experience">
             <SettingsRow
               icon="color-palette-outline"
               title="Theme"
@@ -685,7 +685,7 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
               Settings — it lives in the Agents home and profile menu. */}
-          <SettingsSection title="Connected services" icon="hardware-chip-outline" noCard grouped>
+          <SettingsSection title="Connected services">
             <SettingsRow
               icon="people-outline"
               title="Agents"
@@ -709,7 +709,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
-          <SettingsSection title="Help & legal" icon="help-circle-outline" noCard grouped>
+          <SettingsSection title="Help & legal">
 
             <SettingsRow
               icon="help-circle-outline"
@@ -742,7 +742,7 @@ export default function SettingsScreen({ navigation }: Props) {
               above. Gated behind developer mode (Settings → About → tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (
-            <SettingsSection title="Advanced" icon="code-working-outline" noCard>
+            <SettingsSection title="Advanced">
               <SettingsRow
                 icon="terminal-outline"
                 title="Runtime smoke test"
@@ -754,25 +754,24 @@ export default function SettingsScreen({ navigation }: Props) {
             </SettingsSection>
           ) : null}
     
-          {/* ── SIGN OUT ── */}
-          {/* Sign Out action is rendered via SettingsSignOutRow for destructive separation */}
-          <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
-            <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
-          </View>
-
-          {/* ── DELETE ACCOUNT — destructive zone, separated from benign rows ── */}
+          {/* ── DESTRUCTIVE ACTIONS — separate group at the bottom ── */}
           {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit
-              at the bottom of the settings list, separated from benign rows by
-              a section break. The label is verbatim "Delete account". */}
-          <SettingsSection title="Account" noCard>
+              at the bottom of the settings list, separated from benign rows.
+              Sign Out and Delete Account are grouped together with danger color. */}
+          <SettingsSection title="Account">
+            <SettingsSignOutRow
+              username={currentUser?.username}
+              onSignOut={handleLogout}
+            />
             <SettingsRow
               icon="trash-outline"
               title="Delete account"
               subtitle="Permanently erase your account"
               danger
               onPress={() => navigation.navigate('DeleteAccount')}
-              isFirst
               isLast
+              accessibilityLabel="Delete account"
+              accessibilityHint="Opens the account deletion flow"
             />
           </SettingsSection>
           </>

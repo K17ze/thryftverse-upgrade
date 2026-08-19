@@ -642,6 +642,24 @@ export default function ItemDetailScreen() {
     return undefined;
   })();
 
+  // ── Social proof line (truthful) ──
+  // Built only from real engagement data — never fabricated. Combines
+  // active offers (scarcity urgency) and cumulative views (popularity)
+  // into a single muted line below the price. Each signal is only
+  // included when the backend provides a positive count.
+  const socialProofLine = (() => {
+    const parts: string[] = [];
+    const activeOffers = listingEngagement?.activeOfferCount;
+    if (activeOffers != null && activeOffers > 0) {
+      parts.push(`${activeOffers} offer${activeOffers > 1 ? 's' : ''} active`);
+    }
+    const views = item.views;
+    if (views != null && views > 0) {
+      parts.push(`${views} view${views > 1 ? 's' : ''}`);
+    }
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  })();
+
   const attributeLine = [
     item.size && `Size ${item.size}`,
     item.condition,
@@ -882,6 +900,20 @@ export default function ItemDetailScreen() {
             secondaryLine={secondaryLine}
             interestSignal={interestSignal}
           />
+
+          {/* ── Social proof line (truthful) ──
+              Subtle muted line below the price showing real engagement
+              signals (active offers, views). Only rendered when the
+              backend provides positive counts — never fabricated. */}
+          {socialProofLine ? (
+            <Text
+              style={[styles.socialProofLine, { color: colors.textMuted }]}
+              numberOfLines={1}
+              accessibilityRole="text"
+            >
+              {socialProofLine}
+            </Text>
+          ) : null}
 
           {attributeLine ? (
             <View style={styles.attributeRow}>
@@ -1414,13 +1446,18 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
                 <View style={styles.moreLikeThisGrid}>
-                  {visualSimilar.map((simItem) => (
+                  {visualSimilar.map((simItem) => {
+                    const simPriceFormatted = simItem.price != null
+                      ? formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })
+                      : null;
+                    return (
                     <Pressable
                       key={simItem.id}
                       style={({ pressed }) => [styles.moreLikeThisCard, pressed && styles.pressed]}
                       onPress={() => handlePressRecommendation(simItem)}
+                      hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                       accessibilityRole="button"
-                      accessibilityLabel={`View ${simItem.title}`}
+                      accessibilityLabel={`View ${simItem.title}${simPriceFormatted ? `, ${simPriceFormatted}` : ''}${simItem.brand ? `, ${simItem.brand}` : ''}`}
                     >
                       {simItem.images?.[0] ? (
                         <CachedImage
@@ -1443,10 +1480,11 @@ export default function ItemDetailScreen() {
                         </Text>
                       )}
                       <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-                        {formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })}
+                        {simPriceFormatted}
                       </Text>
                     </Pressable>
-                  ))}
+                    );
+                  })}
                 </View>
               </CommerceDetailSection>
           );
@@ -2083,6 +2121,18 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
+  },
+  // ── Social proof line ──
+  // Subtle muted text below the price showing real engagement signals
+  // (active offers, views). 12sp, single line, muted color — quiet
+  // social proof that doesn't compete with the price hierarchy.
+  socialProofLine: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Trust facts (flat rows with hairline separators) ──
   // Flat rows, no chips, no cards. Each row is one fact with icon +

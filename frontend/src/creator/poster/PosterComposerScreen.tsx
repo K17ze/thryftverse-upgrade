@@ -525,9 +525,19 @@ function PosterComposerInner() {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
 
-  const timelineClips = useMemo<PosterClip[]>(() => {
+  // ── Timeline clips + page-index mapping ────────────────────────────
+  // Map pages with video media to PosterClip objects. We also track which
+  // page each clip originated from (clipPageIndices) so the transition
+  // icons between clips can resolve the source page's transitionId.
+  // Both are derived in a single memo to avoid a ref-mutation-in-memo.
+  const { timelineClips, clipPageIndices } = useMemo<{
+    timelineClips: PosterClip[];
+    clipPageIndices: number[];
+  }>(() => {
     const clips: PosterClip[] = [];
-    for (const p of document.pages) {
+    const pageIndices: number[] = [];
+    for (let pageIdx = 0; pageIdx < document.pages.length; pageIdx++) {
+      const p = document.pages[pageIdx];
       for (const layer of p.layers) {
         if (layer.type !== 'media' || layer.payload.mediaType !== 'video') continue;
         const payload = layer.payload;
@@ -551,10 +561,33 @@ function PosterComposerInner() {
           thumbnailUri: payload.thumbnailUri,
           durationMs,
         });
+        pageIndices.push(pageIdx);
       }
     }
-    return clips;
+    return { timelineClips: clips, clipPageIndices: pageIndices };
   }, [document.pages]);
+
+  // ── Transition preset IDs for each clip boundary ───────────────────
+  // Length = clips.length - 1. Index i is the transition between clip[i]
+  // and clip[i+1], sourced from the source page of clip[i]
+  // (page.transitionId). null means no transition is set — the timeline
+  // renders a subtle "+" icon there. Only page-level transitions (where
+  // clip[i+1] is on a later page) are surfaced; within-page clip cuts
+  // have no page-level transition.
+  const clipTransitionIds = useMemo<(string | null)[]>(() => {
+    if (clipPageIndices.length < 2) return [];
+    const result: (string | null)[] = [];
+    for (let i = 0; i < clipPageIndices.length - 1; i++) {
+      const srcPageIdx = clipPageIndices[i];
+      const nextPageIdx = clipPageIndices[i + 1];
+      if (nextPageIdx > srcPageIdx && srcPageIdx < document.pages.length) {
+        result.push(document.pages[srcPageIdx].transitionId ?? null);
+      } else {
+        result.push(null);
+      }
+    }
+    return result;
+  }, [clipPageIndices, document.pages]);
 
   const timelineOverlays = useMemo<OverlayLayer[]>(() => {
     const overlays: OverlayLayer[] = [];
@@ -1103,6 +1136,25 @@ function PosterComposerInner() {
     );
     haptic.selection();
   }, [activePageIndex, page, document, haptic]);
+
+  // ── Transition icon tap (from the timeline clip boundary) ──────────
+  // When the user taps a transition icon between two clips in the timeline,
+  // navigate to the source page of that boundary and open the transition
+  // drawer. This is the progressive-disclosure pattern: the transition is
+  // visible as an icon between clips (only when 2+ clips exist) and opens
+  // the same drawer as the overflow "Transitions" tool.
+  const handleTimelineTransitionTap = useCallback(
+    (boundaryIndex: number) => {
+      const srcPageIdx = clipPageIndices[boundaryIndex];
+      if (srcPageIdx == null) return;
+      if (srcPageIdx !== activePageIndex) {
+        selectLayer(null);
+        setActivePageIndex(srcPageIdx);
+      }
+      setShowTransitions(true);
+    },
+    [clipPageIndices, activePageIndex, selectLayer, setActivePageIndex],
+  );
 
   // ── Keyframe handlers ──────────────────────────────────────────────
   // Keyframes are stored on the layer's `keyframes` array. The editor
@@ -1760,6 +1812,8 @@ function PosterComposerInner() {
             onTrimClip={(clipId, edge, deltaMs) =>
               handleTimelineOperation({ type: 'trim', clipId, edge, deltaMs })
             }
+            transitionIds={clipTransitionIds}
+            onSelectTransition={handleTimelineTransitionTap}
           />
 
           {/* ── Overlay track (if overlays exist) ── */}

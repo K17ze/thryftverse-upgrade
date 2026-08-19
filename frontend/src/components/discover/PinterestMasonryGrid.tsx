@@ -19,6 +19,7 @@ import type {
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { ProductDiscoveryTile } from '../ProductCardV2';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
@@ -114,6 +115,12 @@ interface Props {
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** Optional ref forwarded to the FlashList (scrollToOffset / useScrollToTop). */
   scrollRef?: React.MutableRefObject<any>;
+  /**
+   * Optional header rendered by FlashList above the masonry grid. Scrolls
+   * with the feed (it is NOT sticky-fixed) so it never overlaps content.
+   * Used by DiscoverScene to mount the category pill bar.
+   */
+  listHeaderComponent?: React.ReactElement;
 }
 
 /**
@@ -157,6 +164,7 @@ export function PinterestMasonryGrid({
   refreshControl,
   onScroll,
   scrollRef,
+  listHeaderComponent,
 }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
@@ -323,6 +331,7 @@ export function PinterestMasonryGrid({
       onScroll={onScroll}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: Math.max(horizontalPadding - gap / 2, 0) }}
+      ListHeaderComponent={listHeaderComponent}
       ListFooterComponent={ListFooterComponent}
       refreshControl={refreshControl}
     />
@@ -391,8 +400,21 @@ function renderUnit(
 // RECOMMENDATION BREAK — full-width quiet eyebrow, no media
 // ============================================================================
 
+/** Short decorative hairline before the eyebrow label (24pt). */
+const BREAK_HAIRLINE_WIDTH = 24;
+
 function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) {
   const { colors } = useAppTheme();
+  // TypographyV2 has no dedicated `eyebrow` role; `label` is the canonical
+  // uppercase role (11/14/600, letterSpacing 0.5) and is the closest semantic
+  // match for a quiet section-divider eyebrow.
+  const eyebrowStyle = React.useMemo(
+    () => ({
+      ...typographyV2Style('label'),
+      color: colors.textSecondary,
+    }),
+    [colors.textSecondary],
+  );
   return (
     <View
       style={{
@@ -405,21 +427,27 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
       }}
       accessibilityRole="header"
     >
-      <Text
+      <View
         style={{
-          fontSize: Type.meta.size,
-          lineHeight: Type.meta.lineHeight,
-          fontFamily: Typography.family.semibold,
-          color: colors.textSecondary,
-          letterSpacing: 1.2,
-          textTransform: 'uppercase',
-          // Align to the same left rail as the masonry content.
+          flexDirection: 'row',
+          alignItems: 'center',
           marginLeft: gap / 2,
+          gap: Space.xs,
         }}
-        numberOfLines={1}
       >
-        {label}
-      </Text>
+        {/* Subtle decorative hairline before the text — a quiet visual
+            marker that separates chapters without fabricated media. */}
+        <View
+          style={{
+            width: BREAK_HAIRLINE_WIDTH,
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: colors.borderSubtle,
+          }}
+        />
+        <Text style={eyebrowStyle} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }

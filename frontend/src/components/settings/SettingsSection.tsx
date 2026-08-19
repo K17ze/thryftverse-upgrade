@@ -1,35 +1,32 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Type, Typography, FontFamily } from '../../theme/designTokens';
 
 export interface SettingsSectionProps {
   title: string;
   /** Optional eyebrow rendered above the title in muted caps. */
   eyebrow?: string;
-  /** Optional icon rendered beside the title. */
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** @deprecated Section headers are now small uppercase labels. Kept for backward compatibility. */
+  icon?: string;
   description?: string;
   children: React.ReactNode;
   style?: ViewStyle;
   /** @deprecated Flat composition is now the default. Kept for backward compatibility. */
   noCard?: boolean;
-  /** When true, wraps children in an iOS 26-style inset grouped card with
-   *  horizontal margins, surface background, and rounded corners. This creates
-   *  visual separation between sections without card-on-card stacking. */
+  /** @deprecated Flat canvas is now the default. Kept for backward compatibility. */
   grouped?: boolean;
 }
 
 export function SettingsSection({
   title,
   eyebrow,
-  icon,
+  icon: _icon,
   description,
   children,
   style,
   noCard: _noCard,
-  grouped = false,
+  grouped: _grouped,
 }: SettingsSectionProps) {
   const { colors } = useAppTheme();
   return (
@@ -37,18 +34,13 @@ export function SettingsSection({
       {eyebrow ? (
         <Text style={[styles.eyebrow, { color: colors.textMuted }]}>{eyebrow}</Text>
       ) : null}
-      <View style={styles.titleRow}>
-        {icon ? (
-          <View style={styles.titleIcon}>
-            <Ionicons name={icon} size={20} color={colors.textSecondary} />
-          </View>
-        ) : null}
-        <Text style={[styles.titleFlat, { color: colors.textPrimary }]}>
-          {title}
-        </Text>
-      </View>
+      {/* Small uppercase header label — flat canvas, no icon chrome */}
+      <Text style={[styles.headerLabel, { color: colors.textMuted }]}>
+        {title.toUpperCase()}
+      </Text>
       {description ? <Text style={[styles.description, { color: colors.textMuted }]}>{description}</Text> : null}
-      <View style={grouped ? [styles.groupedCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }] : styles.noCard}>
+      {/* Flat canvas — no card surface, hairline separators handled by rows */}
+      <View style={styles.flatCanvas}>
         {children}
       </View>
     </View>
@@ -69,26 +61,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     lineHeight: Type.meta.lineHeight,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
+  // Small uppercase header label — muted, caps, compact.
+  // This is the group category label per 2026 mobile UX research.
+  headerLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.semibold,
     paddingHorizontal: Space.md,
-  },
-  titleIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -2,
-  },
-  titleFlat: {
-    fontSize: Type.sectionTitle.size,
-    fontFamily: Typography.family.semibold,
-    marginBottom: Space.xs,
-    marginTop: Space.xs,
-    letterSpacing: Type.sectionTitle.letterSpacing,
-    lineHeight: Type.sectionTitle.lineHeight,
+    marginTop: Space.lg,
+    marginBottom: Space.sm,
+    letterSpacing: Type.label.letterSpacing,
+    textTransform: 'uppercase',
+    lineHeight: Type.meta.lineHeight,
   },
   description: {
     fontSize: Type.caption.size,
@@ -98,15 +81,8 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
   },
-  noCard: {
-    marginHorizontal: 0,
-  },
-  // iOS 26-style inset grouped card — horizontal margins + surface fill +
-  // rounded corners. Creates visual grouping without card-on-card stacking.
-  groupedCard: {
-    marginHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    overflow: 'hidden',
+  flatCanvas: {
+    // Flat — no background, no border, no radius, no shadow.
+    // Hairline separators between rows are handled by SettingsRow.
   },
 });

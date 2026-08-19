@@ -109,7 +109,7 @@ function MessageBubbleBase({
           'worklet';
           return {
             animations: {
-              opacity: withTiming(1, { duration: Motion.duration.slow }),
+              opacity: withTiming(1, { duration: Motion.duration.normal }),
               transform: [{ scale: withSpring(1, spring.settle) }],
             },
             initialValues: {
@@ -146,35 +146,35 @@ function MessageBubbleBase({
       : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
   const metaColor = isMe ? `${colors.textInverse}80` : colors.textMuted;
-  const bubbleBorder = isAgent && !isMe ? `${colors.brand}26` : undefined;
+  const bubbleBorder = undefined;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
   const isBottom = !isFirstInCluster && isLastInCluster;
 
-  // WhatsApp 2026 style: softer, rounder bubbles with asymmetric tail radius
+  // WhatsApp 2026 style: fully-rounded 20px bubbles with asymmetric tail radius
   const meRadius = isStandalone
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
+    ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
     : isTop
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
+    ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.chat }
     : isBottom
     ? { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.sm }
-    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.lg };
+    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.chat };
 
   const themRadius = isStandalone
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.sm }
+    ? { borderTopLeftRadius: Radius.chat, borderBottomLeftRadius: Radius.sm }
     : isTop
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
+    ? { borderTopLeftRadius: Radius.chat, borderBottomLeftRadius: Radius.chat }
     : isBottom
     ? { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.sm }
-    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.lg };
+    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.chat };
 
   // Media radius — WhatsApp 2026: no visible frame, media IS the bubble
   const mediaRadius = isStandalone
     ? isMe
-      ? { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
-      : { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.lg }
-    : { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
+      ? { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
+      : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.chat }
+    : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.chat };
 
   return (
     <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
@@ -406,7 +406,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '78%',
+    maxWidth: '75%',
     gap: 3,
   },
   senderLabelRow: {
@@ -452,7 +452,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   bubbleAgent: {
     alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
   },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,

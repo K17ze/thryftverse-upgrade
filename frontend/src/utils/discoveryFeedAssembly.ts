@@ -46,11 +46,38 @@ const HERO_ASPECT_THRESHOLD = 1.2;
  */
 const HERO_MIN_GAP = 8;
 
-/** Number of listings between full-width context-break eyebrows. */
-const BREAK_INTERVAL = 10;
+/**
+ * Number of listings between full-width context-break eyebrows.
+ * Tuned to 8 to match Pinterest's 2026 feed rhythm — a break lands often
+ * enough to segment the feed into scannable chapters without feeling
+ * interruptive.
+ */
+const BREAK_INTERVAL = 8;
 
-/** Honest, generic section-divider labels (no fabricated personalization). */
-const BREAK_LABELS = ['More to explore', 'Fresh finds', 'Recently added'] as const;
+/**
+ * Number of listings between full-width "Creator spotlight" eyebrows.
+ * A slower, deliberate cadence (every 16 listings) so creator spotlights
+ * read as an occasional rhythm break, not a repeating header. 16 is a
+ * multiple of BREAK_INTERVAL, so at that position the spotlight replaces
+ * the regular break rather than stacking on top of it.
+ */
+const CREATOR_SPOTLIGHT_INTERVAL = 16;
+
+/**
+ * Honest, generic section-divider labels (no fabricated personalization).
+ * The cycle rotates through these by break index so consecutive breaks
+ * don't repeat the same label — variety without fake personalization.
+ */
+const BREAK_LABELS = [
+  'More to explore',
+  'Fresh finds',
+  'Recently added',
+  'Trending now',
+  'New arrivals',
+] as const;
+
+/** Label for the creator-spotlight break (text-only eyebrow, no media). */
+const CREATOR_SPOTLIGHT_LABEL = 'Creators to watch';
 
 /**
  * Assemble a heterogeneous discovery feed from a list of marketplace
@@ -94,15 +121,20 @@ export function assembleDiscoveryFeed(
 
     // Inject a context-break eyebrow after every BREAK_INTERVAL listings,
     // but never as the very last unit (a trailing eyebrow reads as a bug).
+    // Every CREATOR_SPOTLIGHT_INTERVAL listings, a "Creator spotlight"
+    // break replaces the regular break so the two full-width units never
+    // stack into a wall.
     const afterIndex = index + 1;
-    if (
-      afterIndex % BREAK_INTERVAL === 0 &&
-      afterIndex < listings.length
-    ) {
-      units.push(buildRecommendationBreak(afterIndex, numColumns));
-      // A break is itself a rhythm reset; don't let a hero immediately
-      // follow it or the two full-width units stack into a wall.
-      listingsSinceHero = Math.max(listingsSinceHero, 2);
+    if (afterIndex < listings.length) {
+      if (afterIndex % CREATOR_SPOTLIGHT_INTERVAL === 0) {
+        units.push(buildCreatorSpotlightBreak(afterIndex, numColumns));
+        // A break is itself a rhythm reset; don't let a hero immediately
+        // follow it or the two full-width units stack into a wall.
+        listingsSinceHero = Math.max(listingsSinceHero, 2);
+      } else if (afterIndex % BREAK_INTERVAL === 0) {
+        units.push(buildRecommendationBreak(afterIndex, numColumns));
+        listingsSinceHero = Math.max(listingsSinceHero, 2);
+      }
     }
   });
 
@@ -119,6 +151,25 @@ function buildRecommendationBreak(
     id: `break:${listingCountBefore}`,
     type: 'recommendation_break',
     label,
+    span: numColumns,
+  };
+}
+
+/**
+ * Build a full-width "Creator spotlight" break. This is a text-only eyebrow
+ * (no fabricated media — truthful UI): it signals that creator content
+ * follows, but the client never invents editorial imagery. It reuses the
+ * `RecommendationBreakFeedUnit` shape so the renderer treats it as the same
+ * full-width eyebrow primitive, just with a distinct, slower cadence.
+ */
+function buildCreatorSpotlightBreak(
+  listingCountBefore: number,
+  numColumns: number,
+): RecommendationBreakFeedUnit {
+  return {
+    id: `creator-spotlight:${listingCountBefore}`,
+    type: 'recommendation_break',
+    label: CREATOR_SPOTLIGHT_LABEL,
     span: numColumns,
   };
 }

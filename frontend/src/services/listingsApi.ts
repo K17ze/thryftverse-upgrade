@@ -73,6 +73,8 @@ export interface Listing {
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   engagement?: ListingEngagementSummaryApi | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 interface ApiListingRow {
@@ -94,6 +96,8 @@ interface ApiListingRow {
   originalPriceGbp: number | null;
   createdAt: string;
   seller?: ListingSeller | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 interface ApiListingsResponse {
@@ -312,6 +316,8 @@ export interface ListingApiItem {
   mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;
   engagement?: ListingEngagementSummaryApi | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 export interface ListingSoldComparables {

@@ -113,6 +113,7 @@ export default function MyProfileScreen() {
     coverEditVisible: { backgroundColor: colors.overlay, borderColor: colors.scrimTextTertiary },
     coverFailure: { backgroundColor: colors.overlay },
     soldOverlay: { backgroundColor: colors.overlay },
+    pinnedBadge: { backgroundColor: colors.overlay },
     statsRow: { borderBottomColor: colors.borderSubtle, borderTopColor: colors.borderSubtle },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -348,7 +349,17 @@ export default function MyProfileScreen() {
     || profileMediaOverride?.avatar
     || null;
 
-  const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
+  const allOwnedListings = React.useMemo(() => {
+    // Pinned/featured listings appear first in the Shop grid (2026 pattern).
+    // Stable sort preserves backend ordering for non-featured items.
+    return listings
+      .filter((item) => item.sellerId === profileUserId)
+      .sort((a, b) => {
+        const af = a.featured === true ? 0 : 1;
+        const bf = b.featured === true ? 0 : 1;
+        return af - bf;
+      });
+  }, [listings, profileUserId]);
 
   // Profile completion — drives the progress prompt. Completion measures ONLY
   // identity fields the user can complete directly: display name, bio, profile
@@ -739,7 +750,7 @@ export default function MyProfileScreen() {
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
             tabs={[
-              { key: 'listings', label: 'Listings', count: allOwnedListings.length },
+              { key: 'listings', label: 'Shop', count: allOwnedListings.length },
               { key: 'looks', label: 'Looks', count: myLooks.length },
               { key: 'about', label: 'About' },
             ]}
@@ -789,6 +800,7 @@ export default function MyProfileScreen() {
                 <View style={styles.grid}>
                   {allOwnedListings.map((item, index) => {
                     const isHero = showHero && index === 0;
+                    const isFeatured = item.featured === true;
                     const cardW = isHero ? HERO_WIDTH : CARD_WIDTH;
                     const cardH = isHero ? HERO_HEIGHT : CARD_HEIGHT;
                     return (
@@ -797,7 +809,7 @@ export default function MyProfileScreen() {
                       style={[styles.gridCard, { width: cardW }]}
                       onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                       accessibilityRole="button"
-                      accessibilityLabel={`Manage ${item.title}`}
+                      accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
                     >
                       <SharedTransitionView
                         style={[styles.gridImageWrap, { width: cardW, height: cardH }]}
@@ -809,6 +821,11 @@ export default function MyProfileScreen() {
                           containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
                           contentFit="cover"
                         />
+                        {isFeatured ? (
+                          <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
+                            <Ionicons name="pin" size={11} color={colors.scrimTextPrimary} />
+                          </View>
+                        ) : null}
                         {item.isSold ? (
                           <View style={[styles.soldOverlay, t.soldOverlay]}>
                             <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
@@ -1298,6 +1315,16 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
     position: 'relative',
+  },
+  pinnedBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 20,
+    height: 20,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridImage: {
     width: '100%',

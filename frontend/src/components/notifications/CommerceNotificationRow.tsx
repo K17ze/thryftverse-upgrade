@@ -8,6 +8,7 @@ import {
   NotificationStatusIcon,
 } from './NotificationRowBase';
 import {
+  Space,
   Type,
   FontFamily,
 } from '../../theme/designTokens';
@@ -120,10 +121,11 @@ export function CommerceNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyLarge.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
+      lineHeight: Type.bodyLarge.lineHeight,
+      paddingRight: Space.xxl + Space.sm,
     },
     titleUnread: {
       color: colors.textPrimary,

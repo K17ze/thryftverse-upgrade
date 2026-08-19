@@ -1,18 +1,21 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useState } from 'react';
 import {
   View,
   StyleSheet,
   RefreshControl,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  ScrollView,
+  Pressable,
+  Text,
 } from 'react-native';
 import {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useScrollToTop } from '@react-navigation/native';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
 import { PinterestMasonryGrid } from '../../components/discover/PinterestMasonryGrid';
@@ -21,6 +24,112 @@ import type { Listing } from '../../domain';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 
 const DISCOVER_NUM_COLUMNS = 2;
+
+/**
+ * Category pill bar categories. Visual presence only — the backend filtering
+ * path is not wired yet, so selecting a pill is a no-op beyond the active
+ * state. "All" is the default active category.
+ */
+const DISCOVER_CATEGORIES = [
+  'All',
+  'Clothing',
+  'Shoes',
+  'Bags',
+  'Accessories',
+  'Jewelry',
+  'Home',
+  'Art',
+] as const;
+
+// ============================================================================
+// CATEGORY BAR — horizontal scrollable pill bar (visual presence only)
+// ============================================================================
+
+interface DiscoverCategoryBarProps {
+  activeCategory: string;
+  onSelect: (category: string) => void;
+}
+
+/**
+ * DiscoverCategoryBar — a horizontal scrollable row of category pills that
+ * scrolls with the feed (mounted as the FlashList's ListHeaderComponent, not
+ * sticky-fixed). Active pill uses `surfaceAlt` with bold text; inactive pills
+ * are transparent with muted text. A hairline bottom border separates the bar
+ * from the masonry grid.
+ *
+ * Filtering is NOT wired yet (backend not ready) — selection updates the
+ * active pill only, with "All" as the default. The pills are Pressables with
+ * accessibility labels and roles.
+ */
+function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createCategoryBarStyles(colors), [colors]);
+
+  return (
+    <View style={styles.bar}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        accessibilityRole="tablist"
+        accessibilityLabel="Discovery categories"
+      >
+        {DISCOVER_CATEGORIES.map((category) => {
+          const isActive = category === activeCategory;
+          return (
+            <Pressable
+              key={category}
+              style={[styles.pill, isActive && styles.pillActive]}
+              onPress={() => onSelect(category)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${category} category`}
+            >
+              <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+                {category}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function createCategoryBarStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    bar: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs,
+      alignItems: 'center',
+    },
+    pill: {
+      paddingVertical: Space.xs + 2,
+      paddingHorizontal: Space.smMd,
+      borderRadius: Radius.full,
+      backgroundColor: 'transparent',
+    },
+    pillActive: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    pillText: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
+    },
+    pillTextActive: {
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+  });
+}
 
 export interface DiscoverSceneProps {
   listings: Listing[];
@@ -69,6 +178,11 @@ export function DiscoverScene({
   const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
+
+  // Active category for the pill bar. Visual presence only — backend
+  // filtering is not wired yet, so selection is a local no-op beyond the
+  // active state. "All" is the default.
+  const [activeCategory, setActiveCategory] = useState<string>('All');
 
   useScrollToTop(scrollRef);
 
@@ -161,6 +275,18 @@ export function DiscoverScene({
     );
   }
 
+  // Category pill bar — scrolls with the feed (ListHeaderComponent, not
+  // sticky-fixed). Visual presence only; filtering is not wired yet.
+  const categoryBar = useMemo(
+    () => (
+      <DiscoverCategoryBar
+        activeCategory={activeCategory}
+        onSelect={setActiveCategory}
+      />
+    ),
+    [activeCategory],
+  );
+
   // Populated (or loading-skeleton) state: the FlashList owns scrolling.
   // The RefreshIndicator is positioned absolutely over the grid and reads
   // the shared scrollY driven by the animated scroll handler above.
@@ -178,6 +304,7 @@ export function DiscoverScene({
         refreshControl={refreshControl}
         onScroll={handleScroll}
         scrollRef={scrollRef}
+        listHeaderComponent={categoryBar}
       />
     </View>
   );

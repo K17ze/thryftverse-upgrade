@@ -58,6 +58,42 @@ export function useConversationComposer({
   } | null>(null);
   const [reactingToMessage, setReactingToMessage] = useState<Message | null>(null);
 
+  // Typing indicator state — shows after 500ms of continuous typing and
+  // hides after 3s of inactivity (WhatsApp 2026 typing indicator pattern).
+  const [isTyping, setIsTyping] = useState(false);
+  const typingStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setTypingInput = useCallback((value: string) => {
+    setInput(value);
+    // Clear any pending stop timer — the user is actively typing
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (value.length > 0) {
+      // Start the show timer if not already typing and no pending start
+      if (!typingStartTimerRef.current && !isTyping) {
+        typingStartTimerRef.current = setTimeout(() => {
+          setIsTyping(true);
+          typingStartTimerRef.current = null;
+        }, 500);
+      }
+      // Schedule the stop timer for 3s of inactivity
+      typingStopTimerRef.current = setTimeout(() => {
+        setIsTyping(false);
+        typingStopTimerRef.current = null;
+      }, 3000);
+    } else {
+      // Input cleared — cancel start timer and stop typing immediately
+      if (typingStartTimerRef.current) {
+        clearTimeout(typingStartTimerRef.current);
+        typingStartTimerRef.current = null;
+      }
+      setIsTyping(false);
+    }
+  }, [isTyping]);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? "");
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
@@ -73,6 +109,16 @@ export function useConversationComposer({
   useEffect(() => {
     if (!conversationId) return;
     hydratedComposerRef.current = null;
+    // Reset typing state when switching conversations
+    setIsTyping(false);
+    if (typingStartTimerRef.current) {
+      clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -123,6 +169,12 @@ export function useConversationComposer({
     return () => {
       if (composerPersistTimerRef.current) {
         clearTimeout(composerPersistTimerRef.current);
+      }
+      if (typingStartTimerRef.current) {
+        clearTimeout(typingStartTimerRef.current);
+      }
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
       }
       if (conversationId && input) {
         upsertComposerStateOnApi(conversationId, {
@@ -190,6 +242,8 @@ export function useConversationComposer({
   return {
     input,
     setInput,
+    setTypingInput,
+    isTyping,
     replyTo,
     setReplyTo,
     attachmentPickerVisible,

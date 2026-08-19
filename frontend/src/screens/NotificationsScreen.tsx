@@ -36,6 +36,7 @@ import {
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
@@ -99,6 +100,15 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'review', label: 'Reviews' },
   { key: 'price', label: 'Prices' },
   { key: 'auction', label: 'Auctions' },
+];
+
+// Primary pill-style filter tabs — always visible at the top of the list.
+// The most useful commerce/social filters get direct one-tap access; the
+// remaining filters stay behind the overflow funnel icon.
+const PRIMARY_FILTERS: { key: NotificationFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'order', label: 'Purchases' },
 ];
 
 function filterLabelForKey(key: NotificationFilter): string {
@@ -171,27 +181,30 @@ function resolveCardType(v2Event: NotificationEventV2): NotificationCardType {
 function formatRelativeTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return 'Just now';
+    return 'now';
   }
 
   const diffMs = Date.now() - parsed.getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
   if (minutes < 1) {
-    return 'Just now';
+    return 'now';
   }
 
   if (minutes < 60) {
-    return `${minutes} min ago`;
+    return `${minutes}m`;
   }
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours}h ago`;
+    return `${hours}h`;
   }
 
   const days = Math.floor(hours / 24);
+  if (days === 1) {
+    return 'Yesterday';
+  }
   if (days < 7) {
-    return `${days} day${days === 1 ? '' : 's'} ago`;
+    return `${days}d`;
   }
 
   return parsed.toLocaleDateString(undefined, {
@@ -394,6 +407,7 @@ export default function NotificationsScreen() {
 
   const quietActive = isQuietHoursActive(quietHours);
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const reducedMotion = useReducedMotion();
 
   const syncNotifications = React.useCallback(
     async (options?: { silent?: boolean }) => {
@@ -514,11 +528,14 @@ export default function NotificationsScreen() {
     (notification: NotificationCard, progress: Animated.AnimatedInterpolation<number>) => {
       if (notification.read) return <View style={{ width: 0, height: Space.xxl + Space.xl }} />;
       // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
-      const iconScale = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.8, 1.0],
-        extrapolate: 'clamp',
-      });
+      // Collapsed to no scale when reduced motion is enabled.
+      const iconScale = reducedMotion
+        ? 1
+        : progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.8, 1.0],
+            extrapolate: 'clamp',
+          });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
@@ -530,17 +547,20 @@ export default function NotificationsScreen() {
         </View>
       );
     },
-    [colors.success]
+    [colors.success, reducedMotion]
   );
 
   const renderSwipeLeftAction = React.useCallback(
     (progress: Animated.AnimatedInterpolation<number>) => {
       // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
-      const iconScale = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.8, 1.0],
-        extrapolate: 'clamp',
-      });
+      // Collapsed to no scale when reduced motion is enabled.
+      const iconScale = reducedMotion
+        ? 1
+        : progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.8, 1.0],
+            extrapolate: 'clamp',
+          });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeDeleteAction}>
@@ -552,7 +572,7 @@ export default function NotificationsScreen() {
         </View>
       );
     },
-    [colors.danger]
+    [colors.danger, reducedMotion]
   );
 
   const handleSwipeDismiss = React.useCallback(
@@ -764,22 +784,46 @@ export default function NotificationsScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
 
-      {/* Active filter chip — shown only when a filter is applied (attention-first hierarchy) */}
-      {activeFilter !== 'all' ? (
-        <View style={styles.activeFilterChipRow}>
-          <Pressable
-            style={styles.activeFilterChip}
-            onPress={() => { haptics.tap(); setActiveFilter('all'); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Clear filter: ${filterLabelForKey(activeFilter)}`}
-          >
-            <Text style={styles.activeFilterChipText} numberOfLines={1}>
-              {filterLabelForKey(activeFilter)}
-            </Text>
-            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-          </Pressable>
-        </View>
-      ) : null}
+      {/* Primary filter tabs — pill-style, always visible */}
+      <View
+        style={styles.filterTabRow}
+        accessibilityRole="tablist"
+        accessibilityLabel="Notification filters"
+      >
+        {PRIMARY_FILTERS.map((filter) => {
+          const isActive = activeFilter === filter.key;
+          const count = filterCounts[filter.key] ?? 0;
+          return (
+            <Pressable
+              key={filter.key}
+              style={({ pressed }) => [
+                styles.filterTab,
+                isActive && styles.filterTabActive,
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={() => { haptics.tap(); setActiveFilter(filter.key); }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${filter.label} filter${count > 0 ? `, ${count} items` : ''}`}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  isActive && styles.filterTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {filter.label}
+              </Text>
+              {count > 0 ? (
+                <Text style={[styles.filterTabCount, isActive && styles.filterTabCountActive]}>
+                  {count > 99 ? '99+' : count}
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* Unread summary + quiet hours indicator */}
       {unreadCount > 0 || quietActive ? (
@@ -989,28 +1033,46 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
 
-  activeFilterChipRow: {
+  filterTabRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
     paddingBottom: Space.xs,
   },
-  activeFilterChip: {
+  filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
+    gap: Space.xs + 1,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+  },
+  filterTabActive: {
+    backgroundColor: colors.surfaceAlt,
     borderColor: colors.border,
   },
-  activeFilterChipText: {
+  filterTabText: {
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  filterTabTextActive: {
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+  },
+  filterTabCount: {
+    fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  filterTabCountActive: {
+    color: colors.brand,
   },
 
   swipeActionContainer: {

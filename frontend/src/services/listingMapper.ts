@@ -49,6 +49,8 @@ export interface BackendListingRow {
   likes?: number | null;
   views?: number | null;
   engagement?: ListingEngagementSummaryApi | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 /**
@@ -194,6 +196,7 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,
     engagement: row.engagement ?? null,
+    featured: row.featured === true ? true : null,
   };
 }
 

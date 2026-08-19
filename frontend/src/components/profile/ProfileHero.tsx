@@ -24,7 +24,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
 const COVER_HEIGHT = 160;
-const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
+const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;
@@ -64,6 +64,34 @@ function getInitials(name: string): string {
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// ── Bio truncation with see-more expansion ──
+// Bios longer than ~125 chars are truncated with a "see more" inline toggle.
+const BIO_TRUNCATE_CHARS = 125;
+
+function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: any; linkStyle: any; seeMoreStyle: any }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const shouldTruncate = bio.length > BIO_TRUNCATE_CHARS;
+  const displayBio = shouldTruncate && !expanded
+    ? bio.slice(0, BIO_TRUNCATE_CHARS).trimEnd() + '…'
+    : bio;
+
+  return (
+    <Text style={style} numberOfLines={expanded ? undefined : 3}>
+      {displayBio}
+      {shouldTruncate ? (
+        <Text
+          style={seeMoreStyle}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Show less bio' : 'Show more bio'}
+        >
+          {expanded ? ' less' : ' more'}
+        </Text>
+      ) : null}
+    </Text>
+  );
 }
 
 /**
@@ -245,9 +273,9 @@ export function ProfileHero({
             @{targetProfile?.username ?? 'thryft'}
           </Text>
 
-          {/* Biography — concise, readable */}
+          {/* Biography — concise, readable, with see-more expansion for long bios */}
           {targetProfile?.bio ? (
-            <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
+            <BioText bio={targetProfile.bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} />
           ) : null}
 
           {/* Context line — no icons */}
@@ -529,6 +557,14 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.xs,
+  },
+  bioLink: {
+    color: colors.brand,
+    fontFamily: Typography.family.medium,
+  },
+  bioSeeMore: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
   },
 
   // Context line — no icons

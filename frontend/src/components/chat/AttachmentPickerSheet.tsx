@@ -24,6 +24,8 @@ export type AttachmentType =
   | 'file'
   | 'location'
   | 'offer'
+  | 'product'
+  | 'priceQuote'
   | 'shareListing'
   | 'shareOrder'
   | 'requestPayment'
@@ -41,6 +43,8 @@ const OPTIONS: AttachmentOption[] = [
   { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', colorKey: 'brand' },
   { id: 'camera', label: 'Camera', icon: 'camera-outline', colorKey: 'success' },
   { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', colorKey: 'warning' },
+  { id: 'product', label: 'Product', icon: 'cube-outline', colorKey: 'discovery' },
+  { id: 'priceQuote', label: 'Price Quote', icon: 'receipt-outline', colorKey: 'brand' },
   { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', colorKey: 'discovery' },
   { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', colorKey: 'brand' },
   { id: 'requestPayment', label: 'Payment', icon: 'card-outline', colorKey: 'success' },
@@ -105,7 +109,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
 
   const visibleOptions = OPTIONS.filter((opt) => {
     if (opt.id === 'inviteBot') return isGroup;
-    if (opt.id === 'offer' || opt.id === 'shareListing') return hasLinkedItem;
+    if (opt.id === 'offer' || opt.id === 'shareListing' || opt.id === 'product' || opt.id === 'priceQuote') return hasLinkedItem;
     if (opt.id === 'shareOrder' || opt.id === 'requestPayment') return hasLinkedOrder;
     return true;
   });
@@ -190,15 +194,15 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   optionBtn: {
-    width: '23%',
+    width: '31%',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
     minHeight: 44,
   },
   iconCircle: {
-    width: 60,
-    height: 60,
+    width: 80,
+    height: 80,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',

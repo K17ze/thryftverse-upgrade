@@ -205,7 +205,7 @@ function InboxConversationRowBase({
                   styles.preview,
                   unread && styles.previewUnread,
                 ]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {draftText ?? lastMessage}
               </Text>
@@ -244,7 +244,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     gap: Space.sm + 2,
-    minHeight: 68,
+    minHeight: 76,
   },
   rowUnread: {},
   avatarWrap: {
@@ -342,8 +342,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // Unread count badge — for multiple unread messages (WhatsApp/iMessage style)
   unreadBadge: {
-    minWidth: 18,
-    height: 18,
+    minWidth: 20,
+    height: 20,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     alignItems: 'center',

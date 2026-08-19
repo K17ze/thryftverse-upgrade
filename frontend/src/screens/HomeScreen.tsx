@@ -36,7 +36,6 @@ import { fetchLooksFromApi } from '../services/looksApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
@@ -58,11 +57,9 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
-import { SharedTransitionView } from '../components/SharedTransitionView';
-import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
 import { getBackendSyncStatus } from '../utils/syncStatus';
-import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
+import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -121,37 +118,6 @@ const AnimatedFlashList: any = Platform.OS === 'web'
       React.ComponentProps<typeof FlashList<FeedDataItem>> & { ref?: React.Ref<any> }
     >;
 
-type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
-
-const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
-  'new-listing': 'new listing',
-  'live-auction': 'auction',
-  'co-own-launching': 'co-own launch',
-  'sold-recently': 'sold recently',
-};
-
-// Trend clips removed — demo-only content, not real data
-
-type ExploreTile = {
-  id: string;
-  type: 'listing' | 'clip' | 'posters';
-  mediaType: 'image' | 'video';
-  mediaUri: string;
-  posterUri?: string;
-  likes: number;
-  routeId?: string;
-  sellerId?: string;
-  price?: number;
-  caption: string;
-  category?: string;
-  aspectRatio: number;
-  isSaved?: boolean;
-  /** When true, this tile spans both columns as a wider editorial card.
-   *  Per spec 11: asymmetric rhythm — 6-12 normal tiles, one larger
-   *  featured unit, continue feed. Breaks the uniform grid silhouette. */
-  featured?: boolean;
-};
-
 /**
  * Feed data union: Home discovery card VMs (listing tiles) or looks rail
  * markers. The FlashList renders both through the same masonry path.
@@ -185,17 +151,6 @@ type FeedDataItem = HomeDiscoveryItemVM | LookFeedMarker;
 function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
   return (item as LookFeedMarker).type === 'looks';
 }
-
-type StoryBubble = {
-  id: string;
-  userId: string;
-  username: string;
-  avatar: string;
-  posterId?: string;
-  isNew: boolean;
-  status: StoryStatus;
-  isSaved?: boolean;
-};
 
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
   const { colors } = useAppTheme();
@@ -249,170 +204,6 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   );
 });
 
-function ListingMediaPlaceholder({ category }: { category?: string }) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const normalized = category?.toLowerCase() ?? '';
-
-  // Category-tinted neutral: a subtle hue derived from the garment category
-  // (warm beige tint for bags, cool grey for watches) layered over the
-  // surfaceAlt base. The tint uses existing *Subtle semantic tokens so the
-  // fallback reads as authored, not generic grey (audit §3.1, §4.1).
-  const tint = normalized.includes('bag')
-    ? colors.warningSubtle   // warm beige tint for bags/leather
-    : normalized.includes('shoe')
-      ? colors.brandSubtle   // neutral brand tint for footwear
-      : undefined;            // watches/jewellery/apparel → cool grey (surfaceAlt)
-
-  // Typographic treatment: the category name in a quiet weight replaces the
-  // decorative icon. This makes the fallback authored, not generic.
-  const label = normalized.includes('shoe') ? 'Footwear'
-    : normalized.includes('bag') ? 'Bags'
-    : normalized.includes('jewel') ? 'Jewellery'
-    : normalized.includes('watch') ? 'Watches'
-    : category ?? 'ThryftVerse';
-
-  return (
-    <View
-      style={styles.listingMediaPlaceholder}
-      accessibilityLabel={`Product image unavailable — ${label}`}
-      accessibilityRole="image"
-    >
-      {tint ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
-      ) : null}
-      <Text style={styles.listingMediaPlaceholderText} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-interface ExploreGridItemProps {
-  item: ExploreTile;
-  tileWidth: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formatPrice: (...args: any[]) => string;
-  onPress: (routeId: string | undefined) => void;
-  onLongPress: (item: ExploreTile) => void;
-  onPressSellerProfile: (sellerId: string) => void;
-  sellerUsername?: string | null;
-  sellerAvatar?: string | null;
-  /** Viewability-driven playback: only the most-visible video plays. */
-  shouldPlay?: boolean;
-  /** When true, show seller name overlay instead of likes count (Following mode). */
-  showSellerName?: boolean;
-}
-
-const ExploreGridItem = React.memo(function ExploreGridItem({
-  item,
-  tileWidth,
-  formatPrice,
-  onPress,
-  onLongPress,
-  onPressSellerProfile,
-  sellerUsername,
-  sellerAvatar,
-  shouldPlay = false,
-  showSellerName = false,
-}: ExploreGridItemProps) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const sharedTag = item.mediaType === 'image' && item.routeId
-    ? `image-${item.routeId}-0`
-    : undefined;
-  const mediaHeight = Math.round(tileWidth * item.aspectRatio);
-  const toggleWishlist = useStore((state) => state.toggleWishlist);
-  const haptic = useHaptic();
-
-  const handleDoubleTapLike = React.useCallback(() => {
-    if (item.routeId) {
-      toggleWishlist(item.routeId);
-      ProductAnalytics.itemSave(item.routeId);
-      haptic.success();
-    }
-  }, [item.routeId, toggleWishlist, haptic]);
-
-  // Deterministic feed display role: media is primary, price is overlaid,
-  // and ONE interaction signal is shown as a compact overlay.
-  // Following mode → seller name (context: you know this seller).
-  // For You mode → likes count (context: social proof for discovery).
-  // Seller avatar, condition badges, title text are removed from the tile
-  // so media dominates at thumbnail size.
-  // Seller profile navigation is preserved via the peek modal + ItemDetail.
-  const showLikes = !showSellerName && item.likes > 0;
-  const sellerName = showSellerName && sellerUsername ? `@${sellerUsername}` : null;
-  void onPressSellerProfile; // preserved in API, not rendered on tile
-  void sellerAvatar;
-
-  return (
-    <View style={[styles.exploreItemBox, { width: tileWidth }]}>
-      <AnimatedPressable
-        style={[styles.exploreMediaWrap, { height: mediaHeight }]}
-        onPress={() => onPress(item.routeId)}
-        onLongPress={() => onLongPress(item)}
-        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}${sellerName ? `, by ${sellerName}` : showLikes ? `, ${item.likes} likes` : ''}`}
-        accessibilityRole="button"
-        accessibilityHint="Opens item details. Long press to preview this listing"
-      >
-        <DoubleTapHeart
-          isLiked={item.isSaved || false}
-          onLike={handleDoubleTapLike}
-        >
-          <SharedTransitionView
-            style={styles.exploreSharedMedia}
-            sharedTransitionTag={sharedTag}
-          >
-            {item.mediaUri ? (
-              <CanonicalMediaPreview
-                uri={item.mediaUri}
-                posterUri={item.posterUri}
-                style={styles.exploreImage}
-                shouldPlay={shouldPlay}
-                contentFit="cover"
-                focalPoint={getCategoryFocalPoint(item.category)}
-                isVisible
-                showPlayBadge
-                downscaleWidth={Math.round(tileWidth)}
-              />
-            ) : (
-              <ListingMediaPlaceholder category={item.category} />
-            )}
-          </SharedTransitionView>
-        </DoubleTapHeart>
-
-        {/* Bottom gradient + price overlay — media-first, price as secondary signal */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.62)']}
-          style={styles.exploreBottomScrim}
-          pointerEvents="none"
-        />
-        <View style={styles.explorePriceOverlay} pointerEvents="none">
-          <Text style={styles.explorePriceOverlayText} numberOfLines={1}>
-            {formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}
-          </Text>
-        </View>
-
-        {/* ONE interaction signal: likes count (For You) or seller name (Following), top-right */}
-        {sellerName ? (
-          <View style={styles.exploreSellerBadge} pointerEvents="none">
-            <Text style={styles.exploreSellerBadgeText} numberOfLines={1}>
-              {sellerName}
-            </Text>
-          </View>
-        ) : showLikes ? (
-          <View style={styles.exploreLikesBadge} pointerEvents="none">
-            <Ionicons name="heart" size={10} color={colors.scrimTextPrimary} style={styles.exploreLikesGlyph} />
-            <Text style={styles.exploreLikesText} numberOfLines={1}>
-              {item.likes > 999 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
-            </Text>
-          </View>
-        ) : null}
-      </AnimatedPressable>
-    </View>
-  );
-});
-
 export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -420,7 +211,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
-  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -886,33 +676,64 @@ export default function HomeScreen() {
               accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
               accessibilityHint="Opens poster story viewer"
             >
-              <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
-                <PosterStoryArtwork story={story} />
-                <View style={styles.posterShade} />
+              {isUnwatched ? (
+                <LinearGradient
+                  colors={[colors.brand, colors.discovery]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.posterTileGradientRing}
+                >
+                  <View style={styles.posterTileInner}>
+                    <PosterStoryArtwork story={story} />
+                    <View style={styles.posterShade} />
 
-                <View style={styles.posterCreatorOverlay}>
-                  <Text style={styles.posterCreatorName} numberOfLines={1}>
-                    @{story.creator.username ?? story.creatorId}
-                  </Text>
-                  <View
-                    style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                    accessible={false}
-                  />
+                    <View style={styles.posterCreatorOverlay}>
+                      <Text style={styles.posterCreatorName} numberOfLines={1}>
+                        @{story.creator.username ?? story.creatorId}
+                      </Text>
+                      <View
+                        style={styles.posterFreshDot}
+                        accessible={false}
+                      />
+                    </View>
+
+                    {story.totalFrameCount > 1 && (
+                      <View style={styles.frameCountBadge} accessible={false}>
+                        <Ionicons name="layers" size={10} color={colors.textInverse} />
+                        <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                      </View>
+                    )}
+
+                    {showUnwatchedBadge && (
+                      <View style={styles.unwatchedBadge} accessible={false}>
+                        <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
+                      </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.posterTile, styles.posterTileSeen]}>
+                  <PosterStoryArtwork story={story} />
+                  <View style={styles.posterShade} />
+
+                  <View style={styles.posterCreatorOverlay}>
+                    <Text style={styles.posterCreatorName} numberOfLines={1}>
+                      @{story.creator.username ?? story.creatorId}
+                    </Text>
+                    <View
+                      style={styles.posterSeenDot}
+                      accessible={false}
+                    />
+                  </View>
+
+                  {story.totalFrameCount > 1 && (
+                    <View style={styles.frameCountBadge} accessible={false}>
+                      <Ionicons name="layers" size={10} color={colors.textInverse} />
+                      <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                    </View>
+                  )}
                 </View>
-
-                {story.totalFrameCount > 1 && (
-                  <View style={styles.frameCountBadge} accessible={false}>
-                    <Ionicons name="layers" size={10} color={colors.textInverse} />
-                    <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
-                  </View>
-                )}
-
-                {showUnwatchedBadge && (
-                  <View style={styles.unwatchedBadge} accessible={false}>
-                    <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
-                  </View>
-                )}
-              </View>
+              )}
             </AnimatedPressable>
             );
             });
@@ -994,11 +815,6 @@ export default function HomeScreen() {
     haptic.medium(); // ELEVATED: Medium haptic for long press
     setPeekItem(item);
   }, [haptic]);
-
-  const handleSellerProfilePress = React.useCallback((sellerId: string) => {
-    haptic.light(); // ELEVATED: Light haptic on seller interaction
-    openProfile(navigation, sellerId, currentUser?.id);
-  }, [navigation, haptic, currentUser?.id]);
 
   // FlashList v2 performance: getItemType for heterogeneous row recycling.
   // FeedDataItem has two variants: 'listing' (discovery VM) and 'posters'
@@ -1400,13 +1216,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     color: colors.textPrimary,
   },
-  brandSubtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    fontFamily: FontFamily.regular,
-    letterSpacing: 0.25,
-    color: colors.textSecondary,
-  },
   headerRight: {
     flexDirection: 'row',
     gap: 2,
@@ -1529,222 +1338,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  sectionTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
-  sectionHint: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    color: colors.textMuted,
-    letterSpacing: 0.22,
-  },
-
-  storiesSection: {
-    paddingTop: Space.xs + Space.xxs,
-    paddingBottom: Space.sm + Space.xs,
-  },
-  storiesScroll: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm + Space.xs,
-  },
-  storyCreateWrap: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyCreateRing: {
-    width: 62,
-    height: 62,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-    marginBottom: 6,
-  },
-  storyItem: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyRingGradient: {
-    width: 62,
-    height: 62,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    position: 'relative',
-  },
-  storyRingGradientMuted: {
-    opacity: 0.64,
-  },
-  storyRingInner: {
-    width: 58,
-    height: 58,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  storyAvatarWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: Radius.full,
-  },
-  storyAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  storyPulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-    position: 'absolute',
-    right: 1,
-    top: 1,
-    borderWidth: 1,
-    borderColor: colors.background,
-  },
-  storyName: {
-    fontSize: 10,
-    fontFamily: FontFamily.medium,
-    color: colors.textSecondary,
-    width: 66,
-    textAlign: 'center',
-  },
-  storyStatus: {
-    marginTop: 2,
-    fontSize: 9,
-    fontFamily: FontFamily.regular,
-    color: colors.textMuted,
-    width: 66,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.24,
-  },
-
-  looksSection: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  looksRail: {
-    paddingHorizontal: Space.md,
-    gap: Space.smMd,
-  },
-  lookCard: {
-    width: SCREEN_WIDTH * 0.82,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookImageWrap: {
-    width: '100%',
-    height: 280,
-  },
-  lookFeedRow: {
-    paddingHorizontal: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-  lookFeedCard: {
-    width: '100%',
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookFeedImageWrap: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-  },
-  lookImage: {
-    width: '100%',
-    height: '100%',
-  },
-  lookOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.overlay,
-  },
-  lookOwnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  lookOwnerAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-  },
-  lookOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  lookOwnerName: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-  },
-  lookTitle: {
-    color: colors.textInverse,
-    fontSize: 21,
-    fontFamily: FontFamily.extrabold,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-  },
-  lookDescription: {
-    color: colors.scrimTextSecondary,
-    fontSize: 12,
-    fontFamily: FontFamily.medium,
-    marginTop: 2,
-  },
-  lookMetaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  lookMetaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.overlay,
-  },
-  lookMetaText: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-  },
-  lookTime: {
-    color: colors.scrimTextSecondary,
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    marginLeft: 'auto',
-  },
-
   postersSection: {
     marginTop: 0,
     paddingBottom: Space.sm,
@@ -1786,14 +1379,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
   },
-  posterTileUnseen: {
-    borderWidth: 2,
-    borderColor: colors.brand,
+  // Gradient ring for unwatched stories — Instagram-style gradient border
+  // using brand + discovery accent colors. 2pt padding creates the ring
+  // thickness (Stroke.emphasis = 2, reserved for focus/selection per
+  // AGENTS.md §4 stroke grammar). The inner tile clips artwork to the
+  // sheetDialog radius while the outer gradient uses sheetDialog + 2.
+  posterTileGradientRing: {
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: RadiusRoleValue.sheetDialog + Stroke.emphasis,
+    padding: Stroke.emphasis,
   },
-  // No decorative glow shadow — the 2pt brand border is the selection
-  // signal (AGENTS.md §4: 2pt reserved for focus/selection; composition
-  // over decoration).
-  posterTileRing: {
+  posterTileInner: {
+    flex: 1,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.surfaceAlt,
   },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1973,162 +1575,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.border,
   },
 
-  masonryGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-    alignItems: 'flex-start',
-  },
-  masonryColumn: {
-    flex: 1,
-    gap: Space.sm,
-  },
   flashListItem: {
     paddingHorizontal: Space.xs,
     paddingBottom: GRID_GAP,
-  },
-  exploreItemBox: {
-    backgroundColor: colors.background,
-    // Pinterest feel: no border, no shadow — image is the card
-  },
-  exploreMediaWrap: {
-    position: 'relative',
-    borderRadius: RadiusRoleValue.sheetDialog,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
-  exploreSharedMedia: {
-    ...StyleSheet.absoluteFill,
-  },
-  exploreImage: {
-    width: '100%',
-    height: '100%',
-  },
-  listingMediaPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
-  listingMediaPlaceholderText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  exploreDetails: {
-    display: 'none',
-  },
-  exploreTitle: {
-    display: 'none',
-  },
-  explorePrice: {
-    display: 'none',
-  },
-  exploreSellerRow: {
-    display: 'none',
-  },
-  exploreSellerAvatar: {
-    display: 'none',
-  },
-  exploreSellerAvatarFallback: {
-    display: 'none',
-  },
-  exploreSellerText: {
-    display: 'none',
-  },
-  // Bottom gradient scrim for price overlay legibility. Height tuned to
-  // the 15pt overlay price so the scrim covers the text zone without
-  // over-darkening shorter cards (spec §06: price visually quieter than
-  // imagery but stronger than metadata).
-  exploreBottomScrim: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-  },
-  explorePriceOverlay: {
-    position: 'absolute',
-    bottom: Space.sm - 2,
-    left: Space.xs + 1,
-    right: Space.xs + 1,
-  },
-  // Price overlay: 15pt semibold (bodyStrong) — quieter than the 20pt
-  // priceList used on PDP/Browse info sections, appropriate for a card
-  // overlay where media must dominate (spec §06 micro-detail pass).
-  explorePriceOverlayText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    color: colors.scrimTextPrimary,
-    textShadowColor: colors.overlay,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  // Likes badge — compact interaction signal, top-right
-  exploreLikesBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: Space.xs + 1,
-    paddingVertical: 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: colors.overlay,
-  },
-  exploreLikesGlyph: {
-    textShadowColor: colors.overlay,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  exploreLikesText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: colors.scrimTextPrimary,
-    letterSpacing: 0.1,
-    fontVariant: ['tabular-nums'],
-  },
-  // Seller name badge — compact overlay for Following mode (replaces likes)
-  exploreSellerBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    paddingHorizontal: Space.xs + 1,
-    paddingVertical: 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: colors.overlay,
-  },
-  exploreSellerBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: colors.scrimTextPrimary,
-    letterSpacing: 0.1,
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    width: 28,
-    height: 28,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bigHeartLayer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'none',
-    zIndex: 4,
   },
   exploreLoadingGrid: {
     flexDirection: 'row',
@@ -2177,12 +1626,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
-  },
-  peekSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    fontFamily: FontFamily.regular,
-    color: colors.textSecondary,
   },
   peekActionsRow: {
     marginTop: 14,

@@ -109,13 +109,13 @@ export function NotificationRowBase({
       accessibilityLabel={accessibilityLabel}
       hapticFeedback="light"
     >
-      {/* Unread indicator — subtle dot, not a giant badge */}
-      {isUnread ? <View style={styles.unreadDot} /> : null}
+      {/* Leading visual slot — avatar/icon with unread dot at bottom-right */}
+      <View style={styles.leadingWrap}>
+        {leading}
+        {isUnread ? <View style={styles.unreadDot} /> : null}
+      </View>
 
-      {/* Leading visual slot */}
-      <View style={styles.leading}>{leading}</View>
-
-      {/* Body — title + description + meta */}
+      {/* Body — title + description + aggregated badge */}
       <View style={styles.body}>
         {children}
         <View style={styles.metaRow}>
@@ -124,8 +124,14 @@ export function NotificationRowBase({
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
           ) : null}
-          <Text style={[styles.time, { color: timeColor }]}>{time}</Text>
         </View>
+        {/* Timestamp — right-aligned, top-right of the body column */}
+        <Text
+          style={[styles.time, { color: timeColor }]}
+          accessibilityLabel={`Time: ${time}`}
+        >
+          {time}
+        </Text>
       </View>
 
       {/* Trailing slot — action button or chevron */}
@@ -229,9 +235,9 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      paddingVertical: Space.sm + 2,
+      paddingVertical: Space.sm + 4,
       paddingHorizontal: Space.md,
-      minHeight: Control.hit + Space.sm,
+      minHeight: 72,
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
@@ -241,18 +247,21 @@ function createStyles(colors: ThemeColors) {
       borderLeftWidth: Stroke.emphasis,
       borderLeftColor: colors.brand,
     },
-    unreadDot: {
-      position: 'absolute',
-      top: Space.sm + 2,
-      left: Space.xs,
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
-    leading: {
+    leadingWrap: {
+      position: 'relative',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    unreadDot: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: Space.xs + 4,
+      height: Space.xs + 4,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      borderWidth: Stroke.standard,
+      borderColor: colors.background,
     },
     body: {
       flex: 1,
@@ -265,6 +274,9 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
     },
     time: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
       fontSize: Type.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,

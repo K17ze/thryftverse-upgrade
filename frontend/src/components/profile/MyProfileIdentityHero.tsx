@@ -9,29 +9,37 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
-// ── Bio linkification ──
+// ── Bio linkification + truncation ──
 // Parses URLs, @mentions and #hashtags in the bio and renders them as
 // tappable inline spans. Non-link text uses the base bio style.
+// Bios longer than ~125 chars are truncated with a "see more" expansion.
 const BIO_LINK_PATTERN = /((?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+[^\s]*|(?:^|\s)[@#][\w]+)/gi;
+const BIO_TRUNCATE_CHARS = 125;
 
-function BioText({ bio, style, linkStyle }: { bio: string; style: any; linkStyle: any }) {
+function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: any; linkStyle: any; seeMoreStyle: any }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const shouldTruncate = bio.length > BIO_TRUNCATE_CHARS;
+  const displayBio = shouldTruncate && !expanded
+    ? bio.slice(0, BIO_TRUNCATE_CHARS).trimEnd() + '…'
+    : bio;
+
   const segments = React.useMemo(() => {
     const parts: { text: string; isLink: boolean }[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     const pattern = new RegExp(BIO_LINK_PATTERN.source, 'gi');
-    while ((match = pattern.exec(bio)) !== null) {
+    while ((match = pattern.exec(displayBio)) !== null) {
       if (match.index > lastIndex) {
-        parts.push({ text: bio.slice(lastIndex, match.index), isLink: false });
+        parts.push({ text: displayBio.slice(lastIndex, match.index), isLink: false });
       }
       parts.push({ text: match[0], isLink: true });
       lastIndex = match.index + match[0].length;
     }
-    if (lastIndex < bio.length) {
-      parts.push({ text: bio.slice(lastIndex), isLink: false });
+    if (lastIndex < displayBio.length) {
+      parts.push({ text: displayBio.slice(lastIndex), isLink: false });
     }
-    return parts.length > 0 ? parts : [{ text: bio, isLink: false }];
-  }, [bio]);
+    return parts.length > 0 ? parts : [{ text: displayBio, isLink: false }];
+  }, [displayBio]);
 
   const handleLinkPress = (link: string) => {
     const trimmed = link.trim();
@@ -45,7 +53,7 @@ function BioText({ bio, style, linkStyle }: { bio: string; style: any; linkStyle
   };
 
   return (
-    <Text style={style} numberOfLines={2}>
+    <Text style={style} numberOfLines={expanded ? undefined : 2}>
       {segments.map((seg, i) =>
         seg.isLink ? (
           <Text
@@ -59,11 +67,21 @@ function BioText({ bio, style, linkStyle }: { bio: string; style: any; linkStyle
           <Text key={i}>{seg.text}</Text>
         )
       )}
+      {shouldTruncate ? (
+        <Text
+          style={seeMoreStyle}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Show less bio' : 'Show more bio'}
+        >
+          {expanded ? ' less' : ' more'}
+        </Text>
+      ) : null}
     </Text>
   );
 }
 
-const AVATAR_SIZE = 88; // design contract: 88pt seam avatar — matches ProfileHero
+const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar — matches ProfileHero (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;
@@ -240,7 +258,7 @@ export function MyProfileIdentityHero({
           @{username}
         </Text>
 
-        {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} /> : null}
+        {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
 
         {location ? (
           <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
@@ -461,6 +479,10 @@ function createStyles(colors: ThemeColors) {
   bioLink: {
     color: colors.brand,
     fontFamily: Typography.family.medium,
+  },
+  bioSeeMore: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
   },
   contextLine: {
     color: colors.textMuted,

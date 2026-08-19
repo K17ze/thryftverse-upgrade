@@ -31,6 +31,7 @@ interface ProfileShopTileProps {
  * Sold treatment: quiet lower-edge marker, not aggressive all-caps stamp.
  * The garment stays readable; sold inventory feels historical, not disabled.
  * 3-column density: price + brand only, size/condition omitted for scannability.
+ * Pinned/featured listings show a small pin glyph in the top-left corner.
  */
 const ProfileShopTile = React.memo(function ProfileShopTile({
   item,
@@ -45,13 +46,14 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   const showSold = isSold || item.status === 'sold';
   const imageUri = item.images?.[0] ?? item.imageUrl ?? '';
   const hasImage = imageUri.length > 0;
+  const isFeatured = item.featured === true;
   return (
     <AnimatedPressable
       style={[styles.gridCard, { width: cardWidth, marginBottom: Space.sm }]}
       activeOpacity={0.9}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Open listing ${item.title}`}
+      accessibilityLabel={`Open listing ${item.title}${isFeatured ? ', pinned' : ''}`}
       accessibilityHint="Opens listing details"
     >
       <SharedTransitionView
@@ -71,6 +73,12 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
             <Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textMuted} />
           </View>
         )}
+        {/* Pinned/featured indicator — small pin glyph, top-left corner */}
+        {isFeatured ? (
+          <View style={styles.pinnedBadge} pointerEvents="none">
+            <Ionicons name="pin" size={11} color={colors.scrimTextPrimary} />
+          </View>
+        ) : null}
         {/* Quiet lower-edge sold marker — real short fade, image stays readable */}
         {showSold ? (
           <>
@@ -116,6 +124,19 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
+  },
+  // Pinned/featured indicator — small dark pill with pin glyph, top-left.
+  // Subtle scrim backing for legibility over any image.
+  pinnedBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Real short fade from bottom — no hard translucent rectangle
   soldFade: {
