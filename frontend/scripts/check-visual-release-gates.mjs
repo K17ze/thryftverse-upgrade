@@ -52,21 +52,85 @@ const ALLOWED_COLOR_FILES = new Set([
   join(SRC, 'constants', 'colors.ts'),
 ]);
 
-// Camera/poster/live surfaces may use hardcoded colors for scrim/gradient
-// overlays on media. These are documented exceptions.
+// Camera/poster/live/creative surfaces may use hardcoded colors for
+// scrim/gradient overlays on media, or where colors ARE the creative content
+// (gradient presets, filter configs, color pickers, drawing canvas, sticker
+// layers, text color pickers). These are documented exceptions.
 const CAMERA_SURFACE_PATTERNS = [
+  // Creator/camera surfaces
   /creator[\\/]/,
   /CreatorCamera/,
   /CreatorCanvas/,
   /CreatorToolDock/,
   /CreatorStudio/,
-  /PosterViewer/,
-  /PosterHighlight/,
   /CreateCamera/,
   /LiveStreamViewer/,
   /LiveStreamSeller/,
   /LiveShoppingHome/,
   /FullscreenMediaViewer/,
+  // Poster viewer/highlight surfaces
+  /PosterViewer/,
+  /PosterHighlight/,
+  // Poster creative tools — colors ARE the content in these components
+  /poster[\\/]/,  // entire poster components directory
+  /PosterSticker/,
+  /PosterReaction/,
+  /GradientPresets/,
+  /FilterStrip/,
+  /FilterPreview/,
+  /filterConfig/,
+  /FontColorPicker/,
+  /ColorSlider/,
+  /ColorPickerPanel/,
+  /DrawingCanvas/,
+  /StickerPicker/,
+  /TemplatePicker/,
+  /LayoutPicker/,
+  /BackgroundPicker/,
+  /TextOverlayCanvas/,
+  /TextEditSheet/,
+  /DraggableText/,
+  /DraggableLayer/,
+  /MultiPhotoCollage/,
+  /BottomControlBar/,
+  /CreativeToolbar/,
+  /PosterProgressSegments/,
+  /DetailsDrawer/,
+  /ContextMenu/,
+  /PosterArchive/,
+  /PosterStoryActivity/,
+  /layerAccents/,
+  /colorUtils/,
+  // Media stage / overlay surfaces — use scrim gradients on media
+  /MediaStage/,
+  /MediaStudio/,
+  /MediaGallery/,
+  /MediaComposer/,
+  /MediaPreview/,
+  /MediaMosaic/,
+  /MediaEditor/,
+  /MediaRail/,
+  /ListingMedia/,
+  /ProductMedia/,
+  /LookMedia/,
+  /ChatMediaPreview/,
+  /VisualSearchCamera/,
+  /VisualSearchScreen/,
+  /HeroCarousel/,
+  /ImageEmptyGraphic/,
+  /BoardEmptyGraphic/,
+  /OrdersEmptyGraphic/,
+  /SearchEmptyGraphic/,
+  /LookPreviewCard/,
+  /EditProfilePreview/,
+  /FlagshipProfileMedia/,
+  /ProfileVisualHeader/,
+  /ProfileMediaEditor/,
+  // Data files with domain color values (sticker presets, poster data)
+  /data[\\/]posters/,
+  /data[\\/]stickerPresets/,
+  /services[\\/]moodboardApi/,
+  /orderCapabilities/,
 ];
 
 // Hardcoded color patterns

@@ -1,0 +1,98 @@
+
+=== Visual Release Gates ===
+
+P0 violations: 1477
+
+  src/components/AnimatedBadge.tsx:77 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AnimatedBadge.tsx:80 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AnimatedHeart.tsx:98 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AnimatedHeart.tsx:99 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:33 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:34 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:36 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:37 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:38 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/AttachmentMenu.tsx:164 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/auction/AuctionMarketHeader.tsx:256 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/auction/AuctionRunwayCard.tsx:229 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/auction/AuctionRunwayCard.tsx:249 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/BottomSheet.tsx:241 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/BottomSheetPicker.tsx:18 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/BottomSheetPicker.tsx:164 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/CachedImage.tsx:303 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/CachedImage.tsx:374 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/CachedImage.tsx:375 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/CachedImage.tsx:473 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/AttachmentPickerSheet.tsx:170 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/AttachmentReviewSheet.tsx:129 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/AttachmentReviewSheet.tsx:167 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/ChatActionSheet.tsx:152 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/ChatActionSheet.tsx:162 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/MessageBubble.tsx:568 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/MessageBubble.tsx:574 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/MessageContextMenu.tsx:166 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/MessageContextMenu.tsx:179 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  src/components/chat/SkeletonChatLoader.tsx:53 [no-hardcoded-color] Hardcoded color in non-camera surface — use useAppTheme().colors or verified theme exports
+  ... and 1447 more P0 violations
+
+P1 violations: 687
+
+  src/components/auction/AuctionMarketHeader.tsx:119 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/auction/AuctionMarketHeader.tsx:152 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/auction/AuctionMarketHeader.tsx:156 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/auction/AuctionSegmentRail.tsx:82 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/AttachmentReviewSheet.tsx:112 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/ChatComposerBar.tsx:153 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/ChatComposerBar.tsx:170 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/ChatTransactionStrip.tsx:142 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:212 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:226 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:237 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:315 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:322 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:338 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessageBubble.tsx:354 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/MessagingSegmentRail.tsx:46 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/chat/SuggestedRepliesBar.tsx:58 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/checkout/AddAddressSheet.tsx:144 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/checkout/AddAddressSheet.tsx:260 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/checkout/CheckoutPaymentSelector.tsx:40 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/checkout/CheckoutPaymentSelector.tsx:106 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/checkout/CheckoutSelectionRow.tsx:48 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/closet/SaveToCollectionModal.tsx:138 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/closet/SaveToCollectionModal.tsx:216 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/closet/SaveToCollectionModal.tsx:291 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/CommandPalette.tsx:289 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/CommandPalette.tsx:295 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/CommandPalette.tsx:431 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/commerce/CategoryEvidence.tsx:51 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  src/components/commerce/CommerceMediaStage.tsx:222 [missing-accessibility-role] Interactive control without accessibilityRole — add accessibilityRole
+  ... and 657 more P1 violations
+
+Warnings (heuristic): 143
+
+  src/components/ai/AITrustBadge.tsx:79 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/ai/AITrustSignal.tsx:128 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/algorithm/FeedExplanationSheet.tsx:241 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/chat/ChatActionSheet.tsx:59 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/chat/ChatAgentPicker.tsx:53 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/chat/ChatAgentPicker.tsx:122 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/chat/ChatTopBar.tsx:155 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:65 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:139 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:145 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:149 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:154 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:159 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:166 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  src/components/commerce/CommerceStateCanvas.tsx:170 [possible-card-on-card] Possible nested surface composition — verify no card-on-card without distinct interaction/state boundary
+  ... and 128 more warnings
+
+=== Summary ===
+  Files scanned: 1016
+  P0 violations: 1477
+  P1 violations: 687
+  Warnings: 143
+  Mode: report (warn only)
+
+~ visual-gates: 1477 P0, 687 P1 reported (--report mode; default would fail on P0).
