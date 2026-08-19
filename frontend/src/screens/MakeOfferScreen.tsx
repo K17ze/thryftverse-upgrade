@@ -535,7 +535,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       {showReview && (
         <View style={styles.reviewOverlay}>
           <Pressable
-            style={styles.reviewBackdrop}
+            style={[styles.reviewBackdrop, { backgroundColor: colors.overlay }]}
             onPress={() => { if (!isSubmitting) setShowReview(false); }}
             accessibilityLabel="Cancel review"
             accessibilityRole="button"
@@ -580,7 +580,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 {formatFromFiat(numericOfferGbp, 'GBP')}
               </Text>
               {isCounterOffer && previousOffer != null && (
-                <View style={styles.reviewCompareRow}>
+                <View style={[styles.reviewCompareRow, { borderTopColor: colors.borderSubtle }]}>
                   <View style={styles.reviewCompareItem}>
                     <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
                       Previous
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   reviewBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'transparent',
   },
   reviewSheet: {
     position: 'absolute',
@@ -1090,7 +1090,7 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.2)',
+    borderTopColor: 'transparent',
   },
   reviewCompareItem: {
     alignItems: 'center',

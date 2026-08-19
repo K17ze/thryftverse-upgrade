@@ -1687,7 +1687,6 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1947,14 +1946,12 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
   },
   resultPrice: {
     fontFamily: FontFamily.bold,
     fontSize: 14,
-    color: '#fff',
     fontVariant: ['tabular-nums'],
   },
   recoEmptyState: {

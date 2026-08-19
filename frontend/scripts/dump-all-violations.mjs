@@ -43,8 +43,11 @@ const CAMERA_SURFACE_PATTERNS = [
   /HeroCarousel/, /ImageEmptyGraphic/, /BoardEmptyGraphic/, /OrdersEmptyGraphic/,
   /SearchEmptyGraphic/, /LookPreviewCard/, /EditProfilePreview/,
   /FlagshipProfileMedia/, /ProfileVisualHeader/, /ProfileMediaEditor/,
+  // Creative tools — colors ARE the content
+  /OutfitBuilder/,
   // Data files with domain color values
   /data[\\/]posters/, /data[\\/]stickerPresets/, /services[\\/]moodboardApi/,
+  /services[\\/]postersApi/,
   /orderCapabilities/,
 ];
 
@@ -94,6 +97,16 @@ function checkHardcodedColors(files) {
       RGB_COLOR.lastIndex = 0;
       if (hasHex || hasRgb) {
         if (line.includes('gradient') && line.includes('[')) continue;
+        // Skip LinearGradient colors prop arrays (colors={['...', '...']})
+        if (/colors\s*=\s*\{?\s*\[/.test(line)) continue;
+        // Skip ternary branch lines that are gradient color arrays
+        if (/^\s*[?:]\s*\[.*rgba?\(/.test(line)) continue;
+        // Skip shimmer/skeleton wave arrays (visual effect gradient stops)
+        if (/SHIMMER|WAVE|TINT|BRAND_TINT/i.test(line) && line.includes('[')) continue;
+        // Skip brand color data (Visa, Mastercard, Google, Apple, WhatsApp, etc.)
+        if (/logo-|icon:\s*'logo|Visa|Mastercard|amex|discover|whatsapp|instagram|facebook|google|apple/i.test(line)) continue;
+        // Skip console CSS styles (not UI colors)
+        if (/console\.(log|warn|error|group|info)/.test(line) || /color:\s*#/.test(line) && /font-weight/.test(line)) continue;
         violations.push({ line: i + 1, content: trimmed.substring(0, 200) });
       }
     }

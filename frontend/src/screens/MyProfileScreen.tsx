@@ -566,7 +566,7 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens your style and experience preferences"
           >
-            <View style={styles.topUtilityVisible}>
+            <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
               <Ionicons name="options-outline" size={19} color={colors.textInverse} />
             </View>
           </AnimatedPressable>
@@ -579,7 +579,7 @@ export default function MyProfileScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens the system share sheet to share your profile"
             >
-              <View style={styles.topUtilityVisible}>
+              <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
                 <Ionicons name="share-outline" size={18} color={colors.textInverse} />
               </View>
             </AnimatedPressable>
@@ -591,7 +591,7 @@ export default function MyProfileScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens account and app settings"
             >
-              <View style={styles.topUtilityVisible}>
+              <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
                 <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
               </View>
             </AnimatedPressable>
@@ -599,7 +599,7 @@ export default function MyProfileScreen() {
         </Reanimated.View>
 
         {coverState.status === 'failed' ? (
-          <View style={styles.coverFailure}>
+          <View style={[styles.coverFailure, t.coverFailure]}>
             <View style={styles.coverFailureCopy}>
               <Ionicons name="alert-circle-outline" size={17} color={colors.textInverse} />
               <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
@@ -639,7 +639,7 @@ export default function MyProfileScreen() {
             }
             accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
           >
-            <View style={styles.coverEditVisible}>
+            <View style={[styles.coverEditVisible, t.coverEditVisible]}>
               {coverState.status === 'uploading' ? (
                 <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
@@ -808,7 +808,7 @@ export default function MyProfileScreen() {
                           contentFit="cover"
                         />
                         {item.isSold ? (
-                          <View style={styles.soldOverlay}>
+                          <View style={[styles.soldOverlay, t.soldOverlay]}>
                             <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
                           </View>
                         ) : null}
@@ -1189,9 +1189,7 @@ const styles = StyleSheet.create({
     width: Space.xl - 2,
     height: Space.xl - 2,
     borderRadius: RadiusRoleValue.standalonePanel,
-    backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1208,9 +1206,7 @@ const styles = StyleSheet.create({
     width: Space.xl + 2,
     height: Space.xl + 2,
     borderRadius: RadiusRoleValue.dominantPanel,
-    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1223,7 +1219,6 @@ const styles = StyleSheet.create({
     paddingLeft: Space.smMd,
     paddingRight: Space.xs + 1,
     borderRadius: RadiusRoleValue.sheetDialog,
-    backgroundColor: 'rgba(0,0,0,0.72)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
@@ -1308,7 +1303,6 @@ const styles = StyleSheet.create({
   },
   soldOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },

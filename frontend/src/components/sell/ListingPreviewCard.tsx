@@ -192,7 +192,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       position: 'absolute',
       top: Space.xs,
       left: Space.xs,
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: colors.overlay,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs / 2,
       borderRadius: Radius.sm,

@@ -1208,7 +1208,7 @@ interface PickerSheetProps {
 function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors }: PickerSheetProps) {
   const insets = useSafeAreaInsets();
   return (
-    <Pressable style={pickerStyles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker">
+    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker">
       <Pressable
         style={[
           pickerStyles.sheet,
@@ -1220,7 +1220,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
         ]}
         onPress={(e) => e.stopPropagation()}
       >
-        <View style={pickerStyles.handle} />
+        <View style={[pickerStyles.handle, { backgroundColor: colors.border }]} />
         <Text style={[pickerStyles.title, { color: colors.textPrimary }]}>{title}</Text>
         <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
           {options.map((opt) => {
@@ -1671,7 +1671,7 @@ function createStyles(colors: ThemeColors) {
 const pickerStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -1685,7 +1685,7 @@ const pickerStyles = StyleSheet.create({
     width: Space.xxl + Space.sm,
     height: Stroke.standard * 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(120,120,120,0.4)',
+    backgroundColor: 'transparent',
     alignSelf: 'center',
     marginBottom: Space.sm,
   },
