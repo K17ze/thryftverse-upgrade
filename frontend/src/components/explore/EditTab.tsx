@@ -292,7 +292,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.meta.letterSpacing,
   },
   windowTabTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
 
   /* Quiz Card */
@@ -306,7 +306,7 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     padding: Space.md,
     gap: Space.sm,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,

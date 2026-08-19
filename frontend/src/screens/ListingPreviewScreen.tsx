@@ -110,7 +110,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >
-              <Ionicons name="arrow-back" size={24} color="#fff" />
+              <Ionicons name="arrow-back" size={24} color={colors.surface} />
             </Pressable>
           </View>
 
@@ -296,7 +296,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: Space.xxl + Space.xxl + Space.xxl + Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: colors.overlay,
   },
   floatingHeader: {
     position: 'absolute',
@@ -312,7 +312,7 @@ function createStyles(colors: ThemeColors) {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -320,7 +320,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     bottom: Space.md,
     left: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,

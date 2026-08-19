@@ -62,7 +62,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
           accessibilityLabel={`${badgeLabel} unread`}
         >
-          <Text style={tabStyles.badgeText}>{badgeLabel}</Text>
+          <Text style={[tabStyles.badgeText, { color: colors.surface }]}>{badgeLabel}</Text>
         </View>
       )}
     </View>
@@ -384,7 +384,6 @@ const tabStyles = StyleSheet.create({
     borderWidth: 1.5,
   },
   badgeText: {
-    color: '#fff',
     fontSize: 10,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,

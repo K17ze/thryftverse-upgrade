@@ -134,7 +134,7 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { spring, isEnabled } = useMotionConfig();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const baseConfig = VARIANT_CONFIGS[variant];
   const variantConfig: SheetVariantConfig = {
     ...baseConfig,
@@ -238,7 +238,7 @@ export function BottomSheet({
         {variantConfig.useGlassBackdrop ? (
           <LiquidGlassBackdrop
             intensity={blurIntensity}
-            tint={colors.background === '#FFFFFF' ? 'light' : 'dark'}
+            tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
         ) : null}

@@ -286,7 +286,7 @@ export default function AuthLandingScreen() {
               accessibilityRole="button"
               accessibilityLabel="Dismiss error"
             >
-              <Ionicons name="close" size={18} color="rgba(245,239,230,0.65)" />
+              <Ionicons name="close" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
         ) : null}
@@ -345,9 +345,9 @@ export default function AuthLandingScreen() {
               accessibilityHint="Authenticate using your Apple ID"
             >
               {socialLoading === 'apple' ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={colors.textInverse} size="small" />
               ) : (
-                <Ionicons name="logo-apple" size={22} color="#fff" />
+                <Ionicons name="logo-apple" size={22} color={colors.textInverse} />
               )}
             </AnimatedPressable>
             {hasGoogleOAuth ? (
@@ -361,9 +361,9 @@ export default function AuthLandingScreen() {
                 accessibilityHint="Authenticate using your Google account"
               >
                 {socialLoading === 'google' ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={colors.textInverse} size="small" />
                 ) : (
-                  <Ionicons name="logo-google" size={20} color="#fff" />
+                  <Ionicons name="logo-google" size={20} color={colors.textInverse} />
                 )}
               </AnimatedPressable>
             ) : null}
@@ -467,7 +467,7 @@ function createStyles(colors: ThemeColors) {
   title: {
     fontSize: FontSize.giant,
     fontFamily: Typography.family.extrabold,
-    color: '#f6f2ea',
+    color: colors.textPrimary,
     lineHeight: FontSize.giant + 2,
     letterSpacing: -2,
     marginBottom: Space.smMd,
@@ -475,7 +475,7 @@ function createStyles(colors: ThemeColors) {
   subtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(245,239,230,0.72)',
+    color: colors.textSecondary,
     lineHeight: Type.caption.size + 4,
     letterSpacing: 0.24,
   },
@@ -488,13 +488,13 @@ function createStyles(colors: ThemeColors) {
   trustText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(245,239,230,0.65)',
+    color: colors.textMuted,
     letterSpacing: 0.2,
   },
   trustLink: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(245,239,230,0.85)',
+    color: colors.textSecondary,
     letterSpacing: 0.2,
     textDecorationLine: 'underline',
   },
@@ -512,9 +512,9 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.lg + 4,
     marginBottom: Space.xs + 2,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,107,107,0.12)',
+    backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,107,107,0.25)',
+    borderColor: colors.dangerBorder,
   },
   errorBannerText: {
     flex: 1,
@@ -544,7 +544,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   secondaryText: {
-    color: 'rgba(245,239,230,0.85)',
+    color: colors.textSecondary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
@@ -558,10 +558,10 @@ function createStyles(colors: ThemeColors) {
   socialDividerLine: {
     flex: 1,
     height: Stroke.hairline,
-    backgroundColor: 'rgba(245,239,230,0.15)',
+    backgroundColor: colors.border,
   },
   socialDividerText: {
-    color: 'rgba(245,239,230,0.45)',
+    color: colors.textMuted,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.4,
@@ -576,9 +576,9 @@ function createStyles(colors: ThemeColors) {
     width: Space.xl + Space.xl + 2,
     height: Space.xl + Space.xl + 2,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -587,13 +587,13 @@ function createStyles(colors: ThemeColors) {
   },
   magicLinkLoadingText: {
     marginTop: Space.sm,
-    color: 'rgba(255,255,255,0.62)',
+    color: colors.textSecondary,
     fontSize: Type.caption.size,
     textAlign: 'center',
     fontFamily: Typography.family.medium,
   },
   termsText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textMuted,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -601,7 +601,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   termsLink: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },
@@ -610,9 +610,9 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(52,199,89,0.15)',
+    backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(52,199,89,0.4)',
+    borderColor: colors.successBorder,
     alignSelf: 'center',
   },
   devBypassText: {

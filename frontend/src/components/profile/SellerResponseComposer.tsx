@@ -147,7 +147,7 @@ function createStyles(colors: ThemeColors) {
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     backgroundColor: colors.background,
@@ -159,7 +159,7 @@ function createStyles(colors: ThemeColors) {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,

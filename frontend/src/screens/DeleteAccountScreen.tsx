@@ -202,7 +202,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
           <View style={[styles.warningHero, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
             <View style={styles.warningHeader}>
               <View style={[styles.warningIcon, { backgroundColor: colors.danger }]}>
-                <Ionicons name="warning" size={20} color="#FFFFFF" />
+                <Ionicons name="warning" size={20} color={colors.surface} />
               </View>
               <View style={styles.warningHeaderText}>
                 <Text style={[styles.warningTitle, { color: colors.danger }]}>Permanent action</Text>

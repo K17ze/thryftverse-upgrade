@@ -63,7 +63,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -72,7 +72,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingVertical: Space.xs,
     minWidth: 200,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,

@@ -327,7 +327,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           onPress={() => { haptic.light(); setShowCreate(true); }}
           variant="primary"
           size="lg"
-          icon={<Ionicons name="add-circle-outline" size={18} color="#fff" />}
+          icon={<Ionicons name="add-circle-outline" size={18} color={colors.textInverse} />}
           style={{ marginTop: Space.lg }}
         />
 
@@ -595,7 +595,7 @@ function createStyles(colors: ThemeColors) {
     modalOverlay: {
       flex: 1,
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       padding: Space.lg,
     },
     modalCard: {

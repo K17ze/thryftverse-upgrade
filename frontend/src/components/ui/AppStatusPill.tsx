@@ -26,27 +26,27 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, isDark: boolean):
   switch (tone) {
     case 'accent':
       return {
-        backgroundColor: isDark ? '#17302b' : '#ece4d8',
-        borderColor: isDark ? '#35574d' : '#d0c3af',
-        textColor: isDark ? '#d7b98f' : '#7c5f1e',
+        backgroundColor: colors.brandSubtle,
+        borderColor: colors.borderSubtle,
+        textColor: colors.brand,
       };
     case 'positive':
       return {
-        backgroundColor: isDark ? colors.successSubtle : '#efe7d6',
-        borderColor: isDark ? colors.successBorder : '#d9c6a2',
-        textColor: isDark ? '#7bc99a' : '#3a6b42',
+        backgroundColor: colors.successSubtle,
+        borderColor: colors.successBorder,
+        textColor: colors.success,
       };
     case 'negative':
       return {
-        backgroundColor: isDark ? colors.dangerSubtle : '#f6e6e6',
-        borderColor: isDark ? colors.dangerBorder : '#ddb0b0',
-        textColor: isDark ? '#ff9d9d' : '#b64242',
+        backgroundColor: colors.dangerSubtle,
+        borderColor: colors.dangerBorder,
+        textColor: colors.danger,
       };
     case 'warning':
       return {
-        backgroundColor: isDark ? colors.warningSubtle : '#f7ecdb',
-        borderColor: isDark ? colors.warningBorder : '#dfc9a5',
-        textColor: isDark ? '#ffcf8a' : '#8a6a3f',
+        backgroundColor: colors.warningSubtle,
+        borderColor: colors.warningBorder,
+        textColor: colors.warning,
       };
     case 'neutral':
     default:

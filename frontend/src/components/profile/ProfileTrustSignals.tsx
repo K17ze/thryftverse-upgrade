@@ -20,7 +20,7 @@ interface TrustChipProps {
   tone?: 'default' | 'success' | 'muted';
 }
 
-function TrustChip({ icon, label, tone = 'default', colors }: TrustChipProps & { colors: ThemeColors }) {
+function TrustChip({ icon, label, tone = 'default', colors, styles }: TrustChipProps & { colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
   const color =
     tone === 'success' ? colors.success : tone === 'muted' ? colors.textMuted : colors.textSecondary;
   return (
@@ -66,6 +66,7 @@ export function ProfileTrustSignals({
   hideSoldChip = false,
 }: ProfileTrustSignalsProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const chips: TrustChipProps[] = [];
 
   // Verified — tiered badge from seller trust (authoritative) or email-verified fallback
@@ -135,14 +136,15 @@ export function ProfileTrustSignals({
       {chips.map((chip, index) => (
         <React.Fragment key={`${chip.icon}-${index}`}>
           {index > 0 ? <View style={styles.separator} /> : null}
-          <TrustChip {...chip} colors={colors} />
+          <TrustChip {...chip} colors={colors} styles={styles} />
         </React.Fragment>
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -168,6 +170,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(128,128,128,0.35)',
+    backgroundColor: colors.borderSubtle,
   },
-});
+  });
+}

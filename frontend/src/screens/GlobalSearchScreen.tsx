@@ -882,7 +882,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     filterBarCount: { color: colors.textSecondary },
     filterIconBadge: { backgroundColor: colors.brand },
     filterIconBadgeText: { color: colors.textInverse },
-    suggestionsWrap: { backgroundColor: colors.surface, borderColor: colors.border },
+    suggestionsWrap: { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.shadow },
     suggestionsHeader: { color: colors.textMuted },
     suggestionRow: { borderTopColor: colors.border },
     suggestionText: { color: colors.textPrimary },
@@ -901,6 +901,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     activeFilterChipIcon: { color: colors.textMuted },
     sortSheetTitle: { color: colors.textPrimary },
     sortSheetRow: { borderBottomColor: colors.border },
+    resultOverlay: { backgroundColor: colors.overlay },
+    resultPrice: { color: colors.surface },
   });
 
   return (
@@ -1108,8 +1110,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            <View style={[styles.resultOverlay, t.resultOverlay]}>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1130,8 +1132,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            <View style={[styles.resultOverlay, t.resultOverlay]}>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1498,8 +1500,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            <View style={[styles.resultOverlay, t.resultOverlay]}>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1520,8 +1522,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            <View style={[styles.resultOverlay, t.resultOverlay]}>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}

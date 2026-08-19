@@ -19,7 +19,7 @@ import type {
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { ProductDiscoveryTile } from '../ProductCardV2';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
@@ -161,6 +161,7 @@ export function PinterestMasonryGrid({
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Heterogeneous path is active when the feed carries DiscoveryFeedUnit
   // objects. An empty feed falls back to the listing path (the empty/loading
@@ -423,7 +424,8 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   footer: {
     paddingVertical: Space.md,
     alignItems: 'center',
@@ -441,16 +443,17 @@ const styles = StyleSheet.create({
   endOfListHairline: {
     width: 40,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(128,128,128,0.3)',
+    backgroundColor: colors.borderSubtle,
   },
   endOfListText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(128,128,128,0.7)',
+    color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
   },
   empty: {
     flex: 1,
     paddingHorizontal: Space.md,
   },
-});
+  });
+}

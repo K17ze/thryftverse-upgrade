@@ -34,7 +34,7 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="chevron-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -74,7 +74,7 @@ export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="chevron-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -112,7 +112,7 @@ export function ProfileBlockedState({
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="chevron-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
           <View style={{ flex: 1 }} />
           <AnimatedPressable
@@ -123,7 +123,7 @@ export function ProfileBlockedState({
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="share-outline" size={18} color="#fff" />
+            <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -160,7 +160,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -43,7 +43,7 @@ export function CoOwnPositionActionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
       <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
@@ -108,7 +108,6 @@ export function CoOwnPositionActionSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
     borderTopLeftRadius: Radius.xl,

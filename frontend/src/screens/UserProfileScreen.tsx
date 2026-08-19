@@ -631,7 +631,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           pointerEvents={collapsedVisible ? 'none' : 'auto'}
         >
           <AnimatedPressable
-            style={styles.topUtilityIconBtn}
+            style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -643,7 +643,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
-              style={styles.topUtilityIconBtn}
+              style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
               activeOpacity={0.9}
               onPress={handleShare}
               accessibilityLabel="Share profile"
@@ -653,7 +653,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               <Ionicons name="share-outline" size={18} color={TEXT_INVERSE} />
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.topUtilityIconBtn}
+              style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
               activeOpacity={0.9}
               onPress={handleMore}
               accessibilityLabel="More options"
@@ -866,7 +866,6 @@ const styles = StyleSheet.create({
   topUtilityRight: { flexDirection: 'row', gap: Space.sm },
   topUtilityIconBtn: {
     width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.sheetDialog,
-    backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   collapsedHeader: {

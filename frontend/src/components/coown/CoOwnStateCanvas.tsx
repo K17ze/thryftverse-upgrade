@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipEmptyGraphic } from '../flagship';
@@ -64,6 +64,7 @@ export function CoOwnStateCanvas({
   children,
 }: CoOwnStateCanvasProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const defaults = DEFAULTS[variant];
 
   // Build context-aware subtitle for exchange states
@@ -135,7 +136,7 @@ export function CoOwnStateCanvas({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   center: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -153,21 +154,21 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(128,128,128,0.12)',
+    backgroundColor: colors.surfaceAlt,
   },
   skeletonTitle: {
     width: 140,
     height: 18,
     borderRadius: Radius.sm,
     marginTop: Space.md,
-    backgroundColor: 'rgba(128,128,128,0.12)',
+    backgroundColor: colors.surfaceAlt,
   },
   skeletonSubtitle: {
     width: 200,
     height: 14,
     borderRadius: Radius.sm,
     marginTop: Space.xs,
-    backgroundColor: 'rgba(128,128,128,0.10)',
+    backgroundColor: colors.surfaceAlt,
   },
   title: {
     fontSize: Type.subtitle.size,

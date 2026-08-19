@@ -70,7 +70,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     <View style={[styles.container, { top: topInset }]}>
       <Reanimated.View style={animStyle}>
         <View style={styles.circle}>
-          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: Type.body.size, marginTop: -2 }}>T</Text>
+          <Text style={{ fontFamily: Typography.family.bold, color: colors.background, fontSize: Type.body.size, marginTop: -2 }}>T</Text>
         </View>
       </Reanimated.View>
     </View>

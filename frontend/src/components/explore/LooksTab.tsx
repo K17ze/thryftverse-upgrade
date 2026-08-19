@@ -619,7 +619,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      backgroundColor: colors.overlay,
     },
     // Like count — bottom-right, on the gradient scrim.
     likeOverlay: {

@@ -550,7 +550,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     height: Space.sm,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(128,128,128,0.15)',
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   voteResultFill: {

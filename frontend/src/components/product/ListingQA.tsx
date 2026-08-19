@@ -151,7 +151,7 @@ export function ListingQA({
           accessibilityRole="button"
           accessibilityLabel="Post question"
         >
-          <Ionicons name="send" size={16} color={askText.trim() ? '#fff' : colors.textMuted} />
+          <Ionicons name="send" size={16} color={askText.trim() ? colors.scrimTextPrimary : colors.textMuted} />
         </AnimatedPressable>
       </View>
 
@@ -457,7 +457,7 @@ function createStyles(colors: ThemeColors) {
   postAnswerText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   pendingAnswer: {
     fontSize: Type.meta.size,

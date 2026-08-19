@@ -344,7 +344,7 @@ export default function VerificationResponseScreen() {
 
             {/* Deadline badge */}
             <View style={[styles.deadlineBadge, {
-              backgroundColor: isOverdue ? 'rgba(220,38,38,0.08)' : colors.surfaceAlt,
+              backgroundColor: isOverdue ? colors.dangerSubtle : colors.surfaceAlt,
             }]}>
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'time-outline'}

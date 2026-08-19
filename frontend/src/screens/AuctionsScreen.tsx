@@ -530,7 +530,7 @@ export default function AuctionsScreen() {
               </View>
               {endingSoon ? (
                 <View style={styles.endingSoonBadge}>
-                  <Ionicons name="time-outline" size={10} color="#fff" />
+                  <Ionicons name="time-outline" size={10} color={colors.textInverse} />
                   <Meta style={styles.endingSoonText}>ENDING SOON</Meta>
                 </View>
               ) : null}
@@ -1060,7 +1060,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -1075,13 +1075,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(220,38,38,0.9)',
+    backgroundColor: colors.danger,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   endingSoonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 3,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.5,
@@ -1132,7 +1132,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,68,68,0.1)',
+    backgroundColor: colors.dangerSubtle,
   },
   outbidText: {
     color: colors.danger,
@@ -1145,7 +1145,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: colors.overlay,
   },
   leadingText: {
     color: colors.brand,
@@ -1272,7 +1272,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,68,68,0.1)',
+    backgroundColor: colors.dangerSubtle,
   },
   bidHistoryOutbidText: {
     color: colors.danger,

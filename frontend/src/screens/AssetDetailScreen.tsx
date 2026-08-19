@@ -1599,7 +1599,7 @@ export default function AssetDetailScreen() {
         animationType="slide"
         onRequestClose={() => setPriceAlertVisible(false)}
       >
-        <View style={priceAlertStyles.overlay}>
+        <View style={[priceAlertStyles.overlay, { backgroundColor: colors.overlay }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPriceAlertVisible(false)} />
           <View style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]}>
             {/* Header with icon */}
@@ -2100,7 +2100,6 @@ const priceAlertStyles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
     borderTopLeftRadius: RadiusRoleValue.standalonePanel,

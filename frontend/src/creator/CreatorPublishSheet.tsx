@@ -29,6 +29,7 @@ import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
@@ -922,6 +923,7 @@ function PublishReview({
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  const { isOffline } = useConnectivity();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const canvasWidth = 280;
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
@@ -1283,13 +1285,26 @@ function PublishReview({
         </View>
       )}
 
+      {/* Offline banner — prevents failed publish attempts. Save draft
+          remains available because drafts are stored locally. */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Text style={styles.offlineBannerText}>
+            You're offline. Save as draft and publish when you're back online.
+          </Text>
+        </View>
+      )}
+
       {/* Actions — Publish (primary) + Save draft (quiet secondary) */}
       <View style={styles.actionRow}>
         <PressScale
           onPress={handlePublishWithValidation}
-          style={styles.publishBtn}
+          disabled={isOffline}
+          style={[styles.publishBtn, isOffline ? styles.publishBtnDisabled : {}]}
           accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
           accessibilityHint={document.metadata.scheduledFor ? 'Schedules the post for the selected date' : 'Publishes the content immediately'}
+          accessibilityState={{ disabled: isOffline }}
           scale={0.97}
           hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
@@ -1595,11 +1610,33 @@ function createStyles(colors: ThemeColorsType) {
       justifyContent: 'center',
       alignItems: 'center',
     },
+    publishBtnDisabled: {
+      opacity: 0.4,
+    },
     publishBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
       fontSize: Type.bodyStrong.size,
       letterSpacing: Type.bodyStrong.letterSpacing,
+    },
+    // Offline banner — shown when device has no connectivity.
+    // Uses warning color (amber) to signal caution without alarm.
+    offlineBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      backgroundColor: colors.warningSubtle,
+      marginBottom: Space.sm,
+    },
+    offlineBannerText: {
+      flex: 1,
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      color: colors.textSecondary,
+      lineHeight: Type.caption.lineHeight,
     },
     centerState: {
       alignItems: 'center',

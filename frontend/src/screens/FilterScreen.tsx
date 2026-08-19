@@ -44,7 +44,6 @@ import { isSustainableGrade } from '../utils/sustainabilityScore';
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
-const OVERLAY_BG = 'rgba(0,0,0,0.45)';
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
@@ -380,7 +379,7 @@ export default function FilterScreen() {
 
   return (
     <View style={styles.container}>
-      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: OVERLAY_BG }, overlayStyle]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={closeBottomSheet} />
       </Reanimated.View>
 
@@ -804,7 +803,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -(Space.sm - 2) },
     shadowOpacity: 0.18,
     shadowRadius: Space.md,

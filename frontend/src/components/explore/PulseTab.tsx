@@ -468,7 +468,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: 4,
     marginTop: 6,
-    backgroundColor: 'rgba(52,199,89,0.12)',
+    backgroundColor: colors.successSubtle,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,

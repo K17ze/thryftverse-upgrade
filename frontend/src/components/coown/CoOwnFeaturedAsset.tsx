@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
@@ -39,6 +39,7 @@ export function CoOwnFeaturedAsset({
   index = 0,
 }: CoOwnFeaturedAssetProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width, height } = useWindowDimensions();
   // Editorial hero: 60% of viewport height, capped at 420px for tablets
   const heroHeight = Math.min(height * 0.6, 420);
@@ -100,7 +101,7 @@ export function CoOwnFeaturedAsset({
                 accessibilityLabel={actionLabel}
               >
                 <Text style={styles.actionText}>{actionLabel}</Text>
-                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                <Ionicons name="arrow-forward" size={15} color={colors.scrimTextPrimary} />
               </Pressable>
             ) : null}
           </View>
@@ -109,7 +110,7 @@ export function CoOwnFeaturedAsset({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   imageWrap: {
     width: '100%',
     position: 'relative',
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   statusDot: {
     width: 6,
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
-    color: 'rgba(255,255,255,0.95)',
+    color: colors.scrimTextPrimary,
   },
   // Editorial content overlaid on image — bottom-left
   heroContent: {
@@ -177,14 +178,14 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: 1.0,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
   },
   title: {
     fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
     lineHeight: 34,
     letterSpacing: -0.5,
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     marginBottom: 2,
   },
   heroMetaRow: {
@@ -197,17 +198,17 @@ const styles = StyleSheet.create({
   heroPriceLine: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.95)',
+    color: colors.scrimTextPrimary,
     fontVariant: ['tabular-nums'],
   },
   heroDivider: {
     fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.scrimTextTertiary,
   },
   heroAvailability: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.78)',
+    color: colors.scrimTextSecondary,
     fontVariant: ['tabular-nums'],
   },
   // Quieter action button — glassy outline, not a loud colored block
@@ -222,13 +223,13 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
     alignSelf: 'flex-start',
     paddingHorizontal: Space.md + 2,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.glassBg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: colors.glassBorder,
   },
   actionText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
   },
 });

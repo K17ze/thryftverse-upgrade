@@ -275,12 +275,12 @@ function createStyles(colors: ThemeColors) {
   photoOverflowOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: '#fff' },
+  photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.scrimTextPrimary },
   sellerResponseBox: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,

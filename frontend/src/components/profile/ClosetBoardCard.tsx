@@ -87,7 +87,7 @@ export function ClosetBoardCard({
                   if (!uri) {
                     return (
                       <View key={i} style={[styles.collageCell, styles.collageCellEmpty]}>
-                        <Ionicons name="add" size={14} color="rgba(255,255,255,0.4)" />
+                        <Ionicons name="add" size={14} color={colors.scrimTextTertiary} />
                       </View>
                     );
                   }
@@ -125,7 +125,7 @@ export function ClosetBoardCard({
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
             {isPrivate ? (
               <View style={styles.privacyBadge}>
-                <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="lock-closed" size={10} color={colors.scrimTextSecondary} />
               </View>
             ) : null}
           </View>
@@ -174,7 +174,7 @@ function createStyles(colors: ThemeColors) {
   collageCellEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: colors.overlay,
   },
   coverImg: {
     width: '100%',
@@ -202,7 +202,7 @@ function createStyles(colors: ThemeColors) {
     width: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -211,8 +211,8 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
     fontFamily: Typography.family.bold,
     fontSize: Type.bodyStrong.size,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    color: colors.scrimTextPrimary,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -225,21 +225,21 @@ function createStyles(colors: ThemeColors) {
   meta: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.85)',
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    color: colors.scrimTextSecondary,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   metaDot: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.scrimTextTertiary,
   },
   metaUpdated: {
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.7)',
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    color: colors.scrimTextSecondary,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },

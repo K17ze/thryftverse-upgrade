@@ -211,7 +211,7 @@ function createStyles(colors: ThemeColors) {
   retryBtnText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   createBtn: {
     marginTop: Space.xs,
@@ -223,7 +223,7 @@ function createStyles(colors: ThemeColors) {
   createBtnText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   });
 }

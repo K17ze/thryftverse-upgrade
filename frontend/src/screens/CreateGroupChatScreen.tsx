@@ -897,7 +897,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     bottom: 0,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },

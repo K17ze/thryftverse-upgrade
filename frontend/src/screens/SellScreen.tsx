@@ -1756,7 +1756,7 @@ export default function SellScreen() {
             transparent={true}
             onRequestClose={() => setShippingSheetOpen(false)}
           >
-            <Pressable style={styles.shippingSheetBackdrop} onPress={() => setShippingSheetOpen(false)}>
+            <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShippingSheetOpen(false)}>
               <Pressable
                 style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
                 onPress={(e) => { e.stopPropagation(); }}
@@ -2522,7 +2522,7 @@ const styles = StyleSheet.create({
   shippingSheetBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'transparent',
   },
   shippingSheet: {
     borderTopLeftRadius: Radius.xl,

@@ -21,6 +21,7 @@ interface PremiumToggleProps {
 export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
@@ -61,7 +62,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   track: {
     width: 50,
     height: 28,
@@ -73,8 +74,8 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: Radius.lg,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: colors.surfaceElevated,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,

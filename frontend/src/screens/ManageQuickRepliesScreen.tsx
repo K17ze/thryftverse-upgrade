@@ -372,7 +372,7 @@ function createStyles(colors: ThemeColors) {
     // Modal
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: colors.overlay,
       justifyContent: 'flex-end',
     },
     modalAvoid: {

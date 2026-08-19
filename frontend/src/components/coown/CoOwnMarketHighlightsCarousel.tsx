@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Radius, Space, Type, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -44,6 +44,7 @@ export function CoOwnMarketHighlightsCarousel({
   onPressItem,
 }: CoOwnMarketHighlightsCarouselProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const cardWidth = Math.round(Math.min(width * 0.84, 372));
   const cardHeight = Math.round(Math.min(240, Math.max(218, width * 0.58)));
@@ -143,7 +144,7 @@ export function CoOwnMarketHighlightsCarousel({
             </View>
             <View style={styles.marketAction}>
               <Text style={styles.marketActionText} maxFontSizeMultiplier={1.25}>View market</Text>
-              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={14} color={colors.scrimTextPrimary} />
             </View>
           </View>
         </View>
@@ -201,7 +202,7 @@ export function CoOwnMarketHighlightsCarousel({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   contentContainer: {
     paddingHorizontal: Space.md,
   },
@@ -223,7 +224,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.58)',
+    backgroundColor: colors.overlay,
   },
   statusDot: {
     width: 6,
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   category: {
-    color: 'rgba(255,255,255,0.78)',
+    color: colors.scrimTextSecondary,
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     fontSize: Type.priceList.size,
     lineHeight: 24,
     fontFamily: Typography.family.bold,
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   price: {
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     fontSize: Type.bodyStrong.size,
     lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   localReference: {
-    color: 'rgba(255,255,255,0.72)',
+    color: colors.scrimTextSecondary,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
@@ -294,7 +295,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   availability: {
-    color: 'rgba(255,255,255,0.82)',
+    color: colors.scrimTextSecondary,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
@@ -304,12 +305,12 @@ const styles = StyleSheet.create({
     height: 2,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: colors.glassBorder,
   },
   progressFill: {
     height: 2,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.90)',
+    backgroundColor: colors.scrimTextPrimary,
   },
   marketAction: {
     minHeight: 32,
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     paddingLeft: Space.sm,
   },
   marketActionText: {
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,

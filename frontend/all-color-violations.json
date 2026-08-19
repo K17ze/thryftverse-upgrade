@@ -1,0 +1,1854 @@
+{
+  "totalViolations": 398,
+  "fileCount": 128,
+  "byFile": {
+    "src/components/AnimatedBadge.tsx": [
+      {
+        "line": 77,
+        "content": "borderColor: '#111',"
+      },
+      {
+        "line": 80,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/AnimatedHeart.tsx": [
+      {
+        "line": 98,
+        "content": "activeColor = '#E06666',"
+      },
+      {
+        "line": 99,
+        "content": "inactiveColor = '#ffffff',"
+      }
+    ],
+    "src/components/AttachmentMenu.tsx": [
+      {
+        "line": 33,
+        "content": "{ id: 'gallery', icon: 'images', label: 'Gallery', color: '#4CAF50' },"
+      },
+      {
+        "line": 34,
+        "content": "{ id: 'camera', icon: 'camera', label: 'Camera', color: '#2196F3' },"
+      },
+      {
+        "line": 36,
+        "content": "{ id: 'location', icon: 'location', label: 'Location', color: '#9C27B0' },"
+      },
+      {
+        "line": 37,
+        "content": "{ id: 'contact', icon: 'person', label: 'Contact', color: '#00BCD4' },"
+      },
+      {
+        "line": 38,
+        "content": "{ id: 'product', icon: 'pricetag', label: 'Product', color: '#E91E63' },"
+      },
+      {
+        "line": 164,
+        "content": "backgroundColor: 'rgba(0, 0, 0, 0.5)',"
+      }
+    ],
+    "src/components/auction/AuctionMarketHeader.tsx": [
+      {
+        "line": 256,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/auction/AuctionRunwayCard.tsx": [
+      {
+        "line": 229,
+        "content": "ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },"
+      },
+      {
+        "line": 249,
+        "content": "ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6 },"
+      }
+    ],
+    "src/components/BottomSheet.tsx": [
+      {
+        "line": 241,
+        "content": "tint={colors.background === '#FFFFFF' ? 'light' : 'dark'}"
+      }
+    ],
+    "src/components/BottomSheetPicker.tsx": [
+      {
+        "line": 18,
+        "content": "const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';"
+      },
+      {
+        "line": 164,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/CachedImage.tsx": [
+      {
+        "line": 303,
+        "content": "colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}"
+      },
+      {
+        "line": 374,
+        "content": "<View style={[styles.playBadgeCircle, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>"
+      },
+      {
+        "line": 375,
+        "content": "<Ionicons name=\"play\" size={14} color=\"#fff\" />"
+      },
+      {
+        "line": 473,
+        "content": "borderColor: 'rgba(255,255,255,0.25)',"
+      }
+    ],
+    "src/components/chat/AttachmentPickerSheet.tsx": [
+      {
+        "line": 170,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/chat/AttachmentReviewSheet.tsx": [
+      {
+        "line": 129,
+        "content": "backgroundColor: 'rgba(0,0,0,0.6)',"
+      },
+      {
+        "line": 167,
+        "content": "backgroundColor: '#000',"
+      }
+    ],
+    "src/components/chat/ChatActionSheet.tsx": [
+      {
+        "line": 152,
+        "content": "backgroundColor: \"rgba(0,0,0,0.5)\","
+      },
+      {
+        "line": 162,
+        "content": "shadowColor: \"#000\","
+      }
+    ],
+    "src/components/chat/MessageBubble.tsx": [
+      {
+        "line": 568,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 574,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/chat/SkeletonChatLoader.tsx": [
+      {
+        "line": 53,
+        "content": "colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}"
+      }
+    ],
+    "src/components/closet/SaveToCollectionModal.tsx": [
+      {
+        "line": 312,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/commerce/CommerceRelatedRail.tsx": [
+      {
+        "line": 178,
+        "content": "backgroundColor: 'rgba(0,0,0,0.68)',"
+      },
+      {
+        "line": 186,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/commerce/detail/CommerceDetailIdentity.tsx": [
+      {
+        "line": 16,
+        "content": "const MEDIA_TEXT_PRIMARY = '#FFFFFF';"
+      },
+      {
+        "line": 17,
+        "content": "const MEDIA_TEXT_SECONDARY = 'rgba(255,255,255,0.76)';"
+      },
+      {
+        "line": 18,
+        "content": "const MEDIA_TEXT_MUTED = 'rgba(255,255,255,0.6)';"
+      },
+      {
+        "line": 19,
+        "content": "const MEDIA_TEXT_TERTIARY = 'rgba(255,255,255,0.72)';"
+      },
+      {
+        "line": 20,
+        "content": "const MEDIA_TEXT_BODY = 'rgba(255,255,255,0.8)';"
+      },
+      {
+        "line": 21,
+        "content": "const MEDIA_SHADOW = 'rgba(0,0,0,0.55)';"
+      },
+      {
+        "line": 22,
+        "content": "const MEDIA_SHADOW_SOFT = 'rgba(0,0,0,0.5)';"
+      },
+      {
+        "line": 23,
+        "content": "const MEDIA_SHADOW_LIGHT = 'rgba(0,0,0,0.45)';"
+      },
+      {
+        "line": 24,
+        "content": "const MEDIA_SHADOW_SUBTLE = 'rgba(0,0,0,0.4)';"
+      }
+    ],
+    "src/components/Confetti.tsx": [
+      {
+        "line": 17,
+        "content": "const COLORS = ['#d7b98f', '#E06666', '#C9A46A', '#ffffff'];"
+      }
+    ],
+    "src/components/coown/CoOwnFeaturedAsset.tsx": [
+      {
+        "line": 67,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.78)']}"
+      },
+      {
+        "line": 103,
+        "content": "<Ionicons name=\"arrow-forward\" size={15} color=\"#FFFFFF\" />"
+      },
+      {
+        "line": 151,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      },
+      {
+        "line": 162,
+        "content": "color: 'rgba(255,255,255,0.95)',"
+      },
+      {
+        "line": 180,
+        "content": "color: 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 187,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 200,
+        "content": "color: 'rgba(255,255,255,0.95)',"
+      },
+      {
+        "line": 205,
+        "content": "color: 'rgba(255,255,255,0.5)',"
+      },
+      {
+        "line": 210,
+        "content": "color: 'rgba(255,255,255,0.78)',"
+      },
+      {
+        "line": 225,
+        "content": "backgroundColor: 'rgba(255,255,255,0.16)',"
+      },
+      {
+        "line": 227,
+        "content": "borderColor: 'rgba(255,255,255,0.28)',"
+      },
+      {
+        "line": 232,
+        "content": "color: '#FFFFFF',"
+      }
+    ],
+    "src/components/coown/CoOwnFirstTradeGuide.tsx": [
+      {
+        "line": 273,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/coown/CoOwnInstrumentCard.tsx": [
+      {
+        "line": 134,
+        "content": "backgroundColor: 'rgba(0,0,0,0.58)',"
+      },
+      {
+        "line": 142,
+        "content": "color: '#FFFFFF',"
+      }
+    ],
+    "src/components/coown/CoOwnMarketHighlightsCarousel.tsx": [
+      {
+        "line": 121,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.20)', 'rgba(0,0,0,0.78)']}"
+      },
+      {
+        "line": 146,
+        "content": "<Ionicons name=\"arrow-forward\" size={14} color=\"#FFFFFF\" />"
+      },
+      {
+        "line": 226,
+        "content": "backgroundColor: 'rgba(0,0,0,0.58)',"
+      },
+      {
+        "line": 234,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 247,
+        "content": "color: 'rgba(255,255,255,0.78)',"
+      },
+      {
+        "line": 255,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 269,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 277,
+        "content": "color: 'rgba(255,255,255,0.72)',"
+      },
+      {
+        "line": 297,
+        "content": "color: 'rgba(255,255,255,0.82)',"
+      },
+      {
+        "line": 307,
+        "content": "backgroundColor: 'rgba(255,255,255,0.22)',"
+      },
+      {
+        "line": 312,
+        "content": "backgroundColor: 'rgba(255,255,255,0.90)',"
+      },
+      {
+        "line": 322,
+        "content": "color: '#FFFFFF',"
+      }
+    ],
+    "src/components/coown/CoOwnOverflowSheet.tsx": [
+      {
+        "line": 164,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/components/coown/CoOwnPositionActionSheet.tsx": [
+      {
+        "line": 111,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/coown/CoOwnStateCanvas.tsx": [
+      {
+        "line": 156,
+        "content": "backgroundColor: 'rgba(128,128,128,0.12)',"
+      },
+      {
+        "line": 163,
+        "content": "backgroundColor: 'rgba(128,128,128,0.12)',"
+      },
+      {
+        "line": 170,
+        "content": "backgroundColor: 'rgba(128,128,128,0.10)',"
+      }
+    ],
+    "src/components/discover/EditorialDiscoveryHero.tsx": [
+      {
+        "line": 85,
+        "content": "? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.85)']"
+      },
+      {
+        "line": 86,
+        "content": ": ['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']"
+      },
+      {
+        "line": 109,
+        "content": "<Ionicons name=\"arrow-forward\" size={14} color=\"#fff\" />"
+      },
+      {
+        "line": 173,
+        "content": "color: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',"
+      },
+      {
+        "line": 176,
+        "content": "textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 183,
+        "content": "color: ActiveTheme === 'light' ? Colors.textSecondary : 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 185,
+        "content": "textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.3)',"
+      },
+      {
+        "line": 218,
+        "content": "backgroundColor: ActiveTheme === 'light' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.25)',"
+      },
+      {
+        "line": 223,
+        "content": "backgroundColor: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',"
+      }
+    ],
+    "src/components/discover/HomeDiscoveryCard.tsx": [
+      {
+        "line": 185,
+        "content": "color={item.saved ? colors.danger : '#FFFFFF'}"
+      },
+      {
+        "line": 194,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.62)']}"
+      },
+      {
+        "line": 330,
+        "content": "textShadowColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 399,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 400,
+        "content": "textShadowColor: 'rgba(0,0,0,0.55)',"
+      }
+    ],
+    "src/components/discover/PinterestMasonryGrid.tsx": [
+      {
+        "line": 444,
+        "content": "backgroundColor: 'rgba(128,128,128,0.3)',"
+      },
+      {
+        "line": 449,
+        "content": "color: 'rgba(128,128,128,0.7)',"
+      }
+    ],
+    "src/components/discover/PremiumSkeletonTile.tsx": [
+      {
+        "line": 67,
+        "content": "colors={['transparent', 'rgba(255,255,255,0.05)', 'transparent']}"
+      }
+    ],
+    "src/components/discover/VisualCategoryTile.tsx": [
+      {
+        "line": 28,
+        "content": "? ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']"
+      },
+      {
+        "line": 29,
+        "content": ": ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)'];"
+      },
+      {
+        "line": 72,
+        "content": "<Ionicons name=\"shirt-outline\" size={10} color=\"rgba(255,255,255,0.8)\" />"
+      },
+      {
+        "line": 96,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 98,
+        "content": "textShadowColor: 'rgba(0,0,0,0.3)',"
+      },
+      {
+        "line": 105,
+        "content": "color: 'rgba(255,255,255,0.8)',"
+      },
+      {
+        "line": 107,
+        "content": "textShadowColor: 'rgba(0,0,0,0.25)',"
+      },
+      {
+        "line": 120,
+        "content": "color: 'rgba(255,255,255,0.75)',"
+      }
+    ],
+    "src/components/DoubleTapHandler.tsx": [
+      {
+        "line": 67,
+        "content": "<Ionicons name=\"heart\" size={100} color=\"#fff\" style={styles.shadow} />"
+      },
+      {
+        "line": 88,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/explore/EditTab.tsx": [
+      {
+        "line": 295,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 309,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/explore/LooksTab.tsx": [
+      {
+        "line": 141,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']}"
+      },
+      {
+        "line": 622,
+        "content": "backgroundColor: 'rgba(0,0,0,0.35)',"
+      }
+    ],
+    "src/components/explore/PulseTab.tsx": [
+      {
+        "line": 471,
+        "content": "backgroundColor: 'rgba(52,199,89,0.12)',"
+      }
+    ],
+    "src/components/flagship/FlagshipDangerZone.tsx": [
+      {
+        "line": 54,
+        "content": "{ color: destructive ? '#FFFFFF' : colors.danger },"
+      }
+    ],
+    "src/components/flagship/FlagshipHeroSection.tsx": [
+      {
+        "line": 48,
+        "content": "colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}"
+      }
+    ],
+    "src/components/flagship/FlagshipProductCard.tsx": [
+      {
+        "line": 166,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      }
+    ],
+    "src/components/flagship/FlagshipState.tsx": [
+      {
+        "line": 231,
+        "content": "colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}"
+      }
+    ],
+    "src/components/icons/OnezeCoinIcon.tsx": [
+      {
+        "line": 15,
+        "content": "colors={['#f4d27b', '#c68a2d']}"
+      },
+      {
+        "line": 30,
+        "content": "borderColor: '#9b6f22',"
+      },
+      {
+        "line": 36,
+        "content": "borderColor: 'rgba(0,0,0,0.22)',"
+      },
+      {
+        "line": 37,
+        "content": "backgroundColor: 'rgba(255,255,255,0.36)',"
+      },
+      {
+        "line": 42,
+        "content": "color: '#5d3c08',"
+      }
+    ],
+    "src/components/icons/ThryftCartIcon.tsx": [
+      {
+        "line": 9,
+        "content": "export function ThryftCartIcon({ size = 14, color = '#ffffff' }: ThryftCartIconProps) {"
+      }
+    ],
+    "src/components/ImageViewer.tsx": [
+      {
+        "line": 257,
+        "content": "backgroundColor: '#0a0a0a',"
+      },
+      {
+        "line": 276,
+        "content": "backgroundColor: '#ffffff',"
+      }
+    ],
+    "src/components/look/LookCommentsSheet.tsx": [
+      {
+        "line": 230,
+        "content": "<ActivityIndicator size=\"small\" color=\"#fff\" />"
+      },
+      {
+        "line": 232,
+        "content": "<Ionicons name=\"send\" size={18} color=\"#fff\" />"
+      }
+    ],
+    "src/components/orders/DispatchCountdown.tsx": [
+      {
+        "line": 146,
+        "content": "backgroundColor: 'rgba(128,128,128,0.15)',"
+      }
+    ],
+    "src/components/orders/OrderActionsSheet.tsx": [
+      {
+        "line": 131,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/orders/OrdersFilterSheet.tsx": [
+      {
+        "line": 221,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/components/orders/ReviewPromptSheet.tsx": [
+      {
+        "line": 165,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 177,
+        "content": "backgroundColor: 'rgba(0,0,0,0.15)',"
+      }
+    ],
+    "src/components/PremiumToggle.tsx": [
+      {
+        "line": 80,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/product/CuratedCollectionsRail.tsx": [
+      {
+        "line": 276,
+        "content": "backgroundColor: 'rgba(0,0,0,0.68)',"
+      },
+      {
+        "line": 282,
+        "content": "color: '#ffffff',"
+      }
+    ],
+    "src/components/product/ListingQA.tsx": [
+      {
+        "line": 154,
+        "content": "<Ionicons name=\"send\" size={16} color={askText.trim() ? '#fff' : colors.textMuted} />"
+      },
+      {
+        "line": 460,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/product/OfferToLikersSheet.tsx": [
+      {
+        "line": 361,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/components/product/ProductFamilyBadge.tsx": [
+      {
+        "line": 77,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 84,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 99,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/product/ProductIdentitySummary.tsx": [
+      {
+        "line": 163,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/product/SizeGuideSheet.tsx": [
+      {
+        "line": 288,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/components/product/SustainabilityBadge.tsx": [
+      {
+        "line": 52,
+        "content": "onFill: '#FFFFFF',"
+      },
+      {
+        "line": 60,
+        "content": "onFill: '#FFFFFF',"
+      },
+      {
+        "line": 211,
+        "content": "shadowColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/ProductCardV2.tsx": [
+      {
+        "line": 159,
+        "content": "return { label: 'Sold', bg: 'rgba(0,0,0,0.6)' };"
+      },
+      {
+        "line": 165,
+        "content": "bg: isNew ? colors.success : 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 245,
+        "content": "<Ionicons name=\"play\" size={16} color=\"#FFFFFF\" />"
+      },
+      {
+        "line": 249,
+        "content": "<Ionicons name=\"images\" size={13} color=\"#FFFFFF\" />"
+      },
+      {
+        "line": 478,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 488,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 502,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 510,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      },
+      {
+        "line": 527,
+        "content": "textShadowColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 628,
+        "content": "backgroundColor: 'rgba(200,50,50,0.65)',"
+      },
+      {
+        "line": 652,
+        "content": "color: '#FFFFFF',"
+      },
+      {
+        "line": 787,
+        "content": "color: '#FFFFFF',"
+      }
+    ],
+    "src/components/profile/ClosetBoardCard.tsx": [
+      {
+        "line": 90,
+        "content": "<Ionicons name=\"add\" size={14} color=\"rgba(255,255,255,0.4)\" />"
+      },
+      {
+        "line": 117,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.65)']}"
+      },
+      {
+        "line": 128,
+        "content": "<Ionicons name=\"lock-closed\" size={10} color=\"rgba(255,255,255,0.8)\" />"
+      },
+      {
+        "line": 177,
+        "content": "backgroundColor: 'rgba(0,0,0,0.25)',"
+      },
+      {
+        "line": 205,
+        "content": "backgroundColor: 'rgba(0,0,0,0.35)',"
+      },
+      {
+        "line": 214,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 215,
+        "content": "textShadowColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 228,
+        "content": "color: 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 229,
+        "content": "textShadowColor: 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 236,
+        "content": "color: 'rgba(255,255,255,0.5)',"
+      },
+      {
+        "line": 241,
+        "content": "color: 'rgba(255,255,255,0.7)',"
+      },
+      {
+        "line": 242,
+        "content": "textShadowColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/components/profile/ProfileHero.tsx": [
+      {
+        "line": 147,
+        "content": "colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}"
+      },
+      {
+        "line": 153,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.10)']}"
+      }
+    ],
+    "src/components/profile/ProfileLooksGrid.tsx": [
+      {
+        "line": 214,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 226,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/components/profile/ProfileLookTile.tsx": [
+      {
+        "line": 80,
+        "content": "backgroundColor: 'rgba(255,255,255,0.92)',"
+      },
+      {
+        "line": 83,
+        "content": "shadowColor: '#000',"
+      },
+      {
+        "line": 96,
+        "content": "borderLeftColor: 'rgba(20,20,20,0.85)',"
+      },
+      {
+        "line": 107,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/profile/ProfileReviews.tsx": [
+      {
+        "line": 278,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 283,
+        "content": "photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: '#fff' },"
+      }
+    ],
+    "src/components/profile/ProfileShopTile.tsx": [
+      {
+        "line": 78,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.45)']}"
+      },
+      {
+        "line": 134,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 138,
+        "content": "textShadowColor: 'rgba(0,0,0,0.6)',"
+      }
+    ],
+    "src/components/profile/ProfileStates.tsx": [
+      {
+        "line": 37,
+        "content": "<Ionicons name=\"chevron-back\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 77,
+        "content": "<Ionicons name=\"chevron-back\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 115,
+        "content": "<Ionicons name=\"chevron-back\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 126,
+        "content": "<Ionicons name=\"share-outline\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 163,
+        "content": "backgroundColor: 'rgba(0,0,0,0.22)',"
+      }
+    ],
+    "src/components/profile/ProfileTrustSignals.tsx": [
+      {
+        "line": 171,
+        "content": "backgroundColor: 'rgba(128,128,128,0.35)',"
+      }
+    ],
+    "src/components/profile/SellerResponseComposer.tsx": [
+      {
+        "line": 150,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 162,
+        "content": "backgroundColor: 'rgba(0,0,0,0.15)',"
+      }
+    ],
+    "src/components/RefreshIndicator.tsx": [
+      {
+        "line": 73,
+        "content": "<Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: Type.body.size, marginTop: -2 }}>T</Text>"
+      }
+    ],
+    "src/components/sell/ListingPreviewCard.tsx": [
+      {
+        "line": 195,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      }
+    ],
+    "src/components/settings/PremiumToggle.tsx": [
+      {
+        "line": 76,
+        "content": "backgroundColor: '#FFFFFF',"
+      },
+      {
+        "line": 77,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/settings/SettingsCard.tsx": [
+      {
+        "line": 79,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/components/SettingsCell.tsx": [
+      {
+        "line": 198,
+        "content": "shadowColor: '#000',"
+      },
+      {
+        "line": 276,
+        "content": "color: '#FFFFFF',"
+      }
+    ],
+    "src/components/SkeletonLoader.tsx": [
+      {
+        "line": 24,
+        "content": "? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']"
+      },
+      {
+        "line": 25,
+        "content": ": ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'];"
+      },
+      {
+        "line": 28,
+        "content": "? ['rgba(201,162,39,0)', 'rgba(201,162,39,0.08)', 'rgba(201,162,39,0)']"
+      },
+      {
+        "line": 29,
+        "content": ": ['rgba(212,168,83,0)', 'rgba(212,168,83,0.06)', 'rgba(212,168,83,0)'];"
+      }
+    ],
+    "src/components/SortablePhotoStrip.tsx": [
+      {
+        "line": 219,
+        "content": "<Ionicons name=\"videocam\" size={11} color=\"#fff\" />"
+      },
+      {
+        "line": 246,
+        "content": "shadowColor: '#000',"
+      },
+      {
+        "line": 273,
+        "content": "backgroundColor: 'rgba(0,0,0,0.6)',"
+      }
+    ],
+    "src/components/SwipeableMessage.tsx": [
+      {
+        "line": 156,
+        "content": "backgroundColor: 'rgba(0, 0, 0, 0.3)',"
+      }
+    ],
+    "src/components/SyncStatusPill.tsx": [
+      {
+        "line": 29,
+        "content": "background: IS_LIGHT ? '#e8f4ec' : '#193327',"
+      },
+      {
+        "line": 30,
+        "content": "border: IS_LIGHT ? '#b8d8c2' : '#2f5d48',"
+      },
+      {
+        "line": 31,
+        "content": "iconColor: IS_LIGHT ? '#2d7a4b' : '#78d89f',"
+      },
+      {
+        "line": 32,
+        "content": "textColor: IS_LIGHT ? '#2d7a4b' : '#9ae7b8',"
+      },
+      {
+        "line": 36,
+        "content": "background: IS_LIGHT ? '#efe8dc' : '#2d261e',"
+      },
+      {
+        "line": 37,
+        "content": "border: IS_LIGHT ? '#d5c6ad' : '#4d3f31',"
+      },
+      {
+        "line": 38,
+        "content": "iconColor: IS_LIGHT ? '#8f6f3f' : '#d7b987',"
+      },
+      {
+        "line": 39,
+        "content": "textColor: IS_LIGHT ? '#7b6036' : '#e0c69d',"
+      },
+      {
+        "line": 43,
+        "content": "background: IS_LIGHT ? '#f1e7e7' : '#331f1f',"
+      },
+      {
+        "line": 44,
+        "content": "border: IS_LIGHT ? '#ddc1c1' : '#5d3535',"
+      },
+      {
+        "line": 45,
+        "content": "iconColor: IS_LIGHT ? '#8b4c4c' : '#d39b9b',"
+      },
+      {
+        "line": 46,
+        "content": "textColor: IS_LIGHT ? '#7a4545' : '#e1adad',"
+      }
+    ],
+    "src/components/Toast.tsx": [
+      {
+        "line": 23,
+        "content": "const INFO_ACCENT = '#d7b98f';"
+      },
+      {
+        "line": 84,
+        "content": "<Ionicons name=\"close\" size={16} color=\"#888\" />"
+      },
+      {
+        "line": 117,
+        "content": "backgroundColor: '#191714',"
+      },
+      {
+        "line": 123,
+        "content": "shadowColor: '#000',"
+      },
+      {
+        "line": 134,
+        "content": "color: '#f3ede3',"
+      }
+    ],
+    "src/components/trade/AuctionCard.tsx": [
+      {
+        "line": 112,
+        "content": "<Ionicons name=\"time-outline\" size={10} color=\"#fff\" />"
+      },
+      {
+        "line": 118,
+        "content": "<Ionicons name=\"trending-down-outline\" size={10} color=\"#fff\" />"
+      },
+      {
+        "line": 124,
+        "content": "<Ionicons name=\"trophy-outline\" size={10} color=\"#fff\" />"
+      },
+      {
+        "line": 130,
+        "content": "<Ionicons name=\"ribbon-outline\" size={10} color=\"#fff\" />"
+      }
+    ],
+    "src/components/trade/BidComposer.tsx": [
+      {
+        "line": 138,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/trade/UnitsComposer.tsx": [
+      {
+        "line": 164,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/components/TypingIndicator.tsx": [
+      {
+        "line": 145,
+        "content": "dotColor = '#FFFFFF',"
+      }
+    ],
+    "src/components/ui/ActivityBadge.tsx": [
+      {
+        "line": 61,
+        "content": "iconColor: '#FF6B35',"
+      },
+      {
+        "line": 62,
+        "content": "glowColor: '#FF6B35',"
+      },
+      {
+        "line": 89,
+        "content": "iconColor: '#FF6B35',"
+      },
+      {
+        "line": 90,
+        "content": "glowColor: '#FF6B35',"
+      }
+    ],
+    "src/components/ui/AppStatusPill.tsx": [
+      {
+        "line": 29,
+        "content": "backgroundColor: isDark ? '#17302b' : '#ece4d8',"
+      },
+      {
+        "line": 30,
+        "content": "borderColor: isDark ? '#35574d' : '#d0c3af',"
+      },
+      {
+        "line": 31,
+        "content": "textColor: isDark ? '#d7b98f' : '#7c5f1e',"
+      },
+      {
+        "line": 35,
+        "content": "backgroundColor: isDark ? colors.successSubtle : '#efe7d6',"
+      },
+      {
+        "line": 36,
+        "content": "borderColor: isDark ? colors.successBorder : '#d9c6a2',"
+      },
+      {
+        "line": 37,
+        "content": "textColor: isDark ? '#7bc99a' : '#3a6b42',"
+      },
+      {
+        "line": 41,
+        "content": "backgroundColor: isDark ? colors.dangerSubtle : '#f6e6e6',"
+      },
+      {
+        "line": 42,
+        "content": "borderColor: isDark ? colors.dangerBorder : '#ddb0b0',"
+      },
+      {
+        "line": 43,
+        "content": "textColor: isDark ? '#ff9d9d' : '#b64242',"
+      },
+      {
+        "line": 47,
+        "content": "backgroundColor: isDark ? colors.warningSubtle : '#f7ecdb',"
+      },
+      {
+        "line": 48,
+        "content": "borderColor: isDark ? colors.warningBorder : '#dfc9a5',"
+      },
+      {
+        "line": 49,
+        "content": "textColor: isDark ? '#ffcf8a' : '#8a6a3f',"
+      }
+    ],
+    "src/components/ui/BidSheet.tsx": [
+      {
+        "line": 943,
+        "content": "backgroundColor: 'rgba(220,38,38,0.08)',"
+      }
+    ],
+    "src/components/ui/BuyNowSheet.tsx": [
+      {
+        "line": 546,
+        "content": "backgroundColor: 'rgba(220,38,38,0.08)',"
+      }
+    ],
+    "src/dev/BackendDiagnosticsOverlay.tsx": [
+      {
+        "line": 148,
+        "content": "backgroundColor: 'rgba(0,0,0,0.6)',"
+      },
+      {
+        "line": 157,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 164,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/navigation/AppNavigator.tsx": [
+      {
+        "line": 431,
+        "content": "<Ionicons name=\"terminal-outline\" size={22} color=\"#FFFFFF\" />"
+      },
+      {
+        "line": 444,
+        "content": "backgroundColor: 'rgba(120,120,120,0.55)',"
+      }
+    ],
+    "src/navigation/TabNavigator.tsx": [
+      {
+        "line": 387,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/platform/keyboard/KeyboardAwareStickyAction.tsx": [
+      {
+        "line": 70,
+        "content": "borderTopColor: 'rgba(0,0,0,0.06)',"
+      }
+    ],
+    "src/platform/native/NativeMenu.tsx": [
+      {
+        "line": 66,
+        "content": "backgroundColor: 'rgba(0,0,0,0.3)',"
+      },
+      {
+        "line": 75,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/platform/native/NativeSegmentedControl.tsx": [
+      {
+        "line": 71,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/screens/AIPhotoEnhancementScreen.tsx": [
+      {
+        "line": 924,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/screens/AIPoweredListingScreen.tsx": [
+      {
+        "line": 1674,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 1688,
+        "content": "backgroundColor: 'rgba(120,120,120,0.4)',"
+      }
+    ],
+    "src/screens/AssetDetailScreen.tsx": [
+      {
+        "line": 2103,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/screens/AuctionHomeScreen.tsx": [
+      {
+        "line": 152,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.75)']}"
+      }
+    ],
+    "src/screens/AuctionsScreen.tsx": [
+      {
+        "line": 533,
+        "content": "<Ionicons name=\"time-outline\" size={10} color=\"#fff\" />"
+      },
+      {
+        "line": 1063,
+        "content": "backgroundColor: 'rgba(0,0,0,0.7)',"
+      },
+      {
+        "line": 1078,
+        "content": "backgroundColor: 'rgba(220,38,38,0.9)',"
+      },
+      {
+        "line": 1084,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 1135,
+        "content": "backgroundColor: 'rgba(255,68,68,0.1)',"
+      },
+      {
+        "line": 1148,
+        "content": "backgroundColor: 'rgba(0,0,0,0.05)',"
+      },
+      {
+        "line": 1275,
+        "content": "backgroundColor: 'rgba(255,68,68,0.1)',"
+      }
+    ],
+    "src/screens/AuthLandingScreen.tsx": [
+      {
+        "line": 289,
+        "content": "<Ionicons name=\"close\" size={18} color=\"rgba(245,239,230,0.65)\" />"
+      },
+      {
+        "line": 348,
+        "content": "<ActivityIndicator color=\"#fff\" size=\"small\" />"
+      },
+      {
+        "line": 350,
+        "content": "<Ionicons name=\"logo-apple\" size={22} color=\"#fff\" />"
+      },
+      {
+        "line": 364,
+        "content": "<ActivityIndicator color=\"#fff\" size=\"small\" />"
+      },
+      {
+        "line": 366,
+        "content": "<Ionicons name=\"logo-google\" size={20} color=\"#fff\" />"
+      },
+      {
+        "line": 470,
+        "content": "color: '#f6f2ea',"
+      },
+      {
+        "line": 478,
+        "content": "color: 'rgba(245,239,230,0.72)',"
+      },
+      {
+        "line": 491,
+        "content": "color: 'rgba(245,239,230,0.65)',"
+      },
+      {
+        "line": 497,
+        "content": "color: 'rgba(245,239,230,0.85)',"
+      },
+      {
+        "line": 515,
+        "content": "backgroundColor: 'rgba(255,107,107,0.12)',"
+      },
+      {
+        "line": 517,
+        "content": "borderColor: 'rgba(255,107,107,0.25)',"
+      },
+      {
+        "line": 547,
+        "content": "color: 'rgba(245,239,230,0.85)',"
+      },
+      {
+        "line": 561,
+        "content": "backgroundColor: 'rgba(245,239,230,0.15)',"
+      },
+      {
+        "line": 564,
+        "content": "color: 'rgba(245,239,230,0.45)',"
+      },
+      {
+        "line": 579,
+        "content": "backgroundColor: 'rgba(255,255,255,0.08)',"
+      },
+      {
+        "line": 581,
+        "content": "borderColor: 'rgba(255,255,255,0.12)',"
+      },
+      {
+        "line": 590,
+        "content": "color: 'rgba(255,255,255,0.62)',"
+      },
+      {
+        "line": 596,
+        "content": "color: 'rgba(255,255,255,0.5)',"
+      },
+      {
+        "line": 604,
+        "content": "color: 'rgba(255,255,255,0.7)',"
+      },
+      {
+        "line": 613,
+        "content": "backgroundColor: 'rgba(52,199,89,0.15)',"
+      },
+      {
+        "line": 615,
+        "content": "borderColor: 'rgba(52,199,89,0.4)',"
+      }
+    ],
+    "src/screens/BulkListingScreen.tsx": [
+      {
+        "line": 911,
+        "content": "backgroundColor: 'rgba(0,0,0,0.18)',"
+      }
+    ],
+    "src/screens/CheckoutScreen.tsx": [
+      {
+        "line": 1974,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/screens/CollectionDetailScreen.tsx": [
+      {
+        "line": 203,
+        "content": "<AnimatedPressable style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.35)', borderColor: 'transparent' }]} onPress={handleGoBack} activeOpacity={0.85}>"
+      },
+      {
+        "line": 204,
+        "content": "<Ionicons name=\"arrow-back\" size={22} color=\"#fff\" />"
+      },
+      {
+        "line": 281,
+        "content": "<Ionicons name=\"share-outline\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 290,
+        "content": "<Ionicons name=\"settings-outline\" size={18} color=\"#fff\" />"
+      },
+      {
+        "line": 533,
+        "content": "backgroundColor: 'rgba(0,0,0,0.35)',"
+      },
+      {
+        "line": 544,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 545,
+        "content": "textShadowColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 552,
+        "content": "color: 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 564,
+        "content": "color: 'rgba(255,255,255,0.5)',"
+      },
+      {
+        "line": 569,
+        "content": "color: 'rgba(255,255,255,0.7)',"
+      },
+      {
+        "line": 588,
+        "content": "backgroundColor: 'rgba(0,0,0,0.35)',"
+      },
+      {
+        "line": 633,
+        "content": "color: 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 649,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/screens/ConnectedAccountsScreen.tsx": [
+      {
+        "line": 41,
+        "content": "google: { label: 'Google', icon: 'logo-google', color: '#4285F4', gradient: '#4285F4' },"
+      },
+      {
+        "line": 42,
+        "content": "apple: { label: 'Apple', icon: 'logo-apple', color: '#000000', gradient: '#333333' },"
+      },
+      {
+        "line": 43,
+        "content": "facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', gradient: '#1877F2' },"
+      }
+    ],
+    "src/screens/CoOwnRecurringOrdersScreen.tsx": [
+      {
+        "line": 330,
+        "content": "icon={<Ionicons name=\"add-circle-outline\" size={18} color=\"#fff\" />}"
+      },
+      {
+        "line": 598,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/screens/CorporateActionDetailScreen.tsx": [
+      {
+        "line": 553,
+        "content": "backgroundColor: 'rgba(128,128,128,0.15)',"
+      }
+    ],
+    "src/screens/CreateAuctionScreen.tsx": [
+      {
+        "line": 974,
+        "content": "backgroundColor: 'rgba(255,255,255,0.03)',"
+      },
+      {
+        "line": 1010,
+        "content": "backgroundColor: 'rgba(0,0,0,0.88)',"
+      },
+      {
+        "line": 1025,
+        "content": "ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },"
+      },
+      {
+        "line": 1034,
+        "content": "backgroundColor: 'rgba(22,163,74,0.12)',"
+      },
+      {
+        "line": 1036,
+        "content": "borderColor: 'rgba(22,163,74,0.25)',"
+      }
+    ],
+    "src/screens/CreateGroupChatScreen.tsx": [
+      {
+        "line": 900,
+        "content": "backgroundColor: 'rgba(0, 0, 0, 0.45)',"
+      }
+    ],
+    "src/screens/DeleteAccountScreen.tsx": [
+      {
+        "line": 205,
+        "content": "<Ionicons name=\"warning\" size={20} color=\"#FFFFFF\" />"
+      }
+    ],
+    "src/screens/DistributionHistoryScreen.tsx": [
+      {
+        "line": 209,
+        "content": "thumbColor=\"#fff\""
+      }
+    ],
+    "src/screens/EmailNotificationsScreen.tsx": [
+      {
+        "line": 287,
+        "content": "thumbColor=\"#fff\""
+      }
+    ],
+    "src/screens/FilterScreen.tsx": [
+      {
+        "line": 47,
+        "content": "const OVERLAY_BG = 'rgba(0,0,0,0.45)';"
+      },
+      {
+        "line": 807,
+        "content": "shadowColor: '#000',"
+      }
+    ],
+    "src/screens/GalleriaCollectionDetailScreen.tsx": [
+      {
+        "line": 422,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)']}"
+      }
+    ],
+    "src/screens/GalleriaScreen.tsx": [
+      {
+        "line": 83,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}"
+      },
+      {
+        "line": 132,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}"
+      },
+      {
+        "line": 185,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}"
+      },
+      {
+        "line": 290,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']}"
+      },
+      {
+        "line": 1071,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/screens/GlobalSearchScreen.tsx": [
+      {
+        "line": 1688,
+        "content": "shadowColor: '#000',"
+      },
+      {
+        "line": 1948,
+        "content": "backgroundColor: 'rgba(0,0,0,0.35)',"
+      },
+      {
+        "line": 1955,
+        "content": "color: '#fff',"
+      }
+    ],
+    "src/screens/HomeScreen.tsx": [
+      {
+        "line": 386,
+        "content": "colors={['transparent', 'rgba(0,0,0,0.62)']}"
+      },
+      {
+        "line": 405,
+        "content": "<Ionicons name=\"heart\" size={10} color=\"#fff\" style={styles.exploreLikesGlyph} />"
+      },
+      {
+        "line": 1046,
+        "content": "<View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>"
+      },
+      {
+        "line": 1047,
+        "content": "<Text style={{ color: '#fff', fontSize: 10, fontFamily: Typography.family.semibold }}>"
+      },
+      {
+        "line": 1301,
+        "content": "<View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />"
+      },
+      {
+        "line": 1685,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      },
+      {
+        "line": 1716,
+        "content": "color: 'rgba(255,255,255,0.85)',"
+      },
+      {
+        "line": 1734,
+        "content": "backgroundColor: 'rgba(0,0,0,0.34)',"
+      },
+      {
+        "line": 1742,
+        "content": "color: 'rgba(255,255,255,0.82)',"
+      },
+      {
+        "line": 1823,
+        "content": "backgroundColor: 'rgba(0,0,0,0.05)',"
+      },
+      {
+        "line": 1860,
+        "content": "backgroundColor: 'rgba(0,0,0,0.6)',"
+      },
+      {
+        "line": 1887,
+        "content": "backgroundColor: 'rgba(0,0,0,0.6)',"
+      },
+      {
+        "line": 1904,
+        "content": "backgroundColor: 'rgba(0,0,0,0.44)',"
+      },
+      {
+        "line": 1923,
+        "content": "backgroundColor: 'rgba(0,0,0,0.58)',"
+      },
+      {
+        "line": 1939,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 2068,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 2069,
+        "content": "textShadowColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 2084,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 2087,
+        "content": "textShadowColor: 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 2095,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 2107,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      },
+      {
+        "line": 2113,
+        "content": "color: '#fff',"
+      },
+      {
+        "line": 2123,
+        "content": "backgroundColor: 'rgba(0,0,0,0.52)',"
+      }
+    ],
+    "src/screens/InviteFriendsScreen.tsx": [
+      {
+        "line": 173,
+        "content": "{ icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },"
+      },
+      {
+        "line": 174,
+        "content": "{ icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },"
+      }
+    ],
+    "src/screens/KYCVerificationScreen.tsx": [
+      {
+        "line": 1413,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      }
+    ],
+    "src/screens/ListingPreviewScreen.tsx": [
+      {
+        "line": 113,
+        "content": "<Ionicons name=\"arrow-back\" size={24} color=\"#fff\" />"
+      },
+      {
+        "line": 299,
+        "content": "backgroundColor: 'rgba(0,0,0,0.12)',"
+      },
+      {
+        "line": 315,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      },
+      {
+        "line": 323,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      }
+    ],
+    "src/screens/LookDetailScreen.tsx": [
+      {
+        "line": 397,
+        "content": "<Ionicons name=\"arrow-back\" size={24} color=\"#fff\" style={styles.headerGlyph} />"
+      },
+      {
+        "line": 407,
+        "content": "<Ionicons name=\"share-outline\" size={20} color=\"#fff\" style={styles.headerGlyph} />"
+      },
+      {
+        "line": 417,
+        "content": "<Ionicons name=\"create-outline\" size={20} color=\"#fff\" style={styles.headerGlyph} />"
+      },
+      {
+        "line": 431,
+        "content": "<Ionicons name=\"ellipsis-horizontal\" size={20} color=\"#fff\" style={styles.headerGlyph} />"
+      },
+      {
+        "line": 537,
+        "content": "<Ionicons name=\"chevron-forward\" size={14} color=\"rgba(255,255,255,0.7)\" />"
+      },
+      {
+        "line": 545,
+        "content": "colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']}"
+      },
+      {
+        "line": 970,
+        "content": "backgroundColor: 'rgba(255,255,255,0.45)',"
+      },
+      {
+        "line": 973,
+        "content": "backgroundColor: '#fff',"
+      },
+      {
+        "line": 993,
+        "content": "backgroundColor: 'rgba(0,0,0,0.28)',"
+      },
+      {
+        "line": 999,
+        "content": "backgroundColor: 'rgba(255,255,255,0.92)',"
+      },
+      {
+        "line": 1001,
+        "content": "borderColor: 'rgba(0,0,0,0.18)',"
+      },
+      {
+        "line": 1005,
+        "content": "borderColor: '#fff',"
+      },
+      {
+        "line": 1015,
+        "content": "backgroundColor: 'rgba(0,0,0,0.88)',"
+      },
+      {
+        "line": 1021,
+        "content": "tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },"
+      },
+      {
+        "line": 1022,
+        "content": "tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },"
+      },
+      {
+        "line": 1172,
+        "content": "backgroundColor: 'rgba(255,255,255,0.55)',"
+      }
+    ],
+    "src/screens/MakeOfferScreen.tsx": [
+      {
+        "line": 1021,
+        "content": "backgroundColor: 'rgba(0,0,0,0.45)',"
+      },
+      {
+        "line": 1093,
+        "content": "borderTopColor: 'rgba(128,128,128,0.2)',"
+      }
+    ],
+    "src/screens/ManageListingScreen.tsx": [
+      {
+        "line": 623,
+        "content": "backgroundColor: 'rgba(0,0,0,0.06)',"
+      },
+      {
+        "line": 638,
+        "content": "backgroundColor: 'rgba(255,255,255,0.45)',"
+      }
+    ],
+    "src/screens/ManageQuickRepliesScreen.tsx": [
+      {
+        "line": 375,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/screens/MyProfileScreen.tsx": [
+      {
+        "line": 1192,
+        "content": "backgroundColor: 'rgba(0,0,0,0.42)',"
+      },
+      {
+        "line": 1194,
+        "content": "borderColor: 'rgba(255,255,255,0.18)',"
+      },
+      {
+        "line": 1211,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      },
+      {
+        "line": 1213,
+        "content": "borderColor: 'rgba(255,255,255,0.24)',"
+      },
+      {
+        "line": 1226,
+        "content": "backgroundColor: 'rgba(0,0,0,0.72)',"
+      },
+      {
+        "line": 1311,
+        "content": "backgroundColor: 'rgba(0,0,0,0.5)',"
+      }
+    ],
+    "src/screens/OrderSupportScreen.tsx": [
+      {
+        "line": 502,
+        "content": "backgroundColor: 'rgba(255,255,255,0.2)',"
+      }
+    ],
+    "src/screens/OutfitBuilderScreen.tsx": [
+      {
+        "line": 59,
+        "content": "const BG_COLORS = ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6', '#1A1A1A'];"
+      }
+    ],
+    "src/screens/PaymentsScreen.tsx": [
+      {
+        "line": 57,
+        "content": "if (lower.includes('visa')) return { name: 'Visa', icon: 'card' as const, color: '#1A1F71' };"
+      },
+      {
+        "line": 58,
+        "content": "if (lower.includes('mastercard') || lower.includes('master')) return { name: 'Mastercard', icon: 'card' as const, color: '#EB001B' };"
+      },
+      {
+        "line": 59,
+        "content": "if (lower.includes('amex') || lower.includes('american')) return { name: 'Amex', icon: 'card' as const, color: '#2E77BC' };"
+      },
+      {
+        "line": 60,
+        "content": "if (lower.includes('discover')) return { name: 'Discover', icon: 'card' as const, color: '#FF6000' };"
+      }
+    ],
+    "src/screens/PulseFeedScreen.tsx": [
+      {
+        "line": 59,
+        "content": "price_drop: '#dd6a33',"
+      }
+    ],
+    "src/screens/PushNotificationsScreen.tsx": [
+      {
+        "line": 406,
+        "content": "backgroundColor: 'rgba(255,255,255,0.05)',"
+      }
+    ],
+    "src/screens/SellScreen.tsx": [
+      {
+        "line": 2525,
+        "content": "backgroundColor: 'rgba(0,0,0,0.4)',"
+      }
+    ],
+    "src/screens/SharedConversationMediaScreen.tsx": [
+      {
+        "line": 286,
+        "content": "backgroundColor: 'rgba(0,0,0,0.55)',"
+      }
+    ],
+    "src/screens/UserProfileScreen.tsx": [
+      {
+        "line": 869,
+        "content": "backgroundColor: 'rgba(0,0,0,0.22)',"
+      }
+    ],
+    "src/screens/VerificationResponseScreen.tsx": [
+      {
+        "line": 347,
+        "content": "backgroundColor: isOverdue ? 'rgba(220,38,38,0.08)' : colors.surfaceAlt,"
+      }
+    ],
+    "src/services/postersApi.ts": [
+      {
+        "line": 183,
+        "content": "backgroundColor: template?.thumbnailColor ?? '#1A1A1A',"
+      }
+    ],
+    "src/utils/accessibilityAudit.ts": [
+      {
+        "line": 132,
+        "content": "console.group(`%c[Accessibility Audit] ${_screenName} — ${errors.length} error(s)`, 'color: #d32f2f; font-weight: bold');"
+      },
+      {
+        "line": 140,
+        "content": "console.group(`%c[Accessibility Audit] ${_screenName} — ${warnings.length} warning(s)`, 'color: #f9a825; font-weight: bold');"
+      },
+      {
+        "line": 402,
+        "content": "'color: #d32f2f; font-weight: bold'"
+      },
+      {
+        "line": 430,
+        "content": "enabled ? 'color: #4caf50; font-weight: bold' : 'color: #9e9e9e'"
+      }
+    ]
+  }
+}

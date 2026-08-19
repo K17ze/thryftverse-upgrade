@@ -1935,7 +1935,7 @@ function CheckoutProgressOverlay({
       pointerEvents="none"
       style={[
         progressOverlayStyles.overlay,
-        { backgroundColor: `${colors.background}F2`, borderColor: colors.border },
+        { backgroundColor: `${colors.background}F2`, borderColor: colors.border, shadowColor: colors.shadow },
       ]}
       accessibilityLabel={label}
       accessibilityRole="alert"
@@ -1971,7 +1971,7 @@ const progressOverlayStyles = StyleSheet.create({
     borderWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    shadowColor: '#000',
+    shadowColor: 'transparent',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },

@@ -394,7 +394,7 @@ export default function LookDetailScreen() {
           the text-shadow scrim. No circular chrome. */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color="#fff" style={styles.headerGlyph} />
+          <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -404,7 +404,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color="#fff" style={styles.headerGlyph} />
+            <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
           </AnimatedPressable>
           {isOwner && (
             <AnimatedPressable
@@ -414,7 +414,7 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit look"
             >
-              <Ionicons name="create-outline" size={20} color="#fff" style={styles.headerGlyph} />
+              <Ionicons name="create-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
             </AnimatedPressable>
           )}
           {isOwner && (
@@ -428,7 +428,7 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="More look options"
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" style={styles.headerGlyph} />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
             </AnimatedPressable>
           )}
         </View>
@@ -534,7 +534,7 @@ export default function LookDetailScreen() {
                         <Text style={styles.tagTooltipPrice}>£{tag.price}</Text>
                       ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
+                    <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} />
                   </View>
                 )}
               </Pressable>
@@ -967,10 +967,10 @@ function createStyles(colors: ThemeColors) {
       width: Space.sm,
       height: Space.xxs,
       borderRadius: Space.xxs,
-      backgroundColor: 'rgba(255,255,255,0.45)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     pagerDotActive: {
-      backgroundColor: '#fff',
+      backgroundColor: colors.scrimTextPrimary,
       width: Space.sm + Space.xs,
     },
 
@@ -990,19 +990,19 @@ function createStyles(colors: ThemeColors) {
       width: Space.xl - Space.xs,
       height: Space.xl - Space.xs,
       borderRadius: Radius.xl,
-      backgroundColor: 'rgba(0,0,0,0.28)',
+      backgroundColor: colors.overlay,
     },
     hotspotDot: {
       width: Space.sm + Space.xs,
       height: Space.sm + Space.xs,
       borderRadius: Radius.md,
-      backgroundColor: 'rgba(255,255,255,0.92)',
+      backgroundColor: colors.scrimTextPrimary,
       borderWidth: Stroke.emphasis,
-      borderColor: 'rgba(0,0,0,0.18)',
+      borderColor: colors.overlay,
     },
     hotspotDotActive: {
       backgroundColor: colors.brand,
-      borderColor: '#fff',
+      borderColor: colors.scrimTextPrimary,
     },
     tagTooltip: {
       position: 'absolute',
@@ -1012,14 +1012,14 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: 'rgba(0,0,0,0.88)',
+      backgroundColor: colors.overlay,
       borderRadius: Radius.lg,
       padding: Space.sm,
     },
     tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
     tagTooltipText: { flex: 1, gap: Space.xxs },
-    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },
-    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
+    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.scrimTextPrimary },
+    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: colors.scrimTextSecondary },
     tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
 
     // ── Info section ──
@@ -1169,7 +1169,7 @@ function createStyles(colors: ThemeColors) {
     },
     traySoldScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(255,255,255,0.55)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     trayCardTitle: {
       fontSize: Type.caption.size,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { ListingFamily } from '../../platform/product';
 
 export interface ProductFamilyBadgeProps {
@@ -33,6 +33,7 @@ export function ProductFamilyBadge({
   compact = false,
 }: ProductFamilyBadgeProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const meta = FAMILY_META[family];
   const showAccent = !!stateAccent;
 
@@ -59,7 +60,7 @@ export function ProductFamilyBadge({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -74,14 +75,14 @@ const styles = StyleSheet.create({
     gap: Space.xs - 1,
     paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
   },
   familyLabel: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.2,
   },
   familyLabelCompact: {
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.2,
   },
   accentLabelCompact: {

@@ -499,7 +499,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   topicIconActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.surfaceAlt,
   },
   topicText: {
     flex: 1,

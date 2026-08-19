@@ -206,7 +206,7 @@ export default function DistributionHistoryScreen() {
                       onValueChange={(v) => void handleToggleDrip(assetId, v)}
                       disabled={dripToggling === assetId}
                       trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                      thumbColor="#fff"
+                      thumbColor={colors.surfaceElevated}
                       accessibilityRole="switch"
                       accessibilityLabel={`DRIP for ${assetId}`}
                     />

@@ -49,7 +49,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       // Green — strongest positive signal.
       return {
         fill: colors.success,
-        onFill: '#FFFFFF',
+        onFill: colors.scrimTextPrimary,
         tint: `${colors.success}22`,
         label: 'Excellent',
       };
@@ -57,7 +57,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       // Light green — positive, slightly less.
       return {
         fill: `${colors.success}CC`,
-        onFill: '#FFFFFF',
+        onFill: colors.scrimTextPrimary,
         tint: `${colors.success}14`,
         label: 'Good',
       };
@@ -87,6 +87,7 @@ export function SustainabilityBadge({
   onMedia = false,
 }: SustainabilityBadgeProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const meta = gradeMeta(score.grade, colors);
 
   if (variant === 'compact') {
@@ -195,7 +196,7 @@ export function SustainabilityBadge({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── Compact chip ──────────────────────────────────────────────────────────
   compactChip: {
     flexDirection: 'row',
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   compactChipOnMedia: {
     // Legibility on photography — subtle dark backing is provided by the
     // solid grade fill itself, so no extra scrim is needed.
-    shadowColor: 'rgba(0,0,0,0.45)',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.5,
     shadowRadius: 3,

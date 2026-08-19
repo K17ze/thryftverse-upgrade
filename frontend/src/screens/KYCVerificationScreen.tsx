@@ -1410,7 +1410,7 @@ function createStyles(colors: ThemeColors) {
     // Submission loading overlay
     submittingOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: Space.xl,

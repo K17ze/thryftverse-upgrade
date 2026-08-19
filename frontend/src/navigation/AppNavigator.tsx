@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
+import { useAppTheme } from '../theme/ThemeContext';
 import { isOnboardingComplete } from '../screens/OnboardingScreen';
 import { isAgeVerified } from '../screens/AgeVerificationScreen';
 import { InAppNotificationCenter } from '../components/notifications/InAppNotificationCenter';
@@ -419,16 +420,17 @@ export default function AppNavigator() {
  */
 function CommandPaletteTrigger() {
   const open = useCommandPaletteStore((s) => s.open);
+  const { colors } = useAppTheme();
   return (
     <Pressable
       onPress={open}
       hitSlop={12}
-      style={triggerStyles.fab}
+      style={[triggerStyles.fab, { backgroundColor: colors.overlay }]}
       accessibilityRole="button"
       accessibilityLabel="Open command palette"
       accessibilityHint="Opens the global command palette"
     >
-      <Ionicons name="terminal-outline" size={22} color="#FFFFFF" />
+      <Ionicons name="terminal-outline" size={22} color={colors.surface} />
     </Pressable>
   );
 }
@@ -441,7 +443,6 @@ const triggerStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(120,120,120,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },

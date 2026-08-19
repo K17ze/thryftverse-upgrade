@@ -18,15 +18,13 @@ import {
   type PushPermissionContext,
 } from '../lib/pushPermission';
 
-// Info toast uses a warm brand-gold accent (#d7b98f) — a ThryftVerse signature color
-// not yet in the token system. Success and error use theme tokens.
-const INFO_ACCENT = '#d7b98f';
-
+// Info toast uses the antiqueGold accent — a ThryftVerse signature color.
+// Success and error use theme tokens.
 function getTypeConfig(colors: ReturnType<typeof useAppTheme>['colors']): Record<ToastType, { borderColor: string; icon: keyof typeof Ionicons.glyphMap; iconColor: string }> {
   return {
     success: { borderColor: colors.success, icon: 'checkmark-circle', iconColor: colors.success },
     error: { borderColor: colors.danger, icon: 'alert-circle', iconColor: colors.danger },
-    info: { borderColor: INFO_ACCENT, icon: 'information-circle', iconColor: INFO_ACCENT },
+    info: { borderColor: colors.antiqueGold, icon: 'information-circle', iconColor: colors.antiqueGold },
   };
 }
 
@@ -41,6 +39,7 @@ function ToastItem({ id, message, type }: ToastItemProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const config = getTypeConfig(colors)[type];
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const translateY = useSharedValue(-60);
   const opacity = useSharedValue(0);
@@ -81,7 +80,7 @@ function ToastItem({ id, message, type }: ToastItemProps) {
         disableAnimation
         activeOpacity={1}
       >
-        <Ionicons name="close" size={16} color="#888" />
+        <Ionicons name="close" size={16} color={colors.textMuted} />
       </AnimatedPressable>
     </Reanimated.View>
   );
@@ -90,6 +89,8 @@ function ToastItem({ id, message, type }: ToastItemProps) {
 export function ToastContainer() {
   const { toasts } = useToast();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   if (toasts.length === 0) return null;
 
@@ -102,7 +103,7 @@ export function ToastContainer() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     position: 'absolute',
     left: 16,
@@ -114,13 +115,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     // Toast is always dark with warm tint — intentional design for transient overlay
-    backgroundColor: '#191714',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: 14,
     borderLeftWidth: 4,
     gap: 12,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.body,
     fontFamily: Typography.family.medium,
     // Warm off-white text on always-dark toast — intentional
-    color: '#f3ede3',
+    color: colors.textPrimary,
     letterSpacing: Typography.tracking.normal,
     lineHeight: 19,
   },

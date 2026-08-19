@@ -156,13 +156,13 @@ function ProductCardV2Base({
   // in dark mode). Width is auto so longer conditions still fit at 20pt.
   const conditionBadge = (() => {
     if (item.isSold) {
-      return { label: 'Sold', bg: 'rgba(0,0,0,0.6)' };
+      return { label: 'Sold', bg: colors.overlay };
     }
     if (!item.condition) return null;
     const isNew = item.condition === 'New with tags';
     return {
       label: isNew ? 'New' : item.condition,
-      bg: isNew ? colors.success : 'rgba(0,0,0,0.55)',
+      bg: isNew ? colors.success : colors.overlay,
     };
   })();
 
@@ -242,11 +242,11 @@ function ProductCardV2Base({
             existing stack icon. Only one indicator ever shows. */}
         {hasVideo ? (
           <View style={styles.videoIndicator}>
-            <Ionicons name="play" size={16} color="#FFFFFF" />
+            <Ionicons name="play" size={16} color={colors.scrimTextPrimary} />
           </View>
         ) : hasMultiple ? (
           <View style={styles.mediaBadge}>
-            <Ionicons name="images" size={13} color="#FFFFFF" />
+            <Ionicons name="images" size={13} color={colors.scrimTextPrimary} />
           </View>
         ) : null}
 
@@ -475,7 +475,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // the image remains visible behind the scrim.
   soldOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -485,7 +485,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.bold,
     // Fixed white ink — the scrim is always dark, so a theme text token
     // (black in dark mode) would render invisible.
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -499,7 +499,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 24,
     height: 24,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -507,7 +507,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     width: 28,
     height: 28,
     borderRadius: Radius.full,
@@ -524,7 +524,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // visible containment must have meaning. These controls don't need
   // containment; they need legibility. Shadow replaces circular chrome.
   actionGlyph: {
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -625,7 +625,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(200,50,50,0.65)',
+    backgroundColor: colors.danger,
     paddingHorizontal: Space.sm,
     paddingVertical: 5,
     borderRadius: Radius.md,
@@ -649,7 +649,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     // Fixed white ink — condition/price-drop badges always sit on a dark
     // or saturated background, so a theme text token (black in dark mode)
     // would be invisible.
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],
@@ -784,7 +784,7 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],

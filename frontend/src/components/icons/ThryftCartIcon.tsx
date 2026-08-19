@@ -1,22 +1,25 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface ThryftCartIconProps {
   size?: number;
   color?: string;
 }
 
-export function ThryftCartIcon({ size = 14, color = '#ffffff' }: ThryftCartIconProps) {
+export function ThryftCartIcon({ size = 14, color }: ThryftCartIconProps) {
+  const { colors } = useAppTheme();
+  const resolvedColor = color ?? colors.surfaceElevated;
   const bodyWidth = Math.max(8, Math.round(size * 0.88));
   const wheelSize = Math.max(2, Math.round(size * 0.2));
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
-      <View style={[styles.handle, { borderColor: color }]} />
-      <View style={[styles.body, { width: bodyWidth, borderColor: color }]} />
+      <View style={[styles.handle, { borderColor: resolvedColor }]} />
+      <View style={[styles.body, { width: bodyWidth, borderColor: resolvedColor }]} />
       <View style={styles.wheelsRow}>
-        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: color }]} />
-        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: color }]} />
+        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: resolvedColor }]} />
+        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: resolvedColor }]} />
       </View>
     </View>
   );

@@ -543,7 +543,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    backgroundColor: colors.dangerSubtle,
     marginBottom: Space.sm,
   },
   errorText: {

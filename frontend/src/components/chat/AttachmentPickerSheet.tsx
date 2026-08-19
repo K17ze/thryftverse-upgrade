@@ -114,7 +114,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      <Reanimated.View style={[styles.backdrop, backdropStyle]}>
+      <Reanimated.View style={[styles.backdrop, { backgroundColor: colors.overlay }, backdropStyle]}>
         <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} disableAnimation />
       </Reanimated.View>
 
@@ -167,7 +167,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
     borderTopLeftRadius: Radius.xl + 8,

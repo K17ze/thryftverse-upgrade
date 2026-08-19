@@ -74,10 +74,10 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     top: -4,
     right: -4,
     borderWidth: 1.5,
-    borderColor: '#111',
+    borderColor: colors.background,
   },
   text: {
-    color: '#fff',
+    color: colors.surfaceElevated,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center',

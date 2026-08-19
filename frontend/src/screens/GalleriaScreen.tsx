@@ -1068,7 +1068,7 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
           letterSpacing: Type.label.letterSpacing - 0.2,
-          backgroundColor: 'rgba(0,0,0,0.45)',
+          backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2,
           borderRadius: Radius.sm,

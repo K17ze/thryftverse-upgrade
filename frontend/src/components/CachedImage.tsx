@@ -117,6 +117,7 @@ function CachedImageComponent({
   accessibilityElementsHidden,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
@@ -371,8 +372,8 @@ function CachedImageComponent({
           video chrome (audit §Media pipeline / AGENTS §15). */}
       {isVideoSource && showPlayBadge && !shouldPlay && (
         <View pointerEvents="none" style={styles.playBadge}>
-          <View style={[styles.playBadgeCircle, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
-            <Ionicons name="play" size={14} color="#fff" />
+          <View style={[styles.playBadgeCircle, { backgroundColor: colors.overlay }]}>
+            <Ionicons name="play" size={14} color={colors.surfaceElevated} />
           </View>
         </View>
       )}
@@ -450,7 +451,7 @@ function cachedImagePropsEqual(prev: CachedImageProps, next: CachedImageProps): 
  */
 export const CachedImage = React.memo(CachedImageComponent, cachedImagePropsEqual);
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     overflow: 'hidden',
   },
@@ -470,6 +471,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: colors.surfaceElevated,
   },
 });

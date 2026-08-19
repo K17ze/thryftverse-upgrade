@@ -160,7 +160,7 @@ function createStyles(colors: ThemeColors) {
   dropBadgeText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.2,
   },
   interestRow: {

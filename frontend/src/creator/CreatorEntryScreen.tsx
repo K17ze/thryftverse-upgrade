@@ -221,7 +221,13 @@ export function CreatorEntryScreen({
           accessibilityRole="button"
         >
           <Ionicons name="documents-outline" size={22} color="#fff" />
-          <View style={styles.draftsBadge} />
+          {drafts.length > 1 ? (
+            <View style={styles.draftsCountBadge}>
+              <Text style={styles.draftsCountText}>{drafts.length}</Text>
+            </View>
+          ) : (
+            <View style={styles.draftsBadge} />
+          )}
         </Pressable>
       )}
 
@@ -360,6 +366,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F0E8',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.4)',
+  },
+  // Count badge — when there are 2+ drafts, show the number instead of a dot.
+  // Uses brand color fill with count text for clearer affordance.
+  draftsCountBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: Radius.full,
+    backgroundColor: '#F4F0E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftsCountText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: '#0A0A0A',
   },
 
   // Drafts sheet

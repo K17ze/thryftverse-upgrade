@@ -908,7 +908,7 @@ function createStyles(colors: ThemeColors) {
       ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.18)',
+      backgroundColor: colors.overlay,
     },
     progressCard: {
       flexDirection: 'row',

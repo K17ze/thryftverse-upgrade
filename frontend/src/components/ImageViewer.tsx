@@ -19,6 +19,7 @@ import { isVideoUri } from '../utils/media';
 
 import { Radius } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 const { width: W } = Dimensions.get('window');
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
@@ -43,6 +44,8 @@ interface ImagePageProps {
 
 function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -151,6 +154,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
 }
 
 function VideoPage({ uri, shouldPlay }: { uri: string; shouldPlay: boolean }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.page}>
       <Video
@@ -174,6 +179,8 @@ interface DotProps {
 
 function Dot({ index, activeIndex }: DotProps) {
   const isActive = index === activeIndex;
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const width = useSharedValue(isActive ? 24 : 8);
 
   React.useEffect(() => {
@@ -198,6 +205,8 @@ interface Props {
 }
 
 export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexChange }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeIndex, setActiveIndex] = React.useState(0);
 
   React.useEffect(() => {
@@ -250,11 +259,11 @@ export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexCh
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
     width: W,
     height: W,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: colors.background,
   },
   image: {
     width: '100%',
@@ -273,6 +282,6 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: Radius.sm,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surfaceElevated,
   },
 });

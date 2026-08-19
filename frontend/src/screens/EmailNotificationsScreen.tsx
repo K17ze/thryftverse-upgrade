@@ -284,7 +284,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                         onValueChange={(v) => handleToggle(category, v)}
                         disabled={isUpdating || isLocked}
                         trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                        thumbColor="#fff"
+                        thumbColor={colors.surface}
                         accessibilityRole="switch"
                         accessibilityLabel={category.label}
                       />

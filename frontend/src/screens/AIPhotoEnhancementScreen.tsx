@@ -921,7 +921,7 @@ function createStyles(colors: ThemeColors) {
     // Processing overlay
     processingOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.lg,

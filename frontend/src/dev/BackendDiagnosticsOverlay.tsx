@@ -145,7 +145,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       zIndex: 40,
     },
     chipDot: {
@@ -154,14 +154,14 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm,
     },
     chipText: {
-      color: '#fff',
+      color: colors.surfaceElevated,
       fontSize: Type.meta.size,
       fontFamily: Typography.family.bold,
       letterSpacing: 0.4,
     },
     backdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
       padding: Space.lg,

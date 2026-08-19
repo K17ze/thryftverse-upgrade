@@ -61,6 +61,7 @@ export function OfferToLikersSheet({
     warning: colors.warning,
     background: colors.background,
     textInverse: colors.textInverse,
+    overlay: colors.overlay,
   };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const { formatFromFiat } = useFormattedPrice();
@@ -353,12 +354,12 @@ const createStyles = (themed: {
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
   danger: string; success: string; warning: string;
-  background: string; textInverse: string;
+  background: string; textInverse: string; overlay: string;
 }) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: themed.overlay,
   },
   sheet: {
     backgroundColor: themed.background,

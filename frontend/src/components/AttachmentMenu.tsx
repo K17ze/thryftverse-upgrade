@@ -30,12 +30,12 @@ interface AttachmentMenuProps {
 
 function getAttachmentOptions(colors: ThemeColors): AttachmentOption[] {
   return [
-    { id: 'gallery', icon: 'images', label: 'Gallery', color: '#4CAF50' },
-    { id: 'camera', icon: 'camera', label: 'Camera', color: '#2196F3' },
+    { id: 'gallery', icon: 'images', label: 'Gallery', color: colors.success },
+    { id: 'camera', icon: 'camera', label: 'Camera', color: colors.brand },
     { id: 'file', icon: 'document', label: 'File', color: colors.textSecondary },
-    { id: 'location', icon: 'location', label: 'Location', color: '#9C27B0' },
-    { id: 'contact', icon: 'person', label: 'Contact', color: '#00BCD4' },
-    { id: 'product', icon: 'pricetag', label: 'Product', color: '#E91E63' },
+    { id: 'location', icon: 'location', label: 'Location', color: colors.warning },
+    { id: 'contact', icon: 'person', label: 'Contact', color: colors.brandPressed },
+    { id: 'product', icon: 'pricetag', label: 'Product', color: colors.danger },
   ];
 }
 
@@ -161,7 +161,7 @@ function createStyles(colors: ThemeColors) {
     },
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: colors.overlay,
     },
     container: {
       backgroundColor: colors.surface,

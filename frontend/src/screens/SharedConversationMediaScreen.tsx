@@ -283,7 +283,7 @@ function createStyles(colors: ThemeColors) {
       width: Space.lg + 4,
       height: Space.lg + 4,
       borderRadius: Radius.xl,
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
     },

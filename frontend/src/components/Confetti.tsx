@@ -10,11 +10,10 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../theme/motionTokens';
 
 const { width, height } = Dimensions.get('window');
-
-const COLORS = ['#d7b98f', '#E06666', '#C9A46A', '#ffffff'];
 
 interface ParticleProps {
   x: number;
@@ -89,11 +88,13 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 
 export function Confetti({ count = 40 }: { count?: number }) {
   const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const confettiColors = [colors.antiqueGold, colors.danger, colors.bronze, colors.surfaceElevated];
   const particles = Array.from({ length: count }).map((_, i) => ({
     id: i,
     x: (Math.random() - 0.5) * width,
     y: Math.random() * 200 + 50,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
     delay: Math.random() * 200,
   }));
 

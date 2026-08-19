@@ -402,7 +402,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           </View>
         ) : showLikes ? (
           <View style={styles.exploreLikesBadge} pointerEvents="none">
-            <Ionicons name="heart" size={10} color="#fff" style={styles.exploreLikesGlyph} />
+            <Ionicons name="heart" size={10} color={colors.scrimTextPrimary} style={styles.exploreLikesGlyph} />
             <Text style={styles.exploreLikesText} numberOfLines={1}>
               {item.likes > 999 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
             </Text>
@@ -1043,8 +1043,8 @@ export default function HomeScreen() {
                       downscaleWidth={120}
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
-                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontFamily: Typography.family.semibold }}>
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: 10, fontFamily: Typography.family.semibold }}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -1298,7 +1298,7 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close preview"
         >
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]} />
 
           {peekItem ? (
             <Pressable
@@ -1682,7 +1682,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   lookOwnerRow: {
     flexDirection: 'row',
@@ -1713,7 +1713,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: 24,
   },
   lookDescription: {
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     fontSize: 12,
     fontFamily: FontFamily.medium,
     marginTop: 2,
@@ -1731,7 +1731,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.34)',
+    backgroundColor: colors.overlay,
   },
   lookMetaText: {
     color: colors.textInverse,
@@ -1739,7 +1739,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
   },
   lookTime: {
-    color: 'rgba(255,255,255,0.82)',
+    color: colors.scrimTextSecondary,
     fontSize: 11,
     fontFamily: FontFamily.medium,
     marginLeft: 'auto',
@@ -1820,7 +1820,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: colors.overlay,
   },
   posterAvatarOverlay: {
     position: 'absolute',
@@ -1857,7 +1857,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterOwnerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 5,
     paddingVertical: 3,
     borderRadius: Radius.lg,
@@ -1884,7 +1884,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 3,
@@ -1901,7 +1901,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 8,
     paddingVertical: 7,
-    backgroundColor: 'rgba(0,0,0,0.44)',
+    backgroundColor: colors.overlay,
   },
   posterCaption: {
     color: colors.textInverse,
@@ -1920,7 +1920,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 6,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.58)',
+    backgroundColor: colors.overlay,
   },
   posterCreatorName: {
     flex: 1,
@@ -1936,7 +1936,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -2065,8 +2065,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    color: colors.scrimTextPrimary,
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -2081,10 +2081,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.xs + 1,
     paddingVertical: 2,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   exploreLikesGlyph: {
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -2092,7 +2092,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.1,
     fontVariant: ['tabular-nums'],
   },
@@ -2104,13 +2104,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.xs + 1,
     paddingVertical: 2,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   exploreSellerBadgeText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.1,
   },
   videoBadge: {
@@ -2120,7 +2120,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(0,0,0,0.52)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

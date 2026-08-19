@@ -227,9 +227,9 @@ export function LookCommentsSheet({
               accessibilityLabel="Send comment"
             >
               {isSending ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Ionicons name="send" size={18} color="#fff" />
+                <Ionicons name="send" size={18} color={colors.textInverse} />
               )}
             </AnimatedPressable>
           </KeyboardStickyView>

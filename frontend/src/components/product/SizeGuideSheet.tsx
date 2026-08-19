@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 // ── Size guide data ──────────────────────────────────────────────────────────
 // Standard retail measurement tables per category. These are reference charts,
@@ -133,6 +133,7 @@ export function SizeGuideSheet({
   onClose,
 }: SizeGuideSheetProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const guide = useMemo(() => resolveSizeGuide(category), [category]);
 
   return (
@@ -281,11 +282,11 @@ export function SizeGuideSheet({
 
 export { resolveSizeGuide };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     borderTopLeftRadius: Radius.xl,

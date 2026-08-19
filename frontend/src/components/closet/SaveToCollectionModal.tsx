@@ -177,7 +177,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       onRequestClose={handleClose}
     >
       <KeyboardStickyView
-        style={styles.overlay}
+        style={[styles.overlay, { backgroundColor: colors.overlay }]}
       >
         <View style={[styles.card, { backgroundColor: colors.background, paddingBottom: Space.md + insets.bottom }]}>
           {/* Header — flat, no border. Title + close. */}
@@ -309,7 +309,6 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   // ── Card (sheet container) — the one dominant panel ──

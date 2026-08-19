@@ -162,7 +162,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     backgroundColor: colors.background,
@@ -174,7 +174,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,

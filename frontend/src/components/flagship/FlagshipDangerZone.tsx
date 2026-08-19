@@ -51,7 +51,7 @@ export function FlagshipDangerZone({
         <Text
           style={[
             styles.actionText,
-            { color: destructive ? '#FFFFFF' : colors.danger },
+            { color: destructive ? colors.textInverse : colors.danger },
           ]}
         >
           {actionLabel}

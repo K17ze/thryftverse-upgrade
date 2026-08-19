@@ -142,16 +142,18 @@ const TypingDot = React.memo(function TypingDot({
 // Compact version for use inside message bubbles
 export function CompactTypingIndicator({
   dotSize = 6,
-  dotColor = '#FFFFFF',
+  dotColor,
   style,
 }: Omit<TypingIndicatorProps, 'dotCount' | 'dotSpacing' | 'animationDuration'> & {
   dotColor?: string;
 }) {
+  const { colors } = useAppTheme();
+  const resolvedDotColor = dotColor ?? colors.surfaceElevated;
   return (
     <TypingIndicator
       dotCount={3}
       dotSize={dotSize}
-      dotColor={dotColor}
+      dotColor={resolvedDotColor}
       dotSpacing={3}
       animationDuration={500}
       style={StyleSheet.flatten([styles.compactContainer, style])}

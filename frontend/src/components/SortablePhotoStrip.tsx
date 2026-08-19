@@ -216,7 +216,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
 
             {isVideo && (
               <View style={styles.videoBadge}>
-                <Ionicons name="videocam" size={11} color="#fff" />
+                <Ionicons name="videocam" size={11} color={colors.surfaceElevated} />
               </View>
             )}
 
@@ -243,7 +243,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.xl,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 15,
   },
@@ -270,7 +270,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 20,
     height: 20,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

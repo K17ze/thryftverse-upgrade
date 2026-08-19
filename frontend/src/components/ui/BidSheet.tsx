@@ -92,6 +92,7 @@ export function BidSheet({
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
     danger: colors.danger,
+    dangerSubtle: colors.dangerSubtle,
     success: colors.success,
     warning: colors.warning,
     background: colors.background,
@@ -682,7 +683,7 @@ const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
-  danger: string; success: string; warning: string;
+  danger: string; dangerSubtle: string; success: string; warning: string;
   background: string; textInverse: string;
 }) => StyleSheet.create({
   container: {
@@ -940,7 +941,7 @@ const createStyles = (themed: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    backgroundColor: themed.dangerSubtle,
     marginBottom: Space.sm,
   },
   errorText: {

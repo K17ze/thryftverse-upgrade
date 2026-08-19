@@ -200,8 +200,8 @@ export default function CollectionDetailScreen() {
 
       {/* Top-left back button (always visible over cover) */}
       <View style={styles.absoluteBack} pointerEvents="box-none">
-        <AnimatedPressable style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.35)', borderColor: 'transparent' }]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+        <AnimatedPressable style={[styles.backBtn, { backgroundColor: colors.overlay, borderColor: 'transparent' }]} onPress={handleGoBack} activeOpacity={0.85}>
+          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -278,7 +278,7 @@ export default function CollectionDetailScreen() {
                   accessibilityLabel="Share collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="share-outline" size={18} color="#fff" />
+                  <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} />
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
@@ -287,7 +287,7 @@ export default function CollectionDetailScreen() {
                   accessibilityLabel="Edit collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="settings-outline" size={18} color="#fff" />
+                  <Ionicons name="settings-outline" size={18} color={colors.scrimTextPrimary} />
                 </AnimatedPressable>
               </View>
             </View>
@@ -530,7 +530,7 @@ function createStyles(colors: ThemeColors) {
   },
   coverGradient: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
   },
   coverInfo: {
     position: 'absolute',
@@ -541,15 +541,15 @@ function createStyles(colors: ThemeColors) {
   coverTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    color: colors.scrimTextPrimary,
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   coverMeta: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     marginTop: Space.xs,
   },
   coverMetaRow: {
@@ -561,12 +561,12 @@ function createStyles(colors: ThemeColors) {
   coverMetaDot: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.scrimTextTertiary,
   },
   coverMetaUpdated: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
   },
   coverActions: {
     position: 'absolute',
@@ -585,7 +585,7 @@ function createStyles(colors: ThemeColors) {
     width: Space.xl + 4,
     height: Space.xl + 4,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -630,7 +630,7 @@ function createStyles(colors: ThemeColors) {
   coverDesc: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     marginTop: Space.xs / 2,
   },
   noCoverDesc: {
@@ -646,7 +646,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   privacyText: {
     fontSize: Type.meta.size - 1,

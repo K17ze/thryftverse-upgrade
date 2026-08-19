@@ -131,11 +131,11 @@ function createStyles(colors: ThemeColors) {
     left: 8,
   },
   soldText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },

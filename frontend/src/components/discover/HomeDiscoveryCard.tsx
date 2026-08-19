@@ -182,7 +182,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
             <Ionicons
               name={item.saved ? 'heart' : 'heart-outline'}
               size={22}
-              color={item.saved ? colors.danger : '#FFFFFF'}
+              color={item.saved ? colors.danger : colors.scrimTextPrimary}
               style={styles.saveGlyph}
             />
           </Pressable>
@@ -327,7 +327,7 @@ const createStyles = (colors: ThemeColors) =>
       zIndex: 5,
     },
     saveGlyph: {
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.shadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     },
@@ -396,8 +396,8 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.1,
-      color: '#fff',
-      textShadowColor: 'rgba(0,0,0,0.55)',
+      color: colors.scrimTextPrimary,
+      textShadowColor: colors.shadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     } as TextStyle,

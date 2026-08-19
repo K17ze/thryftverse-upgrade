@@ -109,25 +109,25 @@ function AuctionCardBase({
         )}
         {endingSoon && isLive && (
           <View style={styles.endingSoonBadge}>
-            <Ionicons name="time-outline" size={10} color="#fff" />
+            <Ionicons name="time-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>ENDING SOON</Meta>
           </View>
         )}
         {viewerState === 'outbid' && !endingSoon && (
           <View style={styles.outbidBadge}>
-            <Ionicons name="trending-down-outline" size={10} color="#fff" />
+            <Ionicons name="trending-down-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>OUTBID</Meta>
           </View>
         )}
         {viewerState === 'leading' && !endingSoon && (
           <View style={styles.leadingBadge}>
-            <Ionicons name="trophy-outline" size={10} color="#fff" />
+            <Ionicons name="trophy-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>LEADING</Meta>
           </View>
         )}
         {viewerState === 'won' && !endingSoon && (
           <View style={styles.wonBadge}>
-            <Ionicons name="ribbon-outline" size={10} color="#fff" />
+            <Ionicons name="ribbon-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>WON</Meta>
           </View>
         )}

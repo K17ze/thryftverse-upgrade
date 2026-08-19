@@ -55,8 +55,8 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,
     fresh_drop: colors.brand,
-    // Price-drop orange — semantic accent not yet in token system
-    price_drop: '#dd6a33',
+    // Price-drop orange — mapped to warning token
+    price_drop: colors.warning,
     sold: colors.success,
   };
 
