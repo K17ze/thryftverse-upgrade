@@ -256,6 +256,12 @@ export default function BrowseScreen() {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    activeBadgeDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: Space.md,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: Space.xs / 2,
+    },
     clearAllBtn: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
@@ -868,9 +874,13 @@ export default function BrowseScreen() {
 
       {hasActiveFilters ? (
         <View style={styles.activeBadgeRow}>
+          {/* Active filters grouped by category — badges within a category
+              are visually adjacent. Category prefix removed from badge text
+              (the grouping makes it redundant). A hairline divider separates
+              categories when multiple are active. */}
           {browseFilters.brands.map((brand) => (
             <View key={`brand-${brand}`} style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Brand: ${brand}`}</Text>
+              <Text style={styles.activeBadgeText}>{brand}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -884,9 +894,12 @@ export default function BrowseScreen() {
               </Pressable>
             </View>
           ))}
+          {browseFilters.brands.length > 0 && (browseFilters.sizes.length > 0 || browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
+            <View style={styles.activeBadgeDivider} />
+          ) : null}
           {browseFilters.sizes.map((size) => (
             <View key={`size-${size}`} style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Size: ${size}`}</Text>
+              <Text style={styles.activeBadgeText}>{size}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -900,9 +913,12 @@ export default function BrowseScreen() {
               </Pressable>
             </View>
           ))}
+          {browseFilters.sizes.length > 0 && (browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
+            <View style={styles.activeBadgeDivider} />
+          ) : null}
           {browseFilters.condition !== 'Any' ? (
             <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Condition: ${browseFilters.condition}`}</Text>
+              <Text style={styles.activeBadgeText}>{browseFilters.condition}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -915,6 +931,9 @@ export default function BrowseScreen() {
                 <Ionicons name="close" size={12} color={colors.textPrimary} />
               </Pressable>
             </View>
+          ) : null}
+          {browseFilters.condition !== 'Any' && browseFilters.sustainableOnly ? (
+            <View style={styles.activeBadgeDivider} />
           ) : null}
           {browseFilters.sustainableOnly ? (
             <View style={styles.activeBadge}>
