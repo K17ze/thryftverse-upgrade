@@ -146,7 +146,7 @@ export default function VisualSearchCamera({
           <Text style={styles.permissionText}>
             Enable camera permission in Settings to search with a photo.
           </Text>
-          <Pressable style={styles.permissionBtn} onPress={handleOpenSettings}>
+          <Pressable style={styles.permissionBtn} onPress={handleOpenSettings} accessibilityRole="button">
             <Text style={styles.permissionBtnText}>Open Settings</Text>
           </Pressable>
         </View>
@@ -157,7 +157,7 @@ export default function VisualSearchCamera({
   return (
     <View style={StyleSheet.absoluteFill}>
       {/* Full-screen camera feed with tap-to-focus */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus} accessibilityRole="button" accessibilityLabel="Tap Focus">
         <CameraView
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
@@ -199,7 +199,7 @@ export default function VisualSearchCamera({
 
       {/* Top controls */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
-        <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close visual search">
+        <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close visual search" accessibilityRole="button">
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
 
@@ -209,6 +209,7 @@ export default function VisualSearchCamera({
             onPress={onSavedSearches}
             hitSlop={12}
             accessibilityLabel="Saved visual searches"
+          accessibilityRole="button"
           >
             <Ionicons name="time-outline" size={24} color="#fff" />
           </Pressable>
@@ -217,6 +218,7 @@ export default function VisualSearchCamera({
             onPress={toggleFlash}
             hitSlop={12}
             accessibilityLabel={flash === 'on' ? 'Flash on' : 'Flash off'}
+          accessibilityRole="switch"
           >
             <Ionicons name={flash === 'on' ? 'flash' : 'flash-off'} size={24} color="#fff" />
           </Pressable>
@@ -230,6 +232,7 @@ export default function VisualSearchCamera({
           onPress={onGallery}
           hitSlop={16}
           accessibilityLabel="Choose a photo from gallery"
+        accessibilityRole="image"
         >
           {lastImageUri ? (
             <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
@@ -239,7 +242,7 @@ export default function VisualSearchCamera({
           <Text style={styles.bottomLabel}>Gallery</Text>
         </Pressable>
 
-        <Pressable onPress={handleShutterPress} hitSlop={24} accessibilityLabel="Take photo">
+        <Pressable onPress={handleShutterPress} hitSlop={24} accessibilityLabel="Take photo" accessibilityRole="button">
           <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
             <View style={styles.shutterInner} />
           </Animated.View>

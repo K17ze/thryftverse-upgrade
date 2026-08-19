@@ -72,7 +72,7 @@ export function ReviewPromptSheet({
         accessibilityLabel="Close review prompt"
         accessibilityRole="button"
       >
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="button">
           <View style={styles.handle} />
 
           {/* Header */}

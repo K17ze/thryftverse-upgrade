@@ -627,6 +627,7 @@ export default function FilterScreen() {
                             );
                           }}
                           delayLongPress={400}
+                        accessibilityRole="switch" accessibilityLabel="Rate"
                         >
                           <AppButton
                             title={s}

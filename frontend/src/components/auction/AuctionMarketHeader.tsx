@@ -149,7 +149,7 @@ export function AuctionMarketHeader({
         animationType="fade"
         onRequestClose={() => setOverflowOpen(false)}
       >
-        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)}>
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)} accessibilityRole="button">
           <View style={styles.overflowSheet}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {overflowActions.map((action) => (

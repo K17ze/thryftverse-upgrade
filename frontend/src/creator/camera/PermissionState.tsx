@@ -81,12 +81,14 @@ export function PermissionState({
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
           onPress={onEnable}
+        accessibilityRole="switch"
         >
           <Text style={styles.btnText}>Enable Camera</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
           onPress={onGallery}
+        accessibilityRole="button"
         >
           <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
         </Pressable>

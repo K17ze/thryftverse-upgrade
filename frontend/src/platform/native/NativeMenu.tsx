@@ -31,17 +31,19 @@ export function NativeMenu({ visible, onDismiss, options, testID }: NativeMenuPr
 
   if (!visible) return null;
   return (
-    <Pressable style={styles.overlay} onPress={onDismiss} testID={testID}>
+    <Pressable style={styles.overlay} onPress={onDismiss} testID={testID} accessibilityRole="button" accessibilityLabel="Dismiss menu">
       <View style={styles.menu}>
         {options.map((opt, i) => (
           <Pressable
             key={i}
             style={styles.option}
+            accessibilityLabel={opt.label}
             onPress={() => {
               opt.onPress();
               onDismiss();
             }}
             disabled={opt.disabled}
+          accessibilityRole="switch"
           >
             <Text
               style={[

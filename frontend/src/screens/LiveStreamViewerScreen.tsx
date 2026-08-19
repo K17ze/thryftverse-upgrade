@@ -659,10 +659,11 @@ export function LiveStreamViewerScreen() {
 
       {/* ── Item detail sheet (in-stream, not navigation away) ── */}
       {itemSheetVisible && currentLot && (
-        <Pressable style={styles.bidSheetOverlay} onPress={() => setItemSheetVisible(false)}>
+        <Pressable style={styles.bidSheetOverlay} onPress={() => setItemSheetVisible(false)} accessibilityRole="button" accessibilityLabel="Close item details">
           <Pressable
             style={[styles.bidSheet, { backgroundColor: colors.surface }]}
             onPress={(e) => e.stopPropagation()}
+          accessibilityRole="button"
           >
             <View style={styles.bidSheetHandle} />
             <Image source={{ uri: currentLot.imageUri }} style={styles.itemSheetImage} />
@@ -724,10 +725,11 @@ export function LiveStreamViewerScreen() {
 
       {/* ── Bid sheet ── */}
       {bidSheetVisible && currentLot && (
-        <Pressable style={styles.bidSheetOverlay} onPress={() => setBidSheetVisible(false)}>
+        <Pressable style={styles.bidSheetOverlay} onPress={() => setBidSheetVisible(false)} accessibilityRole="button" accessibilityLabel="Close bid sheet">
           <Pressable
             style={[styles.bidSheet, { backgroundColor: colors.surface }]}
             onPress={(e) => e.stopPropagation()}
+          accessibilityRole="button"
           >
             <View style={styles.bidSheetHandle} />
             <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>Place a Bid</Text>

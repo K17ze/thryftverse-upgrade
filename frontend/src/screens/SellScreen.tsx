@@ -1756,10 +1756,11 @@ export default function SellScreen() {
             transparent={true}
             onRequestClose={() => setShippingSheetOpen(false)}
           >
-            <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShippingSheetOpen(false)}>
+            <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShippingSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Close shipping options">
               <Pressable
                 style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
                 onPress={(e) => { e.stopPropagation(); }}
+              accessibilityRole="button"
               >
                 {/* Header */}
                 <View style={styles.shippingSheetHeader}>

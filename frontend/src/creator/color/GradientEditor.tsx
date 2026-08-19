@@ -335,10 +335,12 @@ export function GradientEditor({
             {gradient.stops.map((stop) => (
               <Pressable
                 key={`thumb-wrapper-${stop.id}`}
+                accessibilityLabel="Gradient stop"
                 onPress={() => {
                   haptic.selection();
                   setSelectedStopId(stop.id);
                 }}
+              accessibilityRole="checkbox"
               >
                 <StopThumb
                   stop={stop}

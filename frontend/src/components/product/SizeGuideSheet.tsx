@@ -143,10 +143,11 @@ export function SizeGuideSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close size guide">
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
+        accessibilityRole="button"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 

@@ -190,7 +190,7 @@ export function LookMediaComposer({
       }}
       {...panResponder.panHandlers}
     >
-      <Pressable onPress={handlePhotoPress} style={StyleSheet.absoluteFill}>
+      <Pressable onPress={handlePhotoPress} style={StyleSheet.absoluteFill} accessibilityRole="button">
         <CachedImage uri={imageUri} style={styles.image} contentFit="cover" />
       </Pressable>
 
@@ -208,6 +208,7 @@ export function LookMediaComposer({
                 setActiveTagId(isActive ? null : tag.id);
                 haptic.light();
               }}
+            accessibilityRole="switch"
             >
               <View style={[styles.tagDot, isActive && styles.tagDotActive]} />
             </Pressable>

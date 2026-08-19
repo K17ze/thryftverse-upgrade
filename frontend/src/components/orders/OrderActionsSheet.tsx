@@ -54,10 +54,11 @@ export function OrderActionsSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={[styles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose}>
+      <Pressable style={[styles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close actions">
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
+        accessibilityRole="button"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 

@@ -922,6 +922,7 @@ export default function CreatorCamera({
             <Pressable
               style={StyleSheet.absoluteFill}
               onPress={handleTapFocus}
+            accessibilityRole="button"
             >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
                 <CameraView

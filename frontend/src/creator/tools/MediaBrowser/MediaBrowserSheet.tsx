@@ -395,7 +395,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
   if (!asset) return null;
   return (
     <Modal visible={!!asset} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={previewStyles.backdrop} onPress={onClose}>
+      <Pressable style={previewStyles.backdrop} onPress={onClose} accessibilityRole="image">
         <View style={previewStyles.content}>
           <Image
             source={{ uri: asset.uri }}

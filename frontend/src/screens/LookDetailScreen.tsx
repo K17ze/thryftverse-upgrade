@@ -794,11 +794,12 @@ export default function LookDetailScreen() {
         animationType="slide"
         onRequestClose={() => setInspectTag(null)}
       >
-        <Pressable style={styles.inspectBackdrop} onPress={() => setInspectTag(null)}>
+        <Pressable style={styles.inspectBackdrop} onPress={() => setInspectTag(null)} accessibilityRole="button" accessibilityLabel="Close product preview">
           <Pressable
             style={styles.inspectSheet}
             onPress={(e) => e.stopPropagation()}
             accessibilityLabel="Product preview"
+          accessibilityRole="button"
           >
             {(() => {
               if (!inspectTag) return null;
@@ -864,11 +865,12 @@ export default function LookDetailScreen() {
         animationType="fade"
         onRequestClose={() => setOverflowVisible(false)}
       >
-        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)}>
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)} accessibilityRole="button" accessibilityLabel="Close menu">
           <Pressable
             style={styles.overflowSheet}
             onPress={(e) => e.stopPropagation()}
             accessibilityRole="menu"
+            accessibilityLabel="Look options menu"
           >
             <Pressable
               style={styles.overflowItem}

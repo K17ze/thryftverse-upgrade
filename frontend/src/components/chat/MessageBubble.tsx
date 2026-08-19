@@ -212,6 +212,7 @@ function MessageBubbleBase({
         <Pressable
           onLongPress={onLongPress}
           delayLongPress={350}
+          accessibilityLabel="Message"
           style={({ pressed }) => [
             styles.bubble,
             isMe ? styles.bubbleMe : isAgent ? styles.bubbleAgent : styles.bubbleThem,
@@ -221,9 +222,10 @@ function MessageBubbleBase({
             isDraft && styles.bubbleDraft,
             !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
+        accessibilityRole="button"
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]} accessibilityRole="button">
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -234,7 +236,7 @@ function MessageBubbleBase({
           ) : null}
 
           {mediaUri ? (
-            <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
+            <Pressable onPress={onMediaPress} style={styles.mediaWrap} accessibilityRole="button" accessibilityLabel="Media Press">
               <CachedImage
                 uri={mediaUri}
                 style={[styles.mediaImage, mediaRadius]}
@@ -312,7 +314,7 @@ function MessageBubbleBase({
         </Pressable>
 
         {hasFailed && onRetry ? (
-          <Pressable onPress={onRetry} style={styles.retryBadge}>
+          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button">
             <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
@@ -351,7 +353,7 @@ function MessageBubbleBase({
         ) : null}
 
         {reactions && reactions.length > 0 ? (
-          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]}>
+          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button">
             {reactions.slice(0, 3).map((r, i) => (
               <Reanimated.View key={i} entering={reactionEntering} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>

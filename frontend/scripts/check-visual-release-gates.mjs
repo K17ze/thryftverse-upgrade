@@ -246,26 +246,47 @@ function checkHardcodedColors(files) {
 }
 
 // ─── Check 2: Missing accessibility on interactive controls ─────────────────
+
+/**
+ * Find the real closing '>' of a JSX opening tag, properly skipping
+ * over {expresspressions}, strings, arrow functions, etc.
+ */
+function findTagEnd(src, startPos) {
+  let i = startPos;
+  const len = src.length;
+  while (i < len && /[a-zA-Z0-9_.]/.test(src[i])) i++;
+  let braceDepth = 0, parenDepth = 0, bracketDepth = 0;
+  while (i < len) {
+    const ch = src[i], next = src[i + 1];
+    if (ch === '/' && next === '>' && braceDepth === 0 && parenDepth === 0) return i + 1;
+    if (ch === '>' && braceDepth === 0 && parenDepth === 0 && bracketDepth === 0) return i;
+    if (ch === '"' || ch === "'") { i++; while (i < len && src[i] !== ch) { if (src[i] === '\\') i++; i++; } i++; continue; }
+    if (ch === '`') { i++; while (i < len && src[i] !== '`') { if (src[i] === '\\') { i += 2; continue; } if (src[i] === '$' && src[i + 1] === '{') { i += 2; let d = 1; while (i < len && d > 0) { if (src[i] === '{') d++; else if (src[i] === '}') d--; if (src[i] === '\\') i++; i++; } continue; } i++; } i++; continue; }
+    if (ch === '{') { braceDepth++; i++; continue; }
+    if (ch === '}') { braceDepth--; i++; continue; }
+    if (ch === '(') { parenDepth++; i++; continue; }
+    if (ch === ')') { parenDepth--; i++; continue; }
+    if (ch === '[') { bracketDepth++; i++; continue; }
+    if (ch === ']') { bracketDepth--; i++; continue; }
+    if (ch === '/' && next === '*' && braceDepth > 0) { i += 2; while (i < len && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (ch === '/' && next === '/' && braceDepth > 0) { while (i < len && src[i] !== '\n') i++; continue; }
+    i++;
+  }
+  return -1;
+}
+
 function checkAccessibility(files) {
   const violations = [];
   for (const file of files) {
     const src = readFileSync(file, 'utf-8');
 
-    // Find all Pressable/Touchable/Button opening tags and check the JSX block
     let match;
     PRESSABLE_OPEN.lastIndex = 0;
     while ((match = PRESSABLE_OPEN.exec(src)) !== null) {
       const tagStart = match.index;
-      // Grab a window of text after the opening tag to capture props
-      const windowEnd = Math.min(src.length, tagStart + 600);
-      const block = src.slice(tagStart, windowEnd);
-
-      // Find the end of the opening tag (first '>')
-      const tagEnd = block.indexOf('>');
+      const tagEnd = findTagEnd(src, tagStart);
       if (tagEnd === -1) continue;
-      const openingTag = block.slice(0, tagEnd + 1);
-
-      // Self-closing? skip (no children, likely a wrapper)
+      const openingTag = src.slice(tagStart, tagEnd + 1);
       if (openingTag.endsWith('/>')) continue;
 
       const hasLabel =
@@ -274,10 +295,8 @@ function checkAccessibility(files) {
       const hasRole = HAS_A11Y_ROLE.test(openingTag);
       const hasAccessible = HAS_ACCESSIBLE.test(openingTag);
 
-      // If the component has visible text children, it may not need an
-      // explicit label. Heuristic: check if there's text content shortly
-      // after the opening tag.
-      const childWindow = block.slice(tagEnd + 1, tagEnd + 200);
+      const childStart = tagEnd + 1;
+      const childWindow = src.slice(childStart, Math.min(src.length, childStart + 200));
       const hasTextChild = />[^<{]{2,}</.test(childWindow);
 
       if (!hasLabel && !hasTextChild && !hasAccessible) {

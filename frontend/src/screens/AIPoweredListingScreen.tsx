@@ -1219,6 +1219,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
           },
         ]}
         onPress={(e) => e.stopPropagation()}
+      accessibilityRole="button"
       >
         <View style={[pickerStyles.handle, { backgroundColor: colors.border }]} />
         <Text style={[pickerStyles.title, { color: colors.textPrimary }]}>{title}</Text>

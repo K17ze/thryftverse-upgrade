@@ -230,6 +230,8 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                       <Pressable
                         style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
                         onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: order.assetId }); }}
+                      accessibilityLabel="View order details"
+                      accessibilityRole="link"
                       >
                         <View style={styles.orderHeader}>
                           {/* Frequency badge — visual identity */}

@@ -286,7 +286,7 @@ export function CommandPalette() {
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
+      <Pressable style={styles.backdrop} onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close">
         <Reanimated.View
           entering={reducedMotion ? undefined : SlideInDown.springify().damping(18).stiffness(260)}
           exiting={reducedMotion ? undefined : SlideOutUp.duration(180)}

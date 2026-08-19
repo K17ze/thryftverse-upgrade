@@ -60,11 +60,11 @@ export function BackendDiagnosticsOverlay() {
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessibilityRole="button">
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="button">
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Backend Diagnostics</Text>
-              <Pressable onPress={() => setOpen(false)} accessibilityLabel="Close diagnostics">
+              <Pressable onPress={() => setOpen(false)} accessibilityLabel="Close diagnostics" accessibilityRole="button">
                 <Ionicons name="close" size={22} color={colors.textPrimary} />
               </Pressable>
             </View>

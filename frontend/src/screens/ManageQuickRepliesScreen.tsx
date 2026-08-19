@@ -225,12 +225,12 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
       animationType="fade"
       onRequestClose={closeModal}
     >
-      <Pressable style={styles.modalOverlay} onPress={closeModal}>
+      <Pressable style={styles.modalOverlay} onPress={closeModal} accessibilityRole="button">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalAvoid}
         >
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()} accessibilityRole="button">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{modalTitle}</Text>
               <AnimatedPressable

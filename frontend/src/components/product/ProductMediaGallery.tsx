@@ -372,6 +372,7 @@ export function ProductMediaGallery({
           style={styles.indexBadge}
           onPress={() => onOpenFullscreen(activeIndex)}
           accessibilityLabel={`Image ${activeIndex + 1} of ${images.length}. Tap for fullscreen.`}
+        accessibilityRole="button"
         >
           <Text style={styles.indexText}>
             {activeIndex + 1} / {images.length}
@@ -407,6 +408,7 @@ export function ProductMediaGallery({
                   }}
                   accessibilityLabel={`View image ${index + 1}`}
                   style={[styles.thumbnail, isActive && styles.thumbnailActive]}
+                accessibilityRole="button"
                 >
                   <CachedImage
                     uri={item}
