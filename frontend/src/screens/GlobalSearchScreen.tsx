@@ -1001,33 +1001,45 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* ΓöÇΓöÇ FOCUS STATE: Clean recent + trending when search is focused ΓöÇΓöÇ */}
                 {isSearchFocused ? (
                   <View>
-                    {/* Recent searches — compact rows */}
+                    {/* Recent searches — tappable chips */}
                     {recentSearches.length > 0 && (
                       <EditorialSection title="Recent searches">
-                        <View style={styles.recentRowsWrap}>
-                          {recentSearches.map((term, idx) => (
-                            <AnimatedPressable
-                              key={idx}
-                              style={styles.recentRow}
-                              onPress={() => handlePillPress(term)}
-                              accessibilityLabel={`Search for ${term}`}
-                              accessibilityRole="button"
-                            >
-                              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-                              <Text style={styles.recentRowText} numberOfLines={1}>{term}</Text>
-                              <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
-                            </AnimatedPressable>
-                          ))}
+                        <View style={styles.recentChipsWrap}>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentChipsScroll}>
+                            {recentSearches.map((term, idx) => (
+                              <AnimatedPressable
+                                key={idx}
+                                style={[styles.recentChip, { backgroundColor: colors.surfaceAlt }]}
+                                onPress={() => handlePillPress(term)}
+                                accessibilityLabel={`Search for ${term}`}
+                                accessibilityRole="button"
+                              >
+                                <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                                <Text style={styles.recentChipText} numberOfLines={1}>{term}</Text>
+                              </AnimatedPressable>
+                            ))}
+                          </ScrollView>
                           <AnimatedPressable
-                            style={[styles.recentRow, { justifyContent: 'center' }]}
+                            style={styles.clearRecentBtn}
                             onPress={clearRecentSearches}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             accessibilityLabel="Clear recent searches"
                             accessibilityRole="button"
                           >
-                            <Text style={[styles.recentRowText, { color: colors.textMuted, fontFamily: FontFamily.medium }]}>Clear all</Text>
+                            <Text style={[styles.clearRecentText, { color: colors.textMuted }]}>Clear all</Text>
                           </AnimatedPressable>
                         </View>
                       </EditorialSection>
+                    )}
+
+                    {/* Empty search prompt — when focused with no query and no recent searches */}
+                    {recentSearches.length === 0 && savedSearches.length === 0 && (
+                      <View style={styles.emptySearchPrompt}>
+                        <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+                        <Text style={[styles.emptySearchPromptText, { color: colors.textSecondary }]}>
+                          Search for items, brands, or categories
+                        </Text>
+                      </View>
                     )}
 
                     {/* Saved searches with alerts */}
@@ -1063,26 +1075,24 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       </EditorialSection>
                     )}
 
-                    {/* Trending categories — real category data with icons */}
-                    <EditorialSection title="Categories">
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.trendingFocusScroll}
-                      >
+                    {/* Trending categories — 2-column visual grid with icons */}
+                    <EditorialSection title="Browse categories">
+                      <View style={styles.categoryGridWrap}>
                         {CATEGORY_SHORTCUTS.map((cat, idx) => (
                           <AnimatedPressable
                             key={idx}
-                            style={[styles.trendingFocusPill, t.trendingFocusPill]}
+                            style={[styles.categoryGridCard, { backgroundColor: colors.surfaceAlt }]}
                             onPress={() => handleCategoryPress(cat.query, cat.label)}
                             accessibilityLabel={`Browse ${cat.label} category`}
                             accessibilityRole="button"
                           >
-                            <Ionicons name={cat.icon as any} size={16} color={colors.brand} />
-                            <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
+                            <View style={[styles.categoryGridIconWrap, { backgroundColor: colors.surface }]}>
+                              <Ionicons name={cat.icon as any} size={22} color={colors.brand} />
+                            </View>
+                            <Text style={[styles.categoryGridLabel, { color: colors.textPrimary }]} numberOfLines={1}>{cat.label}</Text>
                           </AnimatedPressable>
                         ))}
-                      </ScrollView>
+                      </View>
                     </EditorialSection>
                   </View>
                 ) : (
@@ -1585,6 +1595,31 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           </AnimatedPressable>
                         )}
                       </View>
+                      {/* Suggested categories — tappable chips for recovery */}
+                      {!isSearching && !hasActiveDiscoverFilters && (
+                        <View style={styles.noResultsCategories}>
+                          <Text style={[styles.noResultsCategoriesLabel, { color: colors.textMuted }]}>
+                            Browse by category
+                          </Text>
+                          <View style={styles.noResultsCategoryChips}>
+                            {CATEGORY_SHORTCUTS.slice(0, 4).map((cat, idx) => (
+                              <AnimatedPressable
+                                key={idx}
+                                style={[styles.recentChip, { backgroundColor: colors.surfaceAlt }]}
+                                onPress={() => {
+                                  setQuery('');
+                                  handleCategoryPress(cat.query, cat.label);
+                                }}
+                                accessibilityLabel={`Browse ${cat.label} category`}
+                                accessibilityRole="button"
+                              >
+                                <Ionicons name={cat.icon as any} size={13} color={colors.brand} />
+                                <Text style={styles.recentChipText} numberOfLines={1}>{cat.label}</Text>
+                              </AnimatedPressable>
+                            ))}
+                          </View>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
@@ -1673,7 +1708,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     paddingHorizontal: Space.md,
     paddingVertical: 0,
-    minHeight: Control.hit,
+    minHeight: 48,
   },
   statusPillWrap: {
     paddingHorizontal: 20,
@@ -1740,7 +1775,37 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
 
-  // Recent searches — compact rows
+  // Recent searches — tappable chips (focus state)
+  recentChipsWrap: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  recentChipsScroll: {
+    gap: Space.xs + 2,
+  },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.full,
+    minHeight: Control.chrome,
+  },
+  recentChipText: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+  },
+  clearRecentBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: Space.xs,
+  },
+  clearRecentText: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+  },
+
+  // Recent searches — compact rows (resting state)
   recentRowsWrap: {
     paddingHorizontal: Space.md,
     gap: 0,
@@ -1756,6 +1821,47 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: FontFamily.regular,
+  },
+
+  // Empty search prompt
+  emptySearchPrompt: {
+    alignItems: 'center',
+    paddingVertical: Space.xxl,
+    gap: Space.sm + 2,
+  },
+  emptySearchPromptText: {
+    fontSize: 15,
+    fontFamily: FontFamily.regular,
+    textAlign: 'center',
+  },
+
+  // Category visual grid — 2-column
+  categoryGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  categoryGridCard: {
+    width: (SCREEN_WIDTH - Space.md * 2 - Space.sm) / 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+  },
+  categoryGridIconWrap: {
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryGridLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: FontFamily.semibold,
   },
 
   // Focus state — trending pills (horizontal scroll with category icons)
@@ -2028,6 +2134,25 @@ const styles = StyleSheet.create({
   noResultsSecondaryCtaText: {
     fontSize: 13,
     fontFamily: FontFamily.semibold,
+  },
+
+  // Suggested categories in no-results state
+  noResultsCategories: {
+    marginTop: Space.md + 2,
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  noResultsCategoriesLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  noResultsCategoryChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
   },
 
   // Scope tabs (Items | People)

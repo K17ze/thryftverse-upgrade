@@ -1,9 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, StatusBar, Keyboard, ActivityIndicator } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
@@ -16,11 +19,15 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   loginWithPassword,
+  loginWithAppleIdentityToken,
+  loginWithGoogleIdToken,
   requestEmailOtp,
   requestMagicLink,
   verifyEmailOtp,
   type LoginWithPasswordError,
 } from '../services/authApi';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -41,10 +48,104 @@ export default function LoginScreen() {
   const [infoMsg, setInfoMsg] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore(state => state.login);
   const setTwoFactorEnabled = useStore(state => state.setTwoFactorEnabled);
+
+  const hasGoogleOAuth = Boolean(
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID
+  );
+
+  const [googleRequest, googleResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response for login
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type !== 'success') {
+      setSocialLoading(null);
+      return;
+    }
+    const idToken = googleResponse.authentication?.idToken
+      ?? (typeof googleResponse.params?.id_token === 'string' ? googleResponse.params.id_token : null);
+    if (!idToken) {
+      setSocialLoading(null);
+      setErrorMsg('Google sign-in failed: Unable to get identity token.');
+      return;
+    }
+    void (async () => {
+      try {
+        const result = await loginWithGoogleIdToken(idToken);
+        login(result.storeUser);
+        setTwoFactorEnabled(result.user.twoFactorEnabled);
+        navigation.replace('MainTabs');
+        markInteractive({ surface: 'login_complete_google' });
+      } catch (error) {
+        setErrorMsg(`Google sign-in failed: ${(error as Error).message}`);
+      } finally {
+        setSocialLoading(null);
+      }
+    })();
+  }, [googleResponse, login, navigation, setTwoFactorEnabled]);
+
+  const handleGoogleSignIn = async () => {
+    if (socialLoading || isSubmitting) return;
+    if (!googleRequest) {
+      setErrorMsg('Google sign-in unavailable. Configure Google OAuth client IDs.');
+      return;
+    }
+    setSocialLoading('google');
+    setErrorMsg('');
+    try {
+      const response = await promptGoogleAuth();
+      if (response.type !== 'success') setSocialLoading(null);
+    } catch (error) {
+      setSocialLoading(null);
+      setErrorMsg(`Google sign-in failed: ${(error as Error).message}`);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    if (socialLoading || isSubmitting) return;
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      setErrorMsg('Apple sign-in is only available on supported iOS devices.');
+      return;
+    }
+    setSocialLoading('apple');
+    setErrorMsg('');
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error('Missing Apple identity token');
+      const result = await loginWithAppleIdentityToken(credential.identityToken);
+      login(result.storeUser);
+      setTwoFactorEnabled(result.user.twoFactorEnabled);
+      navigation.replace('MainTabs');
+      markInteractive({ surface: 'login_complete_apple' });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ERR_REQUEST_CANCELED') {
+        setErrorMsg(`Apple sign-in failed: ${(error as Error).message}`);
+      }
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting;
   const canRequestMagicLink = email.trim().length > 0 && !isSubmitting && !isMagicSending;
   const canRequestOtp = email.trim().length > 0 && !isSubmitting && !isOtpSending;
@@ -433,6 +534,57 @@ export default function LoginScreen() {
                 />
               </Reanimated.View>
 
+              {/* Social login — per 2026 research, social sign-in below the
+                  primary email/password path gives users a low-friction
+                  alternative. Full-width labeled buttons, not icon circles. */}
+              <View style={styles.socialDivider}>
+                <View style={styles.socialDividerLine} />
+                <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with</Text>
+                <View style={styles.socialDividerLine} />
+              </View>
+
+              <View style={styles.socialGroup}>
+                <AnimatedPressable
+                  style={[styles.socialFullBtn, (!!socialLoading || isSubmitting) && styles.socialBtnDisabled]}
+                  activeOpacity={0.85}
+                  onPress={handleAppleSignIn}
+                  disabled={!!socialLoading || isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Apple"
+                  accessibilityHint="Sign in using your Apple ID"
+                >
+                  {socialLoading === 'apple' ? (
+                    <ActivityIndicator color={colors.textPrimary} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={20} color={colors.textPrimary} />
+                      <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Apple</Text>
+                    </>
+                  )}
+                </AnimatedPressable>
+
+                {hasGoogleOAuth ? (
+                  <AnimatedPressable
+                    style={[styles.socialFullBtn, (!!socialLoading || isSubmitting) && styles.socialBtnDisabled]}
+                    activeOpacity={0.85}
+                    onPress={handleGoogleSignIn}
+                    disabled={!!socialLoading || isSubmitting}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Google"
+                    accessibilityHint="Sign in using your Google account"
+                  >
+                    {socialLoading === 'google' ? (
+                      <ActivityIndicator color={colors.textPrimary} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
+                        <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Google</Text>
+                      </>
+                    )}
+                  </AnimatedPressable>
+                ) : null}
+              </View>
+
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>more options</Text>
@@ -566,6 +718,47 @@ function createStyles(colors: ThemeColors) {
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
   forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0, marginTop: Space.md + 2 },
+  socialDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    marginTop: Space.md + 2,
+    marginBottom: Space.sm,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: Stroke.hairline,
+    backgroundColor: colors.border,
+  },
+  socialDividerText: {
+    color: colors.textMuted,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    textTransform: 'uppercase',
+    letterSpacing: LetterSpacing.caps,
+  },
+  socialGroup: {
+    gap: Space.sm + 2,
+    marginBottom: Space.sm,
+  },
+  socialFullBtn: {
+    flexDirection: 'row',
+    height: Space.xxl + Space.xl + 4,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm + 2,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+  },
+  socialFullText: {
+    color: colors.textPrimary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
+  },
+  socialBtnDisabled: { opacity: 0.7 },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.smMd,

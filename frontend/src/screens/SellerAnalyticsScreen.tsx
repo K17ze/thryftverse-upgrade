@@ -36,6 +36,213 @@ const PERIOD_OPTIONS: { key: Period; label: string }[] = [
   { key: '1y', label: '1y' },
 ];
 
+// ── Simple bar chart for listing activity over time ──
+// Derived from real listing createdAt timestamps. No fabricated data.
+// Shows listings created per day (7d/30d) or per week (90d) or per month (1y).
+interface ChartBucket {
+  label: string;
+  count: number;
+}
+
+function computeActivityBuckets(listings: ListingApiItem[], period: Period): ChartBucket[] {
+  const now = Date.now();
+  const buckets: ChartBucket[] = [];
+
+  if (period === '7d') {
+    // 7 daily buckets
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = now - i * dayMs;
+      const date = new Date(dayStart);
+      const dayLabel = date.toLocaleDateString('en-GB', { weekday: 'short' });
+      buckets.push({ label: dayLabel, count: 0 });
+    }
+    const bucketStart = now - 7 * dayMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const dayIndex = Math.floor((created - bucketStart) / dayMs);
+        if (dayIndex >= 0 && dayIndex < 7) {
+          buckets[dayIndex].count++;
+        }
+      }
+    }
+  } else if (period === '30d') {
+    // 30 daily buckets — thin bars
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (let i = 29; i >= 0; i--) {
+      const dayStart = now - i * dayMs;
+      const date = new Date(dayStart);
+      const dayLabel = date.getDate().toString();
+      buckets.push({ label: dayLabel, count: 0 });
+    }
+    const bucketStart = now - 30 * dayMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const dayIndex = Math.floor((created - bucketStart) / dayMs);
+        if (dayIndex >= 0 && dayIndex < 30) {
+          buckets[dayIndex].count++;
+        }
+      }
+    }
+  } else if (period === '90d') {
+    // ~13 weekly buckets
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const numWeeks = 13;
+    for (let i = numWeeks - 1; i >= 0; i--) {
+      const weekStart = now - i * weekMs;
+      const date = new Date(weekStart);
+      const weekLabel = `${date.getDate()}/${date.getMonth() + 1}`;
+      buckets.push({ label: weekLabel, count: 0 });
+    }
+    const bucketStart = now - numWeeks * weekMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const weekIndex = Math.floor((created - bucketStart) / weekMs);
+        if (weekIndex >= 0 && weekIndex < numWeeks) {
+          buckets[weekIndex].count++;
+        }
+      }
+    }
+  } else {
+    // 1y — 12 monthly buckets
+    const now2 = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+      const monthLabel = d.toLocaleDateString('en-GB', { month: 'short' });
+      buckets.push({ label: monthLabel, count: 0 });
+    }
+    for (const l of listings) {
+      const created = new Date(l.createdAt);
+      if (!Number.isNaN(created.getTime())) {
+        for (let i = 0; i < 12; i++) {
+          const bucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i), 1);
+          const nextBucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i) + 1, 1);
+          if (created >= bucketDate && created < nextBucketDate) {
+            buckets[i].count++;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return buckets;
+}
+
+// ── Activity chart component ──
+// Simple View-based bar chart. No external library. Uses theme colors.
+// Per AGENTS.md §4: flat, no card chrome. Hierarchy from typography.
+function ActivityChart({ buckets, colors }: { buckets: ChartBucket[]; colors: ThemeColors }) {
+  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  const hasData = buckets.some((b) => b.count > 0);
+  const isCompact = buckets.length > 10;
+
+  if (!hasData) {
+    return (
+      <View style={chartStyles.emptyWrap}>
+        <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
+        <Text style={[chartStyles.emptyText, { color: colors.textMuted }]}>
+          No listing activity in this period
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={chartStyles.container}>
+      {/* Bars row */}
+      <View style={chartStyles.barsRow}>
+        {buckets.map((bucket, i) => {
+          const heightPct = (bucket.count / maxCount) * 100;
+          return (
+            <View key={i} style={chartStyles.barColumn}>
+              <View style={chartStyles.barTrack}>
+                <View
+                  style={[
+                    chartStyles.bar,
+                    {
+                      height: `${heightPct}%`,
+                      backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {/* Labels row — show every Nth label for compact charts */}
+      <View style={chartStyles.labelsRow}>
+        {buckets.map((bucket, i) => {
+          const showLabel = isCompact
+            ? i % Math.ceil(buckets.length / 6) === 0 || i === buckets.length - 1
+            : true;
+          return (
+            <View key={i} style={chartStyles.labelColumn}>
+              {showLabel && (
+                <Text style={[chartStyles.labelText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {bucket.label}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const chartStyles = StyleSheet.create({
+  container: {
+    paddingVertical: Space.sm,
+  },
+  barsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 80,
+    gap: 2,
+  },
+  barColumn: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  barTrack: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 2,
+    minHeight: 2,
+  },
+  labelsRow: {
+    flexDirection: 'row',
+    marginTop: Space.xs - 2,
+    gap: 2,
+  },
+  labelColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  labelText: {
+    fontSize: 9,
+    fontFamily: Typography.family.regular,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.lg,
+  },
+  emptyText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+});
+
 export default function SellerAnalyticsScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -170,6 +377,11 @@ export default function SellerAnalyticsScreen() {
         imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
       }));
   }, [listings, topPerformersData]);
+
+  // ── Activity chart data ──
+  // Derived from real listing createdAt timestamps. Shows listings created
+  // per day (7d/30d), per week (90d), or per month (1y).
+  const activityBuckets = useMemo(() => computeActivityBuckets(listings, period), [listings, period]);
 
   // ── Needs attention: active listings with low views and no sales ──
   const needsAttention = useMemo(() => {
@@ -321,6 +533,22 @@ export default function SellerAnalyticsScreen() {
               </Pressable>
             );
           })}
+        </View>
+
+        {/* ── Activity chart — listings created over time ──
+            Simple bar chart derived from real listing createdAt timestamps.
+            Shows listing creation activity per day/week/month depending on
+            the selected period. No fabricated data — only real listings. */}
+        <View style={styles.chartSection}>
+          <View style={styles.chartHeader}>
+            <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>
+              Listing activity
+            </Text>
+            <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>
+              {activityBuckets.reduce((sum, b) => sum + b.count, 0)} created
+            </Text>
+          </View>
+          <ActivityChart buckets={activityBuckets} colors={colors} />
         </View>
 
         {/* ── Supporting KPIs as flat rows ── */}
@@ -502,6 +730,29 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
+    },
+
+    // ── Activity chart section ──
+    chartSection: {
+      marginTop: Space.sm,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    chartHeader: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      marginBottom: Space.xs,
+    },
+    chartTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+    },
+    chartSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      fontVariant: ['tabular-nums'],
     },
 
     // ── KPI flat rows ──

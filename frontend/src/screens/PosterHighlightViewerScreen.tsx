@@ -7,6 +7,7 @@ import {
   Pressable,
   Dimensions,
   AccessibilityInfo,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +25,10 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS,
+} from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterHighlightViewer'>;
 
@@ -32,6 +37,7 @@ const TICK_MS = 50;
 const DEFAULT_DURATION = 5000;
 const ERROR_ICON_SIZE = 40;
 const PAUSE_ICON_SIZE = 20;
+const SWIPE_THRESHOLD = 40;
 
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
@@ -98,6 +104,36 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   React.useEffect(() => {
     setCaptionExpanded(false);
   }, [activeFrame?.frameId]);
+
+  // Android hardware back button — dismiss the viewer (matches close button
+  // and swipe-down dismiss).
+  React.useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      haptic.light();
+      navigation.goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [navigation, haptic]);
+
+  // Swipe-down to dismiss gesture — matches the main PosterViewerScreen's
+  // primary exit gesture (Instagram/Snapchat pattern).
+  const handleSwipeDismiss = React.useCallback(() => {
+    haptic.heavy();
+    navigation.goBack();
+  }, [haptic, navigation]);
+
+  const dismissPanGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(SWIPE_THRESHOLD)
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_THRESHOLD && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+            runOnJS(handleSwipeDismiss)();
+          }
+        }),
+    [handleSwipeDismiss]
+  );
 
   const goNextFrame = React.useCallback(() => {
     setProgress(0);
@@ -209,9 +245,12 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   }
 
   const isVideo = activeFrame.mediaType === 'video' || isVideoUrl(activeFrame.mediaUrl);
+  const isSingleFrame = highlight.frames.length <= 1;
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={dismissPanGesture}>
+        <View style={StyleSheet.absoluteFill}>
       <StatusBar barStyle="light-content" />
 
       {/* Media layer */}
@@ -328,40 +367,47 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         <View style={styles.iconBtn} />
       </SafeAreaView>
 
-      {/* Progress segments */}
-      <View style={[styles.progressWrap, { top: insets.top + 52 }]} pointerEvents="none">
-        <PosterProgressSegments
-          total={highlight.frames.length}
-          currentIndex={frameIndex}
-          progress={progress}
-          isPaused={isPaused}
-          isLoading={isLoading}
-          reducedMotion={reducedMotion}
-        />
-      </View>
+      {/* Progress segments — hidden for single-frame highlights (no
+          navigation needed, cleaner immersive view). */}
+      {!isSingleFrame && (
+        <View style={[styles.progressWrap, { top: insets.top + 52 }]} pointerEvents="none">
+          <PosterProgressSegments
+            total={highlight.frames.length}
+            currentIndex={frameIndex}
+            progress={progress}
+            isPaused={isPaused}
+            isLoading={isLoading}
+            reducedMotion={reducedMotion}
+          />
+        </View>
+      )}
 
-      {/* Tap zones for frame navigation */}
-      <View
-        style={[styles.tapLayer, { top: insets.top + 52, bottom: insets.bottom + 24 }]}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          style={styles.tapLeft}
-          onPress={goPrevFrame}
-          onLongPress={() => { setIsPaused(true); haptic.light(); }}
-          onPressOut={() => { if (isPaused) setIsPaused(false); }}
-          accessibilityLabel="Previous frame"
-          accessibilityRole="button"
-        />
-        <Pressable
-          style={styles.tapRight}
-          onPress={goNextFrame}
-          onLongPress={() => { setIsPaused(true); haptic.light(); }}
-          onPressOut={() => { if (isPaused) setIsPaused(false); }}
-          accessibilityLabel="Next frame"
-          accessibilityRole="button"
-        />
-      </View>
+      {/* Tap zones for frame navigation — only for multi-frame highlights.
+          Single-frame highlights have no navigation, so tap zones are
+          omitted to avoid confusing empty press targets. */}
+      {!isSingleFrame && (
+        <View
+          style={[styles.tapLayer, { top: insets.top + 52, bottom: insets.bottom + 24 }]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            style={styles.tapLeft}
+            onPress={goPrevFrame}
+            onLongPress={() => { setIsPaused(true); haptic.light(); }}
+            onPressOut={() => { if (isPaused) setIsPaused(false); }}
+            accessibilityLabel="Previous frame"
+            accessibilityRole="button"
+          />
+          <Pressable
+            style={styles.tapRight}
+            onPress={goNextFrame}
+            onLongPress={() => { setIsPaused(true); haptic.light(); }}
+            onPressOut={() => { if (isPaused) setIsPaused(false); }}
+            accessibilityLabel="Next frame"
+            accessibilityRole="button"
+          />
+        </View>
+      )}
 
       {/* Caption (if present and not a text-only frame).
           3-line clamp with "more" tap to expand.
@@ -386,13 +432,17 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         </Pressable>
       )}
 
-      {/* Frame counter */}
-      <View style={[styles.frameCounter, { bottom: insets.bottom + 8 }]} pointerEvents="none">
-        <Text style={styles.frameCounterText}>
-          {frameIndex + 1} / {highlight.frames.length}
-        </Text>
-      </View>
-    </View>
+      {/* Frame counter — hidden for single-frame highlights */}
+      {!isSingleFrame && (
+        <View style={[styles.frameCounter, { bottom: insets.bottom + 8 }]} pointerEvents="none">
+          <Text style={styles.frameCounterText}>
+            {frameIndex + 1} / {highlight.frames.length}
+          </Text>
+        </View>
+      )}
+        </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 

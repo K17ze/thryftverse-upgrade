@@ -5,6 +5,8 @@ export type OrderClassification =
   | 'cancelled'
   | 'unknown';
 
+import type { ThemeColors } from '../../theme/ThemeContext';
+
 export type OrderRole = 'buyer' | 'seller';
 
 export type StatusTone = 'pending' | 'active' | 'success' | 'danger' | 'muted';
@@ -96,25 +98,56 @@ export function humaniseStatus(status: string): string {
     .join(' ');
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  created: '#888',
-  paid: '#666',
-  processing: '#666',
-  preparing: '#666',
-  shipped: '#666',
-  'in transit': '#666',
-  'out for delivery': '#666',
-  delivered: '#34a853',
-  completed: '#34a853',
-  cancelled: '#dc3545',
-  refunded: '#dc3545',
-  'delivery failed': '#dc3545',
-  returned: '#dc3545',
-};
-
-export function getStatusColor(status: string, fallbackColor = '#888'): string {
+/**
+ * Maps a normalised order status to a semantic tone, then resolves that tone
+ * to a theme token colour. This replaces the former hardcoded hex map and
+ * ensures status badges are fully theme-aware (light/dark/high-contrast).
+ *
+ * Tone mapping (informed by August 2026 mobile UX research):
+ *  - pending  (created/awaiting payment)  → warning (amber)
+ *  - active   (processing/preparing)      → commerceTrust (blue)
+ *  - active   (shipped/in transit/OFD)    → social (muted mauve — distinct from processing blue)
+ *  - success  (delivered/completed)       → success (green)
+ *  - danger   (cancelled/refunded/failed) → danger (red)
+ *  - muted    (unknown)                   → textMuted
+ */
+export function getStatusColor(
+  status: string,
+  colorsOrFallback: ThemeColors | string = '#888',
+): string {
   const key = normaliseOrderStatus(status);
-  return STATUS_COLORS[key] ?? fallbackColor;
+  const tone = getStatusTone(key);
+
+  // Backward-compat: if a plain string fallback is passed, use legacy hex.
+  if (typeof colorsOrFallback === 'string') {
+    const LEGACY_HEX: Record<StatusTone, string> = {
+      pending: '#B8742E',
+      active: key === 'shipped' || key === 'in transit' || key === 'out for delivery' ? '#6B3245' : '#06489A',
+      success: '#215634',
+      danger: '#9b0202',
+      muted: colorsOrFallback,
+    };
+    return LEGACY_HEX[tone];
+  }
+
+  const colors = colorsOrFallback;
+  switch (tone) {
+    case 'success':
+      return colors.success;
+    case 'danger':
+      return colors.danger;
+    case 'pending':
+      return colors.warning;
+    case 'active':
+      // Transit stages get a distinct hue from processing stages so buyers
+      // can scan the list and immediately see "shipped" vs "preparing".
+      if (key === 'shipped' || key === 'in transit' || key === 'out for delivery') {
+        return colors.social;
+      }
+      return colors.commerceTrust;
+    default:
+      return colors.textMuted;
+  }
 }
 
 export function getStatusTone(status: string): StatusTone {

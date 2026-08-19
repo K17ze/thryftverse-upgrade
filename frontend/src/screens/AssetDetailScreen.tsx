@@ -23,7 +23,9 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   fetchCoOwnOrderBook,
+  fetchCoOwnDistributions,
   type CoOwnOrderBookSnapshot,
+  type CoOwnDistribution,
   type MarketCoOwnAsset,
   type MarketCoOwnHolding,
   createCoOwnPriceAlert,
@@ -128,6 +130,7 @@ export default function AssetDetailScreen() {
 
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
+  const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
@@ -201,6 +204,22 @@ export default function AssetDetailScreen() {
     void fetchCoOwnOrderBook(assetId, { limit: 40 })
       .then((book) => { if (!cancelled) setOrderBook(book); })
       .catch(() => { if (!cancelled) setOrderBookError(true); });
+    return () => { cancelled = true; };
+  }, [assetId]);
+
+  // ── Last distribution fetch — most recent settled distribution for this asset ──
+  React.useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    void fetchCoOwnDistributions({ assetId, limit: 1 })
+      .then((result) => {
+        if (cancelled) return;
+        setLastDistribution(result.items[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) return;
+        setLastDistribution(null);
+      });
     return () => { cancelled = true; };
   }, [assetId]);
 
@@ -365,6 +384,25 @@ export default function AssetDetailScreen() {
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
   const viewerPct = yourUnits != null && totalUnits > 0
     ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
+    : null;
+  // Ownership structure segments for the stacked bar visualization.
+  // yourUnits comes from the holdings contract; otherHolders is derived.
+  const yourUnitsInt = yourUnits ?? 0;
+  const otherHoldersUnits = Math.max(0, totalUnits - availableUnits - yourUnitsInt);
+  const yourSegmentPct = totalUnits > 0 ? (yourUnitsInt / totalUnits) * 100 : 0;
+  const otherHoldersSegmentPct = totalUnits > 0 ? (otherHoldersUnits / totalUnits) * 100 : 0;
+  const availableSegmentPct = totalUnits > 0 ? (availableUnits / totalUnits) * 100 : 0;
+  // Last distribution formatted values
+  const lastDistributionAmount = lastDistribution?.amountGbpMinor != null
+    ? lastDistribution.amountGbpMinor / 100
+    : null;
+  const lastDistributionDate = lastDistribution?.settledAt
+    ? new Date(lastDistribution.settledAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : lastDistribution?.createdAt
+      ? new Date(lastDistribution.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null;
+  const lastDistributionPerUnit = lastDistribution?.perUnitGbpMinor != null
+    ? lastDistribution.perUnitGbpMinor / 100
     : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
@@ -743,6 +781,57 @@ export default function AssetDetailScreen() {
               </Text>
             ) : null}
           </View>
+
+          {/* Ownership structure — stacked bar showing supply breakdown.
+              Your position (brand), other holders (textSecondary), available (surfaceAlt).
+              Flat canvas element, no card chrome. Only shown when there is a meaningful
+              allocation (not 100% available). */}
+          {allocatedPct > 0 && (
+            <View style={styles.ownershipStructureWrap}>
+              <View style={[styles.ownershipBar, { backgroundColor: colors.surfaceAlt }]}>
+                {yourSegmentPct > 0 && (
+                  <View style={{
+                    width: `${yourSegmentPct}%`,
+                    height: '100%',
+                    backgroundColor: colors.brand,
+                  }} />
+                )}
+                {otherHoldersSegmentPct > 0 && (
+                  <View style={{
+                    width: `${otherHoldersSegmentPct}%`,
+                    height: '100%',
+                    backgroundColor: colors.textSecondary,
+                  }} />
+                )}
+              </View>
+              <View style={styles.ownershipLegend}>
+                {yourSegmentPct > 0 && (
+                  <View style={styles.ownershipLegendItem}>
+                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.brand }]} />
+                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
+                      You {yourSegmentPct.toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+                {otherHoldersSegmentPct > 0 && (
+                  <View style={styles.ownershipLegendItem}>
+                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.textSecondary }]} />
+                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {asset.holders > 0 ? `${asset.holders - (isHolder ? 1 : 0)} other holders` : 'Holders'} {otherHoldersSegmentPct.toFixed(0)}%
+                    </Text>
+                  </View>
+                )}
+                {availableSegmentPct > 0 && (
+                  <View style={styles.ownershipLegendItem}>
+                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]} />
+                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
+                      Available {availableSegmentPct.toFixed(0)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* ════════════════════════════════════════════════════════════
@@ -792,18 +881,24 @@ export default function AssetDetailScreen() {
 
         {/* ── Holder rights/distributions quick summary ──
             Spec P1-B §5: rights/distributions come before market for
-            holders. Spec §7 language: "Voting rights", "Next
-            distribution". Taps open the full rights sheet. */}
+            holders. Shows last distribution amount/date when available.
+            Taps open the full rights sheet. */}
         {isHolder ? (
           <Pressable
             onPress={() => setRightsSheetVisible(true)}
             hitSlop={4}
             style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
             accessibilityRole="button"
-            accessibilityLabel="Voting rights and next distribution. Review rights."
+            accessibilityLabel={
+              lastDistributionAmount != null && lastDistributionDate != null
+                ? `Last distribution ${formatCoOwnIze(lastDistributionAmount)} on ${lastDistributionDate}. Review rights.`
+                : 'Voting rights and distributions. Review rights.'
+            }
           >
             <Text style={[styles.trustFactualText, { color: colors.textSecondary }]} numberOfLines={1}>
-              {`Voting rights · Next distribution`}
+              {lastDistributionAmount != null && lastDistributionDate != null
+                ? `Last distribution ${formatCoOwnIze(lastDistributionAmount)} · ${lastDistributionDate}`
+                : `Voting rights · Next distribution`}
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
@@ -1291,6 +1386,46 @@ export default function AssetDetailScreen() {
             value={asset.rights?.economicRights ?? 'Not scheduled'}
             muted={!asset.rights?.economicRights}
           />
+          {/* Last distribution — shows actual settled distribution data when available */}
+          {lastDistribution != null && lastDistributionAmount != null ? (
+            <>
+              <CommerceDetailMetricRow
+                label="Last distribution"
+                value={formatCoOwnIze(lastDistributionAmount)}
+              />
+              {lastDistributionDate != null && (
+                <CommerceDetailMetricRow
+                  label="Last distribution date"
+                  value={lastDistributionDate}
+                />
+              )}
+              {lastDistributionPerUnit != null && (
+                <CommerceDetailMetricRow
+                  label="Per unit"
+                  value={formatCoOwnIze(lastDistributionPerUnit)}
+                />
+              )}
+              {lastDistribution.distributionType && (
+                <CommerceDetailMetricRow
+                  label="Type"
+                  value={lastDistribution.distributionType}
+                  muted
+                />
+              )}
+              <Pressable
+                onPress={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
+                hitSlop={8}
+                style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
+                accessibilityRole="button"
+                accessibilityLabel="View full distribution history"
+              >
+                <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
+                  Distribution history
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+              </Pressable>
+            </>
+          ) : null}
 
           {/* ── Risks ── */}
           <View style={styles.dossierSubHeader}>
@@ -1754,6 +1889,41 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  // ── Ownership structure stacked bar (spec 14 V3) ──
+  // Flat canvas element within the identity section. Shows supply breakdown
+  // as a 3-segment bar: your position (brand), other holders (textSecondary),
+  // available (surfaceAlt). No card chrome — just the bar and legend.
+  ownershipStructureWrap: {
+    marginTop: Space.md,
+    gap: Space.xs,
+  },
+  ownershipBar: {
+    height: Space.sm,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  ownershipLegend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+  },
+  ownershipLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  ownershipLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+  },
+  ownershipLegendText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Trust factual line (spec 14 V3: flat, one tap target) ──

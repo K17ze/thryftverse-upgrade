@@ -23,6 +23,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CURRENCIES } from '../constants/currencies';
 import { useStore } from '../store/useStore';
+import { useSellerTrust } from '../platform/product';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
 import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
@@ -144,6 +145,7 @@ export default function SellScreen() {
   const updateSellDraft = useStore((s) => s.updateSellDraft);
   const clearSellDraft = useStore((s) => s.clearSellDraft);
   const currentUser = useStore((s) => s.currentUser);
+  const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [title, setTitle] = useState('');
@@ -207,6 +209,21 @@ export default function SellScreen() {
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
   const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
+  const [sellerTipsDismissed, setSellerTipsDismissed] = useState(false);
+
+  // ── New seller detection ──
+  // Per research: new seller tips/guidance if first-time seller.
+  // Uses real backend data (completedSales) — no fabricated thresholds.
+  const isNewSeller = !sellerTrust?.completedSales || sellerTrust.completedSales === 0;
+
+  // ── Draft content detection ──
+  // Shows a "draft in progress" hint when the user has meaningful draft
+  // content (at least a title or photos). The draft is auto-restored on
+  // mount, so this confirms to the user that their previous work is back.
+  const hasDraftContent = useMemo(() =>
+    Boolean(title.trim() || mediaDraftItems.length > 0 || price.trim()),
+    [title, mediaDraftItems.length, price],
+  );
 
   // Reset dismiss when photos change (new photo -> new suggestions)
   useEffect(() => {
@@ -1031,6 +1048,102 @@ export default function SellScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
+          {/* -- 1a. DRAFT IN PROGRESS HINT -- */}
+          {/* Shows when the user has meaningful draft content restored from
+              the store. Confirms their previous work is back without being
+              intrusive. Auto-hides once the user starts editing. */}
+          {hasDraftContent && !title.trim() && mediaDraftItems.length > 0 && (
+            <View style={styles.draftHintRow}>
+              <Ionicons name="document-text-outline" size={14} color={colors.brand} />
+              <Text style={[styles.draftHintText, { color: colors.textSecondary }]}>
+                Draft restored — pick up where you left off
+              </Text>
+            </View>
+          )}
+
+          {/* -- 1b. QUICK ACTIONS ROW -- */}
+          {/* Per research: quick actions for related seller tasks.
+              Transparent 44pt targets with 20-24pt glyphs (AGENTS.md §4).
+              Only shows when the form is empty (no draft content) to avoid
+              cluttering an in-progress listing. */}
+          {!hasDraftContent && (
+            <View style={styles.sellQuickActions}>
+              <Pressable
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                onPress={() => { haptics.tap(); navigation.navigate('BulkListing'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Bulk listing — list multiple items at once"
+                accessibilityHint="Opens the bulk listing tool"
+              >
+                <Ionicons name="layers-outline" size={20} color={colors.brand} />
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Bulk list</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                onPress={() => { haptics.tap(); navigation.navigate('InventoryManagement'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Inventory dashboard"
+                accessibilityHint="Opens the inventory management screen"
+              >
+                <Ionicons name="grid-outline" size={20} color={colors.brand} />
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Inventory</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                onPress={() => { haptics.tap(); navigation.navigate('SellerHub'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Seller hub"
+                accessibilityHint="Opens the seller hub dashboard"
+              >
+                <Ionicons name="storefront-outline" size={20} color={colors.brand} />
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Hub</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* -- 1c. NEW SELLER TIPS -- */}
+          {/* Per research: new seller tips/guidance if first-time seller.
+              Dismissible, only shows when isNewSeller and not dismissed.
+              Flat inline — no card chrome (§4 surface budget). */}
+          {isNewSeller && !sellerTipsDismissed && !hasDraftContent && (
+            <View style={styles.sellerTipsSection}>
+              <View style={styles.sellerTipsHeader}>
+                <Ionicons name="bulb-outline" size={15} color={colors.brand} />
+                <Text style={[styles.sellerTipsTitle, { color: colors.textPrimary }]}>
+                  Selling tips
+                </Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setSellerTipsDismissed(true)}
+                  style={({ pressed }) => pressed && { opacity: 0.5 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss selling tips"
+                >
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </Pressable>
+              </View>
+              <View style={styles.sellerTipsBody}>
+                <View style={styles.sellerTipRow}>
+                  <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
+                    Use natural light and capture all angles
+                  </Text>
+                </View>
+                <View style={styles.sellerTipRow}>
+                  <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
+                    Price using recent sold comparables
+                  </Text>
+                </View>
+                <View style={styles.sellerTipRow}>
+                  <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
+                    Respond quickly to buyer questions
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
           {/* -- 2. LARGE LISTING MEDIA STUDIO -- */}
           <ListingMediaStudio
             items={mediaDraftItems}
@@ -2588,5 +2701,76 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: Radius.full,
+  },
+
+  /* -- draft hint (flat inline) -- */
+  draftHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + 2,
+  },
+  draftHintText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- quick actions row (transparent targets, no chrome) -- */
+  sellQuickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  sellQuickAction: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Space.xs - 2,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  sellQuickActionLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- new seller tips (flat inline, no card chrome) -- */
+  sellerTipsSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs + 2,
+  },
+  sellerTipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  sellerTipsTitle: {
+    flex: 1,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+  },
+  sellerTipsBody: {
+    gap: Space.xs + 1,
+  },
+  sellerTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  sellerTipText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

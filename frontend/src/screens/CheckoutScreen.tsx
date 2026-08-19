@@ -1333,7 +1333,7 @@ export default function CheckoutScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 300 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         accessibilityElementsHidden={addCardSheetVisible || paymentSelectorVisible}
         importantForAccessibility={addCardSheetVisible || paymentSelectorVisible ? 'no-hide-descendants' : 'auto'}
@@ -1425,6 +1425,17 @@ export default function CheckoutScreen() {
           }
           accessibilityHint="Add or change your payment method"
         />
+
+        {/* Secure payment trust signal — placed inline near the payment method
+            row where card-security anxiety peaks. Per 2026 UX research:
+            "A 'Secure checkout' message next to the card number field is more
+            effective than security badges in the footer." */}
+        <View style={styles.securePaymentRow}>
+          <Ionicons name="lock-closed" size={12} color={colors.success} />
+          <Text style={[styles.securePaymentText, { color: colors.success }]}>
+            Secure payment · card details encrypted
+          </Text>
+        </View>
         </View>
 
         {/* 5b. Buyer protection strip — the single authored trust moment,
@@ -1578,7 +1589,10 @@ export default function CheckoutScreen() {
           </Text>
         </View>
 
-        {/* Pay button row */}
+        {/* Pay button row — digital wallet buttons first (Apple Pay/Google Pay),
+            then the generic Pay button. Per 2026 UX research: "Place Google Pay
+            at the top of the list of payment options, above manual entry fields."
+            This ordering surfaces one-tap biometric payment before card entry. */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
           {Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting && (
@@ -1597,6 +1611,26 @@ export default function CheckoutScreen() {
             >
               <Ionicons name="logo-apple" size={18} color={colors.textInverse} />
               <Text style={[styles.applePayBtnText, t.applePayBtnText]}>Pay</Text>
+            </Pressable>
+          )}
+
+          {/* Google Pay as primary CTA on Android when enabled */}
+          {Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay') && !isSubmitting && (
+            <Pressable
+              onPress={() => { haptics.press(); handlePay(); }}
+              style={({ pressed }) => [
+                styles.googlePayBtn,
+                { backgroundColor: colors.textPrimary },
+                pressed && styles.payBtnPressed,
+                (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+              ]}
+              disabled={!checkoutEligible || isInteractionLocked}
+              accessibilityRole="button"
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Google Pay`}
+              accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
+            >
+              <Ionicons name="logo-google" size={18} color={colors.textInverse} />
+              <Text style={[styles.applePayBtnText, { color: colors.textInverse }]}>G Pay</Text>
             </Pressable>
           )}
 
@@ -2254,6 +2288,18 @@ const styles = StyleSheet.create({
   protectionStripWrap: {
     marginTop: Space.sm,
   },
+  securePaymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.xs,
+  },
+  securePaymentText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
   protectionIncludedRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2531,10 +2577,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     minWidth: 180,
-    paddingVertical: Space.md + 2,
+    paddingVertical: Space.md + Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: RadiusRoleValue.pillAvatar,
-    minHeight: 52,
+    minHeight: 72,
   },
   applePayBtn: {
     flexDirection: 'row',
@@ -2542,7 +2588,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     minWidth: 140,
-    height: 52,
+    height: 72,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    marginBottom: Space.xs,
+  },
+  googlePayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    minWidth: 140,
+    height: 72,
     borderRadius: RadiusRoleValue.pillAvatar,
     marginBottom: Space.xs,
   },

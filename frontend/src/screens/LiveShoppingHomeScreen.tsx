@@ -142,6 +142,90 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
   );
 });
 
+// ── Replay card (past events) ──
+const ReplayCard = React.memo(function ReplayCard({
+  session,
+  onPress,
+}: {
+  session: LiveSession;
+  onPress: () => void;
+}) {
+  const styles = useStyles();
+  const { colors } = useAppTheme();
+
+  const durationLabel = (() => {
+    if (!session.startedAt || !session.endedAt) return '';
+    const start = new Date(session.startedAt).getTime();
+    const end = new Date(session.endedAt).getTime();
+    const diffMin = Math.round((end - start) / 60_000);
+    if (diffMin < 60) return `${diffMin}m`;
+    return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+  })();
+
+  const endedLabel = (() => {
+    if (!session.endedAt) return '';
+    const end = new Date(session.endedAt);
+    const now = new Date();
+    const diffHr = Math.round((now.getTime() - end.getTime()) / (60 * 60 * 1000));
+    if (diffHr < 1) return 'Just ended';
+    if (diffHr < 24) return `${diffHr}h ago`;
+    return `${Math.floor(diffHr / 24)}d ago`;
+  })();
+
+  return (
+    <AnimatedPressable
+      style={styles.replayCard}
+      onPress={onPress}
+      activeOpacity={0.9}
+      scaleValue={0.98}
+      accessibilityRole="button"
+      accessibilityLabel={`Replay: ${session.title} by ${session.sellerName}. ${endedLabel}${durationLabel ? `, duration ${durationLabel}` : ''}. Tap to watch replay.`}
+    >
+      <View style={styles.replayThumbWrap}>
+        <CachedImage
+          uri={session.thumbnail}
+          style={StyleSheet.absoluteFill}
+          containerStyle={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          locations={[0.5, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={styles.replayPlayOverlay}>
+          <Ionicons name="play" size={20} color="#FFFFFF" />
+        </View>
+        {durationLabel && (
+          <View style={styles.replayDurationBadge}>
+            <Text style={styles.replayDurationText}>{durationLabel}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.replayBody}>
+        <View style={styles.replaySellerRow}>
+          <CachedImage
+            uri={session.sellerAvatar}
+            style={styles.replayAvatar}
+            contentFit="cover"
+          />
+          <View style={styles.replaySellerText}>
+            <View style={styles.replayNameRow}>
+              <Text style={styles.replaySellerName} numberOfLines={1}>{session.sellerName}</Text>
+              {session.sellerVerified && (
+                <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
+              )}
+            </View>
+            <Text style={styles.replayEndedLabel}>{endedLabel}</Text>
+          </View>
+        </View>
+        <Text style={styles.replayTitle} numberOfLines={2}>{session.title}</Text>
+      </View>
+    </AnimatedPressable>
+  );
+});
+
 // ── Upcoming row ──
 const UpcomingRow = React.memo(function UpcomingRow({
   session,
@@ -155,6 +239,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
   formatScheduled: (iso: string) => string;
 }) {
   const styles = useStyles();
+  const { colors } = useAppTheme();
   const scheduledLabel = session.scheduledAt ? formatScheduled(session.scheduledAt) : '';
 
   return (
@@ -178,9 +263,14 @@ const UpcomingRow = React.memo(function UpcomingRow({
         <View style={styles.upcomingBody}>
           <Text style={styles.upcomingScheduled}>{scheduledLabel}</Text>
           <View style={styles.upcomingSellerRow}>
+            <CachedImage
+              uri={session.sellerAvatar}
+              style={styles.upcomingAvatar}
+              contentFit="cover"
+            />
             <Text style={styles.upcomingSellerName} numberOfLines={1}>{session.sellerName}</Text>
             {session.sellerVerified && (
-              <Ionicons name="checkmark-circle" size={16} color="#3B9EFF" />
+              <Ionicons name="checkmark-circle" size={14} color={colors.brand} />
             )}
           </View>
           <Text style={styles.upcomingTitle} numberOfLines={2}>{session.title}</Text>
@@ -335,6 +425,10 @@ export default function LiveShoppingHomeScreen() {
   );
   const upcomingSessions = useMemo(
     () => summary?.sessions.filter((s) => s.status === 'upcoming') ?? [],
+    [summary],
+  );
+  const endedSessions = useMemo(
+    () => summary?.sessions.filter((s) => s.status === 'ended') ?? [],
     [summary],
   );
 
@@ -531,14 +625,26 @@ export default function LiveShoppingHomeScreen() {
               </View>
             )}
 
-            {/* Ended sessions (collapsed hint) */}
-            {summary && summary.sessions.some((s) => s.status === 'ended') && (
-              <View style={styles.endedHint}>
-                <Ionicons name="checkmark-done-circle-outline" size={16} color={colors.textMuted} />
-                <Text style={styles.endedHintText}>
-                  {summary.sessions.filter((s) => s.status === 'ended').length} session
-                  {summary.sessions.filter((s) => s.status === 'ended').length === 1 ? '' : 's'} ended recently
-                </Text>
+            {/* Past events / replays */}
+            {endedSessions.length > 0 && (
+              <View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Past Events</Text>
+                  <Text style={styles.sectionCount}>{endedSessions.length} replay{endedSessions.length === 1 ? '' : 's'}</Text>
+                </View>
+                <HorizontalRail
+                  contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}
+                  decelerationRate="fast"
+                  accessibilityLabel="Past event replays"
+                >
+                  {endedSessions.map((session) => (
+                    <ReplayCard
+                      key={session.id}
+                      session={session}
+                      onPress={() => navigation.navigate('LiveStreamViewer', { sessionId: session.id })}
+                    />
+                  ))}
+                </HorizontalRail>
               </View>
             )}
           </View>
@@ -815,6 +921,11 @@ function useStyles() {
           alignItems: 'center',
           gap: Space.xs,
         },
+        upcomingAvatar: {
+          width: Space.lg,
+          height: Space.lg,
+          borderRadius: Radius.full,
+        },
         upcomingSellerName: {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.regular,
@@ -877,6 +988,88 @@ function useStyles() {
           fontFamily: Typography.family.medium,
           color: colors.textMuted,
           fontVariant: ['tabular-nums'],
+        },
+        // ── Replay card ──
+        replayCard: {
+          width: FEATURED_CARD_WIDTH,
+          borderRadius: Radius.lg,
+          overflow: 'hidden',
+          backgroundColor: colors.surface,
+          borderWidth: Stroke.hairline,
+          borderColor: colors.border,
+        },
+        replayThumbWrap: {
+          width: '100%',
+          height: 180,
+          position: 'relative',
+        },
+        replayPlayOverlay: {
+          position: 'absolute',
+          bottom: Space.sm,
+          left: Space.sm,
+          width: Space.xl + Space.xs,
+          height: Space.xl + Space.xs,
+          borderRadius: Radius.full,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        replayDurationBadge: {
+          position: 'absolute',
+          bottom: Space.sm,
+          right: Space.sm,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          paddingHorizontal: Space.xs + 2,
+          paddingVertical: Space.xs / 2 + 1,
+          borderRadius: Radius.sm,
+        },
+        replayDurationText: {
+          fontSize: Type.meta.size,
+          fontFamily: Typography.family.semibold,
+          color: '#FFFFFF',
+          fontVariant: ['tabular-nums'],
+        },
+        replayBody: {
+          padding: Space.sm,
+          gap: Space.xs,
+        },
+        replaySellerRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+        },
+        replayAvatar: {
+          width: Space.lg + 2,
+          height: Space.lg + 2,
+          borderRadius: Radius.full,
+        },
+        replaySellerText: {
+          flex: 1,
+          gap: Space.xs / 4,
+        },
+        replayNameRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs / 2,
+        },
+        replaySellerName: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textPrimary,
+          letterSpacing: -0.1,
+          flexShrink: 1,
+        },
+        replayEndedLabel: {
+          fontSize: Type.meta.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+        },
+        replayTitle: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textPrimary,
+          letterSpacing: Type.body.letterSpacing,
+          lineHeight: Type.body.lineHeight,
         },
       }),
     [colors],

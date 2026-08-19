@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   Alert,
+  Platform,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -119,6 +121,8 @@ export default function PaymentsScreen({ navigation }: Props) {
   );
 
   const allowCards = isPaymentMethodAllowed(countryCapabilities, 'card');
+  const allowApplePay = isPaymentMethodAllowed(countryCapabilities, 'apple_pay');
+  const allowGooglePay = isPaymentMethodAllowed(countryCapabilities, 'google_pay');
   const policyLabel = formatCountryPolicyScope(countryCapabilities);
 
   const handleSetDefault = async (method: CommercePaymentMethod) => {
@@ -345,6 +349,60 @@ export default function PaymentsScreen({ navigation }: Props) {
         />
       ) : (
         <>
+          {/* Digital wallets — Apple Pay / Google Pay shown FIRST per 2026 UX
+              research: "Place Google Pay at the top of the list of payment
+              options, above manual entry fields for payment information."
+              These are device-native biometric payment methods managed by the
+              OS, not stored cards. Shown when the capability is allowed for
+              the user's region and the platform supports it. */}
+          {(allowApplePay || allowGooglePay) && (
+            <View>
+              <PremiumListSection title="Digital wallets">
+                {allowApplePay && Platform.OS === 'ios' && (
+                  <View style={styles.walletRow}>
+                    <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
+                      <Ionicons name="logo-apple" size={20} color={colors.textInverse} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.walletTitle}>Apple Pay</Text>
+                      <Text style={styles.walletSub}>Pay with Face ID or Touch ID</Text>
+                    </View>
+                    <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                      <Text style={[styles.walletBadgeText, { color: colors.success }]}>Ready</Text>
+                    </View>
+                  </View>
+                )}
+                {allowGooglePay && Platform.OS === 'android' && (
+                  <View style={styles.walletRow}>
+                    <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
+                      <Ionicons name="logo-google" size={18} color={colors.textInverse} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.walletTitle}>Google Pay</Text>
+                      <Text style={styles.walletSub}>Pay with biometric authentication</Text>
+                    </View>
+                    <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                      <Text style={[styles.walletBadgeText, { color: colors.success }]}>Ready</Text>
+                    </View>
+                  </View>
+                )}
+              </PremiumListSection>
+            </View>
+          )}
+
+          {/* Inline trust signal — placed near payment methods where card-
+              security anxiety peaks. Per 2026 UX research: "A 'Secure
+              checkout' message next to the card number field is more
+              effective than security badges in the footer." */}
+          <View style={[styles.inlineTrustRow, { borderColor: colors.border }]}>
+            <Ionicons name="lock-closed-outline" size={14} color={colors.success} />
+            <Text style={[styles.inlineTrustText, { color: colors.textSecondary }]}>
+              Secure checkout · card details encrypted by Stripe
+            </Text>
+          </View>
+
           {/* Primary Payment Method Summary */}
           <View>
             {defaultMethod ? (
@@ -445,10 +503,11 @@ export default function PaymentsScreen({ navigation }: Props) {
             </PremiumListSection>
           </View>
 
-          {/* Security Note */}
+          {/* Security note — retained below for detailed disclosure, but the
+              primary trust signal now lives inline near the payment methods. */}
           <View>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="lock-closed-outline" size={16} color={colors.success} />
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>
                 Thryftverse stores provider references and limited display details, not card numbers or security codes.
               </Text>
@@ -537,6 +596,63 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     marginLeft: Space.xs,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  // ── Digital wallet rows ──
+  walletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.md - Space.xs,
+  },
+  walletIcon: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Space.sm + Space.xs,
+  },
+  walletTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    marginBottom: Space.xs,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  walletSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
+  },
+  walletBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+  },
+  walletBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Inline trust signal ──
+  inlineTrustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+  },
+  inlineTrustText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   primaryCard: {
     borderRadius: Radius.lg,

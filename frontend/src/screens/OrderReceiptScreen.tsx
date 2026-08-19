@@ -229,6 +229,8 @@ export default function OrderReceiptScreen() {
   const platformCharge = formatFromFiat(order.platformChargeGbp, 'GBP', fiatOpts);
   const postage = formatFromFiat(order.postageFeeGbp, 'GBP', fiatOpts);
   const total = formatFromFiat(order.totalGbp, 'GBP', fiatOpts);
+  const buyerProtectionFee = order.buyerProtectionFeeGbp;
+  const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
 
   const counterpartyRole = isBuyer ? 'Seller' : 'Buyer';
   const counterparty = isBuyer ? order.seller : order.buyer;
@@ -303,9 +305,40 @@ export default function OrderReceiptScreen() {
 
           <View style={[styles.receiptDivider, t.receiptDivider]} />
 
+          {/* Itemized item — image + title + price for visual verification */}
+          <View style={styles.receiptSection}>
+            <Text style={[styles.sectionLabel, t.sectionLabel]}>Item</Text>
+            <View style={styles.itemizedRow}>
+              {order.listingImageUrl ? (
+                <CachedImage
+                  uri={order.listingImageUrl}
+                  style={styles.itemThumb}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.itemThumb, styles.itemThumbPlaceholder]}>
+                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.itemizedInfo}>
+                <Text style={[styles.itemizedTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {order.listingTitle}
+                </Text>
+                <Text style={[styles.itemizedPrice, { color: colors.textSecondary }]}>
+                  {subtotal}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.receiptDivider, t.receiptDivider]} />
+
           <View style={styles.receiptSection}>
             <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
+            {hasBuyerProtection && (
+              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, 'GBP', fiatOpts)} />
+            )}
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
@@ -380,6 +413,17 @@ export default function OrderReceiptScreen() {
         >
           <Text style={[styles.viewDetailBtnText, t.viewDetailBtnText]}>View order details</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
+          onPress={handleShare}
+          hitSlop={{ top: 8, bottom: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Save or share receipt"
+        >
+          <Ionicons name="download-outline" size={18} color={colors.brand} />
+          <Text style={[styles.saveBtnText, t.viewDetailBtnText]}>Save or share receipt</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -641,6 +685,51 @@ const styles = StyleSheet.create({
   },
   viewDetailBtnText: {
     fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Itemized item row ──
+  itemizedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  itemThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  itemThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  itemizedInfo: {
+    flex: 1,
+    gap: Space.xs - 2,
+  },
+  itemizedTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.body.lineHeight,
+  },
+  itemizedPrice: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.medium,
+  },
+  // ── Save / share button ──
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.md - 2,
+    minHeight: Space.xxl - Space.sm,
+  },
+  saveBtnPressed: {
+    opacity: 0.6,
+  },
+  saveBtnText: {
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
 });

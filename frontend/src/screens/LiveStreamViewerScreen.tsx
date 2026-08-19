@@ -1,10 +1,12 @@
 /**
- * LiveStreamViewerScreen — three-plane live shopping viewer
+ * LiveStreamViewerScreen — immersive full-screen live shopping viewer
  *
- * Architecture (2026 August research):
- * - Video plane (top): low-latency WebRTC stream or demo placeholder
- * - Product plane (middle): current lot with bid/buy-now actions
- * - Chat plane (bottom): real-time chat with system messages
+ * Architecture (2026 August research — TikTok/Whatnot pattern):
+ * - Full-screen video plane (dominant, fills the viewport)
+ * - Semi-transparent chat overlay (bottom-left, ambient)
+ * - Product showcase panel (bottom, floating above chat)
+ * - Top-left: leave button; top-right: like/share/close
+ * - Viewer count + live badge overlaid on video
  *
  * Per AGENTS.md §11 (Truthful UI):
  * - Demo mode is clearly labeled — we never fabricate that a stream is live
@@ -13,10 +15,10 @@
  *   fabricated chat messages, no fabricated "someone just bought" toasts.
  *
  * Per AGENTS.md §4 (Push to maximum quality):
- * - Full-screen immersive experience
- * - Dark background (video-focused)
- * - Three distinct zones with clear visual hierarchy
- * - Video dominates, product is actionable, chat is ambient
+ * - Full-screen immersive experience — video dominates
+ * - Overlays are semi-transparent, never blocking the stream
+ * - Product panel is actionable but compact
+ * - Chat is ambient, bottom-left, auto-scrolling
  *
  * Per AGENTS.md §14 (State coverage):
  * - Connecting, live, error (reconnect), stream ended, offline states
@@ -27,21 +29,26 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Pressable,
   TextInput,
   FlatList,
   Image,
   Dimensions,
   StatusBar,
-  LayoutAnimation,
   Platform,
   KeyboardAvoidingView,
   Share,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  FadeIn,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { RootStackParamList, NativeStackNavigationProp } from '../navigation/types';
@@ -49,6 +56,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFollowMutation } from '../platform/server';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Control, Typography, Stroke } from '../theme/designTokens';
 import {
   LiveStream,
@@ -85,6 +93,7 @@ export function LiveStreamViewerScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { show } = useToast();
+  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const sessionId = route.params.sessionId;
@@ -104,6 +113,32 @@ export function LiveStreamViewerScreen() {
   const [buyNowPending, setBuyNowPending] = useState(false);
   const [streamEndSummary, setStreamEndSummary] = useState<StreamEndEventPayload | null>(null);
   const [currentLot, setCurrentLot] = useState<LiveLot | null>(null);
+  const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number }[]>([]);
+
+  // ── Heart animation — floating heart on double-tap or like ──
+  const heartIdRef = useRef(0);
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+
+  const triggerHeartAnimation = useCallback(() => {
+    if (reducedMotion) return;
+    const id = ++heartIdRef.current;
+    const xOffset = Math.random() * 60 - 30;
+    setFloatingHearts((prev) => [...prev.slice(-4), { id, x: xOffset }]);
+    heartScale.value = withSpring(1, { damping: 12, stiffness: 200 });
+    heartOpacity.value = withTiming(0, { duration: 1200 }, () => {
+      runOnJS(setFloatingHearts)((prev) => prev.filter((h) => h.id !== id));
+    });
+    setTimeout(() => {
+      heartScale.value = withTiming(0, { duration: 100 });
+      heartOpacity.value = 0;
+    }, 100);
+  }, [reducedMotion, heartScale, heartOpacity]);
+
+  const heartAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
 
   const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
   const isDemo = stream?.isDemo ?? LIVE_SHOPPING_DEMO_MODE;
@@ -232,11 +267,13 @@ export function LiveStreamViewerScreen() {
   const handleLike = useCallback(async () => {
     if (hasLiked) {
       haptic.light();
+      triggerHeartAnimation();
       return;
     }
     setHasLiked(true);
     setLikeCount((c) => c + 1);
     haptic.light();
+    triggerHeartAnimation();
     try {
       const result = await likeStream(sessionId);
       if (result.success) {
@@ -247,7 +284,7 @@ export function LiveStreamViewerScreen() {
       setHasLiked(false);
       setLikeCount((c) => Math.max(0, c - 1));
     }
-  }, [hasLiked, haptic, sessionId]);
+  }, [hasLiked, haptic, sessionId, triggerHeartAnimation]);
 
   const handleBuyNow = useCallback(async () => {
     if (!currentLot) return;
@@ -453,209 +490,222 @@ export function LiveStreamViewerScreen() {
     );
   }
 
-  // ── Live state ──
+  // ── Live state — immersive full-screen with overlays ──
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
 
-      {/* ── Video plane (top) ── */}
-      <View style={[styles.videoPlane, { paddingTop: insets.top }]}>
-        {/* Video area */}
-        <View style={styles.videoArea}>
-          {isDemo ? (
-            <View style={styles.demoVideoPlaceholder}>
-              <View style={styles.demoPill}>
-                <Text style={styles.demoPillText}>DEMO</Text>
+      {/* ── Full-screen video plane ── */}
+      <View style={styles.fullScreenVideo}>
+        {isDemo ? (
+          <View style={styles.demoVideoPlaceholder}>
+            <View style={styles.demoPill}>
+              <Text style={styles.demoPillText}>DEMO</Text>
+            </View>
+            <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
+            <Text style={styles.demoVideoText}>Demo stream</Text>
+          </View>
+        ) : (
+          <View style={styles.videoPlaceholder}>
+            <Text style={styles.videoPlaceholderText}>Connecting to stream...</Text>
+          </View>
+        )}
+
+        {/* ── Top overlay: leave (left) + live badge + viewer count + actions (right) ── */}
+        <View style={[styles.topOverlay, { paddingTop: insets.top + Space.xs }]}>
+          {/* Left: leave button + seller identity */}
+          <View style={styles.topLeftCluster}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              hitSlop={12}
+              style={({ pressed }) => [styles.overlayBtnScrim, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Leave stream"
+            >
+              <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
+            </Pressable>
+            <View style={styles.sellerIdentityChip}>
+              <Image source={{ uri: stream?.sellerAvatar }} style={styles.sellerAvatarSmall} />
+              <View style={styles.sellerIdentityText}>
+                <View style={styles.sellerNameRowOverlay}>
+                  <Text style={styles.sellerNameOverlay} numberOfLines={1}>{stream?.sellerName}</Text>
+                  {stream?.sellerVerified && (
+                    <Ionicons name="checkmark-circle" size={12} color={colors.scrimTextPrimary} />
+                  )}
+                </View>
+                <Pressable
+                  onPress={handleFollowToggle}
+                  disabled={followMutation.isPending}
+                  hitSlop={4}
+                  style={({ pressed }) => [styles.followChip, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFollowing ? 'Unfollow seller' : 'Follow seller'}
+                  accessibilityState={{ busy: followMutation.isPending }}
+                >
+                  {followMutation.isPending ? (
+                    <ActivityIndicator size={10} color={colors.scrimTextPrimary} />
+                  ) : (
+                    <Text style={styles.followChipText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+                  )}
+                </Pressable>
               </View>
-              <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
-              <Text style={styles.demoVideoText}>Demo stream</Text>
             </View>
-          ) : (
-            <View style={styles.videoPlaceholder}>
-              <Text style={styles.videoPlaceholderText}>Connecting to stream...</Text>
+          </View>
+
+          {/* Right: live badge + viewer count + like + share */}
+          <View style={styles.topRightCluster}>
+            <View style={styles.liveBadgeOverlay}>
+              <View style={styles.liveDotOverlay} />
+              <Text style={styles.liveBadgeTextOverlay}>LIVE</Text>
             </View>
+            {viewerCount > 0 && (
+              <View style={styles.viewerBadgeOverlay}>
+                <Ionicons name="eye-outline" size={12} color={colors.scrimTextPrimary} />
+                <Text style={styles.viewerBadgeTextOverlay}>{viewerCount >= 1000 ? `${(viewerCount / 1000).toFixed(1)}K` : viewerCount}</Text>
+              </View>
+            )}
+            <Pressable
+              onPress={handleLike}
+              hitSlop={8}
+              style={({ pressed }) => [styles.overlayBtnScrim, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={hasLiked ? 'Unlike stream' : 'Like stream'}
+            >
+              <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.scrimTextPrimary} />
+            </Pressable>
+            <Pressable
+              onPress={handleShare}
+              hitSlop={8}
+              style={({ pressed }) => [styles.overlayBtnScrim, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Share stream"
+            >
+              <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ── Floating heart animation ── */}
+        {!reducedMotion && (
+          <View style={styles.heartAnimationContainer} pointerEvents="none">
+            {floatingHearts.map((heart) => (
+              <Reanimated.View
+                key={heart.id}
+                style={[styles.floatingHeart, heartAnimStyle, { left: 50 + heart.x }]}
+              >
+                <Ionicons name="heart" size={32} color={colors.danger} />
+              </Reanimated.View>
+            ))}
+          </View>
+        )}
+
+        {/* ── Bottom overlay: chat (semi-transparent) + product showcase panel ── */}
+        <KeyboardAvoidingView
+          style={styles.bottomOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
+          {/* Chat overlay — semi-transparent, bottom-left, ambient */}
+          <View style={styles.chatOverlayContainer}>
+            <FlatList
+              ref={chatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={renderChatMessage}
+              contentContainerStyle={styles.chatListContent}
+              onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: !reducedMotion })}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+
+          {/* Product showcase panel — floating, semi-transparent */}
+          {currentLot && (
+            <Reanimated.View
+              entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(300)}
+              style={styles.productShowcasePanel}
+            >
+              <Pressable
+                onPress={() => setItemSheetVisible(true)}
+                style={styles.productShowcasePress}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${currentLot.title} details`}
+              >
+                <Image source={{ uri: currentLot.imageUri }} style={styles.productImageSmall} />
+                <View style={styles.productInfoCompact}>
+                  <Text style={styles.productTitleOverlay} numberOfLines={1}>{currentLot.title}</Text>
+                  <View style={styles.productPriceRow}>
+                    <Text style={styles.productPriceValue}>£{currentLot.currentPrice}</Text>
+                    <Text style={styles.productPriceLabel}>{currentLot.bidCount} bids</Text>
+                    {timeRemaining > 0 && (
+                      <Text style={[styles.productTimer, { color: timeRemaining <= 10 ? colors.danger : colors.scrimTextSecondary }]}>
+                        {formatTime(timeRemaining)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </Pressable>
+              <View style={styles.productActionRow}>
+                <Pressable
+                  onPress={() => setBidSheetVisible(true)}
+                  disabled={bidPending}
+                  style={({ pressed }) => [styles.bidBtnOverlay, pressed && { opacity: 0.85 }, bidPending && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Place a bid"
+                >
+                  {bidPending ? (
+                    <ActivityIndicator size="small" color={colors.textInverse} />
+                  ) : (
+                    <Text style={styles.bidBtnTextOverlay}>Bid £{minNextBid}+</Text>
+                  )}
+                </Pressable>
+                {buyNowPrice > 0 && (
+                  <Pressable
+                    onPress={handleBuyNow}
+                    disabled={buyNowPending}
+                    style={({ pressed }) => [styles.buyNowBtnOverlay, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Buy now for £${buyNowPrice}`}
+                  >
+                    {buyNowPending ? (
+                      <ActivityIndicator size="small" color={colors.textPrimary} />
+                    ) : (
+                      <Text style={styles.buyNowBtnTextOverlay}>Buy £{buyNowPrice}</Text>
+                    )}
+                  </Pressable>
+                )}
+              </View>
+            </Reanimated.View>
           )}
 
-          {/* Overlay: viewer count + like + share */}
-          <View style={styles.videoOverlay}>
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveBadgeText}>LIVE</Text>
-            </View>
-
-            {viewerCount > 0 && (
-              <View style={styles.viewerBadge}>
-                <Ionicons name="eye-outline" size={14} color={colors.scrimTextPrimary} />
-                <Text style={styles.viewerBadgeText}>{viewerCount}</Text>
-              </View>
-            )}
-
-            <View style={styles.videoOverlayRight}>
-              <Pressable
-                onPress={handleLike}
-                style={({ pressed }) => [styles.overlayBtn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityLabel={hasLiked ? 'Unlike stream' : 'Like stream'}
-              >
-                <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.scrimTextPrimary} />
-              </Pressable>
-              <Pressable
-                onPress={handleShare}
-                style={({ pressed }) => [styles.overlayBtn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Share stream"
-              >
-                <Ionicons name="share-outline" size={22} color={colors.scrimTextPrimary} />
-              </Pressable>
-              <Pressable
-                onPress={() => navigation.goBack()}
-                style={({ pressed }) => [styles.overlayBtn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Close stream"
-              >
-                <Ionicons name="close" size={24} color={colors.scrimTextPrimary} />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* Seller info bar */}
-        <View style={styles.sellerBar}>
-          <Image source={{ uri: stream?.sellerAvatar }} style={styles.sellerAvatar} />
-          <View style={styles.sellerInfo}>
-            <View style={styles.sellerNameRow}>
-              <Text style={styles.sellerName} numberOfLines={1}>{stream?.sellerName}</Text>
-              {stream?.sellerVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={colors.brand} />
-              )}
-            </View>
-            <Text style={styles.streamTitle} numberOfLines={1}>{stream?.title}</Text>
-          </View>
-          <Pressable
-            onPress={handleFollowToggle}
-            disabled={followMutation.isPending}
-            style={({ pressed }) => [
-              styles.followBtn,
-              pressed && { opacity: 0.7 },
-              followMutation.isPending && { opacity: 0.6 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={isFollowing ? 'Unfollow seller' : 'Follow seller'}
-            accessibilityState={{ busy: followMutation.isPending }}
-          >
-            {followMutation.isPending ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Text style={styles.followBtnText}>{isFollowing ? 'Following' : 'Follow'}</Text>
-            )}
-          </Pressable>
-        </View>
-      </View>
-
-      {/* ── Product plane (middle) — pinned, tappable ── */}
-      {currentLot && (
-        <Pressable
-          onPress={() => setItemSheetVisible(true)}
-          style={({ pressed }) => [styles.productPlane, pressed && { opacity: 0.92 }]}
-          accessibilityRole="button"
-          accessibilityLabel={`View ${currentLot.title} details`}
-        >
-          <Image source={{ uri: currentLot.imageUri }} style={styles.productImage} />
-          <View style={styles.productInfo}>
-            <Text style={styles.productTitle} numberOfLines={2}>{currentLot.title}</Text>
-            <View style={styles.priceRow}>
-              <View>
-                <Text style={styles.priceLabel}>Current Bid</Text>
-                <Text style={styles.priceValue}>£{currentLot.currentPrice}</Text>
-              </View>
-              <View style={styles.bidCountBadge}>
-                <Ionicons name="pricetag" size={12} color={colors.textSecondary} />
-                <Text style={styles.bidCountText}>{currentLot.bidCount} bids</Text>
-              </View>
-            </View>
-            {timeRemaining > 0 && (
-              <View style={styles.timeRow}>
-                <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} />
-                <Text style={[styles.timeText, { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary }]}>
-                  {formatTime(timeRemaining)}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.productActions}>
+          {/* Chat input — semi-transparent, at the very bottom */}
+          <View style={[styles.chatInputRowOverlay, { paddingBottom: insets.bottom || Space.sm }]}>
+            <TextInput
+              style={styles.chatInputOverlay}
+              placeholder="Send a message..."
+              placeholderTextColor={colors.scrimTextTertiary}
+              value={chatInput}
+              onChangeText={setChatInput}
+              onSubmitEditing={handleSendChat}
+              returnKeyType="send"
+              accessibilityLabel="Chat message input"
+            />
             <Pressable
-              onPress={() => setBidSheetVisible(true)}
-              disabled={bidPending}
-              style={({ pressed }) => [styles.bidBtn, pressed && { opacity: 0.85 }, bidPending && { opacity: 0.6 }]}
+              onPress={handleSendChat}
+              disabled={!chatInput.trim()}
+              hitSlop={4}
+              style={({ pressed }) => [
+                styles.chatSendBtnOverlay,
+                !chatInput.trim() && { opacity: 0.4 },
+                pressed && { opacity: 0.7 },
+              ]}
               accessibilityRole="button"
-              accessibilityLabel="Place a bid"
+              accessibilityLabel="Send message"
             >
-              {bidPending ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
-              ) : (
-                <Text style={styles.bidBtnText}>Bid £{minNextBid}+</Text>
-              )}
+              <Ionicons name="send" size={16} color={colors.scrimTextPrimary} />
             </Pressable>
-            {buyNowPrice > 0 && (
-              <Pressable
-                onPress={handleBuyNow}
-                disabled={buyNowPending}
-                style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Buy now for £${buyNowPrice}`}
-              >
-                {buyNowPending ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.buyNowBtnText}>Buy Now £{buyNowPrice}</Text>
-                )}
-              </Pressable>
-            )}
           </View>
-        </Pressable>
-      )}
-
-      {/* ── Chat plane (bottom) ── */}
-      <KeyboardAvoidingView
-        style={styles.chatPlane}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <FlatList
-          ref={chatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderChatMessage}
-          contentContainerStyle={styles.chatListContent}
-          onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: true })}
-          showsVerticalScrollIndicator={false}
-        />
-        <View style={[styles.chatInputRow, { paddingBottom: insets.bottom || Space.sm }]}>
-          <TextInput
-            style={styles.chatInput}
-            placeholder="Send a message..."
-            placeholderTextColor={colors.textMuted}
-            value={chatInput}
-            onChangeText={setChatInput}
-            onSubmitEditing={handleSendChat}
-            returnKeyType="send"
-            accessibilityLabel="Chat message input"
-          />
-          <Pressable
-            onPress={handleSendChat}
-            disabled={!chatInput.trim()}
-            style={({ pressed }) => [
-              styles.chatSendBtn,
-              !chatInput.trim() && { opacity: 0.4 },
-              pressed && { opacity: 0.7 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Send message"
-          >
-            <Ionicons name="send" size={18} color={colors.scrimTextPrimary} />
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
 
       {/* ── Item detail sheet (in-stream, not navigation away) ── */}
       {itemSheetVisible && currentLot && (
@@ -781,11 +831,364 @@ export function LiveStreamViewerScreen() {
 // ---------------------------------------------------------------------------
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const VIDEO_HEIGHT = Math.round(SCREEN_WIDTH * 0.5625); // 16:9
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // ── Full-screen video plane ──
+  fullScreenVideo: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  demoVideoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    gap: Space.xs,
+  },
+  demoVideoText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
+  },
+  demoPill: {
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.warningSubtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.warningBorder,
+    marginBottom: Space.xs,
+  },
+  demoPillText: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.label.letterSpacing,
+    color: colors.warning,
+  },
+  videoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  videoPlaceholderText: {
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
+  },
+  // ── Top overlay ──
+  topOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.sm,
+    zIndex: 10,
+  },
+  topLeftCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexShrink: 1,
+  },
+  overlayBtnScrim: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sellerIdentityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: Radius.full,
+    paddingLeft: Space.xs,
+    paddingRight: Space.sm,
+    paddingVertical: Space.xs / 2,
+    flexShrink: 1,
+  },
+  sellerAvatarSmall: {
+    width: Space.lg + 2,
+    height: Space.lg + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  sellerIdentityText: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexShrink: 1,
+  },
+  sellerNameRowOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+    flexShrink: 1,
+  },
+  sellerNameOverlay: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.scrimTextPrimary,
+    flexShrink: 1,
+  },
+  followChip: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.scrimTextPrimary,
+  },
+  followChipText: {
+    fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.bold,
+    color: colors.textInverse,
+  },
+  topRightCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  liveBadgeOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+    backgroundColor: colors.danger,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+  },
+  liveDotOverlay: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.scrimTextPrimary,
+  },
+  liveBadgeTextOverlay: {
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: colors.scrimTextPrimary,
+    letterSpacing: Type.label.letterSpacing,
+  },
+  viewerBadgeOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+  },
+  viewerBadgeTextOverlay: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.scrimTextPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Heart animation ──
+  heartAnimationContainer: {
+    position: 'absolute',
+    bottom: SCREEN_HEIGHT * 0.35,
+    right: Space.xl,
+    zIndex: 5,
+  },
+  floatingHeart: {
+    position: 'absolute',
+    bottom: 0,
+  },
+  // ── Bottom overlay (chat + product panel + input) ──
+  bottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  // ── Chat overlay (semi-transparent) ──
+  chatOverlayContainer: {
+    height: SCREEN_HEIGHT * 0.22,
+    paddingLeft: Space.md,
+    paddingRight: Space.md,
+  },
+  chatListContent: {
+    paddingVertical: Space.xs,
+    gap: Space.xs / 2,
+  },
+  chatMessage: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: Space.xs / 2,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.chat,
+    alignSelf: 'flex-start',
+    maxWidth: '80%',
+  },
+  sellerBadge: {
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xs / 4,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
+  },
+  sellerBadgeText: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.bold,
+    color: colors.textInverse,
+    letterSpacing: Type.label.letterSpacing,
+  },
+  chatSender: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.scrimTextPrimary,
+  },
+  chatText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.scrimTextPrimary,
+    flexShrink: 1,
+  },
+  systemMessage: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+    alignSelf: 'center',
+  },
+  systemMessageText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    fontStyle: 'italic',
+    color: colors.scrimTextSecondary,
+  },
+  // ── Product showcase panel (floating, semi-transparent) ──
+  productShowcasePanel: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: Radius.lg,
+    marginHorizontal: Space.sm,
+    marginBottom: Space.xs,
+    padding: Space.sm,
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  productShowcasePress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  productImageSmall: {
+    width: Space.xxl + Space.xs,
+    height: Space.xxl + Space.xs,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  productInfoCompact: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  productTitleOverlay: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.scrimTextPrimary,
+  },
+  productPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.sm,
+  },
+  productPriceValue: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    color: colors.scrimTextPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  productPriceLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.scrimTextSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  productTimer: {
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    marginLeft: 'auto',
+  },
+  productActionRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+  },
+  bidBtnOverlay: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.danger,
+    minHeight: Control.chrome,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bidBtnTextOverlay: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.bold,
+    color: colors.scrimTextPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  buyNowBtnOverlay: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    minHeight: Control.chrome,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buyNowBtnTextOverlay: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.scrimTextPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Chat input (semi-transparent) ──
+  chatInputRowOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingTop: Space.xs,
+  },
+  chatInputOverlay: {
+    flex: 1,
+    height: Space.xl + Space.xs,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.xxl,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: colors.scrimTextPrimary,
+    paddingTop: (Space.xl + Space.xs - Type.body.lineHeight) / 2,
+  },
+  chatSendBtnOverlay: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ── State containers (connecting, error, ended) ──
   stateContainer: {
@@ -862,335 +1265,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: Stroke.hairline,
     height: Space.xxl + Space.xs,
   },
-  // ── Video plane ──
-  videoPlane: {
-    backgroundColor: colors.background,
-  },
-  videoArea: {
-    width: '100%',
-    height: VIDEO_HEIGHT,
-    position: 'relative',
-  },
-  demoVideoPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    gap: Space.xs,
-  },
-  demoVideoText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
-  demoPill: {
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.warningSubtle,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.warningBorder,
-    marginBottom: Space.xs,
-  },
-  demoPillText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.label.letterSpacing,
-    color: colors.warning,
-  },
-  videoPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  videoPlaceholderText: {
-    fontSize: Type.body.size,
-    color: colors.textSecondary,
-  },
-  videoOverlay: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-    backgroundColor: colors.danger,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.sm,
-  },
-  liveDot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.textPrimary,
-  },
-  liveBadgeText: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: Type.label.letterSpacing,
-  },
-  viewerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.sm,
-  },
-  viewerBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  videoOverlayRight: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Space.xs,
-  },
-  overlayBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // ── Seller bar ──
-  sellerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: colors.surface,
-  },
-  sellerAvatar: {
-    width: Space.xl + Space.xs,
-    height: Space.xl + Space.xs,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  sellerInfo: {
-    flex: 1,
-    gap: Space.xs / 4,
-  },
-  sellerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  sellerName: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    flexShrink: 1,
-  },
-  streamTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
-  followBtn: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.danger,
-  },
-  followBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  // ── Product plane ──
-  productPlane: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    backgroundColor: colors.surface,
-  },
-  productImage: {
-    width: Space.xxl + Space.xl + Space.sm,
-    height: Space.xxl + Space.xl + Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-  },
-  productInfo: {
-    flex: 1,
-    gap: Space.xs,
-  },
-  productTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
-  priceValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  bidCountBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.sm,
-  },
-  bidCountText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    fontVariant: ['tabular-nums'],
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-  },
-  timeText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  productActions: {
-    flexDirection: 'row',
-    gap: Space.xs,
-  },
-  bidBtn: {
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.danger,
-    minHeight: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bidBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  buyNowBtn: {
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buyNowBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  // ── Chat plane ──
-  chatPlane: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  chatListContent: {
-    padding: Space.sm,
-    gap: Space.xs,
-  },
-  chatMessage: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    gap: Space.xs / 2,
-  },
-  sellerBadge: {
-    paddingHorizontal: Space.xs,
-    paddingVertical: Space.xs / 4,
-    borderRadius: Radius.sm,
-  },
-  sellerBadgeText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: Type.label.letterSpacing,
-  },
-  chatSender: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  chatText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    flexShrink: 1,
-  },
-  systemMessage: {
-    alignItems: 'center',
-    paddingVertical: Space.xs / 2,
-  },
-  systemMessageText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    fontStyle: 'italic',
-  },
-  chatInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
-  chatInput: {
-    flex: 1,
-    height: Space.xl + Space.xs + 4,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.surfaceAlt,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-    paddingTop: (Space.xl + Space.xs + 4 - Type.body.lineHeight) / 2,
-  },
-  chatSendBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // ── Item detail sheet ──
   itemSheetImage: {
     width: '100%',
@@ -1212,6 +1286,52 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   itemSheetBidCountText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Shared action styles (used by item detail sheet) ──
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  timeText: {
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  productActions: {
+    flexDirection: 'row',
+    gap: Space.xs,
+  },
+  bidBtn: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.danger,
+    minHeight: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bidBtnText: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.bold,
+    color: colors.scrimTextPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  buyNowBtn: {
+    flex: 1,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buyNowBtnText: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
   // ── Bid sheet ──

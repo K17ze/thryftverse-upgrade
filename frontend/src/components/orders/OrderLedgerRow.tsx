@@ -46,7 +46,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const statusLabel = humaniseStatus(order.status);
-  const statusColor = getStatusColor(order.status, colors.textMuted);
+  const statusColor = getStatusColor(order.status, colors);
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatShortDate(order.createdAt);
@@ -214,7 +214,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    minHeight: 44,
+    minHeight: 76,
     gap: Space.md,
   },
   rowPressed: {

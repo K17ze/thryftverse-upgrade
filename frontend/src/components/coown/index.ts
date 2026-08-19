@@ -57,6 +57,8 @@ export { CoOwnPriceTick } from './CoOwnPriceTick';
 export type { CoOwnPriceTickProps, PriceTickDirection } from './CoOwnPriceTick';
 export { CoOwnPortfolioStorytelling } from './CoOwnPortfolioStorytelling';
 export type { CoOwnPortfolioStorytellingProps } from './CoOwnPortfolioStorytelling';
+export { CoOwnPortfolioPerformanceChart } from './CoOwnPortfolioPerformanceChart';
+export type { CoOwnPortfolioPerformanceChartProps } from './CoOwnPortfolioPerformanceChart';
 export { CoOwnConciergeCTA } from './CoOwnConciergeCTA';
 export type { CoOwnConciergeCTAProps, ConciergeReason } from './CoOwnConciergeCTA';
 export { CoOwnOfflineBanner } from './CoOwnOfflineBanner';

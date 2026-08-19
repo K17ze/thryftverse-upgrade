@@ -81,6 +81,9 @@ interface AuctionViewModel {
 
 type StatusFilter = 'all' | 'live' | 'scheduled' | 'ended';
 
+/** Client-side filter chips that augment the server sort modes. */
+type ClientFilter = 'hot' | 'noBids';
+
 function formatCountdown(ms: number) {
   if (ms <= 0) return 'Ended';
   const totalSeconds = Math.floor(ms / 1000);
@@ -130,6 +133,11 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Ended', value: 'ended' },
 ];
 
+const CLIENT_FILTER_OPTIONS: { label: string; value: ClientFilter }[] = [
+  { label: 'Hot', value: 'hot' },
+  { label: 'No Bids', value: 'noBids' },
+];
+
 export default function AuctionsScreen() {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
@@ -154,6 +162,7 @@ export default function AuctionsScreen() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
   const [sortMode, setSortMode] = React.useState<AuctionSortMode>('endingSoon');
+  const [activeClientFilter, setActiveClientFilter] = React.useState<ClientFilter | null>(null);
   const [watchTogglingIds, setWatchTogglingIds] = React.useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
@@ -450,6 +459,34 @@ export default function AuctionsScreen() {
     </View>
   );
 
+  const renderClientFilterBar = () => (
+    <View style={styles.clientFilterBar}>
+      {CLIENT_FILTER_OPTIONS.map((opt) => {
+        const isActive = activeClientFilter === opt.value;
+        return (
+          <AnimatedPressable
+            key={opt.value}
+            style={[styles.clientFilterChip, isActive && styles.clientFilterChipActive]}
+            activeOpacity={0.85}
+            onPress={() => setActiveClientFilter(isActive ? null : opt.value)}
+            accessibilityRole="tab"
+            accessibilityLabel={`Filter: ${opt.label}`}
+            accessibilityState={{ selected: isActive }}
+          >
+            <Ionicons
+              name={opt.value === 'hot' ? 'flame-outline' : 'pricetag-outline'}
+              size={12}
+              color={isActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Meta style={[styles.clientFilterText, isActive && styles.clientFilterTextActive]}>
+              {opt.label}
+            </Meta>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
+  );
+
   const renderStatusFilter = () => (
     <View style={styles.statusFilterBar}>
       {STATUS_OPTIONS.map((opt) => (
@@ -604,6 +641,7 @@ export default function AuctionsScreen() {
 
       {renderStatusFilter()}
       {renderSortBar()}
+      {renderClientFilterBar()}
 
       <View style={styles.launchRow}>
         <View>
@@ -663,10 +701,24 @@ export default function AuctionsScreen() {
         </View>
       )}
 
-      {liveAuctions.length > 0 && (statusFilter === 'all' || statusFilter === 'live') && (
+      {liveAuctions.length > 0 && (statusFilter === 'all' || statusFilter === 'live') && !activeClientFilter && (
         <View style={styles.sectionTitleRow}>
           <BodyEmphasis style={styles.sectionTitle}>Live Auctions</BodyEmphasis>
           <SyncStatusPill tone={marketStatus.tone} label={marketStatus.label} compact />
+        </View>
+      )}
+
+      {activeClientFilter === 'hot' && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>Hot Auctions</BodyEmphasis>
+          <Meta style={styles.clientFilterSubtitle}>High engagement · {displayAuctions.length} found</Meta>
+        </View>
+      )}
+
+      {activeClientFilter === 'noBids' && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>No Bids Yet</BodyEmphasis>
+          <Meta style={styles.clientFilterSubtitle}>Opportunity · {displayAuctions.length} found</Meta>
         </View>
       )}
 
@@ -694,11 +746,23 @@ export default function AuctionsScreen() {
   );
 
   const displayAuctions = React.useMemo(() => {
-    if (statusFilter === 'live') return liveAuctions;
-    if (statusFilter === 'scheduled') return upcomingAuctions;
-    if (statusFilter === 'ended') return endedAuctions;
-    return auctions;
-  }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
+    let base = auctions;
+    if (statusFilter === 'live') base = liveAuctions;
+    else if (statusFilter === 'scheduled') base = upcomingAuctions;
+    else if (statusFilter === 'ended') base = endedAuctions;
+
+    if (activeClientFilter === 'hot') {
+      // "Hot" = high-engagement live auctions with 3+ bids, sorted by bid count desc
+      base = base
+        .filter((a) => a.lifecycle === 'live' && a.bidCount >= 3)
+        .sort((a, b) => b.bidCount - a.bidCount);
+    } else if (activeClientFilter === 'noBids') {
+      // "No Bids" = live or upcoming auctions with zero bids — opportunity finds
+      base = base.filter((a) => a.bidCount === 0 && a.lifecycle !== 'ended');
+    }
+
+    return base;
+  }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter, activeClientFilter]);
 
   const renderAuctionCard = useCallback(({ item }: { item: AuctionViewModel }) => {
     const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
@@ -935,6 +999,35 @@ function createStyles(colors: ThemeColors) {
   sortChipTextActive: {
     color: colors.textInverse,
   },
+  clientFilterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+    gap: Space.xs + 2,
+  },
+  clientFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
+  },
+  clientFilterChipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  clientFilterText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  clientFilterTextActive: {
+    color: colors.textInverse,
+  },
   statusFilterBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
@@ -1162,6 +1255,9 @@ function createStyles(colors: ThemeColors) {
   },
   sectionTitle: {
     fontFamily: Typography.family.semibold,
+  },
+  clientFilterSubtitle: {
+    color: colors.textSecondary,
   },
   horizontalListContent: {
     paddingHorizontal: Space.md,

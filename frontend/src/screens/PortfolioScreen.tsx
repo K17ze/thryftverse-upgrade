@@ -22,6 +22,7 @@ import {
   CoOwnPortfolioSkeleton,
   CoOwnStateCanvas,
   CoOwnPortfolioStorytelling,
+  CoOwnPortfolioPerformanceChart,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   type CoOwnPositionAction,
@@ -120,6 +121,13 @@ export default function PortfolioScreen() {
   const todayChangePct = summary.todayChangePct ?? 0;
   const totalDistributionsGbp = summary.totalDistributionsGbp ?? 0;
   const staleMarkCount = summary.staleMarkCount ?? 0;
+
+  // Total cost basis — sum of avgEntryPrice * unitsOwned across all positions.
+  // Used by the performance chart to show cost basis vs current value.
+  const totalCostBasisGbp = React.useMemo(
+    () => positions.reduce((sum, p) => sum + p.avgEntryPriceGbp * p.unitsOwned, 0),
+    [positions],
+  );
 
   // Allocation bars — only when real positions exist
   const allocationBars = React.useMemo(() => {
@@ -533,6 +541,17 @@ export default function PortfolioScreen() {
                 </View>
               )}
             </View>
+
+            {/* Portfolio performance chart — flat canvas, no card chrome.
+                Shows cost-basis accumulation over time and current mark value.
+                Only rendered when there are positions with cost basis. */}
+            {totalCostBasisGbp > 0 && (
+              <CoOwnPortfolioPerformanceChart
+                positions={positions}
+                totalValueGbp={summary.totalValueGbp}
+                totalCostBasisGbp={totalCostBasisGbp}
+              />
+            )}
 
             {/* Tab toggle — Positions (default) vs Insights.
                 Positions shows holdings immediately; Insights moves allocations,

@@ -24,7 +24,7 @@ import { haptics } from '../utils/haptics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-type BidFilter = 'all' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost';
+type BidFilter = 'all' | 'active' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost';
 
 type ActivityItem = {
   id: string;
@@ -43,9 +43,7 @@ type ActivityItem = {
 };
 
 const BID_FILTERS: Array<{ value: BidFilter; label: string; accessibilityLabel: string }> = [
-  { value: 'all', label: 'All', accessibilityLabel: 'Show all bid activity' },
-  { value: 'leading', label: 'Leading', accessibilityLabel: 'Show bids where you are leading' },
-  { value: 'outbid', label: 'Outbid', accessibilityLabel: 'Show bids where you have been outbid' },
+  { value: 'active', label: 'Active', accessibilityLabel: 'Show active bids where you are leading or outbid' },
   { value: 'won', label: 'Won', accessibilityLabel: 'Show won auctions' },
   { value: 'lost', label: 'Lost', accessibilityLabel: 'Show lost bids' },
 ];
@@ -95,8 +93,8 @@ function bidToActivity(b: MyAuctionBid): ActivityItem {
 function getStateInfo(state: ActivityItem['bidState'], colors: ThemeColors): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } {
   if (state === 'won') return { label: 'Won', color: colors.success, icon: 'trophy-outline', nextAction: 'View result' };
   if (state === 'lost') return { label: 'Lost', color: colors.textMuted, icon: 'close-circle-outline', nextAction: 'Browse more' };
-  if (state === 'outbid') return { label: 'Outbid', color: colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
-  if (state === 'leading') return { label: 'Leading', color: colors.success, icon: 'trending-up', nextAction: 'View auction' };
+  if (state === 'outbid') return { label: "You're outbid", color: colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
+  if (state === 'leading') return { label: "You're winning", color: colors.success, icon: 'trending-up', nextAction: 'View auction' };
   if (state === 'watching') return { label: 'Watching', color: colors.textSecondary, icon: 'eye-outline', nextAction: 'View auction' };
   return { label: 'Active', color: colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
 }
@@ -126,7 +124,7 @@ export default function MyBidsScreen() {
   const { goldRates, displayMode } = useCurrencyContext();
   const { isOffline } = useConnectivity();
 
-  const [filter, setFilter] = React.useState<BidFilter>('all');
+  const [filter, setFilter] = React.useState<BidFilter>('active');
   const [endingSoonest, setEndingSoonest] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [items, setItems] = React.useState<ActivityItem[]>([]);
@@ -146,6 +144,22 @@ export default function MyBidsScreen() {
           setItems(mapped);
         }
         setNextCursor(result.nextCursor);
+      } else if (status === 'active') {
+        // "Active" = leading + outbid, fetched in parallel
+        const [leadingResult, outbidResult] = await Promise.all([
+          getMyAuctionBids('leading', cursor),
+          getMyAuctionBids('outbid', cursor),
+        ]);
+        const mapped = [
+          ...leadingResult.items.map(bidToActivity),
+          ...outbidResult.items.map(bidToActivity),
+        ];
+        if (cursor) {
+          setItems((prev) => [...prev, ...mapped]);
+        } else {
+          setItems(mapped);
+        }
+        setNextCursor(leadingResult.nextCursor ?? outbidResult.nextCursor ?? null);
       } else {
         const apiStatus = status === 'all' ? 'all' : status;
         const result = await getMyAuctionBids(apiStatus as 'leading' | 'outbid' | 'won' | 'lost' | 'all', cursor);
@@ -271,10 +285,26 @@ export default function MyBidsScreen() {
                 </Text>
               </View>
             )}
-            <View style={styles.activityNextRow}>
-              <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-            </View>
+            {item.bidState === 'outbid' && (
+              <Pressable
+                style={({ pressed }) => [styles.bidAgainBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => navigation.navigate('AuctionDetail', {
+                  auctionId: item.auctionId,
+                  openBidSheet: true,
+                })}
+                accessibilityRole="button"
+                accessibilityLabel={`Bid again on ${item.title}`}
+              >
+                <Ionicons name="trending-up" size={12} color={colors.textInverse} />
+                <Text style={styles.bidAgainText}>Bid again</Text>
+              </Pressable>
+            )}
+            {item.bidState !== 'outbid' && (
+              <View style={styles.activityNextRow}>
+                <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+              </View>
+            )}
           </View>
         </View>
       </AnimatedPressable>
@@ -326,7 +356,7 @@ export default function MyBidsScreen() {
             </Text>
           </Pressable>
           {/* Ending-soonest sort toggle — integrated into filter rail */}
-          {(filter === 'all' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
+          {(filter === 'all' || filter === 'active' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
             <>
               <View style={styles.filterDivider} />
               <Pressable
@@ -375,8 +405,8 @@ export default function MyBidsScreen() {
           ) : (
             <EmptyState
               icon="hammer-outline"
-              title={filter === 'won' ? 'No wins yet' : filter === 'lost' ? 'No lost bids' : filter === 'leading' ? 'Not leading any bids' : filter === 'outbid' ? 'No outbid bids' : filter === 'watching' ? 'Not watching anything' : 'No activity yet'}
-              subtitle={filter === 'won' ? 'Auctions you win appear here.' : filter === 'lost' ? "Bids you didn't win appear here." : filter === 'leading' ? 'Auctions where you have the top bid appear here.' : filter === 'outbid' ? 'Auctions where someone outbid you appear here.' : filter === 'watching' ? 'Auctions you watch appear here.' : 'Bids you place appear here.'}
+              title={filter === 'won' ? 'No wins yet' : filter === 'lost' ? 'No lost bids' : filter === 'active' ? 'No active bids' : filter === 'watching' ? 'Not watching anything' : 'No activity yet'}
+              subtitle={filter === 'won' ? 'Auctions you win appear here.' : filter === 'lost' ? "Bids you didn't win appear here." : filter === 'active' ? 'Active bids where you are leading or outbid appear here.' : filter === 'watching' ? 'Auctions you watch appear here.' : 'Bids you place appear here.'}
             />
           )
         }
@@ -571,6 +601,22 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     color: colors.brand,
     fontFamily: Typography.family.semibold,
+  },
+  bidAgainBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    backgroundColor: colors.danger,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    minHeight: Control.chromeCompact,
+    marginLeft: 'auto',
+  },
+  bidAgainText: {
+    fontSize: Type.caption.size,
+    color: colors.textInverse,
+    fontFamily: Typography.family.bold,
   },
   });
 }

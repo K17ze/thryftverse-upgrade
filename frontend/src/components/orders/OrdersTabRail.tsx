@@ -10,12 +10,14 @@ import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-export type OrdersTab = 'buying' | 'selling';
+export type OrdersTab = 'all' | 'buying' | 'selling' | 'completed';
 
 interface OrdersTabRailProps {
   activeTab: OrdersTab;
+  allCount?: number;
   buyingCount: number;
   sellingCount: number;
+  completedCount?: number;
   onChange: (tab: OrdersTab) => void;
 }
 
@@ -23,8 +25,10 @@ type TabLayout = { x: number; width: number };
 
 export function OrdersTabRail({
   activeTab,
+  allCount = 0,
   buyingCount,
   sellingCount,
+  completedCount = 0,
   onChange,
 }: OrdersTabRailProps) {
   const { colors } = useAppTheme();
@@ -32,8 +36,10 @@ export function OrdersTabRail({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const tabs: { key: OrdersTab; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: allCount },
     { key: 'buying', label: 'Buying', count: buyingCount },
     { key: 'selling', label: 'Selling', count: sellingCount },
+    { key: 'completed', label: 'Completed', count: completedCount },
   ];
 
   // Per-tab measured layout (x offset + width) so the shared indicator can
@@ -121,7 +127,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: 2,
-    gap: Space.lg,
+    gap: Space.md + Space.xs,
   },
   tab: {
     paddingVertical: Space.sm,

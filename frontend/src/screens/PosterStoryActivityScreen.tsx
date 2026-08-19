@@ -50,7 +50,7 @@ const REACTION_LABELS: Record<string, string> = {
   laugh: 'Laugh',
 };
 
-type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0];
+type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0] | ActivityData['styleVotes'][0];
 
 const AVATAR_SIZE = 44;
 
@@ -66,7 +66,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [activeTab, setActiveTab] = useState<'viewers' | 'reactions' | 'replies'>('viewers');
+  const [activeTab, setActiveTab] = useState<'viewers' | 'reactions' | 'replies' | 'stickers'>('viewers');
 
   // ── Animated tab indicator ──
   // Spring-based underline that slides between tabs using Motion.spring.entrance.
@@ -90,7 +90,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     }
   }, [activeTab, spring.entrance, tabIndicatorX, tabIndicatorW]);
 
-  const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies') => {
+  const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies' | 'stickers') => {
     haptic.selection();
     setActiveTab(key);
     AccessibilityInfo.announceForAccessibility(`Showing ${key}`);
@@ -146,13 +146,16 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       ? Math.round((totalEngagement / viewerCount) * 1000) / 10 // 1 decimal place
       : 0;
 
-    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate };
+    const stickerVoteCount = activity?.styleVotes.length ?? 0;
+
+    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate, stickerVoteCount };
   }, [activity]);
 
   const tabs = [
     { key: 'viewers' as const, label: 'Views', count: summary.viewerCount, icon: 'eye-outline' as const },
     { key: 'reactions' as const, label: 'Reactions', count: summary.reactionCount, icon: 'heart-outline' as const },
     { key: 'replies' as const, label: 'Replies', count: summary.replyCount, icon: 'chatbubble-outline' as const },
+    { key: 'stickers' as const, label: 'Stickers', count: summary.stickerVoteCount, icon: 'stats-chart-outline' as const },
   ];
 
   // FlashList v2 performance: memoized render functions prevent full
@@ -230,14 +233,33 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     </View>
   ), [styles, formatRelativeTime]);
 
+  // ── Sticker engagement render ────────────────────────────────────────
+  // Renders style vote entries (avatar + username + selected option).
+  // Poll and quiz results are aggregated in the header component below.
+  const renderStyleVote = useCallback(({ item }: { item: ActivityData['styleVotes'][0] }) => (
+    <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} voted in a style vote`}>
+      <View style={[styles.avatar, styles.avatarPlaceholder, styles.voteAvatar]}>
+        <Ionicons name="stats-chart-outline" size={18} color={colors.textSecondary} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowTitle}>@{item.username ?? item.userId}</Text>
+        <Text style={styles.rowSubtitle}>voted in a style poll</Text>
+      </View>
+      <Text style={styles.rowTime}>
+        {formatRelativeTime(item.createdAt)}
+      </Text>
+    </View>
+  ), [styles, colors, formatRelativeTime]);
+
   // FlashList v2 performance: memoized renderItem dispatches to the
   // memoized render functions above, preventing full re-render of all
   // visible activity rows on every parent state change.
   const renderActivityItem = useCallback(({ item }: { item: ActivityItem; index: number }) => {
     if ('viewedFrameCount' in item) return renderViewer({ item });
     if ('reaction' in item) return renderReaction({ item });
+    if ('optionId' in item && 'stickerId' in item) return renderStyleVote({ item });
     return renderReply({ item });
-  }, [renderViewer, renderReaction, renderReply]);
+  }, [renderViewer, renderReaction, renderReply, renderStyleVote]);
 
   // ── Summary header card ──────────────────────────────────────────────
   // A compact metrics summary at the top of the
@@ -380,7 +402,8 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const hasAnyActivity = activity && (
     (activity.viewers?.length ?? 0) > 0 ||
     (activity.reactions?.length ?? 0) > 0 ||
-    (activity.replies?.length ?? 0) > 0
+    (activity.replies?.length ?? 0) > 0 ||
+    (activity.styleVotes?.length ?? 0) > 0
   );
 
   if (activity && !hasAnyActivity) {
@@ -416,11 +439,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 
   const currentData: ActivityItem[] = activeTab === 'viewers' ? activity?.viewers ?? []
     : activeTab === 'reactions' ? activity?.reactions ?? []
+    : activeTab === 'stickers' ? activity?.styleVotes ?? []
     : activity?.replies ?? [];
 
-  const emptyIcon = activeTab === 'viewers' ? 'eye-outline' : activeTab === 'reactions' ? 'heart-outline' : 'chatbubble-outline';
-  const emptyLabel = activeTab === 'viewers' ? 'No views yet' : activeTab === 'reactions' ? 'No reactions yet' : 'No replies yet';
-  const emptyHint = activeTab === 'viewers' ? 'Views will appear here once people watch your story.' : activeTab === 'reactions' ? 'Reactions will appear here as people react.' : 'Replies will appear here as people reply.';
+  const emptyIcon = activeTab === 'viewers' ? 'eye-outline' : activeTab === 'reactions' ? 'heart-outline' : activeTab === 'stickers' ? 'stats-chart-outline' : 'chatbubble-outline';
+  const emptyLabel = activeTab === 'viewers' ? 'No views yet' : activeTab === 'reactions' ? 'No reactions yet' : activeTab === 'stickers' ? 'No sticker interactions yet' : 'No replies yet';
+  const emptyHint = activeTab === 'viewers' ? 'Views will appear here once people watch your story.' : activeTab === 'reactions' ? 'Reactions will appear here as people react.' : activeTab === 'stickers' ? 'Poll votes, quiz answers, and question responses will appear here.' : 'Replies will appear here as people reply.';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -750,6 +774,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     avatarPlaceholder: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    voteAvatar: {
       backgroundColor: colors.surfaceAlt,
     },
     avatarText: {

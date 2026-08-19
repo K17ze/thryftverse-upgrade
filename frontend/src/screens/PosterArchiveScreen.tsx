@@ -20,9 +20,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { fetchPosterStoryArchive, deletePosterStory } from '../services/postersApi';
-import type { PosterStory } from '../services/postersApi';
+import { fetchPosterStoryArchive, deletePosterStory, fetchPosterHighlights } from '../services/postersApi';
+import type { PosterStory, PosterHighlight } from '../services/postersApi';
 import { CachedImage } from '../components/CachedImage';
+import { useStore } from '../store/useStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterArchive'>;
 
@@ -59,10 +60,12 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   const haptic = useHaptic();
 
   const [stories, setStories] = useState<PosterStory[]>([]);
+  const [highlights, setHighlights] = useState<PosterHighlight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'archived' | 'highlights'>('all');
+  const currentUser = useStore((state) => state.currentUser);
 
   const filteredStories = useMemo(() => {
     if (filter === 'active') return stories.filter((s) => s.status === 'active');
@@ -77,8 +80,12 @@ export default function PosterArchiveScreen({ navigation }: Props) {
     if (isRefresh) setIsRefreshing(true);
     else setIsLoading(true);
     try {
-      const res = await fetchPosterStoryArchive({ includeActive: true });
-      setStories(res.items);
+      const [storyRes, highlightRes] = await Promise.all([
+        fetchPosterStoryArchive({ includeActive: true }),
+        currentUser ? fetchPosterHighlights(currentUser.id).catch(() => ({ items: [] as PosterHighlight[] })) : Promise.resolve({ items: [] as PosterHighlight[] }),
+      ]);
+      setStories(storyRes.items);
+      setHighlights(highlightRes.items);
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -87,7 +94,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [show]);
+  }, [show, currentUser]);
 
   useEffect(() => {
     loadArchive();
@@ -126,6 +133,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
     const expiresAt = new Date(item.expiresAt).getTime();
     const isExpired = expiresAt <= Date.now();
     const hoursLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / (60 * 60 * 1000)));
+    const viewCount = item.uniqueViewerCount ?? 0;
 
     return (
       <AnimatedPressable
@@ -134,7 +142,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         scaleValue={0.97}
         hapticFeedback="light"
         activeOpacity={0.85}
-        accessibilityLabel={`Story with ${item.totalFrameCount} frames${isActive ? ` (${hoursLeft}h left)` : ' (archived)'}`}
+        accessibilityLabel={`Story with ${item.totalFrameCount} frames${isActive ? ` (${hoursLeft}h left)` : ' (archived)'}, ${viewCount} views`}
         accessibilityHint="Opens this story in the viewer"
         accessibilityRole="button"
       >
@@ -163,12 +171,20 @@ export default function PosterArchiveScreen({ navigation }: Props) {
                 <Text style={styles.statusText}>Archived</Text>
               </View>
             )}
-            {item.totalFrameCount > 1 && (
-              <View style={styles.frameCountPill}>
-                <Ionicons name="layers" size={12} color="#fff" />
-                <Text style={styles.frameCountText}>{item.totalFrameCount}</Text>
-              </View>
-            )}
+            <View style={styles.cardOverlayRight}>
+              {viewCount > 0 && (
+                <View style={styles.viewCountPill}>
+                  <Ionicons name="eye-outline" size={11} color="#fff" />
+                  <Text style={styles.viewCountText}>{viewCount}</Text>
+                </View>
+              )}
+              {item.totalFrameCount > 1 && (
+                <View style={styles.frameCountPill}>
+                  <Ionicons name="layers" size={12} color="#fff" />
+                  <Text style={styles.frameCountText}>{item.totalFrameCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
         <View style={styles.cardFooter}>
@@ -188,6 +204,56 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           >
             <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
           </AnimatedPressable>
+        </View>
+      </AnimatedPressable>
+    );
+  };
+
+  const renderHighlightItem = ({ item }: { item: PosterHighlight }) => {
+    const coverUrl = item.coverUrl ?? item.frames[0]?.mediaUrl;
+    const frameCount = item.frames.length;
+
+    return (
+      <AnimatedPressable
+        onPress={() => navigation.navigate('PosterHighlightViewer', { highlightId: item.id })}
+        style={styles.card}
+        scaleValue={0.97}
+        hapticFeedback="light"
+        activeOpacity={0.85}
+        accessibilityLabel={`Highlight: ${item.title}, ${frameCount} frames`}
+        accessibilityHint="Opens this highlight in the viewer"
+        accessibilityRole="button"
+      >
+        <View style={styles.cardMedia}>
+          {coverUrl ? (
+            <CachedImage
+              uri={coverUrl}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              containerStyle={{ borderRadius: Radius.none, overflow: 'hidden' }}
+            />
+          ) : (
+            <View style={[styles.cardPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="star" size={28} color={colors.textMuted} />
+            </View>
+          )}
+          <View style={styles.cardOverlay}>
+            <View style={[styles.statusPill, styles.statusHighlight]}>
+              <Ionicons name="star" size={10} color="#fff" />
+              <Text style={styles.statusText}>Highlight</Text>
+            </View>
+            {frameCount > 1 && (
+              <View style={styles.frameCountPill}>
+                <Ionicons name="layers" size={12} color="#fff" />
+                <Text style={styles.frameCountText}>{frameCount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
         </View>
       </AnimatedPressable>
     );
@@ -296,12 +362,13 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         <View style={styles.iconBtn} />
       </View>
 
-      {/* Filter segmented control — All / Active / Archived */}
+      {/* Filter segmented control — All / Active / Archived / Highlights */}
       <View style={styles.filterRow}>
         {([
           { key: 'all', label: `All (${stories.length})` },
           { key: 'active', label: `Active (${activeCount})` },
           { key: 'archived', label: `Archived (${archivedCount})` },
+          { key: 'highlights', label: `Highlights (${highlights.length})` },
         ] as const).map((opt) => (
           <AnimatedPressable
             key={opt.key}
@@ -326,9 +393,9 @@ export default function PosterArchiveScreen({ navigation }: Props) {
       </View>
 
       <FlashList
-        data={filteredStories}
+        data={filter === 'highlights' ? highlights as unknown as PosterStory[] : filteredStories}
         keyExtractor={(item) => item.id}
-        renderItem={renderItem}
+        renderItem={filter === 'highlights' ? renderHighlightItem as unknown as typeof renderItem : renderItem}
         numColumns={2}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -348,14 +415,18 @@ export default function PosterArchiveScreen({ navigation }: Props) {
                 ? 'No active stories'
                 : filter === 'archived'
                   ? 'No archived stories'
-                  : 'No stories yet'}
+                  : filter === 'highlights'
+                    ? 'No highlights yet'
+                    : 'No stories yet'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {filter === 'active'
                 ? 'Your active stories will appear here while they are live.'
                 : filter === 'archived'
                   ? 'Archived stories will appear here after 24 hours.'
-                  : 'Your published and archived stories will appear here.'}
+                  : filter === 'highlights'
+                    ? 'Create highlights from your archived stories to pin them to your profile.'
+                    : 'Your published and archived stories will appear here.'}
             </Text>
           </View>
         }
@@ -472,6 +543,38 @@ function createStyles(colors: ThemeColors) {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     padding: Space.xs,
+  },
+  cardOverlayRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs - 2,
+    alignSelf: 'flex-end',
+  },
+  viewCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
+  },
+  viewCountText: {
+    color: '#fff',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  statusHighlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(244,240,232,0.85)',
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
   },
   statusPill: {
     alignSelf: 'flex-start',

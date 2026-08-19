@@ -35,7 +35,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
@@ -113,7 +113,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         ))}
       </SettingsSection>
 
-      {/* ── Data actions — export & delete ── */}
+      {/* ── Data actions — export ── */}
       <View>
         <SettingsSection title="Your data rights" noCard>
           <SettingsRow
@@ -122,13 +122,6 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             subtitle="Export a copy of your account data (GDPR portability)"
             onPress={() => navigation.navigate('DataExport')}
             isFirst
-          />
-          <SettingsRow
-            icon="trash-outline"
-            title="Delete your data"
-            subtitle="Permanently erase your account and data"
-            danger
-            onPress={() => navigation.navigate('DeleteAccount')}
             isLast
           />
         </SettingsSection>
@@ -210,6 +203,26 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         </SettingsSection>
       </View>
 
+      {/* ── Danger zone — separated, destructive action ── */}
+      <View style={[styles.dangerZone, { borderColor: `${colors.danger}30` }]}>
+        <View style={styles.dangerZoneHeader}>
+          <Ionicons name="warning-outline" size={18} color={colors.danger} />
+          <Text style={[styles.dangerZoneTitle, { color: colors.danger }]}>Danger zone</Text>
+        </View>
+        <Text style={[styles.dangerZoneBody, { color: colors.textSecondary }]}>
+          Permanently erase your account and all associated data. This action cannot be undone.
+        </Text>
+        <SettingsRow
+          icon="trash-outline"
+          title="Delete my account"
+          subtitle="Permanently erase your account and data"
+          danger
+          onPress={() => navigation.navigate('DeleteAccount')}
+          isFirst
+          isLast
+        />
+      </View>
+
       {/* ── Legal ── */}
       <View>
         <SettingsSection title="Legal" noCard>
@@ -271,6 +284,30 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       lineHeight: Type.caption.lineHeight,
       letterSpacing: Type.caption.letterSpacing,
+    },
+    dangerZone: {
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      padding: Space.md,
+      marginBottom: Space.lg,
+    },
+    dangerZoneHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginBottom: Space.xs,
+    },
+    dangerZoneTitle: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+    },
+    dangerZoneBody: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
+      letterSpacing: Type.caption.letterSpacing,
+      marginBottom: Space.md,
     },
   });
 }

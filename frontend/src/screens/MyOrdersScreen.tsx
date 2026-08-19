@@ -88,7 +88,7 @@ export default function MyOrdersScreen() {
   const viewerId = currentUser?.id;
   const { isOffline } = useConnectivity();
 
-  const [activeTab, setActiveTab] = useState<OrdersTab>('buying');
+  const [activeTab, setActiveTab] = useState<OrdersTab>('all');
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -124,11 +124,26 @@ export default function MyOrdersScreen() {
   const buildParams = useCallback(
     (cursor?: string): ListUserOrdersParams => {
       const params: ListUserOrdersParams = {
-        role: activeTab === 'buying' ? 'buyer' : 'seller',
         limit: PAGE_SIZE,
       };
 
-      if (filter.classification !== 'all') {
+      // Tab → role mapping:
+      //  'all'       → role=all (both buyer + seller orders)
+      //  'buying'    → role=buyer
+      //  'selling'   → role=seller
+      //  'completed' → role=buyer, classification=completed
+      if (activeTab === 'buying') {
+        params.role = 'buyer';
+      } else if (activeTab === 'selling') {
+        params.role = 'seller';
+      } else if (activeTab === 'completed') {
+        params.role = 'buyer';
+        params.classification = 'completed';
+      } else {
+        params.role = 'all';
+      }
+
+      if (filter.classification !== 'all' && activeTab !== 'completed') {
         params.classification = filter.classification;
       }
       if (filter.year) {
@@ -379,6 +394,30 @@ export default function MyOrdersScreen() {
       );
     }
 
+    if (activeTab === 'completed') {
+      return (
+        <EmptyState
+          icon="checkmark-done-outline"
+          title="No completed orders yet"
+          subtitle="Orders you've received and confirmed will appear here."
+          ctaLabel="Browse items"
+          onCtaPress={() => navigation.navigate('MainTabs')}
+        />
+      );
+    }
+
+    if (activeTab === 'all') {
+      return (
+        <EmptyState
+          icon="bag-outline"
+          title="No orders yet"
+          subtitle="When you buy or sell something, your orders will show up here."
+          ctaLabel="Start shopping"
+          onCtaPress={() => navigation.navigate('MainTabs')}
+        />
+      );
+    }
+
     return (
       <EmptyState
         icon="pricetag-outline"
@@ -498,8 +537,10 @@ export default function MyOrdersScreen() {
 
       <OrdersTabRail
         activeTab={activeTab}
+        allCount={0}
         buyingCount={0}
         sellingCount={0}
+        completedCount={0}
         onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 

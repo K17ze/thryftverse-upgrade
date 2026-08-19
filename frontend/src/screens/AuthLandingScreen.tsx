@@ -291,89 +291,92 @@ export default function AuthLandingScreen() {
           </View>
         ) : null}
 
-        {/* Bottom — CTAs. Primary action is visually dominant; secondary is
-            restrained. Social auth sits below a subtle divider so the email
-            path remains the clear primary. Placing
-            social below the primary CTA signals that email signup is the
-            recommended path while still offering convenience. */}
+        {/* Bottom — CTAs. Per 2026 research (Gummble, Eleken), social login
+            buttons go at the TOP — the old pattern of burying them below
+            email fields is dead. Apple first (platform native on iOS),
+            Google second. Full-width labeled buttons, not icon circles,
+            so the path is obvious to a distracted user. Email signup is
+            the secondary path below a "or continue with email" divider. */}
         <View
           style={styles.footer}
         >
-          <View>
-            <AnimatedPressable
-              style={styles.primaryBtn}
-              activeOpacity={0.9}
-              onPress={() => navigation.navigate('SignUp')}
-              accessibilityRole="button"
-              accessibilityLabel="Create account"
-              accessibilityHint="Opens the sign-up screen"
-            >
-              <Text style={styles.primaryText} maxFontSizeMultiplier={1.2}>create account</Text>
-            </AnimatedPressable>
-          </View>
-
-          {/* Secondary CTA — flattened (§4: no card-on-card). A transparent
-              pressable with a text label, separated from the primary CTA by
-              spacing alone. No glass wrapper, no nested surface. */}
+          {/* Social login — primary path, full-width labeled buttons */}
           <AnimatedPressable
-            style={styles.secondaryBtn}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Login')}
+            style={[styles.socialFullBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
+            activeOpacity={0.85}
+            onPress={handleAppleSignIn}
+            disabled={!!socialLoading || isMagicLinkLoading}
             accessibilityRole="button"
-            accessibilityLabel="I already have an account"
-            accessibilityHint="Opens the login screen"
+            accessibilityLabel="Continue with Apple"
+            accessibilityHint="Authenticate using your Apple ID"
           >
-            <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>i already have an account</Text>
+            {socialLoading === 'apple' ? (
+              <ActivityIndicator color={colors.textPrimary} size="small" />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={20} color={colors.textPrimary} />
+                <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Apple</Text>
+              </>
+            )}
           </AnimatedPressable>
 
-          {/* Divider — separates email path from social auth */}
-          <View style={styles.socialDivider}>
-            <View style={styles.socialDividerLine} />
-            <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with</Text>
-            <View style={styles.socialDividerLine} />
-          </View>
-
-          {/* Social login row — Apple first (platform native), Google second */}
-          <View style={styles.socialRow}>
+          {hasGoogleOAuth ? (
             <AnimatedPressable
-              style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
-              activeOpacity={0.8}
-              onPress={handleAppleSignIn}
+              style={[styles.socialFullBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
+              activeOpacity={0.85}
+              onPress={handleGoogleSignIn}
               disabled={!!socialLoading || isMagicLinkLoading}
               accessibilityRole="button"
-              accessibilityLabel="Sign in with Apple"
-              accessibilityHint="Authenticate using your Apple ID"
+              accessibilityLabel="Continue with Google"
+              accessibilityHint="Authenticate using your Google account"
             >
-              {socialLoading === 'apple' ? (
-                <ActivityIndicator color={colors.textInverse} size="small" />
+              {socialLoading === 'google' ? (
+                <ActivityIndicator color={colors.textPrimary} size="small" />
               ) : (
-                <Ionicons name="logo-apple" size={22} color={colors.textInverse} />
+                <>
+                  <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
+                  <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Google</Text>
+                </>
               )}
             </AnimatedPressable>
-            {hasGoogleOAuth ? (
-              <AnimatedPressable
-                style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
-                activeOpacity={0.8}
-                onPress={handleGoogleSignIn}
-                disabled={!!socialLoading || isMagicLinkLoading}
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with Google"
-                accessibilityHint="Authenticate using your Google account"
-              >
-                {socialLoading === 'google' ? (
-                  <ActivityIndicator color={colors.textInverse} size="small" />
-                ) : (
-                  <Ionicons name="logo-google" size={20} color={colors.textInverse} />
-                )}
-              </AnimatedPressable>
-            ) : null}
-          </View>
+          ) : null}
 
           {isMagicLinkLoading && (
             <Text style={styles.magicLinkLoadingText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.3}>
               Signing you in from your email link...
             </Text>
           )}
+
+          {/* Divider — separates social from email path */}
+          <View style={styles.socialDivider}>
+            <View style={styles.socialDividerLine} />
+            <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with email</Text>
+            <View style={styles.socialDividerLine} />
+          </View>
+
+          {/* Email signup — secondary path */}
+          <AnimatedPressable
+            style={styles.primaryBtn}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('SignUp')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign up with email"
+            accessibilityHint="Opens the sign-up screen"
+          >
+            <Text style={styles.primaryText} maxFontSizeMultiplier={1.2}>Sign up with email</Text>
+          </AnimatedPressable>
+
+          {/* Already have an account — bottom link */}
+          <AnimatedPressable
+            style={styles.secondaryBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Login')}
+            accessibilityRole="button"
+            accessibilityLabel="Log in to existing account"
+            accessibilityHint="Opens the login screen"
+          >
+            <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>Already have an account? Log in</Text>
+          </AnimatedPressable>
 
           {/* Terms — navigable links (§11). "Terms of Service" and
               "Privacy Policy" open the real documents, so the control has
@@ -501,7 +504,7 @@ function createStyles(colors: ThemeColors) {
   footer: {
     paddingHorizontal: Space.lg + 4,
     paddingBottom: Space.sm + 6,
-    gap: Space.sm,
+    gap: Space.sm + 2,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -549,11 +552,29 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
+  socialFullBtn: {
+    flexDirection: 'row',
+    height: Space.xl + Space.xl + 4,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm + 2,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+  },
+  socialFullText: {
+    color: colors.textPrimary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
+  },
   socialDivider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginTop: Space.xs,
+    marginBottom: Space.xs,
   },
   socialDividerLine: {
     flex: 1,
@@ -566,21 +587,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.md,
-  },
-  socialBtn: {
-    width: Space.xl + Space.xl + 2,
-    height: Space.xl + Space.xl + 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   socialBtnDisabled: {
     opacity: 0.7,

@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -200,10 +201,16 @@ export default function CollectionDetailScreen() {
         </View>
       </Reanimated.View>
 
-      {/* Top-left back button (always visible over cover) */}
+      {/* Top-left back button (always visible over cover) — transparent
+          44pt hit target; glyph legibility from the text-shadow scrim.
+          No circular chrome per AGENTS.md §4 (separate hit area from visible shape). */}
       <View style={styles.absoluteBack} pointerEvents="box-none">
-        <AnimatedPressable style={[styles.backBtn, { backgroundColor: colors.overlay, borderColor: 'transparent' }]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} />
+        <AnimatedPressable style={styles.backBtnOverlay} onPress={handleGoBack} activeOpacity={0.85}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} style={styles.backBtnGlyph} />
         </AnimatedPressable>
       </View>
 
@@ -245,7 +252,10 @@ export default function CollectionDetailScreen() {
                 ))}
               </View>
             )}
-            <View style={styles.coverGradient} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.55)']}
+              style={styles.coverGradient}
+            />
             <View style={styles.coverInfo}>
               <View style={styles.coverTitleRow}>
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
@@ -277,6 +287,7 @@ export default function CollectionDetailScreen() {
                   style={styles.actionBtnOverlay}
                   onPress={handleShare}
                   activeOpacity={0.85}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Share collection"
                   accessibilityRole="button"
                 >
@@ -286,6 +297,7 @@ export default function CollectionDetailScreen() {
                   style={styles.actionBtnOverlay}
                   onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
                   activeOpacity={0.85}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Edit collection"
                   accessibilityRole="button"
                 >
@@ -510,6 +522,17 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  backBtnOverlay: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnGlyph: {
+    textShadowColor: colors.overlay,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
   coverWrap: {
     width: SCREEN_W,
     height: COVER_H,
@@ -531,8 +554,11 @@ function createStyles(colors: ThemeColors) {
     height: '50%',
   },
   coverGradient: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '65%',
   },
   coverInfo: {
     position: 'absolute',

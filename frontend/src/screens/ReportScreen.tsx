@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View, Image as RNImage, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Typography, Type, Radius, Control, Stroke } from '../theme/designTokens';
@@ -14,6 +15,8 @@ import { reportListing, type ListingReportReason } from '../services/listingsApi
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { uploadMedia } from '../services/mediaUpload';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
@@ -21,66 +24,79 @@ const REPORT_REASONS: Array<{
   key: ReportReason;
   label: string;
   description: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
 }> = [
   {
     key: 'spam',
     label: 'Spam',
     description: 'Unwanted promotion, scams or repetitive messages',
+    icon: 'mail-unread-outline',
   },
   {
     key: 'harassment',
     label: 'Harassment',
     description: 'Threatening, abusive or targeted unwanted contact',
+    icon: 'warning-outline',
   },
   {
     key: 'hate_speech',
     label: 'Hate speech',
     description: 'Slurs, dehumanizing language, or attacks on protected groups',
+    icon: 'megaphone-outline',
   },
   {
     key: 'counterfeit',
     label: 'Fake item',
     description: 'Counterfeit goods or misleading authenticity claims',
+    icon: 'pricetag-outline',
   },
   {
     key: 'prohibited',
     label: 'Prohibited item',
     description: 'Weapons, drugs, wildlife, or other prohibited categories',
+    icon: 'ban-outline',
   },
   {
     key: 'off_platform',
     label: 'Off-platform request',
     description: 'Asked to transact outside Thryftverse, against policy',
+    icon: 'exit-outline',
   },
   {
     key: 'scam',
     label: 'Scam or fraud',
     description: 'Attempted financial fraud, phishing, or impersonation',
+    icon: 'cash-outline',
   },
   {
     key: 'misinformation',
     label: 'Misleading content',
     description: 'False or misleading claims about an item',
+    icon: 'information-circle-outline',
   },
   {
     key: 'privacy',
     label: 'Privacy violation',
     description: 'Shared private information without consent',
+    icon: 'lock-closed-outline',
   },
   {
     key: 'impersonation',
     label: 'Impersonation',
     description: 'Pretending to be someone else',
+    icon: 'person-outline',
   },
   {
     key: 'minor_safety',
     label: 'Minor safety',
     description: 'Content or behavior endangering minors',
+    icon: 'shield-outline',
   },
   {
     key: 'other',
     label: 'Something else',
     description: 'Tell the moderation team what happened',
+    icon: 'help-circle-outline',
   },
 ];
 
@@ -93,19 +109,97 @@ export default function ReportScreen({ navigation, route }: Props) {
   const isBlocked = useStore((s) =>
     targetId ? s.blockedUsers.includes(targetId) : false
   );
+  const { isOffline } = useConnectivity();
   const [selectedReason, setSelectedReason] =
-    React.useState<ReportReason | null>(null);
-  const [details, setDetails] = React.useState('');
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isSubmitted, setIsSubmitted] = React.useState(false);
-  const [isBlocking, setIsBlocking] = React.useState(false);
-  const [hasBlocked, setHasBlocked] = React.useState(false);
-  const [reportId, setReportId] = React.useState<string | null>(null);
+    useState<ReportReason | null>(null);
+  const [details, setDetails] = useState('');
+  const [evidenceUris, setEvidenceUris] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
+  const [hasBlocked, setHasBlocked] = useState(false);
+  const [reportId, setReportId] = useState<string | null>(null);
 
   const canSubmit =
     Boolean(targetId) &&
     Boolean(selectedReason) &&
-    !isSubmitting;
+    !isSubmitting &&
+    !isUploading;
+
+  const handlePickEvidence = useCallback(async () => {
+    if (evidenceUris.length >= 3) {
+      show('Attach up to 3 photos.', 'info');
+      return;
+    }
+    if (isOffline) {
+      show('You appear to be offline. Check your connection and try again.', 'error');
+      return;
+    }
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow photo access to upload evidence.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.85,
+        selectionLimit: 3 - evidenceUris.length,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      setIsUploading(true);
+      const uploaded: string[] = [];
+      for (const asset of result.assets) {
+        const media = await uploadMedia(asset.uri, 'evidence');
+        uploaded.push(media.publicUrl);
+      }
+      setEvidenceUris((prev) => [...prev, ...uploaded]);
+      show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
+    } catch {
+      show('Unable to upload photo(s). Try again.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [evidenceUris.length, isOffline, show]);
+
+  const handleTakeEvidence = useCallback(async () => {
+    if (evidenceUris.length >= 3) {
+      show('Attach up to 3 photos.', 'info');
+      return;
+    }
+    if (isOffline) {
+      show('You appear to be offline. Check your connection and try again.', 'error');
+      return;
+    }
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow camera access to take evidence photos.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      setIsUploading(true);
+      const media = await uploadMedia(result.assets[0].uri, 'evidence');
+      setEvidenceUris((prev) => [...prev, media.publicUrl]);
+      show('Photo attached.', 'success');
+    } catch {
+      show('Unable to upload photo. Try again.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [evidenceUris.length, isOffline, show]);
+
+  const handleRemoveEvidence = useCallback((index: number) => {
+    setEvidenceUris((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSubmit = async () => {
     if (!canSubmit || !selectedReason || !targetId) return;
@@ -169,8 +263,8 @@ export default function ReportScreen({ navigation, route }: Props) {
             </Text>
           ) : null}
           <Text style={styles.completeBody}>
-            The moderation team received your report. We review every report
-            and will take action if a policy is violated.
+            Report submitted. We'll review within 24 hours and take action
+            if a policy is violated.
           </Text>
           {reportId ? (
             <Text style={styles.reportIdNote}>
@@ -323,6 +417,13 @@ export default function ReportScreen({ navigation, route }: Props) {
               accessibilityHint={reason.description}
               accessibilityState={{ selected }}
             >
+              <View style={[styles.reasonIcon, selected && styles.reasonIconSelected]}>
+                <Ionicons
+                  name={reason.icon}
+                  size={18}
+                  color={selected ? colors.textPrimary : colors.textMuted}
+                />
+              </View>
               <View style={styles.reasonCopy}>
                 <Text style={styles.reasonLabel}>{reason.label}</Text>
                 <Text style={styles.reasonDescription}>
@@ -337,9 +438,9 @@ export default function ReportScreen({ navigation, route }: Props) {
         })}
       </View>
 
-      {selectedReason === 'other' ? (
+      {selectedReason ? (
         <View style={styles.details}>
-          <Text style={styles.detailsLabel}>Additional details</Text>
+          <Text style={styles.detailsLabel}>Additional details (optional)</Text>
           <TextInput
             style={styles.detailsInput}
             value={details}
@@ -352,6 +453,65 @@ export default function ReportScreen({ navigation, route }: Props) {
             accessibilityLabel="Additional report details"
           />
           <Text style={styles.characterCount}>{details.length}/500</Text>
+
+          {/* Evidence photo upload */}
+          <Text style={styles.evidenceLabel}>Evidence photos (optional)</Text>
+          {evidenceUris.length > 0 ? (
+            <View style={styles.evidenceGrid}>
+              {evidenceUris.map((uri, i) => (
+                <View key={uri + i} style={styles.evidenceTileWrap}>
+                  <RNImage
+                    source={{ uri }}
+                    style={styles.evidenceTile}
+                    resizeMode="cover"
+                    accessibilityLabel={`Evidence photo ${i + 1}`}
+                  />
+                  <Pressable
+                    style={styles.evidenceRemoveBtn}
+                    onPress={() => handleRemoveEvidence(i)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove evidence photo ${i + 1}`}
+                  >
+                    <Ionicons name="close-circle" size={22} color={colors.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {evidenceUris.length < 3 ? (
+            <View style={styles.evidenceUploadRow}>
+              <AnimatedPressable
+                style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={handleTakeEvidence}
+                scaleValue={0.97}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Take evidence photo with camera"
+              >
+                <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
+                <Text style={styles.evidenceUploadText}>Camera</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={handlePickEvidence}
+                scaleValue={0.97}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Choose evidence photos from gallery"
+              >
+                {isUploading ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Ionicons name="images-outline" size={18} color={colors.textPrimary} />
+                )}
+                <Text style={styles.evidenceUploadText}>Gallery</Text>
+              </AnimatedPressable>
+            </View>
+          ) : null}
+          <Text style={styles.evidenceCount}>
+            {evidenceUris.length}/3 photos
+          </Text>
         </View>
       ) : null}
     </FlagshipScreen>
@@ -387,11 +547,23 @@ function createStyles(colors: ThemeColors) {
     minHeight: Control.hit + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
   },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  reasonIcon: {
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  reasonIconSelected: {
+    backgroundColor: `${colors.textPrimary}14`,
   },
   reasonCopy: {
     minWidth: 0,
@@ -458,6 +630,64 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.meta.lineHeight,
     letterSpacing: Type.meta.letterSpacing,
     textAlign: 'right',
+  },
+  evidenceLabel: {
+    marginTop: Space.lg,
+    marginBottom: Space.xs + 2,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+  },
+  evidenceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+  },
+  evidenceTileWrap: {
+    position: 'relative',
+  },
+  evidenceTile: {
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
+    borderRadius: Radius.md,
+  },
+  evidenceRemoveBtn: {
+    position: 'absolute',
+    top: -Space.xs,
+    right: -Space.xs,
+    width: Control.chrome,
+    height: Control.chrome,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  evidenceUploadRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  evidenceUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
+  },
+  evidenceUploadText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  evidenceCount: {
+    marginTop: Space.xs,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
   },
   submitAction: {
     minHeight: Space.xxl,
