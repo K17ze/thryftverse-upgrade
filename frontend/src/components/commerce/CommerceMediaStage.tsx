@@ -961,6 +961,23 @@ export function CommerceMediaStage({
         pointerEvents="none"
       />
 
+      {/* Image count badge — top-right pill showing current/total.
+          Per Aug 2026 research: subtle scrim pill, tabular numerals.
+          Sits above the topScrim for legibility; pointerEvents none so
+          it never intercepts header controls or image gestures. */}
+      {mediaItems.length > 1 && (
+        <View
+          style={styles.countBadge}
+          accessibilityLabel={`Image ${activeIndex + 1} of ${mediaItems.length}`}
+          accessibilityRole="text"
+          pointerEvents="none"
+        >
+          <Text style={styles.countBadgeText}>
+            {activeIndex + 1}/{mediaItems.length}
+          </Text>
+        </View>
+      )}
+
       {overlayBottomContent ? (
         <Reanimated.View style={[styles.bottomScrim, bottomScrimStyle]} pointerEvents="none">
           <LinearGradient
@@ -1167,6 +1184,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     height: 132,
+  },
+  // Image count badge — top-right pill (e.g. "1/8").
+  // Semi-transparent dark pill with white tabular-nums text.
+  countBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    backgroundColor: colors.overlay,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    zIndex: 9,
+  },
+  countBadgeText: {
+    color: colors.scrimTextPrimary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   bigHeartWrap: {
     alignItems: 'center',

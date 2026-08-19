@@ -29,6 +29,29 @@ import type { NotificationEventV2 } from '../../services/notificationsApi';
 // and action button.
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve a timestamp color based on recency.
+ *
+ * The color desaturates as time passes, drawing the eye to fresh activity:
+ *   < 1 hour   → colors.brand         (fresh / active — the "spark")
+ *   1–24 hours → colors.textSecondary (slightly elevated)
+ *   1–7 days   → colors.textMuted     (neutral — current behaviour)
+ *   7+ days    → colors.textMuted     (stays neutral)
+ *
+ * Edge cases:
+ *   - Missing/invalid timestamp → textMuted (safe default)
+ *   - Future timestamp          → brand (treat as fresh)
+ */
+function resolveTimestampColor(createdAt: string | null | undefined, colors: ThemeColors): string {
+  if (!createdAt) return colors.textMuted;
+  const then = new Date(createdAt).getTime();
+  if (Number.isNaN(then)) return colors.textMuted;
+  const hours = (Date.now() - then) / 36e5;
+  if (hours < 1) return colors.brand;            // fresh (also covers future)
+  if (hours < 24) return colors.textSecondary;   // recent
+  return colors.textMuted;                       // 1–7 days and 7+ days
+}
+
 export interface NotificationRowBaseProps {
   /** The V2 notification event. */
   event: NotificationEventV2;
@@ -71,6 +94,7 @@ export function NotificationRowBase({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isUnread = !event.readAt;
+  const timeColor = resolveTimestampColor(event.createdAt, colors);
 
   return (
     <AnimatedPressable
@@ -100,7 +124,7 @@ export function NotificationRowBase({
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
           ) : null}
-          <Text style={styles.time}>{time}</Text>
+          <Text style={[styles.time, { color: timeColor }]}>{time}</Text>
         </View>
       </View>
 

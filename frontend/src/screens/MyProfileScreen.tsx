@@ -47,6 +47,8 @@ import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
+import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
+import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -243,6 +245,18 @@ export default function MyProfileScreen() {
       .then((res) => setMyLooks(res.items ?? []))
       .catch(() => setMyLooks([]))
       .finally(() => setLooksLoading(false));
+  }, [currentUser?.id]);
+
+  // Story highlights — fetched for the highlights rail between identity hero
+  // and the utility rail. Renders nothing when empty (no fabricated content).
+  const [highlights, setHighlights] = React.useState<PosterHighlight[]>([]);
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    fetchPosterHighlights(currentUser.id)
+      .then((res) => { if (!cancelled) setHighlights(res.items ?? []); })
+      .catch(() => { if (!cancelled) setHighlights([]); });
+    return () => { cancelled = true; };
   }, [currentUser?.id]);
 
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
@@ -517,6 +531,12 @@ export default function MyProfileScreen() {
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
+  // Hero span — the first listing spans 2 columns as a wide anchor, breaking
+  // the uniform 3-column grid (Instagram/Pinterest mixed-layout pattern).
+  // Only applied when there are 3+ listings so the grid still reads as a grid.
+  const HERO_WIDTH = CARD_WIDTH * 2 + GRID_GAP;
+  const HERO_HEIGHT = CARD_HEIGHT;
+  const showHero = allOwnedListings.length >= 3;
 
   return (
     <View style={[styles.container, t.container]}>
@@ -688,6 +708,29 @@ export default function MyProfileScreen() {
             </Pressable>
           ) : null}
 
+          {/* ── STORY HIGHLIGHTS RAIL ──
+              Instagram-pattern: highlights sit between the identity hero and
+              the utility rail. Renders only when highlights exist (truthful UI —
+              no fabricated placeholder content). Owner sees a "New" tile. */}
+          {highlights.length > 0 ? (
+            <PosterHighlightsRail
+              highlights={highlights}
+              isOwner
+              onOpenHighlight={(highlightId) => {
+                haptic.light();
+                navigation.navigate('PosterHighlightViewer', { highlightId });
+              }}
+              onCreateHighlight={() => {
+                haptic.light();
+                navigation.navigate('CreatePosterHighlight', {});
+              }}
+              onHighlightLongPress={(highlightId) => {
+                haptic.light();
+                navigation.navigate('PosterHighlightViewer', { highlightId });
+              }}
+            />
+          ) : null}
+
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
@@ -742,16 +785,20 @@ export default function MyProfileScreen() {
                   </Pressable>
                 </View>
                 <View style={styles.grid}>
-                  {allOwnedListings.map((item) => (
+                  {allOwnedListings.map((item, index) => {
+                    const isHero = showHero && index === 0;
+                    const cardW = isHero ? HERO_WIDTH : CARD_WIDTH;
+                    const cardH = isHero ? HERO_HEIGHT : CARD_HEIGHT;
+                    return (
                     <AnimatedPressable
                       key={item.id}
-                      style={[styles.gridCard, { width: CARD_WIDTH }]}
+                      style={[styles.gridCard, { width: cardW }]}
                       onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                       accessibilityRole="button"
                       accessibilityLabel={`Manage ${item.title}`}
                     >
                       <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+                        style={[styles.gridImageWrap, { width: cardW, height: cardH }]}
                         sharedTransitionTag={`image-${item.id}-0`}
                       >
                         <CachedImage
@@ -773,7 +820,8 @@ export default function MyProfileScreen() {
                         <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
                       ) : null}
                     </AnimatedPressable>
-                  ))}
+                    );
+                  })}
                 </View>
               </>
             )}

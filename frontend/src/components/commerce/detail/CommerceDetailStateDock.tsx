@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -123,6 +124,11 @@ export function CommerceDetailStateDock({
   const safeBottom = bottomInset ?? insets.bottom;
   const { isCommerceCompact } = useBreakpoint();
 
+  // Dock surface fill — used for both the container background and the
+  // gradient elevation overlay so they stay in sync across light/dark
+  // and elevated/non-elevated states.
+  const dockBackground = elevated ? colors.surfaceElevated : colors.background;
+
   // Per spec 05 §4: auto stacks on compact widths to prevent label
   // truncation and giant pill overflow.
   const hasSecondary = !!secondaryAction;
@@ -146,12 +152,24 @@ export function CommerceDetailStateDock({
       style={[
         styles.container,
         {
-          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
+          backgroundColor: dockBackground,
           paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
           borderTopColor: colors.border,
         },
       ]}
     >
+      {/* ── Gradient elevation overlay (top edge) ──
+          A subtle LinearGradient at the very top of the dock that fades
+          from transparent to the dock background color over ~12px. This
+          creates a premium "lift" effect (eBay/Vestiaire pattern) where
+          content scrolling under the dock fades out naturally. Sits
+          above the dock content at the top edge, pointer-events none. */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['transparent', dockBackground]}
+        locations={[0, 1]}
+        style={styles.topGradientOverlay}
+      />
       {/* ── Trust strip (top section of the unified dock) ──
           Flattened into the dock surface — no separate surface; a hairline
           borderBottom divides it from the action row.
@@ -397,6 +415,19 @@ const styles = StyleSheet.create({
     // surface separating persistent action from scroll content.
     // Spec: 8px offset, 0.12 opacity, 16px radius.
     ...Elevation.floating,
+  },
+  // ── Gradient elevation overlay ──
+  // Thin gradient pinned to the top edge of the dock, fading from
+  // transparent to the dock background color over ~12px. Creates a
+  // premium "lift" effect where scroll content fades out naturally
+  // under the dock (eBay/Vestiaire pattern). pointerEvents none so it
+  // never intercepts touches on the dock content below.
+  topGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 12,
   },
   row: {
     flexDirection: 'row',

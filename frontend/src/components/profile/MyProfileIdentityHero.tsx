@@ -9,6 +9,60 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
+// ── Bio linkification ──
+// Parses URLs, @mentions and #hashtags in the bio and renders them as
+// tappable inline spans. Non-link text uses the base bio style.
+const BIO_LINK_PATTERN = /((?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+[^\s]*|(?:^|\s)[@#][\w]+)/gi;
+
+function BioText({ bio, style, linkStyle }: { bio: string; style: any; linkStyle: any }) {
+  const segments = React.useMemo(() => {
+    const parts: { text: string; isLink: boolean }[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    const pattern = new RegExp(BIO_LINK_PATTERN.source, 'gi');
+    while ((match = pattern.exec(bio)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: bio.slice(lastIndex, match.index), isLink: false });
+      }
+      parts.push({ text: match[0], isLink: true });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < bio.length) {
+      parts.push({ text: bio.slice(lastIndex), isLink: false });
+    }
+    return parts.length > 0 ? parts : [{ text: bio, isLink: false }];
+  }, [bio]);
+
+  const handleLinkPress = (link: string) => {
+    const trimmed = link.trim();
+    if (trimmed.startsWith('@') || trimmed.startsWith('#')) {
+      // Mentions/hashtags — no dedicated screen yet; suppress to avoid dead taps
+      return;
+    }
+    let normalized = trimmed;
+    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+    Linking.openURL(normalized).catch(() => {});
+  };
+
+  return (
+    <Text style={style} numberOfLines={2}>
+      {segments.map((seg, i) =>
+        seg.isLink ? (
+          <Text
+            key={i}
+            style={linkStyle}
+            onPress={() => handleLinkPress(seg.text)}
+          >
+            {seg.text}
+          </Text>
+        ) : (
+          <Text key={i}>{seg.text}</Text>
+        )
+      )}
+    </Text>
+  );
+}
+
 const AVATAR_SIZE = 88; // design contract: 88pt seam avatar — matches ProfileHero
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const ACTION_RADIUS = 11;
@@ -186,7 +240,7 @@ export function MyProfileIdentityHero({
           @{username}
         </Text>
 
-        {bio ? <Text style={styles.bio} numberOfLines={2}>{bio}</Text> : null}
+        {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} /> : null}
 
         {location ? (
           <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
@@ -403,6 +457,10 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.xs,
+  },
+  bioLink: {
+    color: colors.brand,
+    fontFamily: Typography.family.medium,
   },
   contextLine: {
     color: colors.textMuted,
