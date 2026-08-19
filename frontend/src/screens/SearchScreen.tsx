@@ -20,8 +20,10 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
+import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,8 +32,9 @@ type ExploreTab = DiscoveryMode;
 // Main screen
 export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
-  const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
+  const haptic = useHaptic();
 
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +46,7 @@ export default function SearchScreen() {
   const [loadedTabs, setLoadedTabs] = useState<Set<ExploreTab>>(new Set(['discover']));
 
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -129,12 +133,17 @@ export default function SearchScreen() {
     isSyncing,
     lastError,
     isLoadingMore,
+    hasMore,
     refreshing,
     onRefresh: () => void handleRefresh(),
     onLoadMore: () => void loadMoreListings(),
-    onPressItem: (item: typeof listings[number]) => navigation.navigate('ItemDetail', { itemId: item.id }),
-    onPressSeller: (item: typeof listings[number]) => openProfile(navigation, item.sellerId, currentUser?.id),
-    onMessageSeller: (item: typeof listings[number]) => navigation.navigate('Chat', {
+    // DiscoverScene now receives heterogeneous DiscoveryFeedUnit[]; listing
+    // tiles carry the production DiscoveryListingSummary, so the navigation
+    // callbacks are typed against that contract (it exposes id + sellerId,
+    // which is all navigation needs here).
+    onPressItem: (item: DiscoveryListingSummary) => navigation.navigate('ItemDetail', { itemId: item.id }),
+    onPressSeller: (item: DiscoveryListingSummary) => openProfile(navigation, item.sellerId, currentUser?.id),
+    onMessageSeller: (item: DiscoveryListingSummary) => navigation.navigate('Chat', {
       conversationId: `${item.sellerId}_${item.id}`,
       focusQuery: '',
       partnerUserId: item.sellerId,

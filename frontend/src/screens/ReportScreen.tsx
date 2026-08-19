@@ -100,6 +100,7 @@ export default function ReportScreen({ navigation, route }: Props) {
   const [isSubmitted, setIsSubmitted] = React.useState(false);
   const [isBlocking, setIsBlocking] = React.useState(false);
   const [hasBlocked, setHasBlocked] = React.useState(false);
+  const [reportId, setReportId] = React.useState<string | null>(null);
 
   const canSubmit =
     Boolean(targetId) &&
@@ -110,15 +111,17 @@ export default function ReportScreen({ navigation, route }: Props) {
     if (!canSubmit || !selectedReason || !targetId) return;
     setIsSubmitting(true);
     try {
+      let result: { reportId: string };
       if (type === 'user') {
-        await reportUser(targetId, selectedReason, details.trim() || undefined);
+        result = await reportUser(targetId, selectedReason, details.trim() || undefined);
       } else {
-        await reportListing(
+        result = await reportListing(
           targetId,
           selectedReason as ListingReportReason,
           details.trim() || undefined
         );
       }
+      setReportId(result.reportId);
       setIsSubmitted(true);
     } catch {
       show('The report could not be sent. Check your connection and try again.', 'error');
@@ -160,10 +163,20 @@ export default function ReportScreen({ navigation, route }: Props) {
             color={colors.textPrimary}
           />
           <Text style={styles.completeTitle}>Report submitted</Text>
+          {reportId ? (
+            <Text style={styles.reportIdText}>
+              Report #{reportId}
+            </Text>
+          ) : null}
           <Text style={styles.completeBody}>
             The moderation team received your report. We review every report
             and will take action if a policy is violated.
           </Text>
+          {reportId ? (
+            <Text style={styles.reportIdNote}>
+              Reference this number in future support contact.
+            </Text>
+          ) : null}
           {showBlockButton ? (
             <AnimatedPressable
               style={styles.blockAction}
@@ -474,6 +487,23 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     letterSpacing: Type.subtitle.letterSpacing,
+    textAlign: 'center',
+  },
+  reportIdText: {
+    marginTop: Space.xs,
+    color: colors.brand,
+    fontFamily: Typography.family.bold,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    textAlign: 'center',
+  },
+  reportIdNote: {
+    marginTop: Space.xs,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     textAlign: 'center',
   },
   completeBody: {

@@ -18,7 +18,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography, Type, Control, Stroke } from '../theme/designTokens';
+import { Space, Typography, Type, Control, Stroke, Radius } from '../theme/designTokens';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -184,9 +184,9 @@ export default function CategoryDetailScreen() {
           <View style={styles.loadingGrid} accessibilityLabel="Loading category listings">
             {Array.from({ length: 4 }).map((_, index) => (
               <View key={index} style={styles.loadingColumn}>
-                <SkeletonLoader width="100%" height={index % 2 === 0 ? 220 : 180} borderRadius={14} />
-                <SkeletonLoader width="78%" height={14} borderRadius={6} style={styles.skeletonLine} />
-                <SkeletonLoader width="46%" height={12} borderRadius={6} style={styles.skeletonMeta} />
+                <SkeletonLoader width="100%" height={index % 2 === 0 ? 220 : 180} borderRadius={Radius.lg} />
+                <SkeletonLoader width="78%" height={14} borderRadius={Radius.sm} style={styles.skeletonLine} />
+                <SkeletonLoader width="46%" height={12} borderRadius={Radius.sm} style={styles.skeletonMeta} />
               </View>
             ))}
           </View>

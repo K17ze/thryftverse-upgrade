@@ -121,15 +121,10 @@ export default function SellerAnalyticsScreen() {
     return revenue / itemsSold;
   }, [revenue, itemsSold]);
 
-  // ── Trend indicator: percentage change vs items sold baseline ──
-  const trendPercentage = useMemo(() => {
-    if (itemsSold === 0) return 0;
-    // Use conversion rate as a proxy for trend direction
-    if (conversionRate > 0) {
-      return Math.min(999, Math.round(conversionRate * 10) / 10);
-    }
-    return 0;
-  }, [conversionRate, itemsSold]);
+  // ── Trend indicator ──
+  // Per AGENTS.md §11, we do NOT relabel conversion rate as a trend
+  // percentage. Real period-over-period delta data is not available from the
+  // backend in this build, so we show no trend — only the honest item count.
 
   // ── Supporting KPIs as flat rows (2-4 max) ──
   const kpiRows = useMemo<KpiRow[]>(() => {
@@ -292,13 +287,13 @@ export default function SellerAnalyticsScreen() {
           </Text>
           <View style={styles.heroTrendRow}>
             <Ionicons
-              name={itemsSold > 0 ? 'trending-up' : 'remove'}
+              name={itemsSold > 0 ? 'checkmark-circle-outline' : 'remove'}
               size={14}
               color={itemsSold > 0 ? colors.success : colors.textMuted}
             />
             <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
               {itemsSold > 0
-                ? `${trendPercentage}% conv · ${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
+                ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
                 : 'No sales yet'}
             </Text>
           </View>

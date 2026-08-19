@@ -30,6 +30,7 @@ export type NotificationPushCategory =
   | 'followers'
   | 'orderUpdates'
   | 'priceDrops'
+  | 'auctionAlerts'
   | 'news';
 
 export interface NotificationRoute {
@@ -509,7 +510,7 @@ export function resolveNotificationPriority(eventType: NotificationEventType): N
 export function resolveNotificationCategory(eventType: NotificationEventType): NotificationPushCategory | null {
   if (eventType === 'chat_message') return 'messages';
   if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'orderUpdates';
-  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'priceDrops';
+  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
   if (eventType === 'review_received') return 'wishlist';
   return null;
 }

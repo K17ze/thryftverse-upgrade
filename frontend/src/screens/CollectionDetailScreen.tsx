@@ -76,7 +76,6 @@ export default function CollectionDetailScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
@@ -152,15 +151,6 @@ export default function CollectionDetailScreen() {
     haptic.light();
     setShareVisible(true);
   }, [haptic]);
-
-  const handleToggleFollow = useCallback(() => {
-    haptic.light();
-    setIsFollowing((prev) => {
-      const next = !prev;
-      show(next ? `Following "${collection?.name}"` : `Unfollowed "${collection?.name}"`, 'info');
-      return next;
-    });
-  }, [haptic, show, collection]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -281,17 +271,6 @@ export default function CollectionDetailScreen() {
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
-                {!collection.isPrivate && (
-                  <AnimatedPressable
-                    style={[styles.actionBtnOverlay, isFollowing && styles.actionBtnOverlayActive]}
-                    onPress={handleToggleFollow}
-                    activeOpacity={0.85}
-                    accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? colors.brand : '#fff'} />
-                  </AnimatedPressable>
-                )}
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
                   onPress={handleShare}
@@ -342,17 +321,6 @@ export default function CollectionDetailScreen() {
               </View>
             </View>
             <View style={styles.actionRow}>
-              {!collection.isPrivate && (
-                <AnimatedPressable
-                  style={[styles.actionBtn, isFollowing && styles.actionBtnActive]}
-                  onPress={handleToggleFollow}
-                  activeOpacity={0.85}
-                  accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? colors.brand : colors.textPrimary} />
-                </AnimatedPressable>
-              )}
               <AnimatedPressable
                 style={styles.actionBtn}
                 onPress={handleShare}
@@ -621,9 +589,6 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionBtnOverlayActive: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
   noCoverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -713,10 +678,6 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionBtnActive: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}15`,
   },
   manageRow: {
     flexDirection: 'row',

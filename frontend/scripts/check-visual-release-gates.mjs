@@ -18,7 +18,14 @@
  * transition quality — those remain human visual gates (see
  * `.devin/visual-qa-gates.md`).
  *
- * Run via: npm run check:visual-gates
+ * Enforcement (AGENTS.md §31.7, visual-flagship-convergence-loop.md §10):
+ *   - Default mode FAILS the build on P0 violations (exit 1).
+ *   - `--report` mode is warn-only (exit 0) for local exploration.
+ *   - `--strict` is retained as an alias for the default strict behaviour
+ *     so existing CI invocations keep working.
+ *
+ * Run via: npm run check:visual-gates            (strict, fails on P0)
+ *          npm run check:visual-gates:report     (warn-only)
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
@@ -494,7 +501,12 @@ function checkExperimentFramework(files) {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 function main() {
-  const strict = process.argv.includes('--strict');
+  // Enforcement (AGENTS.md §31.7): the gate FAILS on P0 by default so the
+  // build loop actually enforces the visual constitution. `--report` opts
+  // into the old warn-only behaviour for local exploration. `--strict` is
+  // retained as an alias for the default strict behaviour for back-compat.
+  const report = process.argv.includes('--report');
+  const strict = !report; // default strict; --report disables it
 
   const files = walk(SRC);
 
@@ -569,16 +581,22 @@ function main() {
 
   if (strict && p0Violations.length > 0) {
     console.error(
-      '\n✗ visual-gates: P0 violations found in strict mode — fix before merge.\n'
+      '\n✗ visual-gates: P0 violations found — fix before merge.\n' +
+        '  (AGENTS.md §31.7: the visual release gate is enforced by default.\n' +
+        '   Run with --report for warn-only local exploration.)\n'
     );
     process.exit(1);
   }
 
   if (p0Violations.length === 0 && p1Violations.length === 0) {
     console.log('\n✓ visual-gates: No violations found.');
+  } else if (report) {
+    console.log(
+      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported (--report mode; default would fail on P0).`
+    );
   } else {
     console.log(
-      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported (use --strict to fail on P0).`
+      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported.`
     );
   }
   process.exit(0);

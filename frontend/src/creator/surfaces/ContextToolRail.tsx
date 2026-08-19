@@ -4,11 +4,15 @@
  *
  * Replaces the static tool dock pattern with a rail that adapts its visible
  * tool set based on the active {@link ToolContext} (editor mode + selection
- * state). Up to 6 primary actions are always visible; additional tools are
+ * state). Up to 4 primary actions are always visible; additional tools are
  * revealed under a trailing "More" button.
  *
- * Design requirements (09_VISUAL_SYSTEM spec):
- *   - Maximum 6 primary actions visible; overflow under "More"
+ * Design requirements (2026 flagship creator UX research, AGENTS.md §4):
+ *   - Maximum 4 primary actions visible — the Meta Edits / Instagram / CapCut
+ *     pattern. The primary layer (canvas + preview) is ruthlessly guarded
+ *     against feature creep. More tools ≠ better; ≤4 immediately relevant
+ *     actions is the cognitive-fluency sweet spot.
+ *   - Overflow under "More" with specific grouping labels (not a flat list)
  *   - 44pt minimum touch targets (48pt preferred for high-frequency tools)
  *   - Transparent background — no card, no border, no glass container
  *   - Horizontal scroll with hidden scroll indicator
@@ -22,10 +26,10 @@
  *   - Haptic feedback: light haptic on press (unless overridden)
  *
  * Anatomy:
- *   ┌────────────────────────────────────────────────┐
- *   │  [icon]  [icon]  [icon]  [icon]  [icon]  [⋯]  │
- *   │  Text    Sticker Music  Effects Draw    More   │
- *   └────────────────────────────────────────────────┘
+ *   ┌────────────────────────────────────────┐
+ *   │  [icon]  [icon]  [icon]  [icon]  [⋯]  │
+ *   │  Text    Sticker Music  Effects More   │
+ *   └────────────────────────────────────────┘
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -64,8 +68,11 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Maximum primary tools visible before overflow. */
-const MAX_PRIMARY = 6;
+/** Maximum primary tools visible before overflow. The 2026 flagship creator
+ *  UX research (Meta Edits, Instagram, CapCut) converges on ≤4 immediately
+ *  relevant actions — the primary layer is ruthlessly guarded against
+ *  feature creep. More tools ≠ better; cognitive fluency peaks at 4. */
+const MAX_PRIMARY = 4;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
 /** Badge text size. */
@@ -181,7 +188,7 @@ const MoreButton = React.memo(function MoreButton({
       label="More"
       onPress={onPress}
       accessibilityLabel="More tools"
-      accessibilityHint="Opens the overflow menu with additional tools"
+      accessibilityHint="Opens additional creative tools — layers, transitions, templates, and advanced editing"
     />
   );
 });

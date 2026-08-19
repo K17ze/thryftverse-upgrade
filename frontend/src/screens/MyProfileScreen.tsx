@@ -652,6 +652,7 @@ export default function MyProfileScreen() {
             username={user.username}
             bio={user.bio ?? undefined}
             location={user.location ?? undefined}
+            website={user.website ?? null}
             memberSince={memberSince}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}

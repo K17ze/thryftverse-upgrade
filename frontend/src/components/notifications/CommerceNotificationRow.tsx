@@ -110,7 +110,7 @@ export function CommerceNotificationRow({
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
         {event.title || visual.statusLabel}
       </Text>
-      <Text style={[styles.body, isUnread && styles.bodyUnread]} numberOfLines={2}>
+      <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
     </NotificationRowBase>
@@ -134,10 +134,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
-    },
-    bodyUnread: {
-      color: colors.textPrimary,
-      fontFamily: FontFamily.medium,
     },
   });
 }

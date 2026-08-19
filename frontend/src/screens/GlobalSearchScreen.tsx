@@ -6,6 +6,7 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import Reanimated, {
   interpolateColor,
@@ -28,6 +29,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { EmptyState } from '../components/EmptyState';
 import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { CachedImage } from '../components/CachedImage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,6 +45,7 @@ import { searchUsers, type UserSearchResult, followUser, unfollowUser } from '..
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useHaptic } from '../hooks/useHaptic';
+import { BottomSheet } from '../components/BottomSheet';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { EditorialSection } from '../components/discover/EditorialSection';
@@ -91,15 +94,23 @@ const DISCOVER_SORT_OPTIONS: SearchSortOption[] = [
 
 // Category shortcuts — derived from the app's canonical category tree so
 // pills map to real browse destinations. Shown in both the focus and resting
-// states (Depop/Vinted pattern) with category emoji icons. These are the
-// canonical categories, not "trending" — the label is honest. No hardcoded
-// editorial "Top Searches" cards — the discover landing only renders real
-// backend data, real recent/saved searches, and the canonical category tree
-// (audit: Global P0 — remove production sample editorial constants and
-// empty-URI rendering).
+// states (Depop/Vinted pattern) with clean Ionicons glyphs — not emojis.
+// Emojis read as prototype-grade; flagship apps use consistent icon families.
+const CATEGORY_ICON_MAP: Record<string, string> = {
+  women: 'shirt-outline',
+  men: 'shirt-outline',
+  designer: 'bag-handle-outline',
+  kids: 'happy-outline',
+  home: 'home-outline',
+  electronics: 'phone-portrait-outline',
+  entertainment: 'book-outline',
+  hobbies: 'color-palette-outline',
+  sports: 'basketball-outline',
+};
+
 const CATEGORY_SHORTCUTS: { label: string; icon: string; query: string }[] = CATEGORIES.slice(0, 8).map((cat) => ({
   label: cat.name,
-  icon: cat.emoji,
+  icon: CATEGORY_ICON_MAP[cat.id] ?? 'pricetag-outline',
   query: cat.id,
 }));
 
@@ -327,6 +338,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const { isOffline } = useConnectivity();
+  const reducedMotion = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
   // Evaluate saved search alerts against current listings
@@ -347,6 +359,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const [searchScope, setSearchScope] = useState<'items' | 'people'>('items');
   const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
   const [isSearchingPeople, setIsSearchingPeople] = useState(false);
+  const [isSortSheetVisible, setIsSortSheetVisible] = useState(false);
 
   // Reset scope to Items whenever the query changes
   useEffect(() => {
@@ -604,8 +617,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax, rankedListings, listings, normalizedQuery]);
 
   useEffect(() => {
-    focusProgress.value = withTiming(isSearchFocused ? 1 : 0, { duration: Motion.timing.focus });
-  }, [focusProgress, isSearchFocused]);
+    focusProgress.value = withTiming(isSearchFocused ? 1 : 0, { duration: reducedMotion ? 0 : Motion.timing.focus });
+  }, [focusProgress, isSearchFocused, reducedMotion]);
 
   const animatedSearchShellStyle = useAnimatedStyle(() => {
     // Subtle background shift on focus — matches Explore's clean field.
@@ -742,10 +755,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
   const showSearchLoadingSkeleton = isSyncing && listings.length === 0 && !lastError;
 
-  const handleCycleSort = () => {
-    const activeSortIndex = DISCOVER_SORT_OPTIONS.indexOf(browseFilters.sort as SearchSortOption);
-    const nextSort = DISCOVER_SORT_OPTIONS[(activeSortIndex + 1) % DISCOVER_SORT_OPTIONS.length];
-    updateBrowseFilters({ sort: nextSort, query: normalizedQuery });
+  const handleSelectSort = (sort: SearchSortOption) => {
+    updateBrowseFilters({ sort, query: normalizedQuery });
+    setIsSortSheetVisible(false);
   };
 
   const handleOpenFilter = () => {
@@ -821,19 +833,19 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const renderSearchLoadingState = () => (
     <View style={styles.loadingStateWrap}>
       <View style={styles.loadingSection}>
-        <SkeletonLoader width="32%" height={14} borderRadius={7} style={{ marginBottom: 12 }} />
+        <SkeletonLoader width="32%" height={14} borderRadius={Radius.md} style={{ marginBottom: 12 }} />
         <View style={styles.loadingTagsRow}>
           {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonLoader key={`search_tag_loading_${index}`} width={96} height={36} borderRadius={18} />
+            <SkeletonLoader key={`search_tag_loading_${index}`} width={96} height={36} borderRadius={Radius.xl} />
           ))}
         </View>
       </View>
       <View style={styles.loadingSection}>
-        <SkeletonLoader width="44%" height={14} borderRadius={7} style={{ marginBottom: 14 }} />
+        <SkeletonLoader width="44%" height={14} borderRadius={Radius.md} style={{ marginBottom: 14 }} />
         {Array.from({ length: 4 }).map((_, index) => (
           <View key={`search_recent_loading_${index}`} style={styles.loadingRecentRow}>
-            <SkeletonLoader width={20} height={20} borderRadius={10} />
-            <SkeletonLoader width="62%" height={13} borderRadius={6} style={{ marginLeft: 12 }} />
+            <SkeletonLoader width={20} height={20} borderRadius={Radius.lg} />
+            <SkeletonLoader width="62%" height={13} borderRadius={Radius.sm} style={{ marginLeft: 12 }} />
           </View>
         ))}
       </View>
@@ -881,6 +893,14 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     savedSearchMeta: { color: colors.textMuted },
     recoEmptyState: { borderColor: colors.border, backgroundColor: colors.surface },
     recoEmptyText: { color: colors.textSecondary },
+    sortChip: { backgroundColor: colors.surfaceAlt },
+    sortChipText: { color: colors.textPrimary },
+    sortChipIcon: { color: colors.textSecondary },
+    activeFilterChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    activeFilterChipText: { color: colors.textPrimary },
+    activeFilterChipIcon: { color: colors.textMuted },
+    sortSheetTitle: { color: colors.textPrimary },
+    sortSheetRow: { borderBottomColor: colors.border },
   });
 
   return (
@@ -1056,7 +1076,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             accessibilityLabel={`Browse ${cat.label} category`}
                             accessibilityRole="button"
                           >
-                            <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
+                            <Ionicons name={cat.icon as any} size={16} color={colors.brand} />
                             <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
                           </AnimatedPressable>
                         ))}
@@ -1065,6 +1085,70 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </View>
                 ) : (
                 <>
+                {/* Discover masonry grid — media first, scaffolds secondary */}
+                <EditorialSection
+                  title="Discover"
+                  onSearchPress={handleSearchSubmit}
+                >
+                  {discoverListings.length > 0 ? (
+                    <View style={styles.masonryGrid}>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn1.map((listing) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            </View>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                      <View style={styles.masonryColumn}>
+                        {masonryColumn2.map((listing) => (
+                          <AnimatedPressable
+                            key={listing.id}
+                            style={styles.masonryItemWrap}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
+                          >
+                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
+                              <CachedImage
+                                uri={listing.image}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
+                                contentFit="cover"
+                              />
+                            </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            </View>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={[styles.recoEmptyState, t.recoEmptyState]}>
+                      <Ionicons name="images-outline" size={18} color={colors.textMuted} />
+                      <Text style={[styles.recoEmptyText, t.recoEmptyText]}>
+                        {hasActiveDiscoverFilters
+                          ? 'No picks match your current filters. Adjust or clear them.'
+                          : 'No ranked results yet. Try a shorter keyword.'}
+                      </Text>
+                    </View>
+                  )}
+                </EditorialSection>
+
                 {/* Recent searches — compact rows */}
                 {recentSearches.length > 0 && (
                   <EditorialSection title="Recent searches">
@@ -1162,75 +1246,11 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         accessibilityLabel={`Browse ${cat.label} category`}
                         accessibilityRole="button"
                       >
-                        <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
+                        <Ionicons name={cat.icon as any} size={16} color={colors.brand} />
                         <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
                       </AnimatedPressable>
                     ))}
                   </ScrollView>
-                </EditorialSection>
-
-                {/* Discover masonry grid at bottom of landing */}
-                <EditorialSection
-                  title="Discover"
-                  onSearchPress={handleSearchSubmit}
-                >
-                  {discoverListings.length > 0 ? (
-                    <View style={styles.masonryGrid}>
-                      <View style={styles.masonryColumn}>
-                        {masonryColumn1.map((listing) => (
-                          <AnimatedPressable
-                            key={listing.id}
-                            style={styles.masonryItemWrap}
-                            onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
-                            accessibilityRole="button"
-                          >
-                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
-                              <CachedImage
-                                uri={listing.image}
-                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
-                                contentFit="cover"
-                              />
-                            </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                            </View>
-                          </AnimatedPressable>
-                        ))}
-                      </View>
-                      <View style={styles.masonryColumn}>
-                        {masonryColumn2.map((listing) => (
-                          <AnimatedPressable
-                            key={listing.id}
-                            style={styles.masonryItemWrap}
-                            onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
-                            accessibilityRole="button"
-                          >
-                            <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
-                              <CachedImage
-                                uri={listing.image}
-                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
-                                contentFit="cover"
-                              />
-                            </SharedTransitionView>
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                            </View>
-                          </AnimatedPressable>
-                        ))}
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={[styles.recoEmptyState, t.recoEmptyState]}>
-                      <Ionicons name="images-outline" size={18} color={colors.textMuted} />
-                      <Text style={[styles.recoEmptyText, t.recoEmptyText]}>
-                        {hasActiveDiscoverFilters
-                          ? 'No picks match your current filters. Adjust or clear them.'
-                          : 'No ranked results yet. Try a shorter keyword.'}
-                      </Text>
-                    </View>
-                  )}
                 </EditorialSection>
                 </>
                 )}
@@ -1252,7 +1272,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
                 {isSearching && searchScope === 'items' && (
                   <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
-                    <SkeletonLoader width="40%" height={14} borderRadius={7} />
+                    <SkeletonLoader width="40%" height={14} borderRadius={Radius.md} />
                   </View>
                 )}
 
@@ -1305,10 +1325,10 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       <View style={styles.peopleResultsList}>
                         {[0, 1, 2].map((i) => (
                           <View key={`people-skel-${i}`} style={[peopleRowStyles.row, { borderBottomColor: colors.border }]}>
-                            <SkeletonLoader width={44} height={44} borderRadius={22} />
+                            <SkeletonLoader width={44} height={44} borderRadius={Radius.xxl} />
                             <View style={{ flex: 1, gap: 4 }}>
-                              <SkeletonLoader width="50%" height={14} borderRadius={7} />
-                              <SkeletonLoader width="30%" height={12} borderRadius={6} />
+                              <SkeletonLoader width="50%" height={14} borderRadius={Radius.md} />
+                              <SkeletonLoader width="30%" height={12} borderRadius={Radius.sm} />
                             </View>
                           </View>
                         ))}
@@ -1341,19 +1361,22 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* Sort + Filter bar — only for Items scope */}
                 {searchScope === 'items' && (
                 <>
-                {/* Sort + Filter — single icons, not a wall of chips */}
+                {/* Sort chip + Filter — recognition over recall: current sort is always visible */}
                 <View style={styles.filterBar}>
                   <Text style={[styles.filterBarCount, t.filterBarCount]} numberOfLines={1}>
                     {discoverListings.length} {discoverListings.length === 1 ? 'result' : 'results'}
                   </Text>
                   <View style={styles.filterBarActions}>
                     <AnimatedPressable
-                      style={styles.filterIconBtn}
-                      onPress={handleCycleSort}
-                      accessibilityLabel={`Sort by ${browseFilters.sort}`}
+                      style={[styles.sortChip, t.sortChip]}
+                      onPress={() => setIsSortSheetVisible(true)}
+                      accessibilityLabel={`Sort by ${browseFilters.sort}. Tap to change sort order.`}
                       accessibilityRole="button"
                     >
-                      <Ionicons name="swap-vertical" size={20} color={colors.textPrimary} />
+                      <Ionicons name="swap-vertical" size={14} color={colors.textSecondary} />
+                      <Text style={[styles.sortChipText, t.sortChipText]} numberOfLines={1}>
+                        {browseFilters.sort}
+                      </Text>
                     </AnimatedPressable>
                     <AnimatedPressable
                       style={styles.filterIconBtn}
@@ -1387,6 +1410,73 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     )}
                   </View>
                 </View>
+
+                {/* Active filter chips — removable, no need to reopen FilterScreen */}
+                {activeFilterCount > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.activeFilterChipsRow}
+                  >
+                    {browseFilters.brands.map((brand) => (
+                      <AnimatedPressable
+                        key={`brand-${brand}`}
+                        style={[styles.activeFilterChip, t.activeFilterChip]}
+                        onPress={() => updateBrowseFilters({ brands: browseFilters.brands.filter((b) => b !== brand) })}
+                        accessibilityLabel={`Remove brand filter: ${brand}`}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.activeFilterChipText, t.activeFilterChipText]} numberOfLines={1}>{brand}</Text>
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                      </AnimatedPressable>
+                    ))}
+                    {browseFilters.sizes.map((size) => (
+                      <AnimatedPressable
+                        key={`size-${size}`}
+                        style={[styles.activeFilterChip, t.activeFilterChip]}
+                        onPress={() => updateBrowseFilters({ sizes: browseFilters.sizes.filter((s) => s !== size) })}
+                        accessibilityLabel={`Remove size filter: ${size}`}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.activeFilterChipText, t.activeFilterChipText]} numberOfLines={1}>Size: {size}</Text>
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                      </AnimatedPressable>
+                    ))}
+                    {browseFilters.condition !== 'Any' && (
+                      <AnimatedPressable
+                        style={[styles.activeFilterChip, t.activeFilterChip]}
+                        onPress={() => updateBrowseFilters({ condition: 'Any' })}
+                        accessibilityLabel={`Remove condition filter: ${browseFilters.condition}`}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.activeFilterChipText, t.activeFilterChipText]} numberOfLines={1}>{browseFilters.condition}</Text>
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                      </AnimatedPressable>
+                    )}
+                    {browseFilters.priceMin != null && (
+                      <AnimatedPressable
+                        style={[styles.activeFilterChip, t.activeFilterChip]}
+                        onPress={() => updateBrowseFilters({ priceMin: null })}
+                        accessibilityLabel="Remove minimum price filter"
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.activeFilterChipText, t.activeFilterChipText]} numberOfLines={1}>Min £{browseFilters.priceMin}</Text>
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                      </AnimatedPressable>
+                    )}
+                    {browseFilters.priceMax != null && (
+                      <AnimatedPressable
+                        style={[styles.activeFilterChip, t.activeFilterChip]}
+                        onPress={() => updateBrowseFilters({ priceMax: null })}
+                        accessibilityLabel="Remove maximum price filter"
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.activeFilterChipText, t.activeFilterChipText]} numberOfLines={1}>Max £{browseFilters.priceMax}</Text>
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                      </AnimatedPressable>
+                    )}
+                  </ScrollView>
+                )}
 
                 {/* Masonry grid */}
                 <View style={styles.sectionWrap}>
@@ -1503,6 +1593,48 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           </>
         )}
       </ScrollView>
+
+      {/* Sort sheet — labeled options, recognition over recall */}
+      <BottomSheet
+        visible={isSortSheetVisible}
+        onDismiss={() => setIsSortSheetVisible(false)}
+        snapPoint={0.4}
+      >
+        <View style={styles.sortSheetContent}>
+          <Text style={[styles.sortSheetTitle, t.sortSheetTitle]}>Sort by</Text>
+          {DISCOVER_SORT_OPTIONS.map((option) => {
+            const isActive = browseFilters.sort === option;
+            return (
+              <Pressable
+                key={option}
+                style={({ pressed }) => [
+                  styles.sortSheetRow,
+                  t.sortSheetRow,
+                  isActive && { backgroundColor: `${colors.brand}0A` },
+                  pressed && { opacity: 0.6 },
+                ]}
+                onPress={() => handleSelectSort(option)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${option}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.sortSheetRowText,
+                    { color: isActive ? colors.brand : colors.textPrimary },
+                    isActive && { fontFamily: FontFamily.semibold },
+                  ]}
+                >
+                  {option}
+                </Text>
+                {isActive ? (
+                  <Ionicons name="checkmark" size={18} color={colors.brand} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -1633,14 +1765,11 @@ const styles = StyleSheet.create({
   trendingFocusPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: RadiusRoleValue.compactControl,
     borderWidth: 1,
-  },
-  trendingFocusIcon: {
-    fontSize: 15,
-    marginRight: 6,
   },
   trendingFocusText: {
     fontSize: 13,
@@ -1690,6 +1819,62 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: FontFamily.bold,
     lineHeight: 12,
+  },
+
+  // Sort chip — labeled, always shows current sort
+  sortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.lg,
+  },
+  sortChipText: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+  },
+
+  // Active filter chips — removable
+  activeFilterChipsRow: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    gap: Space.xs,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  activeFilterChipText: {
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+  },
+
+  // Sort sheet
+  sortSheetContent: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  sortSheetTitle: {
+    fontSize: 16,
+    fontFamily: FontFamily.bold,
+    marginBottom: Space.sm,
+  },
+  sortSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sortSheetRowText: {
+    fontSize: 15,
+    fontFamily: FontFamily.regular,
   },
   savedSearchListWrap: {
     paddingHorizontal: 20,

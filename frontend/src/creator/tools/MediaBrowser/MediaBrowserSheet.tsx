@@ -41,7 +41,7 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   type DimensionValue,
 } from 'react-native';
@@ -136,10 +136,10 @@ const MEDIA_TABS: { key: MediaTab; label: string }[] = [
 // ── Grid geometry ───────────────────────────────────────────────────
 
 const GRID_COLUMNS = 3;
-const { width: SCREEN_W } = Dimensions.get('window');
-const THUMB_SIZE = Math.floor(
-  (SCREEN_W - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-);
+// Thumbnail size is derived from the live window width via `useWindowDimensions`
+// inside the component (not module-level `Dimensions.get('window')`) so the
+// grid responds to rotation and multi-window changes instead of being frozen
+// at import time. The hook is called in the sheet component below.
 
 // Max video duration accepted by the downstream editor/upload pipeline.
 const MAX_VIDEO_DURATION_MS = 60_000;
@@ -169,12 +169,16 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 // ── MediaGridSkeleton — 3 columns of square thumbnail skeletons ──────
 function MediaGridSkeleton() {
   const rows = 4;
+  const { width: screenWidth } = useWindowDimensions();
+  const thumbSize = Math.floor(
+    (screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+  );
   return (
     <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
       {Array.from({ length: rows }).map((_, r) => (
         <View key={r} style={{ flexDirection: 'row', gap: Space.xs, marginBottom: Space.xs }}>
           {Array.from({ length: GRID_COLUMNS }).map((_, c) => (
-            <SkeletonBlock key={c} width={THUMB_SIZE} height={THUMB_SIZE} radius={Radius.md} />
+            <SkeletonBlock key={c} width={thumbSize} height={thumbSize} radius={Radius.md} />
           ))}
         </View>
       ))}
@@ -610,9 +614,18 @@ export function MediaBrowserSheet({
 }: MediaBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+
+  // Live window width so the thumbnail grid responds to rotation and
+  // multi-window changes (not frozen at module load — the former
+  // `Dimensions.get('window')` at module level was a frozen-dimension defect).
+  const { width: screenWidth } = useWindowDimensions();
+  const thumbSize = Math.floor(
+    (screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+  );
+
+  const styles = React.useMemo(() => createStyles(colors, thumbSize), [colors, thumbSize]);
 
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
@@ -1168,7 +1181,7 @@ export function MediaBrowserSheet({
 
 // ── Styles ──────────────────────────────────────────────────────────
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, thumbSize: number) {
   return StyleSheet.create({
     // ── Header ──
     header: {
@@ -1299,8 +1312,8 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.xl,
     },
     mediaGridCell: {
-      width: THUMB_SIZE,
-      height: THUMB_SIZE,
+      width: thumbSize,
+      height: thumbSize,
       borderRadius: Radius.md,
       overflow: 'hidden',
       justifyContent: 'center',

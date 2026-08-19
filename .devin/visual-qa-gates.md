@@ -2,9 +2,11 @@
 
 > **Purpose:** A repeatable visual-quality system that runs before any release or before any visual change is merged. Automated logic tests cannot judge optical alignment, hierarchy, card density, media dominance, copy quality, empty-state authorship, or transition quality. This document defines the human + automated gates that close that gap.
 >
-> **Authority:** AGENTS.md §4 (comparative visual-fidelity protocol, thumbnail test, squint test, visual delta evidence), §20 (release gates), §27 (flagship timing rules); Design.md (Visual QA, metrics, reference quality gates, minute visual quality checklist, acceptance scorecard); audit `15_VISUAL_QA_METRICS_EXPERIMENTS_RELEASE_GATES.md`.
+> **Authority:** AGENTS.md §4 (comparative visual-fidelity protocol, thumbnail test, squint test, visual delta evidence), §20 (release gates), §27 (flagship timing rules), §31 (Visual Flagship Convergence Loop); `.devin/workflows/visual-flagship-convergence-loop.md`; Design.md (Visual QA, metrics, reference quality gates, minute visual quality checklist, acceptance scorecard); audit `15_VISUAL_QA_METRICS_EXPERIMENTS_RELEASE_GATES.md`.
 >
 > **Rule:** A TypeScript pass cannot override an obviously inferior native render. A passing test suite cannot override a P0 visual blocker. Do not average away a P0 defect.
+>
+> **How these gates are reached:** Per the Visual Flagship Convergence Loop (AGENTS.md §31), visual work proceeds one surface at a time: establish context → define observable outcomes → implement → capture a native artifact → compare side-by-side vs the benchmark → cold-critic review → rework → sign off. These gates are applied per surface, not after a department-wide wave. Visual completion requires a native artifact, a side-by-side, at least one rework iteration, and human sign-off.
 
 ---
 

@@ -123,13 +123,8 @@ export default function AddBankAccountScreen({ navigation }: Props) {
       show('Bank account saved', 'success');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to save bank account right now.');
-      if (parsed.isNetworkError) {
-        savePaymentMethod(localPaymentMethod);
-        show('Bank account saved locally. Backend sync unavailable.', 'info');
-      } else {
-        shouldCloseScreen = false;
-        show(parsed.message, 'error');
-      }
+      shouldCloseScreen = false;
+      show(parsed.message, 'error');
     } finally {
       setIsSaving(false);
       if (shouldCloseScreen) {

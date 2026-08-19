@@ -16414,12 +16414,25 @@ app.get('/users/:userId/followers', async (request, reply) => {
   const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
   const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
 
+  // Resolve isFollowing for the authenticated viewer so the client can
+  // derive FollowButton state from server data instead of mutation vars.
+  const viewerUserId = request.authUser?.userId;
+  let followingSet = new Set<string>();
+  if (viewerUserId && rows.length > 0) {
+    const followingResult = await readDb.query<{ following_id: string }>(
+      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
+      [viewerUserId, rows.map((r) => r.id)]
+    );
+    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
+  }
+
   return {
     items: rows.map((row) => ({
       id: row.id,
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: followingSet.has(row.id),
     })),
     nextCursor,
   };
@@ -16462,12 +16475,25 @@ app.get('/users/:userId/following', async (request, reply) => {
   const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
   const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
 
+  // Resolve isFollowing for the authenticated viewer so the client can
+  // derive FollowButton state from server data instead of mutation vars.
+  const viewerUserId = request.authUser?.userId;
+  let followingSet = new Set<string>();
+  if (viewerUserId && rows.length > 0) {
+    const followingResult = await readDb.query<{ following_id: string }>(
+      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
+      [viewerUserId, rows.map((r) => r.id)]
+    );
+    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
+  }
+
   return {
     items: rows.map((row) => ({
       id: row.id,
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: followingSet.has(row.id),
     })),
     nextCursor,
   };

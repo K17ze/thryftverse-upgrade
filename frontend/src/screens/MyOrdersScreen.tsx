@@ -26,6 +26,7 @@ import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
 import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
@@ -469,31 +470,31 @@ export default function MyOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.headerBack}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Orders</Text>
-        <Pressable
-          style={styles.headerFilterBtn}
-          onPress={() => setFilterSheetVisible(true)}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel={`Filter orders${filterSummary ? `, current filter: ${filterSummary}` : ''}`}
-        >
-          <Ionicons
-            name={hasActiveFilter ? 'filter' : 'filter-outline'}
-            size={22}
-            color={hasActiveFilter ? colors.brand : colors.textPrimary}
-          />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Orders"
+        variant="large"
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingTop: insets.top,
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+        rightAction={
+          <Pressable
+            onPress={() => setFilterSheetVisible(true)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter orders${filterSummary ? `, current filter: ${filterSummary}` : ''}`}
+          >
+            <Ionicons
+              name={hasActiveFilter ? 'filter' : 'filter-outline'}
+              size={22}
+              color={hasActiveFilter ? colors.brand : colors.textPrimary}
+            />
+          </Pressable>
+        }
+      />
 
       <OrdersTabRail
         activeTab={activeTab}
@@ -606,34 +607,6 @@ function createStyles(colors: ThemeColors) {
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerBack: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.screenTitle.size,
-    lineHeight: Type.screenTitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.screenTitle.letterSpacing,
-    color: colors.textPrimary,
-  },
-  headerFilterBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   needsActionBanner: {
     flexDirection: 'row',

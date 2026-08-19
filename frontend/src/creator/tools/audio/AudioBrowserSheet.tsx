@@ -4,8 +4,8 @@
  * A bottom sheet for choosing audio applied to a composition:
  *  - Library tab: a curated sound library. Per AGENTS.md §11 (truthful UI)
  *    the library backend does not yet exist, so the tab presents an honest
- *    empty state — "No sounds available yet — audio library coming soon."
- *    No song titles, artist names, or durations are fabricated.
+ *    empty state — "No sounds available." No song titles, artist names,
+ *    or durations are fabricated.
  *  - Original Audio tab: toggle to keep the video's recorded audio and mix
  *    its volume.
  *

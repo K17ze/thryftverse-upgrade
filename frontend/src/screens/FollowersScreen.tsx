@@ -128,7 +128,7 @@ export default function FollowersScreen() {
               <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
             ) : null}
           </View>
-          {!isSelf ? <FollowButton userId={item.id} colors={colors} styles={styles} /> : null}
+          {!isSelf ? <FollowButton userId={item.id} serverIsFollowing={item.isFollowing} colors={colors} styles={styles} /> : null}
         </Pressable>
       );
     },
@@ -255,15 +255,17 @@ export default function FollowersScreen() {
 /** Compact follow/unfollow button for list rows. */
 function FollowButton({
   userId,
+  serverIsFollowing,
   colors,
   styles,
 }: {
   userId: string;
+  serverIsFollowing?: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
   const followMutation = useFollowMutation(userId);
-  const isFollowing = followMutation.variables ?? false;
+  const isFollowing = followMutation.variables ?? serverIsFollowing ?? false;
 
   const handlePress = useCallback(() => {
     haptics.tap();

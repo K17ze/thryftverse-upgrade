@@ -153,14 +153,13 @@ type ExploreTile = {
 };
 
 /**
- * Feed data union: Home discovery card VMs (listing tiles) or posters rail
+ * Feed data union: Home discovery card VMs (listing tiles) or looks rail
  * markers. The FlashList renders both through the same masonry path.
  * The `type` field discriminates the two variants — VMs do not carry it.
+ * Posters rail renders in the ListHeaderComponent (above the grid) so it
+ * is visible in the first viewport — aligned with Instagram/Pinterest 2026
+ * story-tray placement.
  */
-interface PosterRailMarker {
-  id: string;
-  type: 'posters';
-}
 
 /**
  * Look feed marker — an authored interruption rail of Looks interspersed
@@ -181,11 +180,7 @@ interface LookFeedMarker {
   }>;
 }
 
-type FeedDataItem = HomeDiscoveryItemVM | PosterRailMarker | LookFeedMarker;
-
-function isPosterMarker(item: FeedDataItem): item is PosterRailMarker {
-  return (item as PosterRailMarker).type === 'posters';
-}
+type FeedDataItem = HomeDiscoveryItemVM | LookFeedMarker;
 
 function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
   return (item as LookFeedMarker).type === 'looks';
@@ -624,6 +619,7 @@ export default function HomeScreen() {
   }, [scrollRef]);
 
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     void followingFeed.refresh();
@@ -776,32 +772,20 @@ export default function HomeScreen() {
 
   // Posters rail injected into the feed after 4 items (2 rows in 2-column
   // grid) so the first viewport shows header + tabs + media — nothing else.
-  // The posters rail appears as a full-span item as the user scrolls down,
-  // preserving the feature while keeping the first viewport media-first
-  // (spec: "First viewport: compact header, For You/Following tabs, first
-  // media row — nothing else").
-  const POSTERS_INJECT_INDEX = 4;
-  // Looks rail injected further down than the posters rail to create a
-  // natural rhythm: posters interrupt early (index 4), looks interrupt
-  // later (index 12, ~6 rows of products) so the feed reads as authored
-  // interruptions rather than a flat product list.
+  // Posters rail renders in the ListHeaderComponent (above the grid) so it
+  // is visible in the first viewport — aligned with Instagram/Pinterest 2026
+  // story-tray placement. The rail is a compact horizontal scroll that does
+  // not displace the first media row significantly.
+  // Looks rail injected as a full-span item further down the feed to create
+  // an authored interruption (~6 rows of products) so the feed reads as
+  // curated rhythm rather than a flat product list.
   const LOOKS_INJECT_INDEX = 12;
   const hasPosters = !postersLoading && realPosters.length > 0;
   const feedGridData = React.useMemo<FeedDataItem[]>(() => {
     if (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) return [];
     if (activeFeedData.length === 0) return [];
     const result: FeedDataItem[] = [...activeFeedData];
-    // Posters rail — inject after the first 2 rows (index 4)
-    if (hasPosters && result.length > POSTERS_INJECT_INDEX) {
-      result.splice(POSTERS_INJECT_INDEX, 0, {
-        id: 'posters_rail',
-        type: 'posters',
-      });
-    }
     // Looks rail — inject as an authored interruption further down the feed.
-    // Spliced after the posters rail so the index is relative to the
-    // already-injected list. Only inject when there is enough content to
-    // justify the interruption (more than 12 items post-posters-injection).
     if (feedLooks.length > 0 && result.length > LOOKS_INJECT_INDEX) {
       result.splice(LOOKS_INJECT_INDEX, 0, {
         id: 'feed-looks-rail',
@@ -810,7 +794,7 @@ export default function HomeScreen() {
       } as LookFeedMarker);
     }
     return result;
-  }, [activeFeedData, hasPosters, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
+  }, [activeFeedData, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
 
   // EAS Observe: record TTI once the home feed has real content rendered for
   // the first time. Only the first markInteractive() call across the whole app
@@ -1022,7 +1006,7 @@ export default function HomeScreen() {
   // layout thrash when switching between item geometries.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.2)
   const getItemType = React.useCallback(
-    (item: FeedDataItem) => (isPosterMarker(item) ? 'posters' : isLookMarker(item) ? 'looks' : 'listing'),
+    (item: FeedDataItem) => (isLookMarker(item) ? 'looks' : 'listing'),
     [],
   );
 
@@ -1032,14 +1016,6 @@ export default function HomeScreen() {
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderFeedItem = React.useCallback(
     ({ item, index }: { item: FeedDataItem; index: number }) => {
-      // Posters rail — full-span item injected after the first 2 rows
-      if (isPosterMarker(item)) {
-        return (
-          <View style={styles.flashListItem}>
-            {renderPosters()}
-          </View>
-        );
-      }
       // Looks rail — authored interruption of Look thumbnails
       if (isLookMarker(item)) {
         return (
@@ -1183,8 +1159,8 @@ export default function HomeScreen() {
         getItemType={getItemType}
         renderItem={renderFeedItem}
         overrideItemLayout={(layout: { span?: number }, item: FeedDataItem) => {
-          // Featured tiles, posters rail and looks rail span both columns
-          if (isPosterMarker(item) || isLookMarker(item)) {
+          // Featured tiles and looks rail span both columns
+          if (isLookMarker(item)) {
             layout.span = 2;
           } else {
             layout.span = item.featured ? 2 : 1;
@@ -1225,6 +1201,8 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {hasPosters ? renderPosters() : null}
 
             {renderNewListingsBanner()}
 
@@ -1285,6 +1263,13 @@ export default function HomeScreen() {
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
               <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+            </View>
+          ) : !hasMore && feedGridData.length > 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
+              <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }}>
+                You've reached the end
+              </Text>
             </View>
           ) : null
         }

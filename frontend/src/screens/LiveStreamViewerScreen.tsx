@@ -464,9 +464,11 @@ export function LiveStreamViewerScreen() {
         <View style={styles.videoArea}>
           {isDemo ? (
             <View style={styles.demoVideoPlaceholder}>
+              <View style={styles.demoPill}>
+                <Text style={styles.demoPillText}>DEMO</Text>
+              </View>
               <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
-              <Text style={styles.demoVideoText}>Demo Mode</Text>
-              <Text style={styles.demoVideoSubtext}>Live video will appear here in production</Text>
+              <Text style={styles.demoVideoText}>Demo stream</Text>
             </View>
           ) : (
             <View style={styles.videoPlaceholder}>
@@ -879,10 +881,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
-  demoVideoSubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
+  demoPill: {
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.warningSubtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.warningBorder,
+    marginBottom: Space.xs,
+  },
+  demoPillText: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.label.letterSpacing,
+    color: colors.warning,
   },
   videoPlaceholder: {
     flex: 1,

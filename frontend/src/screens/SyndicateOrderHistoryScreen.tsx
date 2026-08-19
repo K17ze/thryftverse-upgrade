@@ -340,10 +340,10 @@ export default function CoOwnOrderHistoryScreen() {
             <View style={styles.loadingWrap}>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={styles.loadingRow}>
-                  <SkeletonLoader width={36} height={36} borderRadius={8} />
+                  <SkeletonLoader width={36} height={36} borderRadius={Radius.md} />
                   <View style={{ flex: 1, marginLeft: Space.sm }}>
-                    <SkeletonLoader width="60%" height={14} borderRadius={7} />
-                    <SkeletonLoader width="40%" height={10} borderRadius={5} style={{ marginTop: 6 }} />
+                    <SkeletonLoader width="60%" height={14} borderRadius={Radius.md} />
+                    <SkeletonLoader width="40%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
                   </View>
                 </View>
               ))}

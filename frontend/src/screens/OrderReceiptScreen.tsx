@@ -23,6 +23,7 @@ import { getOrder, type CommerceOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
@@ -51,8 +52,6 @@ export default function OrderReceiptScreen() {
   // Theme-aware color overrides for the static styles.
   const t = React.useMemo(() => ({
     container: { backgroundColor: colors.background },
-    header: { borderBottomColor: colors.border },
-    headerTitle: { color: colors.textPrimary },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     retryBtn: { backgroundColor: colors.brand },
@@ -60,7 +59,6 @@ export default function OrderReceiptScreen() {
     successIconWrap: { backgroundColor: `${colors.success}15` },
     successTitle: { color: colors.textPrimary },
     successSubtitle: { color: colors.textMuted },
-    receiptCard: { backgroundColor: colors.surface },
     receiptTitle: { color: colors.textPrimary },
     orderIdLabel: { color: colors.textSecondary },
     sectionLabel: { color: colors.textMuted },
@@ -71,7 +69,7 @@ export default function OrderReceiptScreen() {
     totalValue: { color: colors.textPrimary },
     immutableText: { color: colors.textMuted },
     pendingText: { color: colors.textMuted },
-    nextStepsCard: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}20` },
+    nextStepsCard: { borderTopColor: colors.border, backgroundColor: `${colors.brand}08` },
     nextStepsTitle: { color: colors.textPrimary },
     nextStepDotActive: { backgroundColor: colors.brand },
     nextStepDotPending: { backgroundColor: colors.border },
@@ -154,31 +152,29 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.skeletonContainer}>
           {/* Receipt header skeleton */}
-          <SkeletonLoader width={100} height={12} borderRadius={6} />
-          <SkeletonLoader width={140} height={20} borderRadius={10} style={{ marginTop: Space.sm }} />
-          <SkeletonLoader width="80%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
+          <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} />
+          <SkeletonLoader width={140} height={20} borderRadius={Radius.lg} style={{ marginTop: Space.sm }} />
+          <SkeletonLoader width="80%" height={14} borderRadius={Radius.md} style={{ marginTop: 6 }} />
           {/* Item row skeleton */}
           <View style={styles.skeletonItemRow}>
-            <SkeletonLoader width={56} height={56} borderRadius={8} />
+            <SkeletonLoader width={56} height={56} borderRadius={Radius.md} />
             <View style={{ flex: 1, gap: Space.xs + 2 }}>
-              <SkeletonLoader width="70%" height={14} borderRadius={7} />
-              <SkeletonLoader width="40%" height={12} borderRadius={6} />
+              <SkeletonLoader width="70%" height={14} borderRadius={Radius.md} />
+              <SkeletonLoader width="40%" height={12} borderRadius={Radius.sm} />
             </View>
           </View>
           {/* Transaction rows skeleton */}
           {Array.from({ length: 5 }).map((_, i) => (
             <View key={i} style={styles.skeletonTxRow}>
-              <SkeletonLoader width="50%" height={12} borderRadius={6} />
-              <SkeletonLoader width={70} height={12} borderRadius={6} />
+              <SkeletonLoader width="50%" height={12} borderRadius={Radius.sm} />
+              <SkeletonLoader width={70} height={12} borderRadius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -190,13 +186,11 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Receipt could not be loaded</Text>
@@ -212,13 +206,11 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>You do not have access to this receipt</Text>
@@ -246,28 +238,29 @@ export default function OrderReceiptScreen() {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
-      <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-        <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-        <View style={styles.headerRight}>
-          {Platform.OS === 'web' && (
-            <Pressable
-              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-              onPress={handlePrint}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Print receipt"
-            >
-              <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+      <ScreenHeader
+        title="Receipt"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <View style={styles.headerRight}>
+            {Platform.OS === 'web' && (
+              <Pressable
+                style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+                onPress={handlePrint}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Print receipt"
+              >
+                <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+              </Pressable>
+            )}
+            <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
+              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
             </Pressable>
-          )}
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
-            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
-        </View>
-      </View>
+          </View>
+        }
+        style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -286,7 +279,7 @@ export default function OrderReceiptScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.receiptCard, t.receiptCard]}>
+        <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
             <Text style={[styles.receiptTitle, t.receiptTitle]}>Order Receipt</Text>
             <Pressable
@@ -411,14 +404,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -434,13 +419,6 @@ const styles = StyleSheet.create({
   },
   viewDetailBtnPressed: {
     opacity: 0.6,
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-  },
-  headerSpacer: {
-    width: Control.hit,
   },
   headerRight: {
     flexDirection: 'row',
@@ -525,7 +503,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   receiptCard: {
-    borderRadius: Radius.lg,
     padding: Space.md,
   },
   receiptHeader: {
@@ -617,9 +594,8 @@ const styles = StyleSheet.create({
   },
   nextStepsCard: {
     marginTop: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   nextStepsTitle: {
     fontSize: Type.caption.size,

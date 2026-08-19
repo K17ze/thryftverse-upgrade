@@ -361,7 +361,7 @@ export default function MyBidsScreen() {
           loading ? (
             <View style={styles.loadingWrap}>
               {[0, 1, 2].map((i) => (
-                <SkeletonLoader key={i} width="100%" height={80} borderRadius={0} style={{ marginBottom: Space.sm }} />
+                <SkeletonLoader key={i} width="100%" height={80} borderRadius={Radius.none} style={{ marginBottom: Space.sm }} />
               ))}
             </View>
           ) : error ? (
@@ -383,7 +383,7 @@ export default function MyBidsScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={styles.loadMoreWrap}>
-              <SkeletonLoader width="100%" height={80} borderRadius={0} />
+              <SkeletonLoader width="100%" height={80} borderRadius={Radius.none} />
             </View>
           ) : null
         }

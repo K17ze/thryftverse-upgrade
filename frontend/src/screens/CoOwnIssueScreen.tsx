@@ -58,8 +58,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       show('Describe the issue', 'error');
       return;
     }
-    const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
-    show(`Opening support — reference: ${categoryLabel} for this Co-Own.`, 'info');
+    show('Describe this issue in the support chat.', 'info');
     navigation.navigate('HelpSupport');
   };
 
@@ -155,12 +154,12 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>
         <AppButton
-          title="Continue to support"
+          title="Open support chat"
           onPress={handleSubmit}
           variant="primary"
           size="lg"
           hapticFeedback="medium"
-          accessibilityLabel="Continue to support"
+          accessibilityLabel="Open support chat"
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>

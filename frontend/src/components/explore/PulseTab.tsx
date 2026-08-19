@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import type { ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
+import { useScrollToTop } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -172,6 +173,8 @@ export default function PulseTab() {
   }, [trending, listings]);
 
   const [now, setNow] = useState(() => Date.now());
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
 
   const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
     return customAuctions
@@ -258,12 +261,11 @@ export default function PulseTab() {
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+    <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Trending Now Rail (merged from EditTab) */}
       {trendingListings.length > 0 && (
         <View>
           <DiscoverySectionHeader
-            kicker="Activity"
             title="Popular this week"
             actionLabel="See all"
             onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
@@ -305,7 +307,6 @@ export default function PulseTab() {
       {liveAuctions.length > 0 && (
         <View>
           <DiscoverySectionHeader
-            kicker="Bidding now"
             title="Live Now"
             actionLabel="View all"
             onAction={handleViewAll}
@@ -328,7 +329,6 @@ export default function PulseTab() {
       {/* Activity feed */}
       <View style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
-          kicker="Updates"
           title="Live Feed"
           actionLabel="View all"
           onAction={handleViewAll}
@@ -341,24 +341,12 @@ export default function PulseTab() {
       {/* Style Quiz (merged from EditTab) */}
       <View style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
-          kicker="Personalise"
           title="Find Your Aesthetic"
         />
         <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
-          <View style={styles.quizContent}>
-            <Text style={styles.quizTitle}>Discover your style</Text>
-            <Text style={styles.quizSub}>Take a short quiz to tailor your Explore feed to your preferences.</Text>
-            <View style={styles.quizPills}>
-              {['Minimal', 'Streetwear', 'Vintage', 'Gorpcore'].map((pill) => (
-                <View key={pill} style={styles.quizPill}>
-                  <Text style={styles.quizPillText}>{pill}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View style={styles.quizIconWrap}>
-            <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
-          </View>
+          <Ionicons name="color-palette-outline" size={22} color={colors.brand} />
+          <Text style={styles.quizActionText}>Take the style quiz</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </AnimatedPressable>
       </View>
 
@@ -383,11 +371,6 @@ function createStyles(colors: ThemeColors) {
   },
   liveCard: {
     width: 150,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.sm,
     gap: Space.sm,
   },
   liveImage: {
@@ -627,59 +610,21 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
   },
 
-  /* Style Quiz (merged from EditTab) */
+  /* Style Quiz — flat action row, hairline separator (no surface card) */
   quizCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
-  quizContent: {
+  quizActionText: {
     flex: 1,
-    gap: 4,
-  },
-  quizTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
     color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  quizSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: 18,
-  },
-  quizPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: Space.xs,
-  },
-  quizPill: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: Space.xs,
-  },
-  quizPillText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  quizIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
+    letterSpacing: Type.body.letterSpacing,
   },
   });
 }

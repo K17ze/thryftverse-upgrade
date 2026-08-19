@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useAppTheme } from '../theme/ThemeContext';
@@ -138,11 +138,21 @@ export default function BrowseScreen() {
       lineHeight: Type.title.lineHeight,
     },
     itemCountText: {
-      fontSize: Type.body.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      marginTop: Space.xs + 2,
+      color: colors.textSecondary,
       fontVariant: ['tabular-nums'],
+    },
+    itemCountPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xxs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xxs + 1,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      marginTop: Space.xs + 2,
+      alignSelf: 'flex-start',
     },
 
     filterBar: { paddingBottom: Space.md },
@@ -157,7 +167,7 @@ export default function BrowseScreen() {
       backgroundColor: 'transparent',
     },
     filterPillActive: {
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
     filterPillTextActive: { color: colors.textPrimary, fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
     filterPillOutline: {
@@ -187,7 +197,7 @@ export default function BrowseScreen() {
       backgroundColor: 'transparent',
     },
     sortTriggerActive: {
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
     sortTriggerText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: Typography.family.semibold },
@@ -233,7 +243,7 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
     activeBadgeText: {
       color: colors.textPrimary,
@@ -493,6 +503,7 @@ export default function BrowseScreen() {
   });
 
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -718,7 +729,10 @@ export default function BrowseScreen() {
 
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
-        <Text style={styles.itemCountText} accessibilityLiveRegion="polite">{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+        <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
+          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+        </View>
       </View>
 
       <View style={styles.filterBar}>

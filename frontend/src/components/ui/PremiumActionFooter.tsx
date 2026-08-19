@@ -50,6 +50,8 @@ export function PremiumActionFooter({
         ]}
         onPress={isPrimaryDisabled ? undefined : onPrimaryPress}
         activeOpacity={0.85}
+        scaleValue={isPrimaryDisabled ? 1 : 0.97}
+        hapticFeedback="medium"
         accessibilityRole="button"
         accessibilityLabel={primaryLabel}
         accessibilityState={{ disabled: isPrimaryDisabled }}
@@ -69,6 +71,8 @@ export function PremiumActionFooter({
           ]}
           onPress={secondaryDisabled ? undefined : onSecondaryPress}
           activeOpacity={0.8}
+          scaleValue={secondaryDisabled ? 1 : 0.97}
+          hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel={secondaryLabel}
         >

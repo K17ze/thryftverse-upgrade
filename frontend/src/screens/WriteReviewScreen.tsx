@@ -35,14 +35,14 @@ type RouteT = RouteProp<RootStackParamList, 'WriteReview'>;
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId } = route.params;
+  const { orderId, initialRating } = route.params;
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const haptic = useHaptic();
 
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(initialRating ?? 0);
   const [review, setReview] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);

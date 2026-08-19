@@ -13,7 +13,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -43,7 +43,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 type Tool = 'scissors' | 'eraser';
 
@@ -83,6 +83,7 @@ export function CreatorCutoutSheet({
   const { show } = useToast();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -94,7 +95,7 @@ export function CreatorCutoutSheet({
   const mountedRef = useRef(false);
 
   // ── Spring-driven shared values ──────────────────────────────────
-  const sheetYSV = useSharedValue(SCREEN_W * 1.2);
+  const sheetYSV = useSharedValue(screenWidth * 1.2);
   const backdropOpacitySV = useSharedValue(0);
   const toolHighlightSV = useSharedValue(0); // 0 = scissors, 1 = eraser
   const cutoutScaleSV = useSharedValue(1);
@@ -113,8 +114,8 @@ export function CreatorCutoutSheet({
       RNImage.getSize(imageUri, (w: number, h: number) => {
         setImageSize({ width: w, height: h });
         // Fit within display area
-        const maxW = SCREEN_W - 32;
-        const maxH = SCREEN_W * 0.6;
+        const maxW = screenWidth - 32;
+        const maxH = screenWidth * 0.6;
         const ratio = Math.min(maxW / w, maxH / h);
         setDisplaySize({ width: w * ratio, height: h * ratio });
       }, () => {
@@ -136,10 +137,10 @@ export function CreatorCutoutSheet({
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
-        sheetYSV.value = SCREEN_W * 1.2;
+        sheetYSV.value = screenWidth * 1.2;
         backdropOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        sheetYSV.value = withTiming(screenWidth * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
         backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }

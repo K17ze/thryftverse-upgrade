@@ -470,9 +470,7 @@ export function getAgentResponse(
       confidence = 0.76;
       break;
     case 'negotiator':
-      content = lower.includes('offer')
-        ? 'Based on recent sold comps, a fair opening offer is around 85% of list. Want me to draft one?'
-        : 'I can suggest a counter-offer range. What was their last price?';
+      content = 'I can help you think about your offer. What price were you considering?';
       confidence = 0.8;
       break;
     case 'style_advisor':

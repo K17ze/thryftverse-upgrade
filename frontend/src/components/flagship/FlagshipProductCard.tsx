@@ -6,7 +6,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily, Control, AspectRatio, IconGrammar } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
-import { isVideoUri } from '../../utils/media';
+import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const GAP = Space.sm;
@@ -16,6 +16,7 @@ interface FlagshipProductCardProps {
   imageUri: string;
   title: string;
   price: string;
+  category?: string;
   onPress?: () => void;
   onToggleSave?: () => void;
   isSaved?: boolean;
@@ -29,6 +30,7 @@ export function FlagshipProductCard({
   imageUri,
   title,
   price,
+  category,
   onPress,
   onToggleSave,
   isSaved = false,
@@ -66,6 +68,7 @@ export function FlagshipProductCard({
           contentFit="cover"
           transition={Motion.transitions.mediaLoad.duration}
           priority="normal"
+          focalPoint={getCategoryFocalPoint(category)}
           accessibilityRole="image"
           accessibilityLabel={title}
         />

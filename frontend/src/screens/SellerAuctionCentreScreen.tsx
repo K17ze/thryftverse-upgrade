@@ -541,13 +541,13 @@ export default function SellerAuctionCentreScreen() {
               <SkeletonLoader width={96} height={96} borderRadius={Radius.md} />
               <View style={styles.loadingBody}>
                 <View style={styles.loadingTitleRow}>
-                  <SkeletonLoader width="70%" height={15} borderRadius={4} />
-                  <SkeletonLoader width={40} height={12} borderRadius={4} />
+                  <SkeletonLoader width="70%" height={15} borderRadius={Radius.sm} />
+                  <SkeletonLoader width={40} height={12} borderRadius={Radius.sm} />
                 </View>
-                <SkeletonLoader width="40%" height={11} borderRadius={4} />
+                <SkeletonLoader width="40%" height={11} borderRadius={Radius.sm} />
                 <View style={styles.loadingHairline} />
-                <SkeletonLoader width="55%" height={17} borderRadius={4} />
-                <SkeletonLoader width="35%" height={11} borderRadius={4} />
+                <SkeletonLoader width="55%" height={17} borderRadius={Radius.sm} />
+                <SkeletonLoader width="35%" height={11} borderRadius={Radius.sm} />
               </View>
             </View>
           ))}

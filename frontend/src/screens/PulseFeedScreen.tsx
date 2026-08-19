@@ -14,6 +14,7 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -87,12 +88,52 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   );
 }
 
+/**
+ * PulseFeedSkeleton — loading frame that mirrors the EventCard silhouette.
+ * Each skeleton row is a horizontal layout: square image thumbnail + text
+ * column (type label, title, subtitle, meta), matching the final card
+ * geometry so there is no loading→final layout shift (AGENTS.md §14).
+ */
+function PulseFeedSkeleton({ count = 5 }: { count?: number }) {
+  const { colors } = useAppTheme();
+  const thumbSize = Space.xxl + Space.xl;
+  return (
+    <View>
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: Space.md,
+            gap: Space.md,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <SkeletonLoader
+            width={thumbSize}
+            height={thumbSize}
+            borderRadius={Radius.md}
+          />
+          <View style={{ flex: 1, gap: Space.xs }}>
+            <SkeletonLoader width="35%" height={Type.meta.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="80%" height={Type.body.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="55%" height={Type.caption.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="40%" height={Type.meta.size} borderRadius={Radius.sm} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function PulseFeedScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { listings } = useBackendData();
+  const { listings, isSyncing } = useBackendData();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 
@@ -163,7 +204,20 @@ export default function PulseFeedScreen() {
     return items;
   }, [customAuctions, listings, now]);
 
-  if (events.length === 0) {
+  if (isSyncing && listings.length === 0) {
+    return (
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
+      >
+        <View style={styles.scrollContent}>
+          <PulseFeedSkeleton />
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
+  if (!isSyncing && events.length === 0) {
     return (
       <FlagshipScreen
         scrollEnabled={false}

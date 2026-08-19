@@ -40,7 +40,7 @@ export function ProfileSkeleton() {
       <SkeletonLoader
         width={W}
         height={COVER_HEIGHT}
-        borderRadius={0}
+        borderRadius={Radius.none}
       />
 
       {/* ── 2–4. Identity hero + stats (offset to overlap cover seam) ── */}

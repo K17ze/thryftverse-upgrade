@@ -43,6 +43,7 @@ import { OrderActionFooter, OrderActionConfig } from '../components/orders/Order
 import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
 import { DispatchCountdown } from '../components/orders/DispatchCountdown';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 import {
   resolveCapabilities,
@@ -743,8 +744,6 @@ export default function OrderDetailScreen() {
   // via this themed proxy so the screen is fully dark-mode compatible.
   const t = useMemo(() => ({
     container: { backgroundColor: colors.background },
-    header: { borderBottomColor: colors.border },
-    headerTitle: { color: colors.textPrimary },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     errorBody: { color: colors.textMuted },
@@ -1526,19 +1525,17 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Order</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Order"
+          variant="large"
+          onBack={() => navigation.goBack()}
+          style={{
+            paddingTop: insets.top,
+            paddingBottom: Space.sm,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.border,
+          }}
+        />
         <OrderDetailSkeleton />
       </SafeAreaView>
     );
@@ -1548,19 +1545,17 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Order</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Order"
+          variant="large"
+          onBack={() => navigation.goBack()}
+          style={{
+            paddingTop: insets.top,
+            paddingBottom: Space.sm,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.border,
+          }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Order could not be loaded</Text>
@@ -1582,19 +1577,17 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Order</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Order"
+          variant="large"
+          onBack={() => navigation.goBack()}
+          style={{
+            paddingTop: insets.top,
+            paddingBottom: Space.sm,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.border,
+          }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="document-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Order not found</Text>
@@ -1610,43 +1603,44 @@ export default function OrderDetailScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact navigation header */}
-      <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-        <Pressable
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, t.headerTitle]}>Order</Text>
-        <View style={styles.headerRight}>
-          <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-            onPress={handleManualRefresh}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh order"
-            accessibilityState={{ busy: isRefreshing }}
-          >
-            {isRefreshing ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} />
-            )}
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-            onPress={() => { haptics.tap(); setActionsSheetVisible(true); }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="More options"
-          >
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
-          </Pressable>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Order"
+        variant="large"
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingTop: insets.top,
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+        rightAction={
+          <View style={styles.headerRight}>
+            <Pressable
+              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+              onPress={handleManualRefresh}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh order"
+              accessibilityState={{ busy: isRefreshing }}
+            >
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} />
+              )}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+              onPress={() => { haptics.tap(); setActionsSheetVisible(true); }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+        }
+      />
 
       <ScrollView
         ref={scrollViewRef}
@@ -2134,14 +2128,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -2161,19 +2147,10 @@ const styles = StyleSheet.create({
   supportRowPressed: {
     opacity: 0.7,
   },
-  headerTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-  },
-  headerSpacer: {
-    width: Control.hit,
   },
   scrollContent: {
     paddingHorizontal: Space.md,

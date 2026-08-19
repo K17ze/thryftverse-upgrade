@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,7 +27,6 @@ import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export interface CreatorPreviewOverlayProps {
   visible: boolean;
@@ -51,6 +50,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [pageIndex, setPageIndex] = useState(0);
 
   const page = document.pages[pageIndex];
@@ -169,11 +169,11 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
 
   // Compute canvas dimensions to fill the screen while preserving aspect ratio
   const ratio = document.canvas.aspectRatio;
-  let canvasW = SCREEN_W;
-  let canvasH = Math.floor(SCREEN_W / ratio);
-  if (canvasH > SCREEN_H) {
-    canvasH = SCREEN_H;
-    canvasW = Math.floor(SCREEN_H * ratio);
+  let canvasW = screenWidth;
+  let canvasH = Math.floor(screenWidth / ratio);
+  if (canvasH > screenHeight) {
+    canvasH = screenHeight;
+    canvasW = Math.floor(screenHeight * ratio);
   }
 
   // Animated style for page transition (slide + fade)

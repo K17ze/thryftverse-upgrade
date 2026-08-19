@@ -13,7 +13,7 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActiveTheme, Colors } from '../constants/colors';
 
-import { Space } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 // ELEVATED: Flagship shimmer with brand tint
 const IS_LIGHT = ActiveTheme === 'light';
@@ -37,7 +37,7 @@ interface SkeletonProps {
   reducedMotion?: boolean;
 }
 
-export function SkeletonLoader({ width, height, borderRadius = 8, style, reducedMotion: reducedMotionProp = false }: SkeletonProps) {
+export function SkeletonLoader({ width, height, borderRadius = Radius.md, style, reducedMotion: reducedMotionProp = false }: SkeletonProps) {
   // OR the prop with the system/in-app setting so all consumers automatically
   // get reduced-motion compliance even when they don't pass the prop (§2.5).
   const systemReducedMotion = useReducedMotion();
@@ -151,9 +151,9 @@ export function ProductGridSkeleton({ columns = 2, count = 6 }: { columns?: numb
     <View style={gridStyles.container}>
       {items.map((i) => (
         <View key={i} style={[gridStyles.card, { width: `${(100 / columns) - 3}%` }]}>
-          <SkeletonLoader width="100%" height={180} borderRadius={14} />
-          <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: 10 }} />
-          <SkeletonLoader width="40%" height={10} borderRadius={6} style={{ marginTop: 6 }} />
+          <SkeletonLoader width="100%" height={180} borderRadius={Radius.lg} />
+          <SkeletonLoader width="60%" height={12} borderRadius={Radius.sm} style={{ marginTop: 10 }} />
+          <SkeletonLoader width="40%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
         </View>
       ))}
     </View>
@@ -167,8 +167,8 @@ export function StoriesRowSkeleton({ count = 5 }: { count?: number }) {
     <View style={storiesStyles.container}>
       {items.map((i) => (
         <View key={i} style={storiesStyles.item}>
-          <SkeletonLoader width={68} height={68} borderRadius={34} />
-          <SkeletonLoader width={48} height={8} borderRadius={4} style={{ marginTop: 6 }} />
+          <SkeletonLoader width={68} height={68} borderRadius={Radius.full} />
+          <SkeletonLoader width={48} height={8} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
         </View>
       ))}
     </View>
@@ -182,12 +182,12 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
     <View>
       {items.map((i) => (
         <View key={i} style={convoStyles.row}>
-          <SkeletonLoader width={50} height={50} borderRadius={25} />
+          <SkeletonLoader width={50} height={50} borderRadius={Radius.full} />
           <View style={convoStyles.textCol}>
-            <SkeletonLoader width="55%" height={12} borderRadius={6} />
-            <SkeletonLoader width="80%" height={10} borderRadius={6} style={{ marginTop: Space.sm }} />
+            <SkeletonLoader width="55%" height={12} borderRadius={Radius.sm} />
+            <SkeletonLoader width="80%" height={10} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
           </View>
-          <SkeletonLoader width={36} height={10} borderRadius={5} />
+          <SkeletonLoader width={36} height={10} borderRadius={Radius.sm} />
         </View>
       ))}
     </View>
@@ -198,18 +198,18 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
 export function ProfileSkeleton() {
   return (
     <View style={profileStyles.container}>
-      <SkeletonLoader width="100%" height={160} borderRadius={0} />
+      <SkeletonLoader width="100%" height={160} borderRadius={Radius.none} />
       <View style={profileStyles.avatarRow}>
-        <SkeletonLoader width={84} height={84} borderRadius={42} style={profileStyles.avatar} />
+        <SkeletonLoader width={84} height={84} borderRadius={Radius.full} style={profileStyles.avatar} />
       </View>
       <View style={profileStyles.info}>
-        <SkeletonLoader width={140} height={16} borderRadius={8} />
-        <SkeletonLoader width={100} height={12} borderRadius={6} style={{ marginTop: 10 }} />
+        <SkeletonLoader width={140} height={16} borderRadius={Radius.md} />
+        <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} style={{ marginTop: 10 }} />
         <View style={profileStyles.statsRow}>
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
         </View>
       </View>
     </View>

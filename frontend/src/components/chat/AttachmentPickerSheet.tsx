@@ -14,6 +14,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -66,11 +67,11 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
   useEffect(() => {
     if (visible) {
       setRendered(true);
-      opacity.value = withTiming(1, { duration: 180 });
-      translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
+      opacity.value = withTiming(1, { duration: Motion.duration.normal });
+      translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
     } else if (rendered) {
-      opacity.value = withTiming(0, { duration: 150 });
-      translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: 200 });
+      opacity.value = withTiming(0, { duration: Motion.duration.fast });
+      translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: Motion.duration.normal });
       setTimeout(() => setRendered(false), 220);
     }
   }, [visible, rendered, opacity, translateY, reducedMotion]);
@@ -93,7 +94,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       if (e.translationY > 100 || e.velocityY > 600) {
         runOnJS(onClose)();
       } else {
-        translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
       }
     });
 

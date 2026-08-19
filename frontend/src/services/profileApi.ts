@@ -185,6 +185,8 @@ export interface FollowListUser {
   username: string;
   displayName: string | null;
   avatar: string | null;
+  /** Whether the authenticated viewer currently follows this user. */
+  isFollowing?: boolean;
 }
 
 export async function fetchFollowCounts(userId: string): Promise<{ followerCount: number; followingCount: number }> {

@@ -55,6 +55,7 @@ import {
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
 } from '../components/coown';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -300,26 +301,18 @@ export default function AssetDueDiligenceScreen() {
 
       {/* ── Header ──
           Quiet, standard back header. No large rounded containers. */}
-      <View style={[styles.header, { borderBottomColor: colors.borderSubtle, paddingTop: insets.top }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={12}
-          style={({ pressed }) => [styles.headerBack, pressed && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Back to asset"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            Due diligence
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {asset.title}
-          </Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Due diligence"
+        subtitle={asset.title}
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingTop: insets.top,
+          paddingHorizontal: Space.sm,
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.borderSubtle,
+        }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -857,40 +850,6 @@ export default function AssetDueDiligenceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  // ── Header ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerBack: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
-  },
-  headerTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
-  headerSubtitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  headerSpacer: {
-    width: Control.hit,
   },
   // ── Story text ──
   storyText: {

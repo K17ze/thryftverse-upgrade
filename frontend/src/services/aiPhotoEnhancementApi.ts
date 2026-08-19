@@ -79,7 +79,15 @@ export interface BackgroundScene {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const AI_PHOTO_DEMO_MODE = __DEV__;
+/**
+ * The enhancement API is always a mock — there is no real backend wired.
+ * Until a real Photoroom / AI image service is connected, this must stay
+ * true so the UI truthfully labels the surface as demo and disables the
+ * apply button (AGENTS.md §11). Setting this to false without a real
+ * backend would cause the UI to present non-functional enhancements as
+ * real, which is a truthfulness violation.
+ */
+export const AI_PHOTO_DEMO_MODE = true;
 
 // ---------------------------------------------------------------------------
 // Mock data

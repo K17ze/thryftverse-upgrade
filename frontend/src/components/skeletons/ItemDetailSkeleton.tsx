@@ -13,7 +13,7 @@ export function ItemDetailSkeleton() {
   return (
     <View>
       {/* Hero image */}
-      <SkeletonLoader width={W} height={W} borderRadius={0} />
+      <SkeletonLoader width={W} height={W} borderRadius={Radius.none} />
       <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 12 }}>
         {/* Price */}
         <SkeletonLoader width={120} height={32} borderRadius={Radius.md} />

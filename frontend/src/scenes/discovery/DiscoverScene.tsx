@@ -3,62 +3,70 @@ import {
   View,
   StyleSheet,
   RefreshControl,
-  NativeScrollEvent,
   NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
-import Reanimated, {
+import {
   useSharedValue,
-  useAnimatedScrollHandler,
 } from 'react-native-reanimated';
 import { useScrollToTop } from '@react-navigation/native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
-import { MasonrySkeleton } from '../../components/skeletons/MasonrySkeleton';
 import { PinterestMasonryGrid } from '../../components/discover/PinterestMasonryGrid';
+import { assembleDiscoveryFeed } from '../../utils/discoveryFeedAssembly';
 import type { Listing } from '../../domain';
+import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
+
+const DISCOVER_NUM_COLUMNS = 2;
 
 export interface DiscoverSceneProps {
   listings: Listing[];
   isSyncing: boolean;
   lastError: string | null;
   isLoadingMore: boolean;
+  hasMore: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   onLoadMore: () => void;
-  onPressItem: (item: Listing) => void;
-  onPressSeller?: (item: Listing) => void;
-  onMessageSeller?: (item: Listing) => void;
+  /** Fired when a listing tile is tapped. Receives the production
+   *  DiscoveryListingSummary carried by the listing feed unit. */
+  onPressItem: (listing: DiscoveryListingSummary) => void;
+  onPressSeller?: (listing: DiscoveryListingSummary) => void;
+  onMessageSeller?: (listing: DiscoveryListingSummary) => void;
   onBrowseCategories: () => void;
 }
 
 /**
  * DiscoverScene owns the Discover feed's scroll surface.
  *
- * The parent (SearchScreen) still owns the data contracts via
- * BackendDataContext, but the scroll, refresh, pagination, loading,
- * empty and error states live here so that switching tabs preserves
- * the Discover scroll position independently of Pulse and Looks.
+ * The FlashList (inside PinterestMasonryGrid) owns scrolling — this scene
+ * must NOT wrap it in a ScrollView (that would break virtualization and
+ * contradict the grid's own invariant). Refresh, pagination, scroll-to-top
+ * and the custom RefreshIndicator are all driven from the FlashList's scroll
+ * via an animated handler + forwarded ref.
+ *
+ * The feed is a heterogeneous `DiscoveryFeedUnit[]` canvas (listings +
+ * full-width context breaks + hero listings), assembled from the raw
+ * `Listing[]` by `assembleDiscoveryFeed`. Listings are one feed-unit type
+ * among several — not the only renderable unit.
  */
 export function DiscoverScene({
   listings,
   isSyncing,
   lastError,
   isLoadingMore,
+  hasMore,
   refreshing,
   onRefresh,
   onLoadMore,
   onPressItem,
-  onPressSeller,
-  onMessageSeller,
   onBrowseCategories,
 }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const scrollY = useSharedValue(0);
-  const scrollRef = useRef<Reanimated.ScrollView>(null);
-  // Track content size so we only trigger pagination once per threshold.
-  const lastLoadMoreY = useRef(0);
+  const scrollRef = useRef<any>(null);
 
   useScrollToTop(scrollRef);
 
@@ -66,42 +74,48 @@ export function DiscoverScene({
     () =>
       StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.background },
-        scrollContent: {
-          paddingHorizontal: Space.md,
-          paddingBottom: Space.xxl * 2 + Space.lg,
-        },
-        loadingWrap: { paddingHorizontal: Space.md, paddingTop: Space.sm },
         stateWrap: { flex: 1 },
-        footer: { alignItems: 'center', paddingVertical: Space.lg },
       }),
     [colors],
   );
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      scrollY.value = e.contentOffset.y;
-    },
-  });
+  // Assemble the heterogeneous feed units from the raw listings. This is the
+  // single place where Discover's feed rhythm + span decisions are made, so
+  // the grid stays a pure function of DiscoveryFeedUnit[]. Stable across
+  // pagination: break positions are index-based and hero eligibility is
+  // per-listing, so appending pages never reshuffles earlier units.
+  const units = useMemo(
+    () => assembleDiscoveryFeed(listings, DISCOVER_NUM_COLUMNS),
+    [listings],
+  );
 
+  // Plain JS scroll handler drives the RefreshIndicator's shared scrollY
+  // value from the FlashList's own scrolling — no enclosing ScrollView.
+  //
+  // Reanimated 4.x known issue: `useAnimatedScrollHandler` does NOT fire
+  // scroll events from FlashList (the 3.12 fix was never backported to 4.x).
+  // The proven workaround is a plain JS onScroll that sets the SharedValue's
+  // `.value` directly. `RefreshIndicator` reads `scrollY.value` inside a
+  // `useAnimatedStyle` worklet, which still runs on the UI thread — only the
+  // event capture is JS-thread, which is the standard RN scroll path anyway.
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-      const distanceFromBottom =
-        contentSize.height - layoutMeasurement.height - contentOffset.y;
-      // Trigger pagination when within 400px of the end, debounced by a
-      // minimum scroll delta to avoid duplicate calls.
-      if (
-        distanceFromBottom < 400 &&
-        Math.abs(contentOffset.y - lastLoadMoreY.current) > 200 &&
-        !isLoadingMore &&
-        !isSyncing &&
-        listings.length > 0
-      ) {
-        lastLoadMoreY.current = contentOffset.y;
-        onLoadMore();
-      }
+      scrollY.value = e.nativeEvent.contentOffset.y;
     },
-    [isLoadingMore, isSyncing, listings.length, onLoadMore],
+    [scrollY],
+  );
+
+  const refreshControl = useMemo(
+    () => (
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        tintColor="transparent"
+        colors={['transparent']}
+        progressBackgroundColor="transparent"
+      />
+    ),
+    [refreshing, onRefresh],
   );
 
   const showLoadingSkeleton =
@@ -111,76 +125,58 @@ export function DiscoverScene({
   const showEmpty =
     listings.length === 0 && !isSyncing && !lastError;
 
+  // Error and empty states are authored here (with recovery CTAs) and render
+  // as non-scrollable surfaces. The loading skeleton + populated feed are
+  // owned by the grid (FlashList owns scrolling for those).
+  if (showError) {
+    return (
+      <View style={[styles.container, styles.stateWrap]}>
+        <EmptyState
+          density="compact"
+          icon="cloud-offline-outline"
+          iconColor={colors.danger}
+          title="Explore unavailable"
+          subtitle="We couldn't load listings. Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={onRefresh}
+        />
+      </View>
+    );
+  }
+
+  if (showEmpty) {
+    return (
+      <View style={[styles.container, styles.stateWrap]}>
+        <EmptyState
+          density="compact"
+          icon="compass-outline"
+          title="Nothing to explore yet"
+          subtitle="New items are uploaded every day. Check back soon or browse categories."
+          ctaLabel="Browse Categories"
+          onCtaPress={onBrowseCategories}
+        />
+      </View>
+    );
+  }
+
+  // Populated (or loading-skeleton) state: the FlashList owns scrolling.
+  // The RefreshIndicator is positioned absolutely over the grid and reads
+  // the shared scrollY driven by the animated scroll handler above.
   return (
     <View style={styles.container}>
       <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
-
-      <Reanimated.ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        onScrollBeginDrag={() => {
-          // Reset pagination debounce anchor when a new gesture starts.
-          lastLoadMoreY.current = 0;
-        }}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="transparent"
-            colors={['transparent']}
-            progressBackgroundColor="transparent"
-          />
-        }
-      >
-        {showLoadingSkeleton ? (
-          <View style={styles.loadingWrap}>
-            <MasonrySkeleton itemCount={6} />
-          </View>
-        ) : showError ? (
-          <View style={styles.stateWrap}>
-            <EmptyState
-              density="compact"
-              icon="cloud-offline-outline"
-              iconColor={colors.danger}
-              title="Explore unavailable"
-              subtitle="We couldn't load listings. Check your connection and try again."
-              ctaLabel="Retry"
-              onCtaPress={onRefresh}
-            />
-          </View>
-        ) : showEmpty ? (
-          <View style={styles.stateWrap}>
-            <EmptyState
-              density="compact"
-              icon="compass-outline"
-              title="Nothing to explore yet"
-              subtitle="New items are uploaded every day. Check back soon or browse categories."
-              ctaLabel="Browse Categories"
-              onCtaPress={onBrowseCategories}
-            />
-          </View>
-        ) : (
-          <>
-            <PinterestMasonryGrid
-              items={listings}
-              onPressItem={onPressItem}
-              onPressSeller={onPressSeller}
-              onMessageSeller={onMessageSeller}
-              enableEntranceAnimation
-            />
-            {isLoadingMore ? (
-              <View style={styles.footer}>
-                <MasonrySkeleton itemCount={2} horizontalPadding={0} />
-              </View>
-            ) : null}
-          </>
-        )}
-
-        <View style={styles.footer} />
-      </Reanimated.ScrollView>
+      <PinterestMasonryGrid
+        items={units}
+        onItemPress={onPressItem}
+        onEndReached={onLoadMore}
+        isLoading={showLoadingSkeleton}
+        isLoadingMore={isLoadingMore}
+        hasMore={hasMore}
+        numColumns={DISCOVER_NUM_COLUMNS}
+        refreshControl={refreshControl}
+        onScroll={handleScroll}
+        scrollRef={scrollRef}
+      />
     </View>
   );
 }

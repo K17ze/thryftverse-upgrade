@@ -85,13 +85,21 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     return () => { mounted = false; };
   }, [currentUser?.id]);
 
-  // Loyalty tier derived from referral activity
-  const loyaltyTier = useMemo<{ name: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; nextThreshold: number | null; progress: number }>(() => {
+  // Loyalty tier derived from referral activity.
+  // Per AGENTS.md §11, we do NOT fabricate a "Bronze Member" tier for users
+  // with zero referrals — the tier is only shown when actually earned.
+  const loyaltyTier = useMemo<{ name: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; nextThreshold: number | null; progress: number } | null>(() => {
     const { rewarded } = referralStats;
     if (rewarded >= 10) return { name: 'Gold', icon: 'trophy', color: ACCENT, nextThreshold: null, progress: 100 };
     if (rewarded >= 3) return { name: 'Silver', icon: 'medal', color: MUTED, nextThreshold: 10, progress: (rewarded / 10) * 100 };
-    return { name: 'Bronze', icon: 'ribbon', color: BORDER, nextThreshold: 3, progress: (rewarded / 3) * 100 };
+    return null;
   }, [referralStats.rewarded, ACCENT, MUTED, BORDER]);
+
+  const hasReferrals =
+    referralStats.invited > 0 ||
+    referralStats.joined > 0 ||
+    referralStats.rewarded > 0 ||
+    referralStats.creditsBalance > 0;
 
   const handleShare = async () => {
     try {
@@ -191,6 +199,13 @@ export default function InviteFriendsScreen({ navigation }: Props) {
                 Stats unavailable right now. Pull down to refresh or try again later.
               </Text>
             </View>
+          ) : !hasReferrals ? (
+            <View style={styles.statsUnavailableRow}>
+              <Ionicons name="people-outline" size={20} color={MUTED} />
+              <Text style={styles.statsUnavailableText}>
+                No referrals yet — share your code to start earning.
+              </Text>
+            </View>
           ) : (
             <View style={styles.statsRow}>
               <View style={styles.statCell}>
@@ -221,33 +236,35 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       </View>
 
       {/* Loyalty Tier Card — tier is derived from referral activity only.
-          Per research §5, the loyalty tier is one-dimensional (referrals).
-          We do NOT fabricate perks (reduced fees, priority support, exclusive
-          drops) that the backend does not actually provide. The card is
-          honest about what the tier measures: successful referrals. */}
-      <View>
-        <View style={styles.loyaltyCard}>
-          <View style={styles.loyaltyHeader}>
-            <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
-              <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
+          Per AGENTS.md §11, the tier badge is only shown when actually earned.
+          We do NOT fabricate a "Bronze Member" tier for zero referrals, and we
+          do NOT fabricate perks (reduced fees, priority support, exclusive
+          drops) that the backend does not actually provide. */}
+      {loyaltyTier && (
+        <View>
+          <View style={styles.loyaltyCard}>
+            <View style={styles.loyaltyHeader}>
+              <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
+                <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
+              </View>
+              <View style={styles.loyaltyInfo}>
+                <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
+                <Text style={styles.loyaltySubtext}>
+                  {loyaltyTier.nextThreshold
+                    ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Silver' ? 'Gold' : 'Silver'}`
+                    : 'Highest referral tier reached'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.loyaltyInfo}>
-              <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
-              <Text style={styles.loyaltySubtext}>
-                {loyaltyTier.nextThreshold
-                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
-                  : 'Highest referral tier reached'}
-              </Text>
+            <View style={styles.loyaltyProgressTrack}>
+              <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
             </View>
+            <Text style={styles.loyaltyFootnote}>
+              Tier is based on successful referrals only.
+            </Text>
           </View>
-          <View style={styles.loyaltyProgressTrack}>
-            <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
-          </View>
-          <Text style={styles.loyaltyFootnote}>
-            Tier is based on successful referrals only.
-          </Text>
         </View>
-      </View>
+      )}
 
       {/* How it works */}
       <View>

@@ -190,7 +190,7 @@ export default function CreateCollectionScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.flatSection}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -203,7 +203,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.flatSection}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -411,6 +411,14 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
+  },
+  // Flat section — no card background, hairline separator.
+  // Anti-AI-slop: avoids generic dashboard silhouette of stacked equal-weight cards.
+  flatSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   label: {
     fontSize: Type.caption.size,

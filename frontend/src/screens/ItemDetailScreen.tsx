@@ -823,6 +823,7 @@ export default function ItemDetailScreen() {
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
           showPageIndicator={false}
+          showThumbnailStrip={item.images ? item.images.length > 1 : false}
           overlayTopContent={
             familyStateAccent ? (
               <View style={styles.familyBadgeOverlay}>
@@ -857,24 +858,9 @@ export default function ItemDetailScreen() {
         />
 
         {/* ── Image pagination ──
-            For short galleries (≤5): dots only.
-            For long galleries (>5): `n / total` counter only.
-            Dots, counter and thumbnails are never shown simultaneously. */}
-        {item.images && item.images.length > 1 && (
-          item.images.length <= 5 ? (
-            <PaginationDots
-              count={item.images.length}
-              activeIndex={paginationIndex}
-              color={colors.textSecondary}
-            />
-          ) : (
-            <View style={paginationStyles.wrap}>
-              <Text style={[paginationStyles.counter, { color: colors.textSecondary }]} numberOfLines={1}>
-                {`${fullscreenIndex + 1} of ${item.images.length}`}
-              </Text>
-            </View>
-          )
-        )}
+            Thumbnail strip is rendered inside CommerceMediaStage
+            (showThumbnailStrip=true). No external dots/counter needed —
+            the thumbnail rail is the premium 2026 pattern (eBay/Depop). */}
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 

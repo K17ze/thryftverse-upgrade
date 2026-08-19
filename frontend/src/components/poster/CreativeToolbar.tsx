@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -89,22 +88,20 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
     >
       <Reanimated.View style={[styles.toolIconWrap, animStyle]}>
         {isActive ? (
-          // Active: gradient fill (Instagram-style)
-          <LinearGradient
-            colors={[colors.brand, colors.antiqueGold]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          // Active: simple brand-tinted background (no gradient chrome)
+          <View
             style={[
               styles.toolIconBg,
               {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
+                backgroundColor: colors.brandSubtle,
               },
             ]}
           >
-            <Ionicons name={tool.icon} size={iconSize} color={colors.textInverse} />
-          </LinearGradient>
+            <Ionicons name={tool.icon} size={iconSize} color={colors.brand} />
+          </View>
         ) : (
           // Inactive: transparent with subtle border
           <View
@@ -218,7 +215,7 @@ function createStyles(colors: ThemeColors) {
     color: 'rgba(255,255,255,0.75)',
   },
   toolLabelActive: {
-    color: colors.antiqueGold,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
   },
   toolLabelSecondary: {

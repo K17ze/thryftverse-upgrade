@@ -18,6 +18,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
 
 import { Radius } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 const { width: W } = Dimensions.get('window');
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
@@ -56,9 +57,9 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withTiming(MIN_ZOOM, { duration: Motion.duration.normal });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -85,8 +86,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
       if (zoomLevel <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
-        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
         return;
       }
 
@@ -100,23 +101,23 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
       savedTranslateX.value = targetX;
       savedTranslateY.value = targetY;
 
-      translateX.value = withTiming(targetX, { duration: 220, easing: Easing.out(Easing.cubic) });
-      translateY.value = withTiming(targetY, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateX.value = withTiming(targetX, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(targetY, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withTiming(1, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withTiming(1, { duration: Motion.duration.normal });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const zoomTarget = reducedMotionEnabled ? 2 : 2.5;
-        scale.value = withTiming(zoomTarget, { duration: 200, easing: Easing.out(Easing.cubic) });
+        scale.value = withTiming(zoomTarget, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
         savedScale.value = zoomTarget;
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
@@ -176,7 +177,7 @@ function Dot({ index, activeIndex }: DotProps) {
   const width = useSharedValue(isActive ? 24 : 8);
 
   React.useEffect(() => {
-    width.value = withTiming(isActive ? 24 : 8, { duration: 200, easing: Easing.out(Easing.cubic) });
+    width.value = withTiming(isActive ? 24 : 8, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
   }, [isActive, width]);
 
   const dotStyle = useAnimatedStyle(() => ({

@@ -12,19 +12,19 @@ export function OrderDetailSkeleton() {
     <View style={styles.container}>
       {/* Status header */}
       <View style={styles.statusHeader}>
-        <SkeletonLoader width={120} height={12} borderRadius={6} />
-        <SkeletonLoader width={80} height={20} borderRadius={10} style={{ marginTop: Space.sm }} />
-        <SkeletonLoader width="90%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
-        <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: Space.xs }} />
+        <SkeletonLoader width={120} height={12} borderRadius={Radius.sm} />
+        <SkeletonLoader width={80} height={20} borderRadius={Radius.md} style={{ marginTop: Space.sm }} />
+        <SkeletonLoader width="90%" height={14} borderRadius={Radius.md} style={{ marginTop: 6 }} />
+        <SkeletonLoader width="60%" height={12} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
       </View>
 
       {/* Item summary */}
       <View style={styles.summaryCard}>
         <SkeletonLoader width={64} height={64} borderRadius={Radius.md} />
         <View style={styles.summaryText}>
-          <SkeletonLoader width="80%" height={14} borderRadius={7} />
-          <SkeletonLoader width="50%" height={12} borderRadius={6} style={{ marginTop: 6 }} />
-          <SkeletonLoader width="40%" height={14} borderRadius={7} style={{ marginTop: Space.sm }} />
+          <SkeletonLoader width="80%" height={14} borderRadius={Radius.md} />
+          <SkeletonLoader width="50%" height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
+          <SkeletonLoader width="40%" height={14} borderRadius={Radius.md} style={{ marginTop: Space.sm }} />
         </View>
       </View>
 
@@ -32,8 +32,8 @@ export function OrderDetailSkeleton() {
       <View style={styles.stepperRow}>
         {Array.from({ length: 5 }).map((_, i) => (
           <View key={i} style={styles.stepperItem}>
-            <SkeletonLoader width={28} height={28} borderRadius={14} />
-            <SkeletonLoader width={40} height={10} borderRadius={5} style={{ marginTop: Space.xs }} />
+            <SkeletonLoader width={28} height={28} borderRadius={Radius.lg} />
+            <SkeletonLoader width={40} height={10} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
           </View>
         ))}
       </View>
@@ -42,10 +42,10 @@ export function OrderDetailSkeleton() {
       <View style={styles.timelineSection}>
         {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={styles.timelineRow}>
-            <SkeletonLoader width={10} height={10} borderRadius={5} />
+            <SkeletonLoader width={10} height={10} borderRadius={Radius.sm} />
             <View style={styles.timelineText}>
-              <SkeletonLoader width="70%" height={12} borderRadius={6} />
-              <SkeletonLoader width="40%" height={10} borderRadius={5} style={{ marginTop: Space.xs }} />
+              <SkeletonLoader width="70%" height={12} borderRadius={Radius.sm} />
+              <SkeletonLoader width="40%" height={10} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
             </View>
           </View>
         ))}
@@ -55,8 +55,8 @@ export function OrderDetailSkeleton() {
       <View style={styles.transactionSection}>
         {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={styles.txRow}>
-            <SkeletonLoader width="50%" height={12} borderRadius={6} />
-            <SkeletonLoader width={60} height={12} borderRadius={6} />
+            <SkeletonLoader width="50%" height={12} borderRadius={Radius.sm} />
+            <SkeletonLoader width={60} height={12} borderRadius={Radius.sm} />
           </View>
         ))}
       </View>

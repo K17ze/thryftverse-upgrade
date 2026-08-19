@@ -300,8 +300,8 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Welcome back</Text>
-            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Log in to continue buying, selling, and trading.</Text>
+            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Sign in</Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Enter your details to continue.</Text>
 
             <View style={styles.form}>
               <AppInput
@@ -438,29 +438,6 @@ export default function LoginScreen() {
                 <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>more options</Text>
                 <View style={styles.dividerLine} />
               </View>
-
-              {/* Passkey sign-in — truthful placeholder.
-                  The backend does not yet support WebAuthn/FIDO2 passkeys,
-                  so this surfaces the option honestly as "coming soon"
-                  rather than fabricating a working passkey flow (§11). */}
-              <AnimatedPressable
-                style={styles.passkeyBtn}
-                onPress={() => {
-                  setInfoMsg('Passkey sign-in is coming soon. Use email, OTP, or magic link for now.');
-                  setErrorMsg('');
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with passkey"
-                accessibilityHint="Passkey sign-in is coming soon"
-              >
-                <Ionicons name="key-outline" size={18} color={colors.textPrimary} />
-                <Text style={styles.passkeyBtnText} maxFontSizeMultiplier={1.3}>
-                  Sign in with passkey
-                </Text>
-                <View style={styles.passkeyBadge}>
-                  <Text style={styles.passkeyBadgeText} maxFontSizeMultiplier={1.2}>Soon</Text>
-                </View>
-              </AnimatedPressable>
 
               <AppButton
                 title={isOtpSending ? 'Sending OTP...' : 'Send OTP to Email'}
@@ -607,35 +584,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps,
-  },
-  passkeyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit,
-    borderRadius: Radius.xxl,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    marginBottom: Space.sm + 2,
-  },
-  passkeyBtnText: {
-    color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  passkeyBadge: {
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-    borderRadius: Radius.sm,
-    backgroundColor: `${colors.brand}1A`,
-  },
-  passkeyBadgeText: {
-    color: colors.brand,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
   },
   otpRequestBtn: {
     minHeight: Control.hit + 2,

@@ -1,6 +1,8 @@
 /**
  * OutfitBuilderScreen — Build outfits from saved/owned items
- * Uses StyleGraph for compatibility scoring and AI suggestions.
+ * Uses StyleGraph for heuristic compatibility scoring (color, formality,
+ * season, and style-tag matching rules — not ML) and rule-based
+ * completion suggestions.
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -33,6 +35,7 @@ import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing } from '../theme/designTokens';
@@ -189,16 +192,17 @@ function createThumbStyles(colors: ThemeColors) {
   return StyleSheet.create({
   card: {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: Space.sm,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+    paddingBottom: Space.sm,
   },
   cardSelected: {
-    borderColor: colors.brand,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
     borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   image: {
     width: '100%',
@@ -224,15 +228,20 @@ function createThumbStyles(colors: ThemeColors) {
 
 function ScoreBadge({ score }: { score: number }) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const scoreStyles = useMemo(() => createScoreStyles(colors), [colors]);
   const scale = useSharedValue(1);
   React.useEffect(() => {
+    if (reducedMotion) {
+      scale.value = 1;
+      return;
+    }
     scale.value = withTiming(1.12, { duration: 150, easing: Easing.out(Easing.quad) });
     const t = setTimeout(() => {
       scale.value = withTiming(1, { duration: 150, easing: Easing.inOut(Easing.quad) });
     }, 200);
     return () => clearTimeout(t);
-  }, [score]);
+  }, [score, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -492,27 +501,25 @@ export default function OutfitBuilderScreen() {
           </View>
         </View>
 
-        {/* AI Suggestion */}
+        {/* Style suggestion — heuristic, not ML */}
         {aiSuggestion && (
-          <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-            <View style={styles.aiCard}>
-              <View style={styles.aiRow}>
-                <Ionicons name="bulb-outline" size={18} color={colors.brand} />
-                <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
-                  Suggestion
-                </T.Caption>
-              </View>
-              <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
-                Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
-              </T.Body>
-              <AppButton
-                title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
-                variant="secondary"
-                size="sm"
-                onPress={handleAiSuggest}
-                icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
-              />
+          <View style={[styles.aiCard, { marginHorizontal: Space.md, marginBottom: Space.md }]}>
+            <View style={styles.aiRow}>
+              <Ionicons name="bulb-outline" size={18} color={colors.brand} />
+              <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
+                Style suggestion
+              </T.Caption>
             </View>
+            <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
+              Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
+            </T.Body>
+            <AppButton
+              title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
+              variant="secondary"
+              size="sm"
+              onPress={handleAiSuggest}
+              icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
+            />
           </View>
         )}
 
@@ -611,10 +618,6 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     padding: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
   },
   slotRow: {
     flexDirection: 'row',
@@ -665,11 +668,9 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   aiCard: {
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
+    paddingVertical: Space.md,
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
   },
   aiRow: {
     flexDirection: 'row',

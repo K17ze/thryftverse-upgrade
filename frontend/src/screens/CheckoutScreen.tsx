@@ -285,6 +285,7 @@ export default function CheckoutScreen() {
     compactSummaryTotalLabel: { color: colors.textPrimary },
     compactSummaryTotalValue: { color: colors.textPrimary },
     compactSummaryDivider: { backgroundColor: colors.border },
+    footerTrustText: { color: colors.success },
     breakdownChevronText: { color: colors.textMuted },
     breakdownSheetTitle: { color: colors.textPrimary },
     breakdownSheetLabel: { color: colors.textSecondary },
@@ -1569,6 +1570,14 @@ export default function CheckoutScreen() {
           </View>
         </Pressable>
 
+        {/* Compact buyer-protection trust line — between summary and Pay */}
+        <View style={styles.footerTrustRow}>
+          <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
+          <Text style={[styles.footerTrustText, t.footerTrustText]} numberOfLines={1}>
+            Buyer protection — money held in escrow until you confirm
+          </Text>
+        </View>
+
         {/* Pay button row */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
@@ -2422,6 +2431,17 @@ const styles = StyleSheet.create({
   compactSummaryDivider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs + 1,
+  },
+  footerTrustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    paddingVertical: Space.xs,
+  },
+  footerTrustText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   compactSummaryTotalRow: {
     flexDirection: 'row',

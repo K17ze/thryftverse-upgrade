@@ -276,7 +276,7 @@ function LoadingShimmer({
       <ShimmerBar
         width="55%"
         height={12}
-        borderRadius={6}
+        borderRadius={Radius.sm}
         marginTop={12}
         surfaceColor={colors.surfaceAlt}
         reduced={reduced}
@@ -285,7 +285,7 @@ function LoadingShimmer({
       <ShimmerBar
         width="80%"
         height={10}
-        borderRadius={5}
+        borderRadius={Radius.sm}
         marginTop={8}
         surfaceColor={colors.surfaceAlt}
         reduced={reduced}

@@ -21,6 +21,7 @@ import { CachedImage } from '../components/CachedImage';
 import { Video } from '../components/compat/Video';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
+import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -58,21 +59,15 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Load highlight data
+  // NOTE: The backend API exposes only a list endpoint
+  // (GET /users/:userId/poster-highlights) — there is no single-highlight
+  // fetch. We therefore fetch the user's highlights and find the matching
+  // id. When a GET /poster-highlights/:id endpoint becomes available,
+  // this should be replaced with a direct fetch.
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // We don't know the userId here, so we fetch via a different approach:
-        // The highlight viewer needs the highlight data. Since the GET endpoint
-        // is /users/:userId/poster-highlights, we need the userId.
-        // For now, we pass the highlight data via navigation params or
-        // fetch from the store. Let's use a simpler approach: fetch all
-        // highlights for the current user and find the one we need.
-        // This is a limitation of the backend API design.
-        //
-        // Actually, the best approach is to pass the userId in the route.
-        // But to keep it simple, we'll use the store to get the current user.
-        const { useStore } = await import('../store/useStore');
         const currentUser = useStore.getState().currentUser;
         if (!currentUser) {
           setLoadError(true);
@@ -170,7 +165,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
           <SkeletonLoader
             width={SCREEN_WIDTH}
             height={SCREEN_HEIGHT * 0.6}
-            borderRadius={0}
+            borderRadius={Radius.none}
           />
         </View>
       </View>

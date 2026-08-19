@@ -49,6 +49,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { createStableId } from '../utils/createStableId';
 import { formatBidActivityRow } from '../utils/auctionDetailLogic';
+import { useBucketedServerClock } from '../hooks/useServerClock';
 
 type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 
@@ -139,7 +140,8 @@ export default function AuctionsScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
-  const [nowTs, setNowTs] = React.useState(Date.now());
+  const [serverNow, setServerNow] = React.useState<string | null>(null);
+  const { secondClock: nowTs, resync } = useBucketedServerClock(serverNow);
   const [refreshing, setRefreshing] = React.useState(false);
   const [bidComposerVisible, setBidComposerVisible] = React.useState(false);
   const [selectedBidAuction, setSelectedBidAuction] = React.useState<AuctionViewModel | null>(null);
@@ -172,13 +174,16 @@ export default function AuctionsScreen() {
       });
       setRemoteAuctions(result.items);
       setNextCursor(result.nextCursor);
+      // Resync the server clock so countdowns stay aligned with backend time
+      // instead of drifting on the client's setInterval (audit §Auctions).
+      if (result.serverNow) resync(result.serverNow);
       setSyncError(null);
     } catch (error) {
       setSyncError((error as Error).message || t('auctions.sync.unable'));
     } finally {
       setIsSyncingAuctions(false);
     }
-  }, [statusFilter, sortMode, searchQuery]);
+  }, [statusFilter, sortMode, searchQuery, resync]);
 
   const loadMore = React.useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;
@@ -193,17 +198,13 @@ export default function AuctionsScreen() {
       });
       setRemoteAuctions((prev) => [...prev, ...result.items]);
       setNextCursor(result.nextCursor);
+      if (result.serverNow) resync(result.serverNow);
     } catch {
       // Silent fail on pagination
     } finally {
       setIsLoadingMore(false);
     }
-  }, [nextCursor, isLoadingMore, statusFilter, sortMode, searchQuery]);
-
-  React.useEffect(() => {
-    const intervalId = setInterval(() => setNowTs(Date.now()), 1000);
-    return () => clearInterval(intervalId);
-  }, []);
+  }, [nextCursor, isLoadingMore, statusFilter, sortMode, searchQuery, resync]);
 
   React.useEffect(() => {
     void syncAuctions();
@@ -211,7 +212,6 @@ export default function AuctionsScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    setNowTs(Date.now());
     await syncAuctions();
     setRefreshing(false);
   };
@@ -363,7 +363,6 @@ export default function AuctionsScreen() {
         idempotencyKey,
       });
       await syncAuctions();
-      setNowTs(Date.now());
       show(
         t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }),
         'success'
@@ -683,11 +682,11 @@ export default function AuctionsScreen() {
     <View style={styles.loadingWrap}>
       {[0, 1, 2].map((i) => (
         <View key={i} style={styles.loadingCard}>
-          <SkeletonLoader width="100%" height={172} borderRadius={12} />
+          <SkeletonLoader width="100%" height={172} borderRadius={Radius.lg} />
           <View style={{ padding: Space.sm + Space.xs }}>
-            <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="40%" height={12} borderRadius={6} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="100%" height={40} borderRadius={10} />
+            <SkeletonLoader width="70%" height={16} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
+            <SkeletonLoader width="40%" height={12} borderRadius={Radius.sm} style={{ marginBottom: Space.sm }} />
+            <SkeletonLoader width="100%" height={40} borderRadius={Radius.lg} />
           </View>
         </View>
       ))}
@@ -820,7 +819,7 @@ export default function AuctionsScreen() {
           {bidHistoryLoading ? (
             <View style={styles.bidHistoryLoadingWrap}>
               {[0, 1, 2, 3, 5].map((i) => (
-                <SkeletonLoader key={i} width="100%" height={48} borderRadius={8} style={{ marginBottom: Space.sm }} />
+                <SkeletonLoader key={i} width="100%" height={48} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
               ))}
             </View>
           ) : bidHistoryError ? (

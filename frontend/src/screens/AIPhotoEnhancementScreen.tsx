@@ -584,16 +584,20 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
               style={styles.footerSecondaryBtn}
             />
             <AppButton
-              title={AI_PHOTO_DEMO_MODE ? 'Preview (Demo)' : 'Apply'}
+              title={AI_PHOTO_DEMO_MODE ? 'Coming Soon' : 'Apply'}
               onPress={handleApply}
-              disabled={!canApply}
+              disabled={AI_PHOTO_DEMO_MODE || !canApply}
               loading={isApplying}
               variant="primary"
               size="md"
               accessibilityLabel={
-                AI_PHOTO_DEMO_MODE ? 'Preview enhancement in demo mode' : 'Apply enhancement'
+                AI_PHOTO_DEMO_MODE ? 'AI enhancement coming soon' : 'Apply enhancement'
               }
-              accessibilityHint="Applies the selected enhancement to the photo"
+              accessibilityHint={
+                AI_PHOTO_DEMO_MODE
+                  ? 'AI photo enhancement is not yet available'
+                  : 'Applies the selected enhancement to the photo'
+              }
               icon={<Ionicons name="color-filter-outline" size={16} color={colors.textInverse} />}
               style={styles.footerPrimaryBtn}
             />

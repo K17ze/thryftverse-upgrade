@@ -25,6 +25,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -39,8 +40,8 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
-// Demo mode flag — live shopping & preview toggles are local-only in this build.
-const NOTIFICATION_PREFS_DEMO_MODE = __DEV__;
+const LIVE_SHOPPING_KEY = '@thryftverse/notif_prefs_live_shopping';
+const SHOW_PREVIEW_KEY = '@thryftverse/notif_prefs_show_preview';
 
 function formatHour(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -65,10 +66,44 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setQuietHours,
   } = useSettingsPreferences();
 
-  // Local-only toggles (not yet in the canonical context).
+  // Local-only toggles — persisted to AsyncStorage so they survive restarts.
+  // Per AGENTS.md §11, these are not yet backed by a server-side sync, so an
+  // honest banner makes that clear rather than pretending the toggles are
+  // synced.
   const [liveShopping, setLiveShopping] = React.useState(true);
   const [showPreview, setShowPreview] = React.useState(true);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
+
+  // Hydrate local toggles from AsyncStorage on mount.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [lsVal, spVal] = await Promise.all([
+          AsyncStorage.getItem(LIVE_SHOPPING_KEY),
+          AsyncStorage.getItem(SHOW_PREVIEW_KEY),
+        ]);
+        if (!mounted) return;
+        if (lsVal !== null) setLiveShopping(lsVal === 'true');
+        if (spVal !== null) setShowPreview(spVal === 'true');
+      } catch {
+        // AsyncStorage read failure — keep defaults
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleLiveShoppingChange = React.useCallback((v: boolean) => {
+    haptic.selection();
+    setLiveShopping(v);
+    AsyncStorage.setItem(LIVE_SHOPPING_KEY, String(v)).catch(() => {});
+  }, [haptic]);
+
+  const handleShowPreviewChange = React.useCallback((v: boolean) => {
+    haptic.selection();
+    setShowPreview(v);
+    AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(v)).catch(() => {});
+  }, [haptic]);
 
   const masterOn = enabledCount > 0;
 
@@ -82,11 +117,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setPushNotificationToggle(key, !toggles[key]);
   };
 
-  const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
-    haptic.selection();
-    setter(v);
-  };
-
   return (
     <FlagshipScreen
       header={
@@ -96,19 +126,17 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {NOTIFICATION_PREFS_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Live shopping and preview toggles are saved on this device only in demo mode.
-          </Text>
-        </View>
-      )}
+      {/* ── Honest persistence banner (truthful UI per AGENTS.md §11) ── */}
+      <View
+        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Notification preferences saved on device"
+      >
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.demoBannerText}>
+          Notification preferences are saved on this device and will be synced when available.
+        </Text>
+      </View>
 
       {/* ── Summary — flat intro block ── */}
         <View style={styles.summaryBlock}>
@@ -194,7 +222,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             title="Live shopping notifications"
             subtitle="When sellers you follow go live"
             toggleValue={liveShopping}
-            onToggle={toggleWithHaptic(setLiveShopping)}
+            onToggle={handleLiveShoppingChange}
             disabled={!masterOn}
           />
           <SettingsRow
@@ -307,7 +335,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             title="Notification preview"
             subtitle="Show message content in notification previews"
             toggleValue={showPreview}
-            onToggle={toggleWithHaptic(setShowPreview)}
+            onToggle={handleShowPreviewChange}
             isFirst
             isLast
           />

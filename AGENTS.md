@@ -937,10 +937,378 @@ This protocol scales with the prompt. A one-line fix still requires codebase res
 - Truthful UI always. No fabricated success, data, or capability.
 - Preserve working features. Elevate, don't strip.
 - The device render is the source of truth. Iterate against it.
+
+---
+
+## 33. 2026 AUGUST RESEARCH FINDINGS — WAVE 2 SURFACES
+
+Compiled from 4 parallel web research subagents (August 2026) covering search, chat, sell flows, wallet/settings. Supplements §32.
+
+### 33.1 Search & Visual Search (August 2026)
+
+**Pinterest Visual Search 2026:**
+- Animated glow effect on shoppable items in Pins
+- Refinement bar with style/occasion/color/fabric refinements
+- AI-generated descriptive keywords from images
+- Contextual intent models (outfit vs makeup vs background)
+
+**Instagram Search 2026:**
+- Hybrid AI-traditional search interface
+- Category filters: accounts, audio, hashtags, places
+- Shift from account search to content search
+- Recommended searches extracted from comment discussions
+
+**eBay Search Filters 2026:**
+- Lockable filters — users choose which filters to persist
+- Customise panel: hide sort/filter button, expand all, lockable filters
+- AI-powered natural language search (eBay.ai)
+- Search with Pics — upload photo to find matches
+
+**Search psychology 2026:**
+- Popular Ranking Search Aid (PRSA) — aggregated popular categories at entry point
+- Privacy-compliant guidance (non-personalized aggregated data)
+- Mobile context: fragmented attention, app-switching behavior
+
+**Conversational AI search 2026:**
+- Google Search Live — interactive multimodal with voice + camera
+- Gemini 3.1 Flash Live — audio-focused, 90+ languages
+- Background operation — conversations continue in other apps
+- Wave gesture to interrupt AI when speaking
+
+**Saved searches 2026:**
+- Variable alert frequency: Real-Time, Daily Digest, Off per search
+- Named saved searches for organization
+- Full filter preservation
+
+**Autocomplete 2026:**
+- 100ms speed target (suggestions must appear within 100ms)
+- Liquid Glass search patterns (iOS 26)
+- Search tokens (tag-style filters in SwiftUI)
+- Adaptive placement (bottom toolbar for thumb ergonomics)
+
+**Visual search camera 2026:**
+- Live viewfinder integration (Pixel Circle to Search)
+- Multi-object selection — circle multiple items simultaneously
+- Press-and-hold gesture invocation
+- AI agent actions — camera as visual AI agent
+
+### 33.2 Chat & Messaging (August 2026)
+
+**Message bubble composition:**
+- Dynamic Type scaling (iOS semantic styles, Android sp units)
+- WCAG AA contrast compliance (4.5:1 minimum)
+- Minimal decorations: single-color, 8-12px radius, 4-8px padding
+- Subtle shadow (2px, 0.12 opacity) for depth
+
+**Input bar design:**
+- Bottom-center primary action (Fitts's Law, thumb reach)
+- Staged media composition — review multiple images before send
+- Smart input expansion based on content type
+- 300ms ease-out expansion animation
+
+**Media sharing:**
+- Chat list media thumbnails (40×40px preview of latest message)
+- Inline video playback (autoplay muted, tap to unmute)
+- Full-screen media viewer with complete reply bar
+- Animated wallpapers (subtle motion, respects reduced-motion)
+
+**Typing indicators:**
+- Context-aware modes: never, instant, thinking, message
+- Privacy-respecting (user can disable via settings)
+- ARIA live regions for screen readers (aria-live="polite")
+
+**Message requests:**
+- Two-tier filtering: Requests + Spam folders
+- Profile context before acceptance (shared servers, mutual connections)
+- Resend capability for ignored requests
+
+**Search in chat:**
+- Semantic search (vector embeddings, not just keywords)
+- Quick filters: media, links, mentions, date, sender
+- Message API search (REST/RPC)
+
+**Accessibility:**
+- WCAG 2.1 Level AA conformance with independent verification
+- Opt-in accessibility layer with master toggle
+- role="log" for message list, aria-live="polite" for new messages
+- Complete keyboard navigation
+- Motion sensitivity respect (prefers-reduced-motion)
+
+### 33.3 Sell & Listing Flow (August 2026)
+
+**eBay Sell 2026:**
+- Capture-first: photos and title first, not text search
+- AI analyzes images in ~7 seconds
+- Two-pass form loading: basic fields instantly, detailed fields via second pass
+- Quick List option — crosslist without full editing
+- 50% reduction in total steps vs previous flow
+
+**Instagram Create Post 2026:**
+- Format-first composer (Post, Story, Reel, Live before media)
+- Carousel support up to 20 images (increased from 10)
+- Swipe right from feed opens camera
+- Minimum 1080px width enforced
+
+**Depop Sell 2026:**
+- One-tap AI listing ("Create your listings with just one tap")
+- Zero selling fees US/UK (shifted to buyer-paid model)
+- Integrated Photoroom for image editing
+- AI/ML feed matching items with likely buyers
+
+**Mobile sell psychology:**
+- Thumb-zone optimization (primary CTAs in bottom 1/3)
+- Trust signals above the fold (ratings, reviews, verification)
+- 3-second decision window
+- Z-pattern hierarchy: photo → price → scarcity → CTA
+
+**AI listing assistant:**
+- Photo-to-listing pipeline (snap → AI generates complete listing)
+- Bulk generation (up to 15 listings at once)
+- Platform-optimized output (26 platforms)
+- Market data integration for pricing suggestions
+
+**Listing success screen 2026:**
+- Minimalist design (plain background, no gradient banners)
+- Token image + emerald check badge + sparkles accent
+- Share triggers at key moments (after listing, after sale, monthly recap)
+- Receipt-style monthly recap cards
+
+### 33.4 Wallet & Settings (August 2026)
+
+**Cash App wallet 2026:**
+- Maximum contrast canvas (pitch black, white type, single electric green #00d54b)
+- Custom typography (Cash Sans grotesque)
+- Video-game energy with springy motion and glowing effects
+- Atomic design system with cross-brand consistency (Cash App + Square)
+
+**Stripe wallet 2026:**
+- AI agent integration (OAuth flow for autonomous spending)
+- Link digital wallet (cards, banks, crypto, BNPL unified)
+- Spend request flow: agent creates → user approves → notification
+- 90-day purchase protection
+
+**eBay payouts 2026:**
+- Four-stage process: Processing → Available → Initiated → Deposited
+- Daily default schedule (weekly, bi-weekly, monthly on Tuesdays)
+- Payouts on demand (30-minute for eligible sellers)
+- Automatic fee deduction, net amount displayed
+
+**Wallet psychology 2026:**
+- Spendception — reduced psychological resistance to spending
+- Trust-integrated framework: empowerment, gamification, social visibility, status, eco-friendliness, digital trust
+- Anxiety mediation: perceived risk → anxiety → reduced trust → behavior
+- Personality-based moderation (neuroticism, gender)
+
+**iOS Settings 2026:**
+- iOS 27 AirPods settings overhaul with menu organization + icons
+- "Before Search" option for app suggestions
+- Global search moved to bottom of screen
+- Rounded & spacious elements, floating tab bars
+
+**Android Settings 2026 (Material 3 Expressive):**
+- Colorful pastel icons per category
+- Card-based layout with caret indicators
+- Material You switches (X/checkmark in handle)
+- Top headers, compact menus for deeper levels
+
+**Settings UX 2026:**
+- Risk-frequency-complexity matrix for organization
+- Control pattern selection: toggle, navigation row, segmented, picker, radio, stepper
+- 44px minimum touch targets
+- Auto-save for low-stakes, explicit save for high-stakes
+- Search once you have 15-20+ settings
+
+**Account security UX 2026:**
+- Three-tier layout: status summary → priority actions → detailed management
+- Four core jobs: password, MFA, session, device management
+- Passkeys as default (Credential Manager API)
+- Goal-oriented language ("Sign-in methods" not "authentication vectors")
+- State-first design (show current state before controls)
+
+---
+
+## 34. 2026 AUGUST RESEARCH FINDINGS — WAVE 3 POLISH
+
+Compiled from web research + codebase audit (August 2026) covering profile, discovery, haptics, and end-of-list patterns. Supplements §32-33.
+
+### 34.1 Instagram Profile 2026
+
+- **Bio links:** Up to 5 tappable links natively (no more single-link limit). Each with optional title. First link gets most taps. Collapsed as "and X more" when >1.
+- **Story highlights:** Moving to dedicated tab (Posts → Highlights → Reels). Main profile above-the-fold becomes bio + grid, cleaner.
+- **Bio:** 150 chars, line breaks supported, not tappable (only dedicated Links field is clickable).
+- **Profile photo:** 320×320 display, 1080×1080 source for sharp rendering.
+- **Pronouns:** Up to 4 from Instagram's list.
+- **Action buttons:** 1 active button (reservations, food orders, tickets).
+
+### 34.2 iOS 26 Liquid Glass
+
+- **Liquid Glass material:** Translucent, dynamic, adaptive to content underneath. Forms distinct functional layer for controls and navigation.
+- **Auto-adoption:** Standard SwiftUI/UIKit components pick up Liquid Glass automatically when compiled with Xcode 26 SDK.
+- **Edge effects:** Scroll views under navigation/toolbars get automatic visual treatment for legibility.
+- **Floating bars:** Tab bars and navigation bars float above content with glass background.
+- **Interactive controls:** Toggles, segmented pickers, sliders transform into liquid glass during interaction.
+- **Accessibility:** Translucency and motion adapt to user settings (reduce transparency, reduce motion).
+- **React Native implication:** Cannot directly use `.glassEffect()` — but should reduce opaque backgrounds on bars, use translucent surfaces where possible, and let content extend under bars.
+
+### 34.3 Depop 2026 Seller Patterns
+
+- **AI listing assistant:** Photo-to-listing pipeline (snap → AI generates complete listing). Auto-generates descriptions from images. Auto-selects category, color, brand from description.
+- **Photoroom integration:** Background removal + AI drop shadows directly in sell flow. 1.5% uplift in items listed.
+- **Seller onboarding:** Reduced from 5 steps to 1 (pre-populate from account creation data).
+- **Zero selling fees US/UK:** Shifted to buyer-paid model.
+- **Seller profile:** Bio with shop policies (shipping, returns). Social media links for trust. Profile photo reflects brand.
+
+### 34.4 Haptic Feedback Best Practices 2026
+
+- **Less is more:** Too much vibration is annoying and numbing. Well-crafted haptics provide valuable sensory feedback.
+- **Clear haptics:** Crisp, clean sensations for discrete events (button presses). Imitate real-world mechanical actions.
+- **Rich haptics:** More expressive, sequenced patterns for special moments. Require wider bandwidth actuators.
+- **Latency:** <50ms target for cause-effect relationship. Delays weaken the connection.
+- **Signal, not noise:** Not every interaction needs feedback. Use it where it adds value.
+- **Pair with visual:** A haptic without a visual change is easy to miss. Together they make actions feel decisive.
+- **Respect system settings:** Always check user's system-level haptics setting. Never make haptics the only signal.
+- **Android:** Use `HapticFeedbackConstants` for action-oriented consistency. `VibratorManager` + `VibrationEffect` for custom patterns.
+- **iOS:** `UIImpactFeedbackGenerator` (light/medium/heavy/rigid/soft), `UINotificationFeedbackGenerator` (success/warning/error), `UISelectionFeedbackGenerator` (selection tick). `CoreHaptics` for rich patterns.
+
+### 34.5 End-of-List State Pattern 2026
+
+- **Honest terminal state:** When infinite scroll reaches the end, show a clear "You've reached the end" message. Don't leave a spinner forever.
+- **Visual treatment:** Short hairline separator + muted text. No card, no illustration — just a quiet terminal marker.
+- **Haptic:** Optional `selection` tick when the end state first appears (subtle, not jarring).
+- **Contrast with loading:** Loading-more shows skeleton tiles matching the grid. End-of-list shows a text marker. The two states are visually distinct.
+
+### 34.6 Pull-to-Refresh Haptic 2026
+
+- **Trigger haptic:** Fire a `medium` impact when refresh is triggered (not when it completes). The haptic confirms the pull gesture was registered.
+- **Completion:** No haptic on completion — the visual refresh of content is sufficient signal.
+- **Pattern:** `HapticPatterns.refresh()` → `haptics.press()` (medium impact).
 - The improvement must be obvious at thumbnail size.
 - The correct outcome is a richer, clearer, more coherent, and more trustworthy native product.
 
 ---
+
+## 35. 2026 AUGUST RESEARCH FINDINGS — WAVE 5 MASONRY/CHAT/NAV
+
+Compiled from live web research (August 2026) + codebase audit. Supplements §32-34.
+
+### 35.1 Pinterest Masonry Algorithm (Gestalt source — verified Aug 2026)
+
+- **Algorithm:** Pick the left-most column of shortest height and put the item there. First `columnCount` items go left-to-right; after that, always slot into the shortest column.
+- **Column count:** Determined by `(width + gutter) / (columnWidth + gutter)`. Can be overridden by `minCols`.
+- **No caching:** Positions are recalculated on each render. Column heights tracked as an array of length `columnCount`.
+- **Variable heights:** Item heights depend on content (image aspect ratio + text). This is what creates the masonry stagger — not random heights, but content-driven heights.
+- **CSS Grid Lanes (Safari 26.4+):** `display: grid-lanes` is the new native CSS masonry. `grid-template-rows: masonry` was the earlier proposal. Chromium team pushed back on gluing two layout modes onto one property → result is `display: grid-lanes` as a dedicated value.
+- **Key insight for RN FlashList:** FlashList v2 masonry mode handles the column assignment internally. Our job is to provide varied item heights via `aspectRatio` styles. The 7-step HEIGHT_RHYTHM cycle (prime-length) avoids the "every 4th item looks the same" tell.
+
+### 35.2 iOS 26 Liquid Glass (Apple Developer — verified Aug 2026)
+
+- **Material:** Translucent, dynamic, adaptive to content underneath. Forms a distinct functional layer for controls and navigation.
+- **Auto-adoption:** Standard SwiftUI/UIKit components pick up Liquid Glass automatically when compiled with Xcode 26 SDK.
+- **Tab bar:** Floats above content. Can minimize on scroll (`tabBarMinimizeBehavior = .onScrollDown`). Re-expands when scrolling opposite direction.
+- **Custom backgrounds:** Apple explicitly says "reduce your use of custom backgrounds in controls and navigation elements." Custom backgrounds may overlay or interfere with Liquid Glass.
+- **Content extension:** Content should extend underneath the tab bar. The blur effect is the default for a tab bar that sits on top of a scrollable container.
+- **RN implication:** Cannot use `.glassEffect()`. Best approach: use `colors.background` with high opacity for bars, let content extend underneath via `contentContainerStyle` padding, and use translucent surface fills (`colors.surfaceAlt`) for selected states rather than opaque brand colors.
+
+### 35.3 WhatsApp 2026 Bubble Design (WABetaInfo — verified Aug 2026)
+
+- **Shape:** Bubbles are now fully rounded — "pill-shaped" with significantly increased radius of curvature. The classic angular corners are gone.
+- **Tail removed:** The classic "tail" or side pointer that visually indicated message origin has been removed. Replaced by perfectly rounded pill-style bubbles.
+- **Media:** Photos and videos appear without traditional bubble borders. Media IS the bubble — no visible frame.
+- **Alignment:** Without the tail, messages are better aligned with the side of the display, cutting out unnecessary dead space.
+- **Timeline:** Android beta 2.26.10.2 (March 2026), iOS beta 26.29.10.70 (rolling out). Both platforms aligned.
+- **Our approach:** We keep the asymmetric tail radius (iMessage-style) which is also flagship. The tail corner at `Radius.sm` (4px) is subtle enough. Full pill removal is a design choice, not a requirement.
+
+### 35.4 iMessage Typing Dots
+
+- **Three dots:** Pulsing in sequence, not simultaneously. Each dot fades from 30% to 100% opacity with a 200ms stagger.
+- **Color:** Brand blue on iOS. We use `colors.brand` for consistency.
+- **Reduced motion:** Static dots at fixed opacity, no animation.
+- **Replaces:** Text "typing..." which reads as prototype-grade. The animated dots are a visual cue that doesn't need translation.
+
+### 35.5 Instagram Stories Editor 2026 (verified Aug 2026)
+
+- **Tool layout:** Top toolbar with primary tools, sticker tray behind a smiley icon. Layout feature splits frame into up to 6 panels.
+- **Safe zone:** 1080×1920 canvas, but only middle ~1420px is usable. Top 250px and bottom 250px are covered by UI.
+- **Progressive disclosure:** Primary tools (text, stickers, draw, layout) are immediately visible. Advanced tools (filters, boomerang, multi-capture) are behind secondary menus.
+- **Edits app:** Instagram launched a separate "Edits" app for video creation — timeline with clip-level precision, auto-enhance, green screen, AI image animation.
+- **Key insight for our creator:** The collage-native workspace is the right approach. Tool count should be 3-4 primary, with advanced behind "more". The canvas should be the focus, not the tools.
+
+### 35.6 Unread Count Badge (WhatsApp/iMessage 2026)
+
+- **Single unread:** Small dot (8pt) in brand color. No number.
+- **Multiple unread:** Pill-shaped badge with count. `minWidth: 18, height: 18, borderRadius: full`. Shows "99+" when over 99.
+- **Position:** Right side of the conversation row, after the snippet preview.
+- **Color:** Brand color background, inverse text. Consistent across WhatsApp, iMessage, Telegram.
+
+---
+
+## 36. 2026 AUGUST RESEARCH FINDINGS — WAVE 6 FLAGSHIP CROSS-COMPARISON
+
+Compiled from 6 parallel research subagents + manual online research (August 2026).
+Benchmark apps: Instagram, Pinterest, eBay, Depop, Vinted, Vestiaire Collective, Whatnot, Snapchat, TikTok.
+Full report: `.devin/wave6-research.md`.
+
+### 36.1 Instagram 2026 Key Specs
+
+- **Feed canvas:** 1080×1350px (4:5 portrait recommended), 3:4 grid display since Jan 2025
+- **Colors:** True-black OLED dark mode (#000000), body #262626/#fafafa, muted #8e8e8e, heart pink #ed1c84
+- **Spacing:** 4px base scale (4/8/12/16/24/32), 16px post card padding
+- **Motion:** Spring physics (mass: 3, damping: 500, stiffness: 1000), double-tap heart 1.3x at 300ms
+- **Stories ring:** ~2s loop animation on unread
+- **Profile grid:** 3:4 aspect ratio (changed from 1:1), 3-column, 2px gap
+- **Story highlights:** Moved to dedicated tab (rounded heart icon)
+- **DM bubbles:** Gradient sent (purple→pink→orange), gray received, capsule corners, spring physics (mass: 0.6-0.7, damping: 14-24, stiffness: 130-170)
+- **Typing indicator:** 3 bouncing dots, phase-offset 0.15s
+
+### 36.2 Pinterest 2026 Key Specs
+
+- **Masonry:** Shortest-column algorithm, 8px gutters (tightest), 16px card radius, natural aspect ratio
+- **Warm-cream chrome:** Page #fbfbf9, card #f6f6f3, canvas #ffffff, text #211922
+- **Single-accent discipline:** Pinterest Red #e60023 reserved for CTAs only — never decorative
+- **Typography:** Pin Sans medium weight "suggests rather than shouts", negative tracking on display
+- **Filter chips:** 36-40px height, 8px 16px padding, pill radius, surface #f6f6f3 / active ink #211922
+- **Search bar:** 48px height, 15px padding, 16px radius
+- **Psychology:** Masonry = discovery/exploration (zig-zag reading, variable rewards). Grid = catalog/utilitarian. Warm colors = hedonic, cool = utilitarian.
+
+### 36.3 Marketplace Trust Signals (Cross-Platform 2026)
+
+- **Review count matters as much as score:** 4.6 with 3,400 reviews > 5.0 with 12 reviews
+- **Placement:** Search card (rating + count + badge) → PDP (seller rating, response time, returns) → Checkout (security)
+- **Cold-start:** New sellers need verified credentials, fast response, on-time fulfillment
+- **Urgency cues:** Real deadlines only (fake urgency tanks trust, legally risky EU/FTC 2024-2026). Calm countdown: clock icon + number, no flashing red. Inline with price.
+- **Premium vs flea market:** Generous white space, clean typography, one strong trust signal (not competing messages), editorial content. Avoid: dense info, too many badges, inconsistent photography.
+
+### 36.4 AI-Slop Patterns Identified in Codebase
+
+- **P0:** CreateCollectionScreen stacked equal-weight cards (fixed → flat sections with hairline separators)
+- **P0:** HomeScreen decorative gradient scrims on video tiles (kept — functional for price legibility)
+- **P0:** 50+ files with hardcoded border radii instead of tokens (noted for future audit)
+- **P0:** 163 files with contentFit="cover" without focal-point logic (noted for future audit)
+- **P1:** LoginScreen verbose "Welcome back" copy (fixed → "Sign in" / "Enter your details to continue.")
+- **P1:** AuctionCard symmetrical layout regardless of state (fixed → state-based left accent borders)
+- **Positive:** FlatRow component, designTokens anti-AI principles, excellent state coverage, getCategoryFocalPoint exists
+
+### 36.5 Surface Gaps Identified and Addressed
+
+- **P0 HomeScreen:** Posters rail buried at index 4 (fixed → moved to ListHeaderComponent for first-viewport visibility)
+- **P0 ItemDetailScreen:** Gallery lacked thumbnail strip (fixed → enabled showThumbnailStrip on CommerceMediaStage)
+- **P0 AuctionDetailScreen:** Same gallery gap (fixed → enabled showThumbnailStrip)
+- **P0 BrowseScreen:** Result count lacked visual prominence (fixed → pill badge with icon), active filters lacked visual hierarchy (fixed → surfaceAlt background)
+- **P0 NotificationsScreen:** "Needs attention" group lacked visual distinction (fixed → subtle danger background tint, larger title)
+- **P0 CreateCollectionScreen:** Generic dashboard silhouette (fixed → flat sections with hairline separators)
+
+### 36.6 Snapchat/TikTok 2026 Key Patterns
+
+- **Full-screen media psychology:** Eliminates peripheral distractions → tunnel vision, stronger "presence", reduced cognitive load, flow state
+- **TikTok safe zones (9:16):** Top 200px, bottom 1550-1920px, right 900-1080px → center 840×1310px
+- **Snapchat gestures:** Swipe left→Chat, right→Discover, down→Memories, up→Map
+- **"Alive" design:** Motion and micro-animation (300ms first impression), freshness each visit, human-centric authenticity, visual hierarchy and tension, platform-native craft, "title sequence" mentality
+
+### 36.7 Implementation Priority Matrix
+
+**Tier 1 (Done):** Posters to first viewport, PDP thumbnail strip, filter visual hierarchy, notification grouping, CreateCollection flat sections, login copy, auction asymmetry
+**Tier 2 (Future):** Header visual weight, price treatment upgrade, seller info enrichment, stats grid upgrade, animated tab indicators, sort visible pills, notification type variety, read/unread distinction
+**Tier 3 (Future):** Story highlights on profile, AI-assisted sell flow, visual search, mixed grid layouts, notification preview, settings context menus
 
 ## 27. 2026 FLAGSHIP UX PSYCHOLOGY PRINCIPLES
 
@@ -1239,3 +1607,86 @@ COMPLETE — TARGET MET.
 ```
 
 If any box fails, the task is not complete. Fix it and re-run the checklist. Do not claim completion with open failures.
+
+---
+
+## 31. VISUAL FLAGSHIP CONVERGENCE LOOP — THE CANONICAL EXECUTION UNIT
+
+> **Authority:** `.devin/workflows/visual-flagship-convergence-loop.md`. This section is binding and overrides the former department-wide "research then mass implementation" method for every UI/UX change.
+
+### 31.1 The implementation unit is one surface, not one department
+
+Past a certain point, more research does not produce proportionally better visual design. The repository is research-rich and iteration-poor. The flagship research library (§28) remains a **reference corpus**, not a prompt to load wholesale. The implementation unit is now **one visually coherent surface at a time**.
+
+Do not accept a task framed as "implement this department" and fan out across dozens of screens. Reframe it as a sequence of single-surface convergence loops, beginning where the code proves the largest structural gap:
+
+```
+Discover/Explore → Creator media selection → Poster camera/editor → Looks Explore
+→ Product Detail → Co-Own → Profile → Inbox/Chat → Settings → remaining utility
+```
+
+### 31.2 Active visual context budget
+
+For an implementation task, reduce active visual context to:
+
+```
+1 department north-star document      (max ~3–5 pages)
+1 current surface contract            (max ~1–2 pages, .devin/surfaces/<surface>.md)
+3–5 benchmark reference screenshots    (per state)
+1 current native screenshot            (same viewport as benchmark)
+1 explicit before→after visual delta
+```
+
+Do not paste the 86-file research pack into an implementation prompt. Do not paste this whole charter into a subagent prompt (§0).
+
+### 31.3 Observable visual outcomes, not quality adjectives
+
+"Flagship", "premium", "modern", "minimal", "Pinterest-quality", "Instagram-style" are judgements, not CSS properties. Agents translate them into familiar patterns (premium → radius + shadows; modern → pills + blur; minimal → remove content; Instagram → underline tabs; Pinterest → 2-column masonry). That translation is how AI-slop appears.
+
+Hygiene rules in §4 (no card-on-card, fewer pills, restrained radii, 44pt targets, flatter surfaces, limited animation) are **floor constraints**, not the objective function. Repeating one recipe (flatten → remove pill → remove shadow → underline → shrink label → reduce radius) across every screen is a different kind of machine-generated sameness. Human-designed flagship products select the treatment that serves the particular object and context; they do not have a universal rule that tabs must always be underlines or buttons always 50pt.
+
+Implementation instructions and surface contracts must define **observable visual outcomes** instead:
+
+```text
+- At 25% screenshot scale the media must dominate.
+- The user must identify the main action without reading.
+- The first viewport must show ≥2 strong media objects.
+- Exactly one visual region may use persistent containment.
+- The next item must peek 80–140pt into the viewport.
+- Navigation must disappear in the squint test.
+- The editor must expose no more than four immediately relevant actions before More.
+- No catalogue-card silhouette may dominate the first viewport.
+```
+
+These are testable. "Make it flagship" is not.
+
+### 31.4 The cold critic
+
+The same agent must not research → spec → implement → test → evaluate its own visual work. That creates confirmation bias. The visual reviewer is a **cold critic** that receives only `reference screenshots + resulting screenshots + user goal` — not commit messages, not implementation explanations, not "all requirements completed."
+
+It answers only: what looks weaker, what feels templated, what visually dominates incorrectly, where density differs, where crop/art direction fails, what a senior designer would reject immediately. Then the coding agent reworks from that criticism. This separation is mandatory for any surface that claims visual completion.
+
+### 31.5 Definition of done — native artifact required
+
+Engineering-ready is not visually done.
+
+```text
+TypeScript 0 errors + tests pass + tokens compliant + no banned patterns
+  = engineering-ready for visual review. NOT completion.
+
+Visual completion requires:
+  - a native artifact (screenshot). No screenshot = not visually reviewed.
+  - a side-by-side at equal scale vs the benchmark. No side-by-side = not reference-validated.
+  - at least one rework iteration after the first capture. No second iteration = almost certainly not flagship.
+  - human acceptance. No human sign-off = not signed off.
+```
+
+When no native device or emulator is available (§19), use status `IMPLEMENTED — NATIVE DEVICE VALIDATION PENDING` and produce the surface contract + before→after delta so the user can run the first capture. Do not claim `COMPLETE — TARGET MET` without a native artifact and human sign-off.
+
+### 31.6 Generalize only after one screen proves the pattern
+
+Do not propagate a visual grammar across the codebase until one screen has passed sign-off (§31.5). Extracting and generalizing a pattern is step 10 of the loop, after one screen has cleared the bar. Screen-local compensation remains allowed when a screen has a genuinely different information hierarchy (§4).
+
+### 31.7 Enforcement
+
+The visual release gate (`.devin/release-gates.md`, `check-visual-release-gates.mjs`) is enforced: it fails on P0 violations by default. A TypeScript pass cannot override an obviously inferior native render (§4, §29). The native render is the source of truth.

@@ -34,6 +34,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
 import {
@@ -453,11 +454,12 @@ const BulkRow = React.memo(function BulkRow({
 }: RowProps) {
   const meta = STATUS_META[item.status];
   const statusColor = colors[meta.colorKey];
+  const reducedMotion = useReducedMotion();
   const rotate = useSharedValue(expanded ? 1 : 0);
 
   React.useEffect(() => {
-    rotate.value = withTiming(expanded ? 1 : 0, { duration: Motion.duration.normal });
-  }, [expanded, rotate]);
+    rotate.value = withTiming(expanded ? 1 : 0, { duration: reducedMotion ? 0 : Motion.duration.normal });
+  }, [expanded, rotate, reducedMotion]);
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value * 180}deg` }],

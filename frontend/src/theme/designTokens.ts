@@ -323,28 +323,6 @@ export const Elevation: Record<string, ShadowConfig> = {
 } as const;
 
 // ============================================================================
-// ANIMATION DURATIONS — single source of truth is Motion.duration in motionTokens.ts
-// This re-export preserves backward compatibility for existing imports from designTokens.
-// Do NOT add new duration values here — use Motion.duration.* or Motion.tier.* instead.
-// ============================================================================
-import { Motion } from './motionTokens';
-
-/** @deprecated Use `Motion.duration` from `motionTokens.ts` directly. This re-export
- *  exists only for backward compatibility. The canonical duration scale is `Motion.duration`. */
-export const Duration = {
-  /** 0ms — Immediate */
-  instant: Motion.duration.instant,
-  /** 120ms — Touch acknowledgement (button press, toggle) */
-  fast: Motion.duration.fast,
-  /** 180ms — Micro state transition (segment switch, sheet slide) */
-  normal: Motion.duration.normal,
-  /** 280ms — Emphasis / route continuity (content crossfade, screen push) */
-  slow: Motion.duration.slow,
-  /** 400ms — Hero/page transitions, rare celebratory motion */
-  slower: Motion.duration.slower,
-} as const;
-
-// ============================================================================
 // LAYOUT CONSTANTS
 // ============================================================================
 import { Dimensions } from 'react-native';

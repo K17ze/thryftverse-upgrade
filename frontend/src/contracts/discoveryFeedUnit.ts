@@ -51,6 +51,14 @@ export interface DiscoveryFeedUnitBase {
   score?: number;
   /** Optional reason for inclusion (shown only in debug/overflow, never on every card). */
   reason?: string;
+  /**
+   * Masonry span hint (number of columns this unit should occupy).
+   * `1` = single column (default for listings). `numColumns` = full width
+   * (editorial / look / poster / recommendation_break / hero listing).
+   * The renderer clamps this to the grid's `numColumns`. Omit for the
+   * default single-column placement.
+   */
+  span?: number;
 }
 
 /**

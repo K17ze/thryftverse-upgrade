@@ -21,6 +21,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
+import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
@@ -40,7 +41,7 @@ interface SupportTopic {
 }
 
 const ALL_SUPPORT_TOPICS: SupportTopic[] = [
-  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'delivered'] },
+  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
   { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
   { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
   { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
@@ -50,14 +51,14 @@ const ALL_SUPPORT_TOPICS: SupportTopic[] = [
 ];
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
-  const { orderId } = route.params;
+  const { orderId, categoryId, categoryLabel } = route.params;
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
 
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(categoryId ?? null);
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -88,7 +89,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const existingTickets = getSupportTicketsForOrder(orderId);
   const openTicket = existingTickets.find((t) => t.status === 'open');
 
-  const orderStatus = order?.status ?? 'unknown';
+  const orderStatus = normaliseOrderStatus(order?.status ?? 'unknown');
   const availableTopics = ALL_SUPPORT_TOPICS.filter((t) => {
     if (t.requiresStatus === null) return true;
     return t.requiresStatus.includes(orderStatus);

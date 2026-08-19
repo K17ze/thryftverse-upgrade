@@ -56,8 +56,16 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string; accessibilityLabel
   { value: 'Price: Low to High', label: 'Price: Low to High', accessibilityLabel: 'Sort by price low to high' },
   { value: 'Price: High to Low', label: 'Price: High to Low', accessibilityLabel: 'Sort by price high to low' },
   { value: 'Most liked', label: 'Most liked', accessibilityLabel: 'Sort by most liked items' },
-  { value: 'Ending soon', label: 'Ending soon', accessibilityLabel: 'Sort by ending soon' },
 ];
+
+// "Ending soon" only applies to auction listings — it is meaningless for
+// fixed-price browse/search, so it is excluded unless the filter context is
+// an auction category (mirrors BrowseScreen.getSortOptions).
+const AUCTION_SORT_OPTION: { value: SortOption; label: string; accessibilityLabel: string } = {
+  value: 'Ending soon',
+  label: 'Ending soon',
+  accessibilityLabel: 'Sort by ending soon',
+};
 
 const CONDITION_OPTIONS: Array<{ value: ConditionOption; label: string; accessibilityLabel: string }> = [
   { value: 'Any', label: 'Any', accessibilityLabel: 'Filter any condition' },
@@ -109,6 +117,14 @@ export default function FilterScreen() {
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
+
+  // "Ending soon" is only meaningful for auction listings. Include it solely
+  // when the filter context is an auction category (mirrors BrowseScreen).
+  const isAuctionContext = categoryId.toLowerCase().includes('auction');
+  const sortOptions = React.useMemo(
+    () => (isAuctionContext ? [...SORT_OPTIONS, AUCTION_SORT_OPTION] : SORT_OPTIONS),
+    [isAuctionContext],
+  );
 
   const [activeSort, setActiveSort] = useState<SortOption>(browseFilters.sort);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(browseFilters.brands);
@@ -164,19 +180,14 @@ export default function FilterScreen() {
     return { opacity };
   });
 
-  const MOCK_BRANDS = ['Nike', 'Adidas', 'Stussy', 'Carhartt', 'Arc\'teryx', 'Levi\'s', 'Off-White', 'Zara'];
-  const MOCK_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-
   const brandOptions = React.useMemo(() => {
-    const derived = Array.from(
+    return Array.from(
       new Set(
         listings
           .map((listing) => listing.brand?.trim())
           .filter((brand): brand is string => Boolean(brand)),
       ),
     );
-
-    return derived.length > 0 ? derived : MOCK_BRANDS;
   }, [listings]);
 
   const visibleBrandOptions = React.useMemo(() => {
@@ -188,15 +199,13 @@ export default function FilterScreen() {
   }, [brandOptions, showAllBrands]);
 
   const sizeOptions = React.useMemo(() => {
-    const derived = Array.from(
+    return Array.from(
       new Set(
         listings
           .map((listing) => listing.size?.trim())
           .filter((size): size is string => Boolean(size)),
       ),
     );
-
-    return derived.length > 0 ? derived : MOCK_SIZES;
   }, [listings]);
 
   const filterStatus = React.useMemo(
@@ -524,7 +533,7 @@ export default function FilterScreen() {
                 <Text style={styles.sectionHeading}>Sort By</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
                   <AppSegmentControl
-                    options={SORT_OPTIONS}
+                    options={sortOptions}
                     value={activeSort}
                     onChange={setActiveSort}
                     optionStyle={styles.chip}
@@ -552,21 +561,25 @@ export default function FilterScreen() {
                   ) : null}
                 </View>
                 <View style={styles.wrapContainer}>
-                  {visibleBrandOptions.map(b => {
-                    const isActive = selectedBrands.includes(b);
-                    return (
-                      <AppButton
-                        key={b}
-                        title={b}
-                        variant="secondary"
-                        size="sm"
-                        style={[styles.chip, isActive && styles.chipActive]}
-                        titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                        onPress={() => toggleBrand(b)}
-                        accessibilityLabel={`Toggle brand filter ${b}`}
-                      />
-                    );
-                  })}
+                  {visibleBrandOptions.length > 0 ? (
+                    visibleBrandOptions.map(b => {
+                      const isActive = selectedBrands.includes(b);
+                      return (
+                        <AppButton
+                          key={b}
+                          title={b}
+                          variant="secondary"
+                          size="sm"
+                          style={[styles.chip, isActive && styles.chipActive]}
+                          titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                          onPress={() => toggleBrand(b)}
+                          accessibilityLabel={`Toggle brand filter ${b}`}
+                        />
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptySectionText}>No brands in this category yet.</Text>
+                  )}
                 </View>
 
                 <View style={styles.sectionDivider} />
@@ -599,36 +612,40 @@ export default function FilterScreen() {
                 ) : null}
 
                 <View style={styles.wrapContainer}>
-                  {sizeOptions.map(s => {
-                    const isActive = selectedSizes.includes(s);
-                    const isMySize = mySizes.includes(s);
-                    return (
-                      <Pressable
-                        key={s}
-                        onLongPress={() => {
-                          toggleMySize(s);
-                          haptics.press();
-                          show(
-                            mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
-                            'success'
-                          );
-                        }}
-                        delayLongPress={400}
-                      >
-                        <AppButton
-                          title={s}
-                          icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
-                          iconContainerStyle={styles.chipIconWrap}
-                          variant="secondary"
-                          size="sm"
-                          style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
-                          titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                          onPress={() => toggleSize(s)}
-                          accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
-                        />
-                      </Pressable>
-                    );
-                  })}
+                  {sizeOptions.length > 0 ? (
+                    sizeOptions.map(s => {
+                      const isActive = selectedSizes.includes(s);
+                      const isMySize = mySizes.includes(s);
+                      return (
+                        <Pressable
+                          key={s}
+                          onLongPress={() => {
+                            toggleMySize(s);
+                            haptics.press();
+                            show(
+                              mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
+                              'success'
+                            );
+                          }}
+                          delayLongPress={400}
+                        >
+                          <AppButton
+                            title={s}
+                            icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
+                            iconContainerStyle={styles.chipIconWrap}
+                            variant="secondary"
+                            size="sm"
+                            style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
+                            titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                            onPress={() => toggleSize(s)}
+                            accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
+                          />
+                        </Pressable>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptySectionText}>No sizes in this category yet.</Text>
+                  )}
                 </View>
 
                 {/* Save current sizes as my sizes */}
@@ -1038,6 +1055,14 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     paddingHorizontal: Space.xl,
     gap: Space.sm,
+  },
+
+  emptySectionText: {
+    paddingHorizontal: Space.xl,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
 
   chip: {

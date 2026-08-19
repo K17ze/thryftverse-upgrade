@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
@@ -20,6 +20,7 @@ interface MyProfileIdentityHeroProps {
   username: string;
   bio?: string;
   location?: string;
+  website?: string | null;
   memberSince?: string;
   listingCount?: number;
   lookCount?: number;
@@ -48,6 +49,7 @@ export function MyProfileIdentityHero({
   username,
   bio,
   location,
+  website,
   memberSince,
   sellerTrust,
   emailVerified,
@@ -188,6 +190,22 @@ export function MyProfileIdentityHero({
 
         {location ? (
           <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
+        ) : null}
+
+        {/* Website — tappable link, matches ProfileHero */}
+        {website ? (
+          <Pressable
+            style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
+            onPress={() => {
+              let normalized = website.trim();
+              if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+              Linking.openURL(normalized).catch(() => {});
+            }}
+            accessibilityRole="link"
+            accessibilityLabel={`Open website ${website}`}
+          >
+            <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
+          </Pressable>
         ) : null}
 
         {/* Trust line — one row, no chips, no second trust surface */}
@@ -391,6 +409,15 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     marginBottom: Space.xs,
+  },
+  websiteLink: {
+    paddingVertical: 2,
+    marginBottom: Space.xs,
+  },
+  websiteText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
   },
 
   // Trust line — compact, no badge container

@@ -348,7 +348,14 @@ export default function PaymentsScreen({ navigation }: Props) {
           {/* Primary Payment Method Summary */}
           <View>
             {defaultMethod ? (
-              <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <AnimatedPressable
+                style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => handlePaymentMethodPress(defaultMethod)}
+                activeOpacity={0.8}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={`Manage ${defaultMethod.label}`}
+              >
                 <View style={styles.primaryCardHeader}>
                   <Text style={[styles.primaryCardLabel, { color: colors.textMuted }]}>PRIMARY METHOD</Text>
                   <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
@@ -368,17 +375,9 @@ export default function PaymentsScreen({ navigation }: Props) {
                     <Text style={styles.primaryCardTitle}>{defaultMethod.label}</Text>
                     <Text style={styles.primaryCardSub}>{defaultMethod.details ?? (defaultMethod.type === 'card' ? 'Card ending in ••••' : 'Bank account')}</Text>
                   </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </View>
-                <AnimatedPressable
-                  style={styles.primaryCardAction}
-                  onPress={() => handlePaymentMethodPress(defaultMethod)}
-                  activeOpacity={0.8}
-                  hapticFeedback="light"
-                >
-                  <Text style={[styles.primaryCardActionText, { color: colors.brand }]}>Manage</Text>
-                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-                </AnimatedPressable>
-              </View>
+              </AnimatedPressable>
             ) : (
               <View style={[styles.primaryCard, styles.primaryCardEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[styles.brandIconCircle, { backgroundColor: colors.surfaceAlt }]}>
@@ -579,18 +578,6 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
-  },
-  primaryCardAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: Space.md,
-    gap: Space.xs,
-  },
-  primaryCardActionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
   },
   primaryCardCta: {
     flexDirection: 'row',

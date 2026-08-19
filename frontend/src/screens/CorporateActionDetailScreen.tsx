@@ -262,93 +262,82 @@ export default function CorporateActionDetailScreen() {
 
         {/* Title (from backend if available) */}
         {fetchedAction && (
-          <View>
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
-            </View>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
           </View>
         )}
 
         {/* Description */}
-        <View>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About this event</Text>
-            <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
-              {description}
-            </Text>
-          </View>
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About this event</Text>
+          <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
+            {description}
+          </Text>
         </View>
 
         {/* Key dates */}
-        <View>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
-            <View style={styles.dateRow}>
-              <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Event date</Text>
-              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayDateLabel}</Text>
-            </View>
-            {displayRecordDate && (
-              <View style={styles.dateRow}>
-                <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Record date</Text>
-                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayRecordDate}</Text>
-              </View>
-            )}
-            {displayPaymentDate && (
-              <View style={styles.dateRow}>
-                <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Payment date</Text>
-                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayPaymentDate}</Text>
-              </View>
-            )}
-            {fetchedAction?.exDate && (
-              <View style={styles.dateRow}>
-                <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Ex-date</Text>
-                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{formatDate(fetchedAction.exDate)}</Text>
-              </View>
-            )}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
+          <View style={styles.dateRow}>
+            <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Event date</Text>
+            <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayDateLabel}</Text>
           </View>
+          {displayRecordDate && (
+            <View style={styles.dateRow}>
+              <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Record date</Text>
+              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayRecordDate}</Text>
+            </View>
+          )}
+          {displayPaymentDate && (
+            <View style={styles.dateRow}>
+              <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Payment date</Text>
+              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayPaymentDate}</Text>
+            </View>
+          )}
+          {fetchedAction?.exDate && (
+            <View style={styles.dateRow}>
+              <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Ex-date</Text>
+              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{formatDate(fetchedAction.exDate)}</Text>
+            </View>
+          )}
         </View>
 
         {/* Effect */}
-        <View>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
-            <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
-              {displayEffectLabel}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
+          <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
+            {displayEffectLabel}
+          </Text>
+          {displayAmountLabel && (
+            <Text style={[styles.amountLabel, { color: displayAmountLabel.startsWith('+') ? colors.success : displayAmountLabel.startsWith('−') ? colors.danger : colors.textPrimary }]}>
+              {displayAmountLabel}
             </Text>
-            {displayAmountLabel && (
-              <Text style={[styles.amountLabel, { color: displayAmountLabel.startsWith('+') ? colors.success : displayAmountLabel.startsWith('−') ? colors.danger : colors.textPrimary }]}>
-                {displayAmountLabel}
-              </Text>
-            )}
-            {fetchedAction?.totalValueGbpMinor !== null && fetchedAction?.totalValueGbpMinor !== undefined && (
-              <Text style={[styles.totalLabel, { color: colors.textMuted }]}>
-                Total: {formatAmount(fetchedAction.totalValueGbpMinor) ?? '—'}
-              </Text>
-            )}
-          </View>
+          )}
+          {fetchedAction?.totalValueGbpMinor !== null && fetchedAction?.totalValueGbpMinor !== undefined && (
+            <Text style={[styles.totalLabel, { color: colors.textMuted }]}>
+              Total: {formatAmount(fetchedAction.totalValueGbpMinor) ?? '—'}
+            </Text>
+          )}
         </View>
 
         {/* Status */}
-        <View>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
-            <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
-              {displayStatus === 'pending' && 'This event is pending and has not yet taken effect.'}
-              {displayStatus === 'announced' && 'This event has been announced and is awaiting the record date.'}
-              {displayStatus === 'effective' && 'This event is effective — it has been applied to your position.'}
-              {displayStatus === 'completed' && 'This event is completed.'}
-              {displayStatus === 'cancelled' && 'This event was cancelled and will not take effect.'}
-              {displayStatus === 'open' && 'This vote is open for participation.'}
-              {!['pending', 'announced', 'effective', 'completed', 'cancelled', 'open'].includes(displayStatus) && displayStatus}
-            </Text>
-          </View>
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
+          <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
+            {displayStatus === 'pending' && 'This event is pending and has not yet taken effect.'}
+            {displayStatus === 'announced' && 'This event has been announced and is awaiting the record date.'}
+            {displayStatus === 'effective' && 'This event is effective — it has been applied to your position.'}
+            {displayStatus === 'completed' && 'This event is completed.'}
+            {displayStatus === 'cancelled' && 'This event was cancelled and will not take effect.'}
+            {displayStatus === 'open' && 'This vote is open for participation.'}
+            {!['pending', 'announced', 'effective', 'completed', 'cancelled', 'open'].includes(displayStatus) && displayStatus}
+          </Text>
         </View>
 
         {/* Governance voting — flagship treatment with tally bars, quorum, voting power */}
         {isGovernanceAction && actionId && (
-          <View>
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.voteHeaderRow}>
+          <View style={styles.section}>
+            <View style={styles.voteHeaderRow}>
                 <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.textInverse} />
                 </View>
@@ -447,7 +436,6 @@ export default function CorporateActionDetailScreen() {
                 })}
               </View>
             </View>
-          </View>
         )}
       </ScrollView>
 
@@ -478,10 +466,10 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+  section: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: Space.md,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,

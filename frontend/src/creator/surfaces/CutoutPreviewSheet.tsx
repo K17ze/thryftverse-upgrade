@@ -33,7 +33,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Image as RNImage,
   Pressable,
   PanResponder,
@@ -66,7 +66,7 @@ import {
   type BrushStroke,
 } from '../core/cutout/CutoutService';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 // ── Brush colours ──────────────────────────────────────────────────
 // Green = keep (add to mask), red = erase (remove from mask).
@@ -210,6 +210,7 @@ export function CutoutPreviewSheet({
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [supported, setSupported] = useState<boolean | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -298,8 +299,8 @@ export function CutoutPreviewSheet({
     RNImage.getSize(
       imageUri,
       (w, h) => {
-        const maxW = SCREEN_W - Space.lg * 2;
-        const maxH = SCREEN_W * 0.5;
+        const maxW = screenWidth - Space.lg * 2;
+        const maxH = screenWidth * 0.5;
         const ratio = Math.min(maxW / w, maxH / h);
         setDisplaySize({ width: Math.floor(w * ratio), height: Math.floor(h * ratio) });
       },
@@ -415,7 +416,7 @@ export function CutoutPreviewSheet({
 
   const previewSize = displaySize.width > 0
     ? displaySize
-    : { width: SCREEN_W - Space.lg * 2, height: SCREEN_W * 0.4 };
+    : { width: screenWidth - Space.lg * 2, height: screenWidth * 0.4 };
 
   // ── Brush colour for the current mode ─────────────────────────────
   const currentBrushColor =

@@ -81,6 +81,7 @@ export default function InboxScreen() {
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
+  const markConversationsLoaded = useStore((state) => state.markConversationsLoaded);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [segment, setSegment] = useState<InboxSegment>('all');
@@ -122,12 +123,14 @@ export default function InboxScreen() {
       setSyncError((error as Error).message || 'Unable to load conversations.');
     } finally {
       setIsLoading(false);
+      markConversationsLoaded();
     }
   };
   useEffect(() => {
     void loadConversations();
   }, []);
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     setSyncError('');
     await refreshListings();
@@ -442,6 +445,7 @@ export default function InboxScreen() {
         lastMessage={item.lastMessage ?? ''}
         lastMessageTime={item.lastMessageTime}
         unread={!!item.unread}
+        unreadCount={item.unread ? item.messages.filter(m => m.sender !== 'me' && !m.isSystem).length : undefined}
         isPinned={!!item.isPinned}
         isMuted={isMuted}
         isGroup={isGroup}

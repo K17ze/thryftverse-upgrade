@@ -200,38 +200,34 @@ export default function BuyoutScreen() {
         {/* Title */}
         <Text style={[styles.title, { color: colors.textPrimary }]}>{asset.title}</Text>
 
-        {/* Position summary */}
-        <View style={[styles.positionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.positionRow}>
+        {/* Position summary — flat section with hairline rows */}
+        <View style={[styles.positionSection, { borderBottomColor: colors.borderSubtle }]}>
+          <View style={[styles.positionRow, { borderBottomColor: colors.borderSubtle }]}>
             <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Your units</Text>
             <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{sharesOwned} / {asset.totalUnits}</Text>
           </View>
-          <View style={[styles.positionRow, { borderColor: colors.border }]}>
+          <View style={[styles.positionRow, { borderBottomColor: colors.borderSubtle }]}>
             <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Ownership</Text>
             <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{ownershipPct.toFixed(1)}%</Text>
           </View>
-          <View style={styles.positionRow}>
+          <View style={styles.positionRowLast}>
             <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Remaining</Text>
             <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{remainingUnits} units</Text>
           </View>
         </View>
 
-        {/* Status message */}
+        {/* Status message — flat section */}
         {ownsAll ? (
-          <View style={[styles.statusCard, { backgroundColor: colors.successSubtle, borderColor: colors.successBorder }]}>
-            <View style={[styles.statusIconWrap, { backgroundColor: colors.successSubtle }]}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
-            </View>
+          <View style={[styles.statusSection, { borderBottomColor: colors.borderSubtle }]}>
+            <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>You own 100% of this item</Text>
             <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
               You already hold all units in this Co-Own. No buyout is needed.
             </Text>
           </View>
         ) : (
-          <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="cash-outline" size={28} color={colors.brand} />
-            </View>
+          <View style={[styles.statusSection, { borderBottomColor: colors.borderSubtle }]}>
+            <Ionicons name="cash-outline" size={28} color={colors.brand} />
             <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Make a buyout offer</Text>
             <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
               Submit an offer to acquire the remaining {remainingUnits} units from current holders. Holders will be notified and can accept or decline.
@@ -239,9 +235,9 @@ export default function BuyoutScreen() {
           </View>
         )}
 
-        {/* Buyout offer form */}
+        {/* Buyout offer form — flat section */}
         {!ownsAll && (
-          <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.formSection}>
             <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -326,12 +322,9 @@ const styles = StyleSheet.create({
     lineHeight: Type.title.lineHeight,
     marginBottom: Space.md,
   },
-  positionCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: 0,
-    marginBottom: Space.lg,
+  positionSection: {
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   positionRow: {
     flexDirection: 'row',
@@ -339,6 +332,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  positionRowLast: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.sm,
   },
   positionLabel: {
     fontSize: Type.body.size,
@@ -348,20 +347,11 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
-  statusCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+  statusSection: {
+    paddingVertical: Space.lg,
     gap: Space.sm,
     alignItems: 'center',
-  },
-  statusIconWrap: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
-    borderRadius: Radius.xxl + 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   statusTitle: {
     fontSize: Type.subtitle.size,
@@ -375,25 +365,8 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     textAlign: 'center',
   },
-  futureFeatures: {
-    gap: Space.xs,
-    marginTop: Space.sm,
-    alignSelf: 'stretch',
-  },
-  futureFeatureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  futureFeatureText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-  formCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.lg,
+  formSection: {
+    paddingVertical: Space.md,
   },
   formLabel: {
     fontSize: Type.caption.size,

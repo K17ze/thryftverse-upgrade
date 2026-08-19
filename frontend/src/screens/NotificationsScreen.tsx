@@ -18,9 +18,6 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
-import { AvatarRing } from '../components/chat/AvatarRing';
-import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BottomSheet } from '../components/BottomSheet';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -42,6 +39,13 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import {
+  SocialNotificationRow,
+  CommerceNotificationRow,
+  AuctionNotificationRow,
+  FinancialNotificationRow,
+  SystemNotificationRow,
+} from '../components/notifications';
 
 import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -77,6 +81,8 @@ type NotificationCard = {
   aggregatedCount?: number;
   /** Actor names for aggregated notifications (first few). */
   aggregatedActors?: string[];
+  /** V2 structured event — passed to role-specific row presenters. */
+  v2Event: NotificationEventV2;
 };
 
 type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
@@ -96,17 +102,6 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
 
 function filterLabelForKey(key: NotificationFilter): string {
   return OVERFLOW_FILTERS.find((f) => f.key === key)?.label ?? 'All';
-}
-
-function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const candidate = payload[key];
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate;
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -229,6 +224,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     aggregationKey: v2.aggregationKey,
     attention: v2.attention,
     objectRef: v2.objectRef,
+    v2Event: v2,
   };
 }
 
@@ -307,6 +303,10 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       aggregatedCount: count,
       aggregatedActors: uniqueActorNames.slice(0, 5),
       read: group.every((n) => n.read),
+      v2Event: {
+        ...primary.v2Event,
+        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null,
+      },
     });
   }
 
@@ -448,6 +448,7 @@ export default function NotificationsScreen() {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleRefresh = React.useCallback(async () => {
+    haptics.press();
     setIsRefreshing(true);
     try {
       const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
@@ -593,135 +594,98 @@ export default function NotificationsScreen() {
     [navigation, show]
   );
 
+  const renderNotificationRow = useCallback(
+    (item: NotificationCard) => {
+      const v2Event = item.v2Event;
+      const inAttention = item.requiresAction;
+      const onPress = () => handleOpenNotification(item);
+
+      switch (v2Event.semanticRole) {
+        case 'social':
+          return (
+            <SocialNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              aggregatedActors={item.aggregatedActors}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onActorPress={
+                item.actorUserId
+                  ? () => openProfile(navigation, item.actorUserId!, currentUser?.id)
+                  : undefined
+              }
+            />
+          );
+        case 'commerce':
+          return (
+            <CommerceNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+            />
+          );
+        case 'auction':
+          return (
+            <AuctionNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onAction={onPress}
+            />
+          );
+        case 'financial':
+          return (
+            <FinancialNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+            />
+          );
+        case 'system':
+        default:
+          return (
+            <SystemNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onAction={onPress}
+            />
+          );
+      }
+    },
+    [handleOpenNotification, navigation, currentUser?.id]
+  );
+
   const renderNotificationCard = useCallback(({ item }: { item: NotificationCard; index: number }) => {
-    const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
-    const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-    const actorHandle = item.actorUsername ?? actorUserId ?? null;
-    const visualUri = item.itemImage || item.actorAvatar || '';
-
     return (
-        <Swipeable
-          ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
-          renderRightActions={() => renderSwipeRightAction(item)}
-          renderLeftActions={() => renderSwipeLeftAction()}
-          onSwipeableRightOpen={() => {
-            void handleSwipeMarkRead(item);
-            swipeableRefs.current[item.id]?.close();
-          }}
-          onSwipeableLeftOpen={() => {
-            handleSwipeDismiss(item);
-            swipeableRefs.current[item.id]?.close();
-          }}
-          rightThreshold={80}
-          leftThreshold={80}
-          overshootRight={false}
-          overshootLeft={false}
-        >
-        <View
-          style={[
-            styles.notifCard,
-            item.attention === 'critical' && styles.notifCardCritical,
-            item.attention === 'action' && !item.read && styles.notifCardAction,
-          ]}
-        >
-          {item.attention === 'critical' ? <View style={styles.notifAccentCritical} /> : null}
-          {item.attention === 'action' && !item.read ? <View style={styles.notifAccentAction} /> : null}
-          {!item.read && item.attention !== 'critical' && item.attention !== 'action' ? <View style={styles.unreadDot} /> : null}
-          <AnimatedPressable
-            style={styles.notifMainTap}
-            activeOpacity={0.8}
-            onPress={() => handleOpenNotification(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
-          >
-            <View style={styles.notifImageWrap}>
-              <SharedTransitionView
-                style={styles.notifImageShared}
-                sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
-              >
-                <CachedImage
-                  uri={visualUri}
-                  style={styles.notifImage}
-                  contentFit="cover"
-                  emptyIcon="notifications-outline"
-                  emptyLabel={item.title || 'Notification'}
-                />
-              </SharedTransitionView>
-            </View>
-
-            <View style={styles.notifBody}>
-              {item.title ? (
-                <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-              ) : null}
-              <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={item.title ? 2 : 3}>
-                {item.body || item.text}
-              </Text>
-              <View style={styles.notifMetaRow}>
-                {item.aggregatedCount && item.aggregatedCount > 1 ? (
-                  <View style={styles.notifAggregatedRow}>
-                    {item.actorAvatar ? (
-                      <CachedImage
-                        uri={item.actorAvatar}
-                        style={styles.notifAggregatedAvatar}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={styles.notifAggregatedAvatarFallback}>
-                        <Ionicons name="person" size={10} color={colors.textSecondary} />
-                      </View>
-                    )}
-                    <View style={styles.notifAggregatedCountBadge}>
-                      <Text style={styles.notifAggregatedCountText}>
-                        +{item.aggregatedCount - 1}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-                <Text style={styles.notifTime}>{item.time}</Text>
-              </View>
-            </View>
-          </AnimatedPressable>
-
-          {actorUserId && actorHandle ? (
-            <View style={styles.notifActionRow}>
-              <AnimatedPressable
-                style={styles.notifActorChip}
-                onPress={() => openProfile(navigation, actorUserId, currentUser?.id)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${actorHandle} profile`}
-                accessibilityHint="Shows sender profile details"
-              >
-                <AvatarRing
-                  uri={item.actorAvatar ?? undefined}
-                  size={28}
-                  isUnread={!item.read}
-                />
-                <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={styles.notifMessageBtn}
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
-                    focusQuery: actorHandle,
-                    partnerUserId: actorUserId,
-                    itemId: listingId,
-                  })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Message @${actorHandle}`}
-                accessibilityHint="Opens chat with this user"
-              >
-                <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
-              </AnimatedPressable>
-            </View>
-          ) : null}
-        </View>
-        </Swipeable>
+      <Swipeable
+        ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
+        renderRightActions={() => renderSwipeRightAction(item)}
+        renderLeftActions={() => renderSwipeLeftAction()}
+        onSwipeableRightOpen={() => {
+          void handleSwipeMarkRead(item);
+          swipeableRefs.current[item.id]?.close();
+        }}
+        onSwipeableLeftOpen={() => {
+          handleSwipeDismiss(item);
+          swipeableRefs.current[item.id]?.close();
+        }}
+        rightThreshold={80}
+        leftThreshold={80}
+        overshootRight={false}
+        overshootLeft={false}
+      >
+        {renderNotificationRow(item)}
+      </Swipeable>
     );
   }, [
     swipeableRefs,
@@ -729,10 +693,7 @@ export default function NotificationsScreen() {
     renderSwipeLeftAction,
     handleSwipeMarkRead,
     handleSwipeDismiss,
-    handleOpenNotification,
-    navigation,
-    colors,
-    styles,
+    renderNotificationRow,
   ]);
 
   return (
@@ -859,7 +820,7 @@ export default function NotificationsScreen() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
         renderSectionHeader={({ section: { title, unreadCount, isAttention } }) => (
-          <View style={styles.sectionHeaderRow}>
+          <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
             {isAttention ? (
               <Ionicons name="alert-circle" size={14} color={colors.danger} style={styles.sectionAttentionIcon} />
             ) : null}
@@ -1119,6 +1080,12 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md + 4,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
+  },
+  sectionHeaderRowAttention: {
+    backgroundColor: `${colors.danger}0D`,
   },
   sectionAttentionIcon: {
     marginRight: -Space.xs / 2,
@@ -1131,6 +1098,7 @@ function createStyles(colors: ThemeColors) {
   },
   sectionTitleAttention: {
     color: colors.danger,
+    fontSize: Type.body.size,
   },
   sectionCountBadge: {
     minWidth: Space.md + 4,
@@ -1148,149 +1116,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.bold,
     color: colors.background,
-  },
-
-  notifCard: {
-    backgroundColor: colors.background,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  notifCardCritical: {
-    backgroundColor: `${colors.danger}0A`,
-  },
-  notifCardAction: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  notifAccentCritical: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: Stroke.emphasis,
-    backgroundColor: colors.danger,
-  },
-  notifAccentAction: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: Stroke.emphasis,
-    backgroundColor: colors.brand,
-  },
-  notifMainTap: {
-    padding: Space.md,
-    flexDirection: 'row',
-    gap: Space.sm + 2,
-    alignItems: 'center',
-  },
-
-  unreadDot: {
-    position: 'absolute',
-    top: Control.iconCompact,
-    left: Space.sm,
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
-
-  notifImageWrap: {
-    width: Space.xxl + Space.xs, height: Space.xxl + Space.xs, borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
-  notifImageShared: {
-    ...StyleSheet.absoluteFill,
-  },
-  notifImage: { width: '100%', height: '100%' },
-
-  notifBody: { flex: 1 },
-  notifTitle: {
-    color: colors.textSecondary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs / 2,
-  },
-  notifTitleUnread: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  notifText: {
-    color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight, marginBottom: Space.sm,
-  },
-  notifTextUnread: { color: colors.textPrimary },
-
-  notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  notifTime: { fontSize: Type.caption.size, color: colors.textMuted, fontFamily: Typography.family.regular },
-  notifAggregatedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  notifAggregatedAvatar: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-    marginRight: -(Space.sm - Space.xs / 2),
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-  },
-  notifAggregatedAvatarFallback: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-    marginRight: -(Space.sm - Space.xs / 2),
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifAggregatedCountBadge: {
-    minWidth: Space.md + 4,
-    height: Space.md + 4,
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xs + 2,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-  },
-  notifAggregatedCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
-    color: colors.background,
-  },
-  notifActionRow: {
-    marginTop: 0,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  notifActorChip: {
-    flex: 1,
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: 0,
-  },
-  notifActorText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
-  notifMessageBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   notificationSkeletonList: {

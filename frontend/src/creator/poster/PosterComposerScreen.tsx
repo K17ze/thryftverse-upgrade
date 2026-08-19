@@ -53,6 +53,7 @@ import {
   type ToolContext,
   type ToolGroup,
   type ToolDefinition,
+  getOverflowTools,
 } from '../core/toolRegistry';
 import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
 import type { AdjustNode } from '../tools/effects';
@@ -1197,9 +1198,13 @@ function PosterComposerInner() {
       mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker'),
     ];
 
-    // ── poster-photo-default: Text, Stickers, Music, Effects, Draw, Timeline ──
-    // Timeline is included so the user can explicitly expand it for timed
-    // overlays. For a single photo it is hidden by default (canvas dominant).
+    // ── poster-photo-default: Text, Stickers, Music, Effects ──
+    // 2026 flagship creator UX: ≤4 primary actions (Meta Edits / Instagram /
+    // CapCut pattern). Draw and Timeline move to overflow — Draw is a
+    // secondary creative tool, and Timeline is canvas-dominant for a single
+    // photo (auto-hidden). The primary layer is ruthlessly guarded against
+    // feature creep; the 4 most common creative actions are immediately
+    // visible, everything else is one tap away under "More".
     const photoDefault: ToolGroup = {
       context: 'poster-photo-default',
       primary: [
@@ -1207,13 +1212,20 @@ function PosterComposerInner() {
         mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker'),
         mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
+      ],
+      overflow: [
         mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool'),
         mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays'),
+        ...productOverflow,
+        ...addFrameOverflow,
+        ...sharedOverflow,
       ],
-      overflow: [...productOverflow, ...addFrameOverflow, ...sharedOverflow],
     };
 
-    // ── poster-video-default: Timeline, Text, Music, Effects, Stickers, More ──
+    // ── poster-video-default: Timeline, Text, Music, Effects ──
+    // Timeline stays primary for video (it is the job-to-be-done for video
+    // editing). Stickers move to overflow — less frequently needed for video
+    // than the core 4 of timeline + text + music + effects.
     const videoDefault: ToolGroup = {
       context: 'poster-video-default',
       primary: [
@@ -1221,16 +1233,21 @@ function PosterComposerInner() {
         mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker'),
         mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
-        mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker'),
       ],
-      overflow: [...productOverflow, ...addFrameOverflow, ...sharedOverflow],
+      overflow: [
+        mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker'),
+        ...productOverflow,
+        ...addFrameOverflow,
+        ...sharedOverflow,
+      ],
     };
 
-    // ── poster-media-selected: Replace, Crop, Auto, Adjust, Effects, More ──
-    // Edit Clip is conditionally included in overflow when the selected
-    // media is a video — it expands the timeline for drag-to-trim and
-    // volume controls. This replaces the legacy context toolbar which
-    // duplicated tools already available in the ContextToolRail.
+    // ── poster-media-selected: Replace, Crop, Auto, Adjust ──
+    // Effects moves to overflow — it's already accessible from the default
+    // rail, and the 4 most relevant media-editing actions (replace, crop,
+    // auto-enhance, adjust) are the job-to-be-done when a media layer is
+    // selected. Advanced tools (cutout, animation, speed curve, etc.) remain
+    // in overflow.
     const isVideoMedia = selectedLayer?.type === 'media' && selectedLayer.payload.mediaType === 'video';
     const editClipOverflow: ToolDefinition[] = isVideoMedia
       ? [mk('edit-clip', 'Edit Clip', 'film-outline', () => {
@@ -1248,9 +1265,9 @@ function PosterComposerInner() {
         mk('crop', 'Crop', 'crop-outline', handleCropAction, 'Crop', 'Opens in-canvas crop with direct pan, zoom, and precise handles'),
         mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap intelligent color correction'),
         mk('adjust', 'Adjust', 'color-wand-outline', handleAdjustAction, 'Adjust', 'Opens the adjust panel for exposure and color'),
-        mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
       ],
       overflow: [
+        mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
         ...editClipOverflow,
         mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'sparkles-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the background using on-device subject segmentation' : 'Crops the selected media to a rectangle'),
         mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); setShowKeyframes(true); }, 'Animation', 'Opens the keyframe editor for the selected layer'),
@@ -1363,6 +1380,17 @@ function PosterComposerInner() {
         return 'poster-sticker-selected';
     }
   }, [selectedLayer, hasVideoContent]);
+
+  // ── Dynamic overflow tools for the active context ──────────────────
+  // The overflow menu renders the actual overflow tools from the active
+  // context's ToolGroup (not a hardcoded list). This ensures tools moved
+  // to overflow (Draw, Timeline, Stickers, Effects, Cutout, Animation, etc.)
+  // are actually accessible. Context-only items that aren't in the tool
+  // groups (Accessibility, Help) are appended as persistent overflow items.
+  const activeOverflowTools = useMemo(
+    () => getOverflowTools(activeToolContext, toolGroups),
+    [activeToolContext, toolGroups],
+  );
 
   // ── Camera → Editor crossfade ─────────────────────────────────────
   // Per the human-flow reconstruction spec, the captured/selected media
@@ -1850,36 +1878,26 @@ function PosterComposerInner() {
       )}
 
       {/* ── Overflow menu (More) ─────────────────────────────────────── */}
-      {/* Advanced controls: Layers, Preview, Safe Zone, Templates, Drafts,
-          Settings. These are NOT first-run chrome per spec 09. */}
+      {/* Dynamic overflow: renders the actual overflow tools from the active
+          context's ToolGroup (Draw, Timeline, Cutout, Animation, etc.) plus
+          persistent items (Accessibility, Help) that aren't in the tool
+          groups. This replaces the former hardcoded list that ignored the
+          ContextToolRail's overflowTools array — tools moved to overflow are
+          now actually accessible. */}
       {showOverflow && (
         <View style={[styles.overflowContainer, { top: insets.top + 52 }]}>
           <View style={styles.overflowMenu}>
-            <OverflowItem
-              icon="layers-outline"
-              label="Layers"
-              onPress={() => { setShowLayers(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="eye-outline"
-              label="Preview"
-              onPress={() => { setShowPreview(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon={showSafeZone ? 'shield-checkmark-outline' : 'shield-outline'}
-              label={showSafeZone ? 'Safe Zone On' : 'Safe Zone'}
-              onPress={() => { setShowSafeZone((p) => !p); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="grid-outline"
-              label="Templates"
-              onPress={() => { setShowTemplates(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="document-text-outline"
-              label="Drafts"
-              onPress={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
-            />
+            {/* Dynamic context overflow tools */}
+            {activeOverflowTools.map((tool) => (
+              <OverflowItem
+                key={tool.id}
+                icon={tool.icon}
+                label={tool.label}
+                onPress={() => { tool.onPress(); setShowOverflow(false); }}
+              />
+            ))}
+            {/* Persistent items not in the tool groups */}
+            <View style={styles.overflowDivider} />
             <OverflowItem
               icon="accessibility-outline"
               label="Accessibility Move"
@@ -1889,12 +1907,6 @@ function PosterComposerInner() {
               icon="accessibility-outline"
               label="Accessibility Arrange"
               onPress={() => { setShowA11yZOrder(true); setShowOverflow(false); }}
-            />
-            <View style={styles.overflowDivider} />
-            <OverflowItem
-              icon="settings-outline"
-              label="Settings"
-              onPress={() => { setShowSettings(true); setShowOverflow(false); }}
             />
             <OverflowItem
               icon="help-circle-outline"

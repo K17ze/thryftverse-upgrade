@@ -48,10 +48,9 @@ export const linking: LinkingOptions<RootStackParamList> = {
         screens: {
           Home: 'home',
           Explore: 'explore',
-          Create: undefined, // Create tab is not deep-linkable (modal action)
           Inbox: 'inbox',
           Profile: 'me',
-        } satisfies Record<keyof TabParamList, string | undefined>,
+        } satisfies Partial<Record<keyof TabParamList, string>>,
       },
 
       // Marketplace / product surfaces

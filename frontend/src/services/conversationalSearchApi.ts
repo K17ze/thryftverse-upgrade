@@ -59,8 +59,6 @@ export interface ChatMessage {
   suggestions?: string[];
   /** Filters extracted from the user query that produced this assistant turn. */
   filterResults?: SearchFilters;
-  /** Estimated match count for the extracted filters (mock heuristic). */
-  estimatedMatchCount?: number;
   /** Honest flag — true while this message comes from mock logic. */
   isDemo: boolean;
 }
@@ -315,25 +313,6 @@ export function summariseFilters(filters: SearchFilters): string {
   return parts.length ? parts.join('  ·  ') : 'No specific keywords matched';
 }
 
-/**
- * Mock heuristic for an estimated match count. This is a deterministic
- * function of how many filters were extracted — it is NOT a real catalogue
- * query. The UI presents it honestly alongside the demo indicator.
- */
-function estimateMatchCount(filters: SearchFilters): number {
-  let base = 120;
-  if (filters.brands?.length) base -= 18 * filters.brands.length;
-  if (filters.categories?.length) base -= 14 * filters.categories.length;
-  if (filters.sizes?.length) base -= 22 * filters.sizes.length;
-  if (filters.conditions?.length) base -= 10 * filters.conditions.length;
-  if (filters.colors?.length) base -= 8 * filters.colors.length;
-  if (filters.styles?.length) base -= 12 * filters.styles.length;
-  if (filters.priceRange?.max !== undefined) base -= 16;
-  if (filters.priceRange?.min !== undefined) base -= 8;
-  if (filters.sustainableOnly) base -= 20;
-  return Math.max(3, base);
-}
-
 function buildRefinementSuggestions(filters: SearchFilters): string[] {
   const suggestions: string[] = [];
   if (filters.priceRange?.max === undefined) {
@@ -352,12 +331,12 @@ function buildRefinementSuggestions(filters: SearchFilters): string[] {
   return suggestions.slice(0, 4);
 }
 
-function buildAssistantContent(filters: SearchFilters, matchCount: number): string {
+function buildAssistantContent(filters: SearchFilters): string {
   const summary = summariseFilters(filters);
   if (summary === 'No specific keywords matched') {
     return "I couldn't pick out specific keywords from that. Try describing the item, brand, size, or price range — for example \"vintage Levi's denim under £50\".";
   }
-  return `I matched these keywords:\n${summary}\n\nBased on those, I found around ${matchCount} items. Tap "View results" to see them, or refine below.`;
+  return `I matched these keywords:\n${summary}\n\nTap "View results" to see matches, or refine below.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -396,15 +375,13 @@ export async function startConversation(query: string): Promise<SearchConversati
   };
 
   const filters = extractFilters(query);
-  const matchCount = estimateMatchCount(filters);
   const assistantMessage: ChatMessage = {
     id: generateId('msg'),
     role: 'assistant',
-    content: buildAssistantContent(filters, matchCount),
+    content: buildAssistantContent(filters),
     timestamp: nowIso(),
     suggestions: buildRefinementSuggestions(filters),
     filterResults: filters,
-    estimatedMatchCount: matchCount,
     isDemo: true,
   };
 
@@ -472,15 +449,13 @@ export async function continueConversation(
 
   merged.sustainableOnly = newFilters.sustainableOnly ?? priorFilters?.sustainableOnly ?? false;
 
-  const matchCount = estimateMatchCount(merged);
   const assistantMessage: ChatMessage = {
     id: generateId('msg'),
     role: 'assistant',
-    content: buildAssistantContent(merged, matchCount),
+    content: buildAssistantContent(merged),
     timestamp: nowIso(),
     suggestions: buildRefinementSuggestions(merged),
     filterResults: merged,
-    estimatedMatchCount: matchCount,
     isDemo: true,
   };
   conversation.messages.push(assistantMessage);

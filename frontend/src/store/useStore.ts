@@ -453,6 +453,8 @@ interface StoreState {
 
   // Conversations Inbox
   conversations: Conversation[];
+  conversationsLoaded: boolean;
+  markConversationsLoaded: () => void;
   availableChatBots: ChatBot[];
   upsertConversation: (conversation: Conversation) => void;
   markConversationRead: (id: string) => void;
@@ -1275,6 +1277,8 @@ export const useStore = create<StoreState>()(
   clearSellDraft: () => set({ sellDraft: {} }),
 
   conversations: ENABLE_RUNTIME_MOCKS ? MOCK_CONVERSATIONS : [],
+  conversationsLoaded: ENABLE_RUNTIME_MOCKS,
+  markConversationsLoaded: () => set({ conversationsLoaded: true }),
   availableChatBots: ENABLE_RUNTIME_MOCKS ? MOCK_CHAT_BOTS : [],
   upsertConversation: (conversation) =>
     set((state) => {

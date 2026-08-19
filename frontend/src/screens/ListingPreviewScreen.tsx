@@ -112,15 +112,6 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
             >
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
-              onPress={handleBack}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit"
-            >
-              <Text style={styles.editText}>Edit</Text>
-            </Pressable>
           </View>
 
           {/* PREVIEW indicator */}
@@ -324,11 +315,6 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  editText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
   },
   previewBadge: {
     position: 'absolute',

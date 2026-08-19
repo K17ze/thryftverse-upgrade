@@ -16,6 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
@@ -307,28 +308,19 @@ export default function MessageRequestsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.screenRoot}>
-      <View style={styles.compactHeader}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          scaleValue={0.92}
-          hapticFeedback="light"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-          style={styles.backBtn}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Message requests</Text>
-          <Text style={styles.headerSubtitle}>
-            {requestConversations.length > 0
-              ? `${requestConversations.length} pending · Accept to chat`
-              : "People you don't follow"}
-          </Text>
-        </View>
-        <View style={styles.backBtn} />
-      </View>
+      <ScreenHeader
+        title="Message requests"
+        subtitle={
+          requestConversations.length > 0
+            ? `${requestConversations.length} pending · Accept to chat`
+            : "People you don't follow"
+        }
+        onBack={() => navigation.goBack()}
+        style={{
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      />
       {requestConversations.length === 0 ? (
         <EmptyState
           icon="mail-outline"
@@ -400,37 +392,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       backgroundColor: colors.background,
     },
-    compactHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    backBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerTitleWrap: {
-      flex: 1,
-      alignItems: 'center',
-      gap: Space.xs / 2,
-    },
-    headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.title.fontFamily,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    headerSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
@@ -462,11 +423,10 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.md,
-      padding: Space.sm,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      paddingVertical: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: Space.sm,
     },
     listingThumb: {
       width: Space.xl + Space.xs + 4,

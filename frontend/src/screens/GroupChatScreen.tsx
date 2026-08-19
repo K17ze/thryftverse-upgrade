@@ -45,6 +45,7 @@ import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { SuggestedRepliesBar } from '../components/chat/SuggestedRepliesBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Caption, Body, BodyEmphasis, Meta } from '../components/ui/Text';
+import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
 
 import {
   deployAgent,
@@ -325,12 +326,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         )}
 
         {loadState === 'loading' && (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="small" color={colors.textMuted} />
-            <Caption color={colors.textMuted} style={styles.stateCaption}>
-              Loading conversation…
-            </Caption>
-          </View>
+          <SkeletonChatLoader count={6} />
         )}
 
         {loadState === 'error' && (

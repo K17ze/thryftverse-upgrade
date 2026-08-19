@@ -80,7 +80,12 @@ function AuctionCardBase({
 
   return (
     <AnimatedPressable
-      style={styles.container}
+      style={[
+        styles.container,
+        viewerState === 'outbid' && styles.containerOutbid,
+        viewerState === 'leading' && styles.containerLeading,
+        viewerState === 'won' && styles.containerWon,
+      ]}
       onPress={onPress}
       activeOpacity={0.92}
       disableAnimation={false}
@@ -250,14 +255,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: 0,
   },
+  // State-based left accent — creates asymmetry based on viewer's relationship
+  // to the auction. Anti-AI-slop: breaks the symmetrical card pattern.
+  containerOutbid: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.danger,
+    marginLeft: Space.md - 3,
+  },
+  containerLeading: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success,
+    marginLeft: Space.md - 3,
+  },
+  containerWon: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success,
+    marginLeft: Space.md - 3,
+  },
   imageWrap: {
     position: 'relative',
   },
   imageContainer: {
     width: '100%',
     height: 172,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
   },
   image: {
     width: '100%',
@@ -341,6 +361,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   body: {
     padding: Space.md,
     paddingBottom: Space.md + Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   topRow: {
     flexDirection: 'row',

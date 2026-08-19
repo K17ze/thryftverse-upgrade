@@ -296,9 +296,9 @@ export function ProfileHero({
             </View>
           ) : null}
 
-          {/* Trust signal chips removed — the trust line above shows rating/sold/joined,
-              and SellerReputationCard below shows the full metric breakdown (response
-              time, dispatch time, response rate). Chips here duplicated both. */}
+          {/* Trust line is the sole trust surface above the tab rail.
+              Rating, sold count, and join date are shown here.
+              Detailed metrics live in the Reviews tab. */}
         </View>
 
         {/* Actions — flat 11pt radius, restrained, content-first */}

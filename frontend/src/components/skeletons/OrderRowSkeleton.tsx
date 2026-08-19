@@ -14,9 +14,9 @@ export function OrderRowSkeleton({ count = 4 }: Props) {
         <View key={i} style={styles.row}>
           <SkeletonLoader width={64} height={64} borderRadius={Radius.md} />
           <View style={styles.textCol}>
-            <SkeletonLoader width="70%" height={14} borderRadius={7} />
-            <SkeletonLoader width="45%" height={10} borderRadius={5} style={{ marginTop: Space.sm }} />
-            <SkeletonLoader width="30%" height={10} borderRadius={5} style={{ marginTop: 6 }} />
+            <SkeletonLoader width="70%" height={14} borderRadius={Radius.md} />
+            <SkeletonLoader width="45%" height={10} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+            <SkeletonLoader width="30%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
           </View>
           <SkeletonLoader width={56} height={24} borderRadius={Radius.sm} />
         </View>

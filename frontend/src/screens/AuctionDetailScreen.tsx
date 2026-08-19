@@ -843,6 +843,7 @@ export default function AuctionDetailScreen() {
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
+          showThumbnailStrip={auctionMediaItems.length > 1}
           heightFraction={isCompact ? 0.54 : 0.58}
           initialIndex={fullscreenMediaIndex}
           onActiveIndexChange={setFullscreenMediaIndex}

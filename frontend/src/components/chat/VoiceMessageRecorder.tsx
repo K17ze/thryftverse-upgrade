@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,29 +11,19 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  withSpring,
   cancelAnimation,
-  useDerivedValue,
-  interpolate,
-  Extrapolation,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-import { useHaptic } from '../../hooks/useHaptic';
-import { HapticPatterns } from '../../utils/hapticPatterns';
-import { makeStableId } from '../../utils/createStableId';
 
 export interface VoiceMessageRecorderProps {
-  onSend: (uri: string, durationMs: number) => void;
+  onSend?: (uri: string, durationMs: number) => void;
   onCancel?: () => void;
   onRecordingChange?: (isRecording: boolean) => void;
   disabled?: boolean;
 }
 
-const CANCEL_THRESHOLD = 80;
-const MIN_DURATION_MS = 800;
 const BAR_COUNT = 5;
 const BAR_MAX_HEIGHT = 28;
 const BAR_MIN_HEIGHT = 6;
@@ -163,135 +153,31 @@ const createIndicatorStyles = (colors: any) =>
     },
   });
 
-export function VoiceMessageRecorder({
-  onSend,
-  onCancel,
-  onRecordingChange,
-  disabled = false,
-}: VoiceMessageRecorderProps) {
+/**
+ * VoiceMessageRecorder — honestly disabled.
+ *
+ * Real audio recording requires an expo-av integration that is not wired up
+ * in this build. Per AGENTS.md §11 (Truthful UI) we never expose a control
+ * that produces fake audio — so the mic renders as a visibly disabled,
+ * non-interactive button instead of a working recorder that emits a
+ * fabricated `voice://` URI.
+ */
+export function VoiceMessageRecorder(_props: VoiceMessageRecorderProps) {
   const { colors } = useAppTheme();
-  const haptic = useHaptic();
-  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const isRecording = useSharedValue(false);
-  const dragX = useSharedValue(0);
-  const micScale = useSharedValue(1);
-  const startTimeRef = useRef(0);
-  const sentRef = useRef(false);
-  const recordingChangeRef = useRef(onRecordingChange);
-  recordingChangeRef.current = onRecordingChange;
-
-  const isCancelled = useDerivedValue(() => dragX.value <= -CANCEL_THRESHOLD);
-
-  const notifyRecordingChange = useCallback((recording: boolean) => {
-    recordingChangeRef.current?.(recording);
-  }, []);
-
-  const startRecording = useCallback(() => {
-    if (disabled) return;
-    isRecording.value = true;
-    sentRef.current = false;
-    startTimeRef.current = Date.now();
-    dragX.value = 0;
-    micScale.value = withSpring(1.12, spring.press);
-    HapticPatterns.longPress();
-    notifyRecordingChange(true);
-  }, [disabled, isRecording, dragX, micScale, spring, notifyRecordingChange]);
-
-  const finishRecording = useCallback(() => {
-    if (sentRef.current) return;
-    sentRef.current = true;
-    isRecording.value = false;
-    micScale.value = withSpring(1, spring.press);
-    dragX.value = 0;
-    notifyRecordingChange(false);
-
-    const duration = Date.now() - startTimeRef.current;
-    haptic.success();
-
-    if (duration < MIN_DURATION_MS) {
-      onCancel?.();
-      return;
-    }
-
-    const uri = `voice://${makeStableId('msg')}`;
-    onSend(uri, duration);
-  }, [isRecording, micScale, dragX, spring, haptic, onCancel, onSend, notifyRecordingChange]);
-
-  const cancelRecording = useCallback(() => {
-    if (sentRef.current) return;
-    sentRef.current = true;
-    isRecording.value = false;
-    micScale.value = withSpring(1, spring.press);
-    dragX.value = 0;
-    haptic.warning();
-    notifyRecordingChange(false);
-    onCancel?.();
-  }, [isRecording, micScale, dragX, spring, haptic, onCancel, notifyRecordingChange]);
-
-  const panGesture = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .onUpdate((e) => {
-          if (e.translationX < 0) {
-            dragX.value = e.translationX;
-          }
-        })
-        .onEnd(() => {
-          if (dragX.value <= -CANCEL_THRESHOLD) {
-            cancelRecording();
-          } else {
-            dragX.value = withSpring(0, spring.press);
-          }
-        }),
-    [dragX, cancelRecording, spring],
-  );
-
-  const pressGesture = React.useMemo(
-    () =>
-      Gesture.LongPress()
-        .minDuration(180)
-        .runOnJS(true)
-        .onStart(() => {
-          startRecording();
-        })
-        .onFinalize(() => {
-          if (isRecording.value && !sentRef.current) {
-            if (isCancelled.value) {
-              cancelRecording();
-            } else {
-              finishRecording();
-            }
-          }
-        }),
-    [startRecording, finishRecording, cancelRecording, isRecording, isCancelled],
-  );
-
-  const composed = React.useMemo(
-    () => Gesture.Race(panGesture, pressGesture),
-    [panGesture, pressGesture],
-  );
-
-  const micAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: micScale.value }],
-  }));
-
   return (
-    <GestureDetector gesture={composed}>
-      <Reanimated.View
-        style={styles.container}
-        accessibilityLabel="Hold to record voice message, slide left to cancel"
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        accessibilityHint="Press and hold to record, release to send, slide left to cancel"
-      >
-        <Reanimated.View style={[styles.micBtn, micAnimStyle]}>
-          <Ionicons name="mic" size={24} color={colors.textInverse} />
-        </Reanimated.View>
-      </Reanimated.View>
-    </GestureDetector>
+    <View
+      style={styles.container}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: true }}
+      accessibilityLabel="Voice messages are not available"
+      accessibilityHint="Audio recording is not supported in this build"
+    >
+      <View style={styles.micBtn}>
+        <Ionicons name="mic-off" size={22} color={colors.textMuted} />
+      </View>
+    </View>
   );
 }
 
@@ -303,12 +189,13 @@ const createStyles = (colors: any) =>
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.full,
+      opacity: 0.5,
     },
     micBtn: {
       width: 44,
       height: 44,
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
     },

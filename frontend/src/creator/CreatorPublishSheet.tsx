@@ -51,6 +51,55 @@ import {
 // foreground `mediaUploadPipeline`.
 const USE_UPLOAD_MANAGER = true;
 
+// ── Caption hashtag suggestions ────────────────────────────────────
+// Curated, Thryftverse-relevant hashtags surfaced when the user types
+// "#" in the caption input. Filtered by the fragment after "#". Tap to
+// complete the hashtag inline. This mirrors the flagship pattern from
+// TikTok/Instagram where typing "#" surfaces relevant suggestions.
+const CAPTION_HASHTAG_SUGGESTIONS: string[] = [
+  'thryftverse', 'thrift', 'thrifting', 'vintage', 'vintagefashion',
+  'secondhand', 'secondhandfashion', 'sustainablefashion', 'thrifter',
+  'thriftfind', 'thrifted', 'preloved', 'resale', 'slowfashion',
+  'y2k', 'retro', 'antique', 'handmade', 'smallbusiness',
+  'streetwear', 'aesthetic', 'ootd', 'fashionfind', 'style',
+  'upcycle', 'curated', 'archive', 'designer', 'rarefind',
+  'look', 'poster', 'fitcheck', 'thrift haul', 'garagesale',
+];
+
+/**
+ * Extract the hashtag fragment currently being typed (the text after
+ * the last "#" that has no intervening whitespace). Returns null if no
+ * active hashtag fragment is found.
+ */
+function getActiveHashtagFragment(caption: string): string | null {
+  const lastHash = caption.lastIndexOf('#');
+  if (lastHash === -1) return null;
+  const afterHash = caption.slice(lastHash + 1);
+  // If there's whitespace after the #, the hashtag is "closed" — no
+  // active fragment to suggest for.
+  if (/\s/.test(afterHash)) return null;
+  return afterHash;
+}
+
+/**
+ * Filter suggestions by the active fragment, case-insensitive, excluding
+ * hashtags already present elsewhere in the caption.
+ */
+function filterHashtagSuggestions(fragment: string, caption: string): string[] {
+  const lower = fragment.toLowerCase();
+  // Collect hashtags already in the caption (closed ones) to dedupe.
+  const existing = new Set<string>();
+  const re = /#(\w+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(caption)) !== null) {
+    existing.add(m[1].toLowerCase());
+  }
+  return CAPTION_HASHTAG_SUGGESTIONS.filter((tag) => {
+    if (existing.has(tag.toLowerCase())) return false;
+    return tag.toLowerCase().startsWith(lower);
+  }).slice(0, 8);
+}
+
 export interface CreatorPublishSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -241,6 +290,21 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     publishGuardRef.current.reset();
     onClose();
   }, [stage, haptic, onClose, progressWidth]);
+
+  // Cancel an in-progress upload: abort all active jobs for this document
+  // and return to the review stage so the user can adjust and retry.
+  const handleCancelUpload = useCallback(() => {
+    haptic.medium();
+    // Cancel every job the manager holds for this project.
+    for (const job of uploadManager.jobs) {
+      if (job.status === 'queued' || job.status === 'initiating' || job.status === 'uploading') {
+        uploadManager.cancelJob(job.id);
+      }
+    }
+    progressWidth.value = 0;
+    publishGuardRef.current.reset();
+    setStage('review');
+  }, [haptic, uploadManager, progressWidth]);
 
   const handlePublish = useCallback(async () => {
     // Prevent duplicate submissions
@@ -488,6 +552,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
             stage={stage}
             uploadedBytes={uploadManager.uploadedBytes}
             totalBytes={uploadManager.totalBytes}
+            onCancel={stage === 'uploading' ? handleCancelUpload : undefined}
           />
         )}
 
@@ -568,6 +633,7 @@ interface SharingStateViewProps {
   stage: 'uploading' | 'publishing';
   uploadedBytes: number;
   totalBytes: number;
+  onCancel?: () => void;
 }
 
 function SharingStateView({
@@ -577,9 +643,11 @@ function SharingStateView({
   stage,
   uploadedBytes,
   totalBytes,
+  onCancel,
 }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showByteProgress = stage === 'uploading' && totalBytes > 0;
+  const showCancel = stage === 'uploading' && !!onCancel;
   return (
     <View style={localStyles.centerState}>
       <Text style={localStyles.centerStateTitle}>
@@ -599,6 +667,19 @@ function SharingStateView({
         <Text style={localStyles.progressByteLabel}>
           {formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}
         </Text>
+      )}
+      {showCancel && (
+        <Pressable
+          onPress={onCancel}
+          style={localStyles.cancelUploadBtn}
+          accessibilityLabel="Cancel upload"
+          accessibilityHint="Cancels the in-progress upload and returns to review"
+          accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
+          <Text style={localStyles.cancelUploadText}>Cancel</Text>
+        </Pressable>
       )}
     </View>
   );
@@ -1027,6 +1108,43 @@ function PublishReview({
         />
         <Text style={styles.captionCount}>{document.metadata.caption.length}/500</Text>
       </View>
+      {/* Hashtag suggestions — surfaced when typing "#" */}
+      {(() => {
+        const fragment = getActiveHashtagFragment(document.metadata.caption);
+        if (fragment === null) return null;
+        const suggestions = filterHashtagSuggestions(fragment, document.metadata.caption);
+        if (suggestions.length === 0) return null;
+        return (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.hashtagSuggestionScroll}
+            contentContainerStyle={styles.hashtagSuggestionContainer}
+            keyboardShouldPersistTaps="handled"
+          >
+            {suggestions.map((tag) => (
+              <Pressable
+                key={tag}
+                onPress={() => {
+                  haptic.light();
+                  const caption = document.metadata.caption;
+                  const lastHash = caption.lastIndexOf('#');
+                  const before = caption.slice(0, lastHash + 1);
+                  const after = caption.slice(lastHash + 1 + fragment.length);
+                  updateMetadata({ caption: `${before}${tag} ${after}` });
+                }}
+                style={styles.hashtagChip}
+                accessibilityLabel={`Insert hashtag ${tag}`}
+                accessibilityHint="Completes the hashtag in your caption"
+                accessibilityRole="button"
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              >
+                <Text style={styles.hashtagChipText}>#{tag}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        );
+      })()}
       {/* Inline error message with spring appearance */}
       {captionError !== '' && (
         <Reanimated.View style={[styles.captionErrorWrap, errorStyle]}>
@@ -1293,6 +1411,28 @@ function createStyles(colors: ThemeColorsType) {
       fontSize: Type.caption.size,
       color: colors.danger,
     },
+    // ── Hashtag suggestions ──
+    hashtagSuggestionScroll: {
+      marginTop: Space.xs,
+      marginBottom: Space.xs,
+    },
+    hashtagSuggestionContainer: {
+      gap: Space.xs,
+      paddingRight: Space.md,
+    },
+    hashtagChip: {
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      borderRadius: Radius.full,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+    },
+    hashtagChipText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.caption.size,
+      color: colors.brand,
+    },
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1499,6 +1639,20 @@ function createStyles(colors: ThemeColorsType) {
       fontSize: Type.meta.size,
       color: colors.textMuted,
       marginTop: Space.xs,
+    },
+    cancelUploadBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: Space.md,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.md,
+      alignSelf: 'center',
+    },
+    cancelUploadText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.caption.size,
+      color: colors.textSecondary,
     },
     // ── Error state ──
     errorCircle: {

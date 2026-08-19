@@ -8,7 +8,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
@@ -329,7 +329,8 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   return (
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
@@ -364,8 +365,6 @@ function baseLayer(id: string, zIndex: number): Omit<CreatorLayer, 'type' | 'pay
 // ── Media Picker ───────────────────────────────────────────────────
 
 const GRID_COLUMNS = 3;
-const { width: SCREEN_W } = Dimensions.get('window');
-const THUMB_SIZE = Math.floor((SCREEN_W - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
 
 // HSL → HEX converter for the spectrum color picker
 function hslToHex(h: number, s: number, l: number): string {
@@ -561,7 +560,8 @@ function PermissionDeniedState({
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
   const [status, requestPermission] = MediaLibrary.usePermissions();
@@ -1269,7 +1269,8 @@ type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const currentUserId = useStore((state) => state.currentUser?.id);
   const savedProductIds = useStore((state) => state.savedProducts);
   const wishlistIds = useStore((state) => state.wishlist);
@@ -1598,7 +1599,8 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const currentUserId = useStore((state) => state.currentUser?.id);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
@@ -1713,7 +1715,8 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [query, setQuery] = useState('');
   const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1881,7 +1884,8 @@ const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number;
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'text';
   const existingPayload = editingLayer?.type === 'text' ? editingLayer.payload : null;
 
@@ -2022,7 +2026,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   const { locationX } = e.nativeEvent;
                   // Approximate hue from x position (0..width → 0..360°)
                   // width is approximate; the layout fills the row
-                  const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                  const ratio = Math.max(0, Math.min(1, locationX / (screenWidth - Space.md * 2 - 4)));
                   const hue = ratio * 360;
                   const hex = hslToHex(hue, 80, 55);
                   setTextColor(hex);
@@ -2209,7 +2213,8 @@ function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): a
 function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'draw';
   const existingStrokes: DrawStroke[] = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
 
@@ -2453,7 +2458,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     style={styles.spectrumOverlay}
                     onPress={(e) => {
                       const { locationX } = e.nativeEvent;
-                      const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                      const ratio = Math.max(0, Math.min(1, locationX / (screenWidth - Space.md * 2 - 4)));
                       const hue = ratio * 360;
                       setActiveColor(hslToHex(hue, 80, 55));
                     }}
@@ -2560,7 +2565,8 @@ interface GifResult {
 function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('trending');
   const [results, setResults] = useState<GifResult[]>([]);
@@ -2740,7 +2746,8 @@ interface MusicTrack {
 function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MusicTrack[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -2913,7 +2920,8 @@ const QUIZ_EMOJIS = ['🎯', '🔥', '💡', '❓', '✅', '⭐', '🎨', '👍'
 function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'quiz';
   const existing = editingLayer?.type === 'quiz' ? editingLayer.payload : null;
 
@@ -3111,7 +3119,8 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'question';
   const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
 
@@ -3218,7 +3227,8 @@ const SLIDER_EMOJIS = ['😍', '🔥', '💯', '😂', '🤔', '👍', '❤️',
 function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'emojiSlider';
   const existing = editingLayer?.type === 'emojiSlider' ? editingLayer.payload : null;
 
@@ -3341,7 +3351,8 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
 function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'countdown';
   const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
 
@@ -3472,7 +3483,8 @@ const SHAPE_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C
 function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [activeColor, setActiveColor] = useState('#ffffff');
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
     haptic.selection();
@@ -3551,7 +3563,8 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
   const [timerMs, setTimerMs] = useState<number | null>(null);
@@ -3790,7 +3803,8 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = [
 function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('interactive');
 
@@ -3921,7 +3935,8 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'link';
   const existingPayload = editingLayer?.type === 'link' ? editingLayer.payload : null;
 
@@ -4010,7 +4025,8 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'location';
   const existingPayload = editingLayer?.type === 'location' ? editingLayer.payload : null;
 
@@ -4068,7 +4084,8 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
 function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'hashtag';
   const existingPayload = editingLayer?.type === 'hashtag' ? editingLayer.payload : null;
 
@@ -4131,7 +4148,8 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
 function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'time';
   const existingPayload = editingLayer?.type === 'time' ? editingLayer.payload : null;
 
@@ -4204,7 +4222,8 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'weather';
   const existingPayload = editingLayer?.type === 'weather' ? editingLayer.payload : null;
 
@@ -4324,7 +4343,8 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
 
 // ── Styles ─────────────────────────────────────────────────────────
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
+  const THUMB_SIZE = Math.floor((screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
   return StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
   title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary },

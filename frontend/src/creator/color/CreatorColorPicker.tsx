@@ -44,7 +44,7 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,10 +78,7 @@ import type {
   ProjectPaletteEntry,
 } from './ColorTypes';
 
-// ── Constants ────────────────────────────────────────────────────────
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SV_PLANE_SIZE = Math.min(SCREEN_WIDTH - Space.md * 2, 280);
-const SLIDER_WIDTH = SV_PLANE_SIZE;
+
 
 // ── Props ────────────────────────────────────────────────────────────
 export interface CreatorColorPickerProps {
@@ -122,6 +119,9 @@ export function CreatorColorPicker({
 }: CreatorColorPickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { width: screenWidth } = useWindowDimensions();
+  const SV_PLANE_SIZE = Math.min(screenWidth - Space.md * 2, 280);
+  const SLIDER_WIDTH = SV_PLANE_SIZE;
   const styles = usePickerStyles(colors);
 
   const [isExpanded, setIsExpanded] = useState(mode === 'expanded');

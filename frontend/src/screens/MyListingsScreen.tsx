@@ -65,10 +65,10 @@ function StatCard({ icon, label, value, tone }: { icon: React.ComponentProps<typ
   const styles = useMemo(() => createStyles(colors), [colors]);
   const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.statTile}>
+      <Ionicons name={icon} size={18} color={color} />
+      <Text style={styles.statTileValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.statTileLabel} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -319,27 +319,25 @@ function createStyles(colors: ThemeColors) {
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
+    gap: Space.sm,
   },
-  statCard: {
-    flex: 1,
-    minWidth: '47%',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    gap: Space.xs / 2,
+  statTile: {
+    width: '48%',
+    flexGrow: 1,
+    gap: 2,
+    paddingVertical: Space.sm,
   },
-  statValue: {
+  statTileValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
-  statLabel: {
+  statTileLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -352,10 +350,6 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     gap: Space.xs + 2,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   quickActionText: {
     fontSize: Type.caption.size,
@@ -379,11 +373,9 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    padding: Space.md,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   rowImageWrap: {
     width: Space.xxl + Space.md,

@@ -47,7 +47,7 @@ export function ProfileSkeleton({
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {/* Cover stage — exact final height */}
-      <SkeletonLoader width="100%" height={coverHeight} borderRadius={0} />
+      <SkeletonLoader width="100%" height={coverHeight} borderRadius={Radius.none} />
 
       {/* Hero root — position relative for absolute avatar */}
       <View style={[styles.heroRoot, { backgroundColor: colors.background }]}>
@@ -96,7 +96,7 @@ export function ProfileSkeleton({
 
           {/* Tab rail skeleton */}
           <View style={styles.skeletonTabRail}>
-            <SkeletonLoader width="100%" height={44} borderRadius={0} />
+            <SkeletonLoader width="100%" height={44} borderRadius={Radius.none} />
           </View>
 
           {/* Destination-specific content skeletons */}

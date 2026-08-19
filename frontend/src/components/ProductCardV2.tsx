@@ -23,6 +23,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
 import { computeSustainabilityScore } from '../utils/sustainabilityScore';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
+import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
 import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 import { synthesizeListingIdentity } from '../services/listingMapper';
@@ -326,7 +327,7 @@ function ProductCardV2Base({
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={10} color={colors.textMuted} />
+                  <Ionicons name="person" size={14} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
@@ -594,14 +595,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 5,
   },
   sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.md,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
   },
   sellerAvatarPlaceholder: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.md,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -677,7 +678,10 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
 // tile metadata budget (audit §02): media + title + price + one state marker.
 
 interface ProductDiscoveryTileProps {
-  item: Listing;
+  /** Accepts the mock-data `Listing` or the production `DiscoveryListingSummary`
+   *  carried by a `ListingFeedUnit` — both expose the fields the tile reads
+   *  (id, images, title, price, condition, isSold, category). */
+  item: Listing | DiscoveryListingSummary;
   onPress: () => void;
   /** Width divided by height for the media frame. Defaults to the listing's
    *  real media geometry, falling back to the 3:4 portrait standard. */

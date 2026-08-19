@@ -31,7 +31,7 @@ import Reanimated, {
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useAIListingSuggestion } from '../hooks/useAIListingSuggestion';
@@ -432,28 +432,16 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* -- Header -- */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <AnimatedPressable
-          style={styles.iconBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          scaleValue={0.92}
-          hapticFeedback="light"
-          activeOpacity={0.62}
-        >
-          <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            AI Quick List
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            Snap photos · review · publish
-          </Text>
-        </View>
-        <View style={styles.iconBtnPlaceholder} />
-      </View>
+      <ScreenHeader
+        title="AI Quick List"
+        subtitle="Snap photos · review · publish"
+        backIcon="arrow-back"
+        onBack={() => navigation.goBack()}
+        style={{
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      />
 
       {SMART_SELL_DEMO_MODE && (
         <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
@@ -1276,14 +1264,6 @@ function createStyles(colors: ThemeColors) {
     root: {
       flex: 1,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
     demoBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1297,32 +1277,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       lineHeight: Type.caption.lineHeight,
-    },
-    iconBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    iconBtnPlaceholder: {
-      width: Control.hit,
-      height: Control.hit,
-    },
-    headerTitleWrap: {
-      flex: 1,
-      alignItems: 'center',
-      marginHorizontal: Space.sm,
-    },
-    headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    headerSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textSecondary,
-      marginTop: Space.xs,
     },
     scrollContent: {
       paddingHorizontal: Space.md,

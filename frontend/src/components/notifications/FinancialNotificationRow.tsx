@@ -98,7 +98,7 @@ export function FinancialNotificationRow({
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
         {event.title || visual.typeLabel}
       </Text>
-      <Text style={[styles.body, isUnread && styles.bodyUnread]} numberOfLines={2}>
+      <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
       {amountText ? (
@@ -125,10 +125,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
-    },
-    bodyUnread: {
-      color: colors.textPrimary,
-      fontFamily: FontFamily.medium,
     },
     amount: {
       fontSize: Type.numericMeta.size,

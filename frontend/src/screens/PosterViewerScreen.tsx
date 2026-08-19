@@ -544,20 +544,20 @@ export default function PosterViewerScreen() {
         })
         .onEnd(() => {
           if (zoomScale.value < ZOOM_MIN) {
-            zoomScale.value = withSpring(ZOOM_MIN, SPRING_SETTLE);
-            zoomTranslateX.value = withSpring(0, SPRING_SETTLE);
-            zoomTranslateY.value = withSpring(0, SPRING_SETTLE);
+            zoomScale.value = reducedMotion ? ZOOM_MIN : withSpring(ZOOM_MIN, SPRING_SETTLE);
+            zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+            zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
             zoomSavedScale.value = ZOOM_MIN;
             zoomSavedTranslateX.value = 0;
             zoomSavedTranslateY.value = 0;
           } else if (zoomScale.value > ZOOM_MAX) {
-            zoomScale.value = withSpring(ZOOM_MAX, SPRING_SETTLE);
+            zoomScale.value = reducedMotion ? ZOOM_MAX : withSpring(ZOOM_MAX, SPRING_SETTLE);
             zoomSavedScale.value = ZOOM_MAX;
           } else {
             zoomSavedScale.value = zoomScale.value;
           }
         }),
-    [isImageFrame, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
+    [isImageFrame, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
   );
 
   const zoomPanGesture = React.useMemo(
@@ -583,8 +583,8 @@ export default function PosterViewerScreen() {
           if (zoomLevel <= 1) {
             zoomSavedTranslateX.value = 0;
             zoomSavedTranslateY.value = 0;
-            zoomTranslateX.value = withSpring(0, SPRING_SETTLE);
-            zoomTranslateY.value = withSpring(0, SPRING_SETTLE);
+            zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+            zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
             return;
           }
           const maxTransX = (SCREEN_WIDTH * (zoomLevel - 1)) / 2;
@@ -595,10 +595,10 @@ export default function PosterViewerScreen() {
           const targetY = clamp(projectedY, -maxTransY, maxTransY);
           zoomSavedTranslateX.value = targetX;
           zoomSavedTranslateY.value = targetY;
-          zoomTranslateX.value = withSpring(targetX, SPRING_SETTLE);
-          zoomTranslateY.value = withSpring(targetY, SPRING_SETTLE);
+          zoomTranslateX.value = reducedMotion ? targetX : withSpring(targetX, SPRING_SETTLE);
+          zoomTranslateY.value = reducedMotion ? targetY : withSpring(targetY, SPRING_SETTLE);
         }),
-    [isImageFrame, isZoomed, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
+    [isImageFrame, isZoomed, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
   );
 
   // Double-tap zoom toggle is integrated into the tap zone double-tap logic
@@ -1458,9 +1458,9 @@ function ReducedMotionHeart({ x, y }: { x: number; y: number }) {
   const scale = useSharedValue(0.8);
 
   React.useEffect(() => {
-    scale.value = withTiming(1, { duration: Motion.duration.normal });
+    scale.value = withTiming(1, { duration: 0 });
     const timer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: Motion.duration.slower });
+      opacity.value = withTiming(0, { duration: 0 });
     }, 200);
     return () => clearTimeout(timer);
   }, [scale, opacity]);

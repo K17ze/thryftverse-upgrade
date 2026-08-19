@@ -12,7 +12,7 @@
  *   - reduced-motion fallback: instant
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, PressableProps, ViewStyle, Dimensions } from 'react-native';
+import { View, StyleSheet, Pressable, PressableProps, ViewStyle, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
@@ -116,11 +116,20 @@ export function SheetContainer({
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const { height: windowHeight } = useWindowDimensions();
   const translateY = useSharedValue(1000);
   const backdropOpacity = useSharedValue(0);
   const mountedRef = useRef(false);
-  const sheetHeightRef = useRef(Dimensions.get('window').height * maxHeight);
+  // Live window height (not module-level Dimensions.get) so the initial
+  // estimate responds to rotation/multi-window before onLayout fires.
+  const sheetHeightRef = useRef(windowHeight * maxHeight);
   const isDismissingRef = useRef(false);
+
+  // Keep the initial estimate in sync with window changes until onLayout
+  // provides the measured sheet height.
+  useEffect(() => {
+    sheetHeightRef.current = windowHeight * maxHeight;
+  }, [windowHeight, maxHeight]);
 
   useEffect(() => {
     if (visible) {
@@ -131,15 +140,15 @@ export function SheetContainer({
         backdropOpacity.value = 1;
       } else {
         translateY.value = withTiming(0, TIMING_SHEET);
-        backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
         translateY.value = 1000;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(1000, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacity.value = withTiming(0, { duration: 160 });
+        translateY.value = withTiming(1000, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [visible, reduceMotion, translateY, backdropOpacity]);
@@ -168,8 +177,8 @@ export function SheetContainer({
           backdropOpacity.value = 0;
           runOnJS(onClose)();
         } else {
-          translateY.value = withTiming(1000, { duration: 180, easing: Easing.in(Easing.ease) });
-          backdropOpacity.value = withTiming(0, { duration: 160 });
+          translateY.value = withTiming(1000, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+          backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
           // Fire onClose after the dismiss animation completes.
           setTimeout(() => {
             runOnJS(onClose)();

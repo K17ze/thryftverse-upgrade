@@ -70,14 +70,12 @@ export function NotificationRowBase({
 }: NotificationRowBaseProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
   const isUnread = !event.readAt;
 
   return (
     <AnimatedPressable
       style={[
         styles.row,
-        isUnread && styles.rowUnread,
         inAttentionSection && styles.rowAttention,
         style,
       ]}
@@ -213,9 +211,6 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-    },
-    rowUnread: {
-      backgroundColor: colors.surfaceAlt,
     },
     rowAttention: {
       // Subtle accent — left border tint, not a giant card.

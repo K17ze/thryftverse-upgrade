@@ -35,7 +35,7 @@ import {
   ScrollView,
   Pressable,
   FlatList,
-  Dimensions,
+  useWindowDimensions,
   Animated,
   type TextStyle,
   type ViewStyle,
@@ -99,14 +99,6 @@ export interface StickerBrowserSheetProps {
 // ── Geometry ─────────────────────────────────────────────────────────
 
 const GRID_COLUMNS = 4;
-const { width: SCREEN_W } = Dimensions.get('window');
-/** Square cell side: screen width minus sheet padding and inter-cell gaps. */
-const CELL_SIZE = Math.floor(
-  (SCREEN_W - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-);
-/** 44pt minimum touch target, but never smaller than the visible cell. */
-const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
-
 // ── Sheet ────────────────────────────────────────────────────────────
 
 export function StickerBrowserSheet({
@@ -125,7 +117,8 @@ export function StickerBrowserSheet({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
 
   // Pin mode is only available when the parent provides onPinSticker.
   const pinModeSupported = !!onPinSticker;
@@ -485,7 +478,13 @@ const StickerCell = React.memo(function StickerCell({
 
 // ── Styles ───────────────────────────────────────────────────────────
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
+  /** Square cell side: screen width minus sheet padding and inter-cell gaps. */
+  const CELL_SIZE = Math.floor(
+    (screenWidth - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+  );
+  /** 44pt minimum touch target, but never smaller than the visible cell. */
+  const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
   return StyleSheet.create({
     container: {
       flex: 1,

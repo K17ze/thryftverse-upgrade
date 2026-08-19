@@ -378,16 +378,15 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: -0.2,
     },
 
-    // Toggle rows
+    // Toggle rows — flat, hairline-separated
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     toggleInfo: {
       flexDirection: 'row',

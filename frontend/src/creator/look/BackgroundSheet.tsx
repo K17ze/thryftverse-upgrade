@@ -41,6 +41,7 @@ import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '..
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CreatorSlider } from '../controls/CreatorSlider';
 import {
   CreatorColorPicker,
@@ -140,6 +141,7 @@ export function BackgroundSheet({
 }: BackgroundSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Recent color history (shared across creator tools, spec §4).
@@ -192,8 +194,13 @@ export function BackgroundSheet({
     // Animate underline to the selected tab.
     const layout = typeTabLayouts.current.get(type);
     if (layout) {
-      typeUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
-      typeUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
+      if (reducedMotion) {
+        typeUnderlineXSV.value = layout.x;
+        typeUnderlineWSV.value = layout.width;
+      } else {
+        typeUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        typeUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
+      }
     }
     setDraft((prev) => {
       const next: CreatorBackground = { ...prev, type };
@@ -214,7 +221,7 @@ export function BackgroundSheet({
       }
       return next;
     });
-  }, [haptic, firstMediaLayer, typeUnderlineXSV, typeUnderlineWSV]);
+  }, [haptic, firstMediaLayer, typeUnderlineXSV, typeUnderlineWSV, reducedMotion]);
 
   // ── Solid color selection (preset swatches) ────────────────────────
   const handleSolidSelect = useCallback((value: string) => {

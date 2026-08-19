@@ -6,10 +6,11 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Typography } from '../theme/designTokens';
+import { Type, Typography, Space } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
+import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -19,6 +20,7 @@ export default function ArchivedConversationsScreen() {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
+  const conversationsLoaded = useStore((s) => s.conversationsLoaded);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const toggleArchived = useStore((s) => s.toggleArchivedConversation);
   const deleteConversation = useStore((s) => s.deleteConversation);
@@ -95,7 +97,11 @@ export default function ArchivedConversationsScreen() {
         />
       }
     >
-      {archivedConversations.length === 0 ? (
+      {!conversationsLoaded ? (
+        <View style={styles.skeletonWrap}>
+          <ConversationListSkeleton count={5} />
+        </View>
+      ) : archivedConversations.length === 0 ? (
         <EmptyState
           icon="archive-outline"
           title="No archived conversations"
@@ -144,6 +150,9 @@ export default function ArchivedConversationsScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    skeletonWrap: {
+      paddingTop: Space.sm,
+    },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,

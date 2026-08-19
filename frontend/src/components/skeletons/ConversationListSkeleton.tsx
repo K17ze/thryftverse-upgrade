@@ -1,16 +1,17 @@
 import React from 'react';
 import { View } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
+import { Radius } from '../../theme/designTokens';
 
 function ConvoRow() {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 14 }}>
-      <SkeletonLoader width={52} height={52} borderRadius={26} />
+      <SkeletonLoader width={52} height={52} borderRadius={Radius.full} />
       <View style={{ flex: 1, gap: 8 }}>
-        <SkeletonLoader width="60%" height={14} borderRadius={7} />
-        <SkeletonLoader width="85%" height={11} borderRadius={6} />
+        <SkeletonLoader width="60%" height={14} borderRadius={Radius.md} />
+        <SkeletonLoader width="85%" height={11} borderRadius={Radius.sm} />
       </View>
-      <SkeletonLoader width={36} height={36} borderRadius={18} />
+      <SkeletonLoader width={36} height={36} borderRadius={Radius.xl} />
     </View>
   );
 }

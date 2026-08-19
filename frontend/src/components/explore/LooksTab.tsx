@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,20 @@ import {
   useWindowDimensions,
   Pressable,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, AspectRatio } from '../../theme/designTokens';
+import { useScrollToTop } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
+import { useHaptic } from '../../hooks/useHaptic';
 import { EmptyState } from '../EmptyState';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
@@ -27,18 +29,33 @@ import { isVideoUri } from '../../utils/media';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Template set ─────────────────────────────────────────────────────────────
-// A small, deterministic template set drives the mixed-tile Explore canvas.
-// Templates are assigned from item properties + index, never at random.
+// A deterministic template set drives the mixed-tile Explore canvas with
+// TRUE masonry rhythm — varying heights so the two columns stagger naturally
+// like Pinterest/Instagram Explore, not a uniform grid.
 //
 //   1×1 standard        — default image look (span 1, 4:5)
-//   1×2 portrait feature — tall portrait look (span 1, 4:5, taller media)
+//   1×1 portrait        — tall portrait look (span 1, 3:4)
+//   1×1 square          — compact square look (span 1, 1:1)
 //   2×1 cinematic        — video or multi-layer collage (span 2, 16:9)
 //   2×2 editorial anchor — rare, every 8th item (span 2, 4:5)
 //
-// `span` is consumed by FlashList's `overrideItemLayout`; the aspect ratio is
-// applied inside the tile so each cell sizes to its creator's media, not a
-// screen-imposed fixed height.
+// The height variation between standard/portrait/square is what creates the
+// masonry staggering. Assignment is deterministic from index — no randomness.
 const EDITORIAL_ANCHOR_INTERVAL = 8;
+
+// Deterministic height rhythm: a 7-step cycle that creates organic masonry
+// staggering without visible pattern repetition. Prime-length cycles avoid
+// the "every 4th item looks the same" tell. The mix of portrait/square/
+// marketplace/landscape creates true Pinterest-style column stagger.
+const HEIGHT_RHYTHM: number[] = [
+  AspectRatio.portrait,    // 3:4 — tall
+  AspectRatio.square,      // 1:1 — compact
+  AspectRatio.marketplace, // 4:5 — standard
+  AspectRatio.portrait,    // 3:4 — tall
+  AspectRatio.landscape,   // 4:3 — wide-ish (still span 1)
+  AspectRatio.square,      // 1:1 — compact
+  AspectRatio.marketplace, // 4:5 — standard
+];
 
 interface LookTemplate {
   /** Column span (1 or 2). Consumed by overrideItemLayout. */
@@ -46,7 +63,7 @@ interface LookTemplate {
   /** Media aspect ratio (width / height) applied to the tile image. */
   aspect: number;
   /** Semantic template id — drives overlay cues. */
-  kind: 'standard' | 'portrait' | 'cinematic' | 'editorial';
+  kind: 'standard' | 'portrait' | 'square' | 'cinematic' | 'editorial';
 }
 
 function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
@@ -62,9 +79,16 @@ function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
     return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
   }
 
-  // 1×1 standard image look. 4:5 is the marketplace default; the tile honours
-  // real media dimensions once exposed by the service.
-  return { span: 1, aspect: AspectRatio.marketplace, kind: 'standard' };
+  // 1×1 tiles with deterministic height variation for true masonry rhythm.
+  // The cycle creates visual stagger between columns without randomness.
+  const aspect = HEIGHT_RHYTHM[index % HEIGHT_RHYTHM.length];
+  if (aspect === AspectRatio.portrait) {
+    return { span: 1, aspect, kind: 'portrait' };
+  }
+  if (aspect === AspectRatio.square) {
+    return { span: 1, aspect, kind: 'square' };
+  }
+  return { span: 1, aspect, kind: 'standard' };
 }
 
 // ── LookTile ─────────────────────────────────────────────────────────────────
@@ -110,11 +134,27 @@ function LookTile({
           transition={180}
         />
 
-        {/* Creator identity — small, bottom-left, low density */}
+        {/* Bottom gradient scrim — Pinterest/Instagram approach for text
+            legibility without heavy overlay pills. Fades from transparent to
+            a subtle dark scrim at the bottom 40% of the tile. */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']}
+          locations={[0, 0.55, 1.0]}
+          style={styles.tileScrim}
+          pointerEvents="none"
+        />
+
+        {/* Creator identity — bottom-left, on the gradient scrim. No pill. */}
         <View style={styles.creatorOverlay}>
           <Text style={styles.creatorText} numberOfLines={1}>
             @{creatorHandle}
           </Text>
+          {isShoppable && (
+            <View style={styles.shoppableInline}>
+              <Ionicons name="pricetag" size={9} color={colors.textInverse} />
+              <Text style={styles.shoppableText}>{look.tags.length}</Text>
+            </View>
+          )}
         </View>
 
         {/* Media-type / multi-layer cue — top-right, small icon only */}
@@ -128,10 +168,14 @@ function LookTile({
           </View>
         )}
 
-        {/* Shoppable / provenance marker — bottom-right, distinct from likes */}
-        {isShoppable && (
-          <View style={styles.shoppableMarker}>
-            <Ionicons name="pricetag" size={11} color={colors.textInverse} />
+        {/* Like count — bottom-right, on the gradient scrim. Pinterest-style
+            engagement cue without a heavy badge. */}
+        {look.likeCount > 0 && (
+          <View style={styles.likeOverlay}>
+            <Ionicons name="heart" size={11} color={colors.textInverse} />
+            <Text style={styles.likeText}>
+              {look.likeCount > 999 ? `${(look.likeCount / 1000).toFixed(1)}k` : look.likeCount}
+            </Text>
           </View>
         )}
       </View>
@@ -145,6 +189,9 @@ export default function LooksTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const { width: windowWidth } = useWindowDimensions();
+  const scrollRef = useRef<any>(null);
+  useScrollToTop(scrollRef);
+  const haptic = useHaptic();
 
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -180,8 +227,9 @@ export default function LooksTab() {
   }, [loadLooks]);
 
   const handleRefresh = useCallback(() => {
+    haptic.patterns.refresh();
     loadLooks(true);
-  }, [loadLooks]);
+  }, [loadLooks, haptic]);
 
   // Cursor-based pagination. The service returns nextCursor; when present we
   // fetch the next page and append. Otherwise onEndReached stays undefined.
@@ -357,14 +405,33 @@ export default function LooksTab() {
     () =>
       isLoadingMore ? (
         <View style={styles.footer}>
-          <ActivityIndicator color={colors.textMuted} />
+          <View style={styles.masonrySkeletonGrid}>
+            <View style={styles.masonrySkeletonCol}>
+              <PremiumSkeletonTile
+                width={(windowWidth - Space.md * 2 - Space.sm) / 2}
+                height={Math.round((windowWidth - Space.md * 2 - Space.sm) / 2 / AspectRatio.marketplace)}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            </View>
+            <View style={styles.masonrySkeletonCol}>
+              <PremiumSkeletonTile
+                width={(windowWidth - Space.md * 2 - Space.sm) / 2}
+                height={Math.round((windowWidth - Space.md * 2 - Space.sm) / 2 / AspectRatio.wide)}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            </View>
+          </View>
+        </View>
+      ) : !cursor && looks.length > 0 ? (
+        <View style={styles.endOfList}>
+          <View style={styles.endOfListHairline} />
+          <Text style={styles.endOfListText}>You've reached the end</Text>
         </View>
       ) : null,
-    [isLoadingMore, colors.textMuted],
+    [isLoadingMore, windowWidth, cursor, looks.length],
   );
-
-  // Column width for CDN downscaling (kept for future derivative sizing).
-  void windowWidth;
 
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.
@@ -372,6 +439,7 @@ export default function LooksTab() {
 
   return (
     <FlashList
+      ref={scrollRef}
       data={looks}
       masonry
       numColumns={2}
@@ -394,12 +462,6 @@ export default function LooksTab() {
 // ── Styles ───────────────────────────────────────────────────────────────────
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    loadingWrap: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 80,
-    },
     masonrySkeletonGrid: {
       flexDirection: 'row',
       justifyContent: 'center',
@@ -475,6 +537,22 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       alignItems: 'center',
     },
+    endOfList: {
+      alignItems: 'center',
+      paddingVertical: Space.lg,
+      gap: Space.sm,
+    },
+    endOfListHairline: {
+      width: 40,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
+    endOfListText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
+    },
     // ── Tile ──
     tileCell: {
       paddingHorizontal: Space.sm,
@@ -495,23 +573,41 @@ function createStyles(colors: ThemeColors) {
       width: '100%',
       height: '100%',
     },
-    // Creator identity — small, bottom-left. Low-density overlay.
+    // Gradient scrim — covers bottom 40% of tile for text legibility.
+    tileScrim: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '45%',
+    },
+    // Creator identity — bottom-left, on the gradient scrim. No pill.
     creatorOverlay: {
       position: 'absolute',
-      bottom: Space.xs,
-      left: Space.xs,
-      right: Space.xl,
-      backgroundColor: colors.overlay,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xxs,
-      alignSelf: 'flex-start',
+      bottom: Space.xs + 2,
+      left: Space.xs + 2,
+      right: Space.xs + 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
     },
     creatorText: {
       color: colors.textInverse,
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.meta.letterSpacing,
+      flexShrink: 1,
+    },
+    // Shoppable count — inline with creator handle, not a separate badge.
+    shoppableInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    shoppableText: {
+      color: colors.textInverse,
+      fontSize: 10,
+      fontFamily: Typography.family.semibold,
     },
     // Media-type / multi-layer cue — top-right, small icon only.
     mediaCueBadge: {
@@ -523,19 +619,21 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.overlay,
+      backgroundColor: 'rgba(0,0,0,0.35)',
     },
-    // Shoppable / provenance marker — bottom-right, distinct from likes.
-    shoppableMarker: {
+    // Like count — bottom-right, on the gradient scrim.
+    likeOverlay: {
       position: 'absolute',
-      bottom: Space.xs,
-      right: Space.xs,
-      width: 20,
-      height: 20,
-      borderRadius: Radius.full,
+      bottom: Space.xs + 2,
+      right: Space.xs + 2,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.overlay,
+      gap: 3,
+    },
+    likeText: {
+      color: colors.textInverse,
+      fontSize: 10,
+      fontFamily: Typography.family.semibold,
     },
   });
 }

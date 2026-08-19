@@ -362,6 +362,7 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 0,
+    minHeight: 44,
   },
   tabIconWrap: {
     alignItems: 'center',

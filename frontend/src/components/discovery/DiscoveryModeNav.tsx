@@ -50,14 +50,16 @@ const MODES: { value: DiscoveryMode; label: string }[] = [
  * DiscoveryModeNav — the flagship semantic mode navigation for the Explore
  * surface (Discover / Pulse / Looks).
  *
- * Design intent (AGENTS.md §4, §17):
+ * Design intent (AGENTS.md §4, §17, iOS 26 Liquid Glass):
  *   - Content-first, text-only tabs — no icon soup, no decorative chrome.
- *   - Selected state is evident without colour alone: an underline indicator
- *     + weight change (semibold vs regular).
- *   - The underline slides between tabs preserving spatial continuity. Under
+ *   - Selected state uses a subtle pill background (surfaceAlt) + brand
+ *     text colour + semibold weight. Unselected is muted regular weight.
+ *   - The pill slides between tabs preserving spatial continuity. Under
  *     Reduce Motion it moves instantly (no spring).
  *   - Compact 44pt touch height per tab (Control.hit).
  *   - Bottom hairline separates the bar from content below.
+ *   - The pill uses a flat surfaceAlt fill, not a glass effect — keeping
+ *     it readable over any content and consistent with the surface budget.
  *
  * State ownership: this component is presentational. The parent owns
  * `activeMode` and the scroll/data lifecycle of each scene, so switching modes
@@ -137,7 +139,7 @@ export function DiscoveryModeNav({
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        { backgroundColor: colors.background, borderBottomColor: colors.border },
         style,
       ]}
       accessibilityRole="tablist"
@@ -145,7 +147,7 @@ export function DiscoveryModeNav({
       <Reanimated.View
         style={[
           styles.indicator,
-          { backgroundColor: colors.brand },
+          { backgroundColor: colors.surfaceAlt },
           indicatorStyle,
         ]}
         pointerEvents="none"
@@ -153,7 +155,7 @@ export function DiscoveryModeNav({
       {MODES.map((mode, index) => {
         const isActive = mode.value === activeMode;
         const status = modeStatus?.[mode.value];
-        const labelColor = isActive ? colors.textPrimary : colors.textSecondary;
+        const labelColor = isActive ? colors.textPrimary : colors.textMuted;
         const fontFamily = isActive
           ? Typography.family.semibold
           : Typography.family.regular;
@@ -188,7 +190,7 @@ export function DiscoveryModeNav({
               <Text
                 style={[
                   styles.status,
-                  { color: colors.textMuted },
+                  { color: isActive ? colors.brand : colors.textMuted },
                 ]}
                 maxFontSizeMultiplier={1.3}
                 numberOfLines={1}
@@ -207,13 +209,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     borderBottomWidth: Stroke.hairline,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    gap: Space.xs,
   },
   tab: {
     flex: 1,
-    minHeight: Control.hit,
+    minHeight: 36,
     paddingVertical: Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: Radius.md,
   },
   label: {
     fontSize: Type.body.size,
@@ -227,9 +233,9 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    height: Stroke.emphasis,
-    borderRadius: Radius.full,
+    top: Space.xs,
+    bottom: Space.xs,
+    left: Space.md,
+    borderRadius: Radius.md,
   },
 });

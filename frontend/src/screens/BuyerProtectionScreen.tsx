@@ -101,7 +101,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
     Alert.alert(
       'Submit claim?',
-      'This will create a support ticket with our team. We\'ll review it and respond within 48 hours.',
+      'This will create a support ticket with our team. We respond as quickly as we can.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -114,7 +114,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 description: description.trim(),
               });
               haptics.success();
-              show('Claim submitted. We\'ll be in touch within 48 hours.', 'success');
+              show('Claim submitted. We respond as quickly as we can.', 'success');
               setShowClaimForm(false);
               setReason('');
               setDescription('');
@@ -167,7 +167,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Coverage summary */}
-          <View style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: isCovered ? colors.successBorder : colors.border }]}>
+          <View style={styles.coverageCard}>
             <View style={styles.coverageHeader}>
               <View style={[styles.coverageIcon, { backgroundColor: isCovered ? colors.successSubtle : colors.surfaceAlt }]}>
                 <Ionicons name="checkmark-circle" size={24} color={isCovered ? colors.success : colors.textMuted} />
@@ -201,7 +201,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
           </View>
 
         {/* What's covered */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>What's covered</Text>
             <View style={styles.coverageList}>
               <View style={styles.coverageItem}>
@@ -225,7 +225,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         {/* Claims history */}
         {protection && protection.claims.length > 0 && (
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Claims history</Text>
               {protection.claims.map((claim, idx) => (
                 <View key={claim.ticketId} style={[styles.claimRow, idx < protection.claims.length - 1 && styles.claimRowBorder]}>
@@ -257,7 +257,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 style={{ marginHorizontal: Space.md, marginTop: Space.md }}
               />
             ) : (
-              <View style={[styles.claimForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.claimForm}>
                 <Text style={styles.sectionTitle}>File a protection claim</Text>
 
                 <Text style={styles.inputLabel}>Reason</Text>
@@ -341,11 +341,11 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
     },
     coverageCard: {
-      borderRadius: Radius.xl,
-      borderWidth: Stroke.standard,
       padding: Space.lg,
       marginHorizontal: Space.md,
       marginTop: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     coverageHeader: {
       flexDirection: 'row',
@@ -393,11 +393,11 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     sectionCard: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
       padding: Space.md,
       marginHorizontal: Space.md,
       marginTop: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     sectionTitle: {
       fontSize: Type.body.size,
@@ -450,8 +450,6 @@ function createStyles(colors: ThemeColors) {
       marginLeft: Space.xl + Space.sm,
     },
     claimForm: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
       padding: Space.md,
       marginHorizontal: Space.md,
       marginTop: Space.md,

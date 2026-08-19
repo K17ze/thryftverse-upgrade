@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -600,32 +600,6 @@ function useStyles() {
           fontFamily: Typography.family.bold,
           letterSpacing: Type.label.letterSpacing,
           color: colors.warning,
-        },
-        headerSearchBtn: {
-          width: Control.hit,
-          height: Control.hit,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        demoBanner: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          marginHorizontal: Space.md,
-          marginBottom: Space.sm,
-          paddingHorizontal: Space.sm + 2,
-          paddingVertical: Space.sm,
-          borderRadius: Radius.md,
-          backgroundColor: colors.warningSubtle,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.warningBorder,
-        },
-        demoBannerText: {
-          flex: 1,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textSecondary,
-          letterSpacing: Type.caption.letterSpacing,
         },
         sectionHeader: {
           flexDirection: 'row',

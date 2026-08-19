@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   Image as RNImage,
 } from 'react-native';
@@ -35,7 +35,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 // ── Aspect ratio presets (Instagram/Snapchat-grade) ────────────────
 const ASPECT_PRESETS = [
@@ -67,6 +67,7 @@ export function CreatorCropSheet({
   const { show } = useToast();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [selectedRatio, setSelectedRatio] = useState<number | null>(null);
@@ -84,7 +85,7 @@ export function CreatorCropSheet({
   const zoomSV = useSharedValue(1);
   const rotateSV = useSharedValue(0);
   const gridOpacitySV = useSharedValue(0);
-  const sheetYSV = useSharedValue(SCREEN_W * 1.2);
+  const sheetYSV = useSharedValue(screenWidth * 1.2);
   const backdropOpacitySV = useSharedValue(0);
   const mountedRef = useRef(false);
 
@@ -126,11 +127,11 @@ export function CreatorCropSheet({
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
-        sheetYSV.value = SCREEN_W * 1.2;
+        sheetYSV.value = screenWidth * 1.2;
         backdropOpacitySV.value = 0;
         gridOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        sheetYSV.value = withTiming(screenWidth * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
         backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
         gridOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       }
@@ -138,7 +139,7 @@ export function CreatorCropSheet({
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, gridOpacitySV, spring]);
 
   // ── Calculate display dimensions ─────────────────────────────────
-  const displayW = SCREEN_W - Space.md * 2;
+  const displayW = screenWidth - Space.md * 2;
   const displayH = imageSize.width > 0
     ? displayW * (imageSize.height / imageSize.width)
     : displayW;

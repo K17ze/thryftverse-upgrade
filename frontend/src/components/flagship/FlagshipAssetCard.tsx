@@ -5,6 +5,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
+import { getCategoryFocalPoint } from '../../utils/media';
 
 interface FlagshipAssetCardProps {
   imageUri?: string | null;
@@ -55,6 +56,7 @@ export function FlagshipAssetCard({
             style={styles.image}
             contentFit="cover"
             transition={Motion.transitions.mediaLoad.duration}
+            focalPoint={getCategoryFocalPoint('art')}
             accessibilityRole="image"
             accessibilityLabel={name}
           />

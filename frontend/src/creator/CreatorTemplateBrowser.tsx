@@ -7,7 +7,7 @@ import {
   ScrollView,
   FlatList,
   Alert,
-  Dimensions,
+  useWindowDimensions,
   ViewStyle,
   TextInput,
 } from 'react-native';
@@ -25,8 +25,10 @@ import {
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useStore } from '../store/useStore';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 // ── Underline tab for category filtering ────────────────────────────
 // Replaces pill-background chips with text-only tabs + 2pt spring-animated
@@ -39,11 +41,14 @@ interface CategoryTabProps {
 }
 
 function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
+  const reducedMotion = useReducedMotion();
   const underlineOpacity = useSharedValue(isActive ? 1 : 0);
 
   useEffect(() => {
-    underlineOpacity.value = withSpring(isActive ? 1 : 0, Motion.spring.indicator);
-  }, [isActive, underlineOpacity]);
+    underlineOpacity.value = reducedMotion
+      ? (isActive ? 1 : 0)
+      : withSpring(isActive ? 1 : 0, Motion.spring.indicator);
+  }, [isActive, underlineOpacity, reducedMotion]);
 
   const underlineStyle = useAnimatedStyle(() => ({
     opacity: underlineOpacity.value,
@@ -115,7 +120,8 @@ export function CreatorTemplateBrowser({
 }: CreatorTemplateBrowserProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
@@ -135,14 +141,45 @@ export function CreatorTemplateBrowser({
     );
   }, [templates, searchQuery]);
 
+  // ── Style-preference-aware sorting ────────────────────────────────
+  // Templates whose styleTags overlap with the user's StyleQuiz
+  // preferences (stored in personalisationPreferences.categoriesAndSizesPref
+  // as a comma-separated string) are sorted to the top so the creator
+  // surface reflects the user's taste. Templates without styleTags or
+  // with no overlap retain their original order.
+  const stylePrefs = useStore(
+    (s) => s.personalisationPreferences.categoriesAndSizesPref,
+  );
+  const preferredStyles = useMemo(
+    () =>
+      stylePrefs && stylePrefs !== 'Balanced'
+        ? stylePrefs.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+    [stylePrefs],
+  );
+
+  const sortedTemplates = useMemo(() => {
+    if (preferredStyles.length === 0) return filteredTemplates;
+    return [...filteredTemplates].sort((a, b) => {
+      const aMatch = (a.styleTags ?? []).some((tag) =>
+        preferredStyles.includes(tag),
+      );
+      const bMatch = (b.styleTags ?? []).some((tag) =>
+        preferredStyles.includes(tag),
+      );
+      if (aMatch === bMatch) return 0;
+      return aMatch ? -1 : 1;
+    });
+  }, [filteredTemplates, preferredStyles]);
+
   const featuredTemplates = useMemo(
-    () => filteredTemplates.filter((t) => t.category === 'featured'),
-    [filteredTemplates],
+    () => sortedTemplates.filter((t) => t.category === 'featured'),
+    [sortedTemplates],
   );
 
   const standardTemplates = useMemo(
-    () => filteredTemplates.filter((t) => t.category !== 'featured'),
-    [filteredTemplates],
+    () => sortedTemplates.filter((t) => t.category !== 'featured'),
+    [sortedTemplates],
   );
 
   const handleApply = useCallback(
@@ -187,7 +224,7 @@ export function CreatorTemplateBrowser({
   const renderFeaturedItem = useCallback(
     ({ item }: { item: CreatorTemplate }) => {
       const previewDoc = item.build();
-      const previewWidth = SCREEN_W * 0.42;
+      const previewWidth = screenWidth * 0.42;
       const previewHeight = Math.floor(previewWidth / previewDoc.canvas.aspectRatio);
 
       return (
@@ -219,7 +256,7 @@ export function CreatorTemplateBrowser({
         </Pressable>
       );
     },
-    [handleApply, styles],
+    [handleApply, styles, screenWidth],
   );
 
   const renderStandardItem = useCallback(
@@ -350,7 +387,7 @@ export function CreatorTemplateBrowser({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -421,7 +458,7 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
   featuredCard: {
-    width: SCREEN_W * 0.42,
+    width: screenWidth * 0.42,
   },
   featuredPreviewWrap: {
     borderRadius: Radius.lg,
