@@ -134,6 +134,7 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={({ pressed }) => [
         {
           paddingHorizontal: Space.md,

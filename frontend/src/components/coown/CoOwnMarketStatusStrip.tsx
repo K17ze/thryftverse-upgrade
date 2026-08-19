@@ -187,6 +187,7 @@ function PressableChip({
       accessibilityRole="button"
       accessibilityLabel={`Rights version ${label}. Tap to view.`}
       onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <Text style={[styles.chipText, { color: colors.textSecondary }]} numberOfLines={1}>
         {label}

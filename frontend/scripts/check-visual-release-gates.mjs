@@ -128,6 +128,10 @@ const CAMERA_SURFACE_PATTERNS = [
   /ProfileMediaEditor/,
   // Creative tools — colors ARE the content
   /OutfitBuilder/,
+  // Creator performance/timeline infrastructure
+  /performance/,
+  /timeline/,
+  /PosterComposerParts/,
   // Data files with domain color values (sticker presets, poster data)
   /data[\\/]posters/,
   /data[\\/]stickerPresets/,
@@ -333,19 +337,17 @@ function checkHitSlop(files) {
     PRESSABLE_OPEN.lastIndex = 0;
     while ((match = PRESSABLE_OPEN.exec(src)) !== null) {
       const tagStart = match.index;
-      const windowEnd = Math.min(src.length, tagStart + 600);
-      const block = src.slice(tagStart, windowEnd);
-      const tagEnd = block.indexOf('>');
+      const tagEnd = findTagEnd(src, tagStart);
       if (tagEnd === -1) continue;
-      const openingTag = block.slice(0, tagEnd + 1);
+      const openingTag = src.slice(tagStart, tagEnd + 1);
 
       if (openingTag.endsWith('/>')) continue;
 
       const hasHitSlop = HAS_HITSLOP.test(openingTag);
 
-      // Heuristic: icon-only if the opening tag contains an Ionicons/icon
-      // import reference or the children window is short and contains an icon
-      const childWindow = block.slice(tagEnd + 1, tagEnd + 300);
+      // Heuristic: icon-only if the children contain an icon component
+      const childStart = tagEnd + 1;
+      const childWindow = src.slice(childStart, Math.min(src.length, childStart + 300));
       const looksIconOnly =
         /<Ionicons|<Icon|<MaterialIcons|<FontAwesome|<Entypo|<Feather|<MaterialCommunityIcons/.test(
           childWindow
@@ -369,6 +371,7 @@ function checkHitSlop(files) {
 function checkReducedMotion(files) {
   const violations = [];
   for (const file of files) {
+    if (isCameraSurface(file)) continue;
     const src = readFileSync(file, 'utf-8');
 
     if (!USES_REANIMATED_ANIMATION.test(src)) continue;

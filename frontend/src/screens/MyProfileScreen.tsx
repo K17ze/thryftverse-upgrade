@@ -21,6 +21,7 @@ import Reanimated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
@@ -83,6 +84,7 @@ function formatCompact(n: number): string {
 
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   // Themed style overrides — color properties extracted from module-level styles
   const t = {

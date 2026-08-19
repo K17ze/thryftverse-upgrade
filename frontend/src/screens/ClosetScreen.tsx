@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -68,6 +69,7 @@ const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },

@@ -312,6 +312,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                   <Pressable
                     style={styles.searchMain}
                     onPress={() => handleSearchPress(search.query)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityLabel={`Search for ${search.query}${newCount > 0 ? `, ${newCount} new matches` : ''}`}
                     accessibilityRole="button"
                   >

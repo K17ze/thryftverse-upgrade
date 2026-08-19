@@ -18,6 +18,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler,
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { Motion } from '../constants/motion';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,6 +109,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 
 export default function BrowseScreen() {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },

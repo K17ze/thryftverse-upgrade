@@ -430,6 +430,7 @@ const CommandRow = React.memo(function CommandRow({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={({ pressed }) => [
         styles.row,
         highlighted && styles.rowHighlighted,

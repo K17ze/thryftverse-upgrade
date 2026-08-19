@@ -467,6 +467,7 @@ export function CaptionEditorSheet({
           <Pressable
             onPress={handleAddCaption}
             disabled={!entryText.trim()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[
               styles.addBtn,
               {

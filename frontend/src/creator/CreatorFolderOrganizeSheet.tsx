@@ -333,6 +333,7 @@ export function CreatorFolderOrganizeSheet({
                       <Pressable
                         key={draft.id}
                         onPress={() => handleToggleDraft(draft.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={({ pressed }) => [
                           styles.draftPickRow,
                           isSelected && styles.draftPickRowSelected,

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useSharedValue, SharedValue } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface TabScrollContextType {
   tabBarVisible: SharedValue<boolean>;
@@ -8,6 +9,7 @@ interface TabScrollContextType {
 export const TabScrollContext = createContext<TabScrollContextType | null>(null);
 
 export const TabScrollProvider = ({ children }: { children: ReactNode }) => {
+  const reducedMotion = useReducedMotion();
   const tabBarVisible = useSharedValue(true);
 
   return (

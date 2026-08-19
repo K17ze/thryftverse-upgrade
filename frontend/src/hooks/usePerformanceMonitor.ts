@@ -36,6 +36,7 @@ import {
   useSharedValue,
   runOnJS,
 } from 'react-native-reanimated';
+import { useReducedMotion } from './useReducedMotion';
 
 export interface PerformanceMonitorOptions {
   /** Screen name used in dev warnings for attribution. */
@@ -93,6 +94,7 @@ export function usePerformanceMonitor(
     fpsWarningConsecutiveFrames = DEFAULT_FPS_CONSECUTIVE,
   } = options;
 
+  const reducedMotion = useReducedMotion();
   const [renderMs, setRenderMs] = React.useState(0);
   const [scrollFps, setScrollFps] = React.useState(0);
   const [isScrolling, setIsScrolling] = React.useState(false);

@@ -2037,6 +2037,7 @@ const FilterSheet = memo(function FilterSheet({
             return (
               <Pressable
                 key={opt.key}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={({ pressed }) => [
                   styles.filterSortRow,
                   pressed && styles.filterOptionPressed,

@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -73,6 +74,7 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);

@@ -473,6 +473,7 @@ export default function VerificationScreen({ navigation }: Props) {
               {(['passport', 'driving_licence', 'national_id'] as const).map((doc) => (
                 <Pressable
                   key={doc}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={[
                     styles.docOption,
                     {

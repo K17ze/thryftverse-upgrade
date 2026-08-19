@@ -284,6 +284,7 @@ const SuggestionRow = React.memo(function SuggestionRow({
       accessibilityRole="button"
       accessibilityLabel={`Search for ${suggestion.query}`}
       accessibilityHint="Fills the search box and searches"
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <Ionicons name={iconName} size={18} color={colors.textMuted} style={styles.rowIcon} />
       <Text style={styles.rowText} numberOfLines={1}>

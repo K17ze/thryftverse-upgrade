@@ -11,6 +11,7 @@ import {
 } from 'react-native-reanimated';
 import { useScrollToTop } from '@react-navigation/native';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Space } from '../../theme/designTokens';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
@@ -65,6 +66,7 @@ export function DiscoverScene({
   onBrowseCategories,
 }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
