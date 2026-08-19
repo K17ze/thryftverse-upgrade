@@ -35,7 +35,12 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
         snapToInterval={108}
         snapToAlignment="start"
       >
-        {items.map((item) => (
+        {items.map((item) => {
+          // Items with a value (Closet: "5 items", Co-own: "3 assets") get
+          // slightly more visual weight — the value uses brandSubtle tint to
+          // signal "this tile carries data". Items without values stay neutral.
+          const hasValue = Boolean(item.value);
+          return (
           <AnimatedPressable
             key={item.label}
             style={styles.item}
@@ -47,19 +52,20 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
             accessibilityLabel={item.accessibilityLabel}
             accessibilityHint={item.accessibilityHint}
           >
-            <Ionicons name={item.icon} size={20} color={colors.textPrimary} />
+            <Ionicons name={item.icon} size={20} color={hasValue ? colors.brand : colors.textPrimary} />
             <Text style={styles.label} numberOfLines={1}>
               {item.label}
             </Text>
             {item.value ? (
-              <Text style={styles.value} numberOfLines={1}>
+              <Text style={[styles.value, hasValue && styles.valueWithData]} numberOfLines={1}>
                 {item.value}
               </Text>
             ) : (
               <View style={styles.valuePlaceholder} />
             )}
           </AnimatedPressable>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -94,6 +100,10 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size - 1,
     lineHeight: Type.meta.lineHeight,
+  },
+  valueWithData: {
+    color: colors.brandSubtle,
+    fontFamily: Typography.family.semibold,
   },
   valuePlaceholder: {
     height: 12,

@@ -69,6 +69,8 @@ import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
+import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
+import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -168,6 +170,18 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // Seller trust summary - verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
+
+  // Story highlights — fetched for the highlights rail below the ProfileHero.
+  // Renders nothing when empty (truthful UI — no fabricated placeholder content).
+  const [highlights, setHighlights] = useState<PosterHighlight[]>([]);
+  useEffect(() => {
+    if (!targetUserId) return;
+    let cancelled = false;
+    fetchPosterHighlights(targetUserId)
+      .then((res) => { if (!cancelled) setHighlights(res.items ?? []); })
+      .catch(() => { if (!cancelled) setHighlights([]); });
+    return () => { cancelled = true; };
+  }, [targetUserId]);
 
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
@@ -506,6 +520,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </View>
+      ) : null}
+
+      {/* Story highlights rail — renders only when highlights exist.
+          No "New" tile for public profiles (viewer is not the owner). */}
+      {highlights.length > 0 ? (
+        <PosterHighlightsRail
+          highlights={highlights}
+          isOwner={false}
+          onOpenHighlight={(highlightId) => {
+            navigation.navigate('PosterHighlightViewer', { highlightId });
+          }}
+          onHighlightLongPress={(highlightId) => {
+            navigation.navigate('PosterHighlightViewer', { highlightId });
+          }}
+        />
       ) : null}
 
       {/* Tab rail - measures Y for sticky threshold */}

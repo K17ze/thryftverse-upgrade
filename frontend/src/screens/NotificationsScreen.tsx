@@ -6,6 +6,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -510,30 +511,48 @@ export default function NotificationsScreen() {
   );
 
   const renderSwipeRightAction = React.useCallback(
-    (notification: NotificationCard) => {
+    (notification: NotificationCard, progress: Animated.AnimatedInterpolation<number>) => {
       if (notification.read) return <View style={{ width: 0, height: Space.xxl + Space.xl }} />;
+      // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
+      const iconScale = progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.8, 1.0],
+        extrapolate: 'clamp',
+      });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
-            <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+            <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+            </Animated.View>
             <Text style={styles.swipeReadText}>Read</Text>
           </View>
         </View>
       );
     },
-    []
+    [colors.success]
   );
 
   const renderSwipeLeftAction = React.useCallback(
-    () => (
-      <View style={styles.swipeActionContainer}>
-        <View style={styles.swipeDeleteAction}>
-          <Ionicons name="trash-outline" size={20} color={colors.danger} />
-          <Text style={styles.swipeDeleteText}>Clear</Text>
+    (progress: Animated.AnimatedInterpolation<number>) => {
+      // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
+      const iconScale = progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.8, 1.0],
+        extrapolate: 'clamp',
+      });
+      return (
+        <View style={styles.swipeActionContainer}>
+          <View style={styles.swipeDeleteAction}>
+            <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            </Animated.View>
+            <Text style={styles.swipeDeleteText}>Clear</Text>
+          </View>
         </View>
-      </View>
-    ),
-    []
+      );
+    },
+    [colors.danger]
   );
 
   const handleSwipeDismiss = React.useCallback(
@@ -669,8 +688,8 @@ export default function NotificationsScreen() {
     return (
       <Swipeable
         ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
-        renderRightActions={() => renderSwipeRightAction(item)}
-        renderLeftActions={() => renderSwipeLeftAction()}
+        renderRightActions={(progress) => renderSwipeRightAction(item, progress)}
+        renderLeftActions={(progress) => renderSwipeLeftAction(progress)}
         onSwipeableRightOpen={() => {
           void handleSwipeMarkRead(item);
           swipeableRefs.current[item.id]?.close();
