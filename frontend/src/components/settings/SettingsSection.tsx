@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography, Radius, Stroke } from '../../theme/designTokens';
 
 export interface SettingsSectionProps {
   title: string;
@@ -15,6 +15,10 @@ export interface SettingsSectionProps {
   style?: ViewStyle;
   /** @deprecated Flat composition is now the default. Kept for backward compatibility. */
   noCard?: boolean;
+  /** When true, wraps children in an iOS 26-style inset grouped card with
+   *  horizontal margins, surface background, and rounded corners. This creates
+   *  visual separation between sections without card-on-card stacking. */
+  grouped?: boolean;
 }
 
 export function SettingsSection({
@@ -25,6 +29,7 @@ export function SettingsSection({
   children,
   style,
   noCard: _noCard,
+  grouped = false,
 }: SettingsSectionProps) {
   const { colors } = useAppTheme();
   return (
@@ -43,7 +48,9 @@ export function SettingsSection({
         </Text>
       </View>
       {description ? <Text style={[styles.description, { color: colors.textMuted }]}>{description}</Text> : null}
-      <View style={styles.noCard}>{children}</View>
+      <View style={grouped ? [styles.groupedCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }] : styles.noCard}>
+        {children}
+      </View>
     </View>
   );
 }
@@ -93,5 +100,13 @@ const styles = StyleSheet.create({
   },
   noCard: {
     marginHorizontal: 0,
+  },
+  // iOS 26-style inset grouped card — horizontal margins + surface fill +
+  // rounded corners. Creates visual grouping without card-on-card stacking.
+  groupedCard: {
+    marginHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    overflow: 'hidden',
   },
 });

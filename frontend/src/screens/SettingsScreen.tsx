@@ -1,5 +1,6 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -37,7 +38,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 
-import { Space, FontFamily } from '../theme/designTokens';
+import { Space, FontFamily, Radius, Type } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -392,8 +393,47 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           ) : null}
 
+          {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
+              Shows completed security steps at a glance. Each pill is a
+              checkmark + label. Incomplete steps are omitted (not shown as
+              red warnings — the verification prompt above handles that). */}
+          {currentUser ? (
+            <View style={styles.healthRow}>
+              {currentUser.emailVerified ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Verified</Text>
+                </View>
+              ) : null}
+              {twoFactorEnabled ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>2FA</Text>
+                </View>
+              ) : null}
+              {biometricEnabled ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Biometric</Text>
+                </View>
+              ) : null}
+              {savedPaymentMethod ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Payment</Text>
+                </View>
+              ) : null}
+              {savedAddress ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Address</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
-          <SettingsSection title="Your account" icon="person-circle-outline" noCard>
+          <SettingsSection title="Your account" icon="person-circle-outline" noCard grouped>
             <SettingsRow
               icon="shield-checkmark-outline"
               iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
@@ -474,7 +514,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
-          <SettingsSection title="Buying & selling" icon="bag-outline" noCard>
+          <SettingsSection title="Buying & selling" icon="bag-outline" noCard grouped>
             <SettingsRow
               icon="location-outline"
               title="Saved addresses"
@@ -537,7 +577,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── NOTIFICATIONS ── */}
-          <SettingsSection title="Notifications" icon="notifications-outline" noCard>
+          <SettingsSection title="Notifications" icon="notifications-outline" noCard grouped>
             <SettingsRow
               icon="notifications"
               title="Enable notifications"
@@ -569,7 +609,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
-          <SettingsSection title="Experience" icon="color-palette-outline" noCard>
+          <SettingsSection title="Experience" icon="color-palette-outline" noCard grouped>
             <SettingsRow
               icon="color-palette-outline"
               title="Theme"
@@ -645,7 +685,7 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
               Settings — it lives in the Agents home and profile menu. */}
-          <SettingsSection title="Connected services" icon="hardware-chip-outline" noCard>
+          <SettingsSection title="Connected services" icon="hardware-chip-outline" noCard grouped>
             <SettingsRow
               icon="people-outline"
               title="Agents"
@@ -669,7 +709,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
-          <SettingsSection title="Help & legal" icon="help-circle-outline" noCard>
+          <SettingsSection title="Help & legal" icon="help-circle-outline" noCard grouped>
 
             <SettingsRow
               icon="help-circle-outline"
@@ -781,5 +821,26 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
+  },
+  // ── Account health indicator ──
+  healthRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  healthPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs + 1,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xxs + 1,
+    borderRadius: Radius.full,
+  },
+  healthPillText: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });
