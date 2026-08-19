@@ -87,10 +87,11 @@ export async function updateLookOnApi(
   });
 }
 
-export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
+export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; sort?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
   const params = new URLSearchParams();
   if (options?.creatorId) params.set('creatorId', options.creatorId);
   if (options?.status) params.set('status', options.status);
+  if (options?.sort) params.set('sort', options.sort);
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();

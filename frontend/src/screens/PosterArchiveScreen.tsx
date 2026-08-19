@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   AccessibilityInfo,
+  TextInput,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,6 +66,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'archived' | 'highlights'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const currentUser = useStore((state) => state.currentUser);
 
   const filteredStories = useMemo(() => {
@@ -72,6 +74,17 @@ export default function PosterArchiveScreen({ navigation }: Props) {
     if (filter === 'archived') return stories.filter((s) => s.status !== 'active');
     return stories;
   }, [stories, filter]);
+
+  // Client-side search — matches firstFrame.caption and item.title (case-insensitive, partial word).
+  const filteredBySearch = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return filteredStories;
+    return filteredStories.filter((s) => {
+      const caption = s.frames[0]?.caption?.toLowerCase() ?? '';
+      const title = 'title' in s && typeof s.title === 'string' ? s.title.toLowerCase() : '';
+      return caption.includes(q) || title.includes(q);
+    });
+  }, [filteredStories, searchQuery]);
 
   const activeCount = useMemo(() => stories.filter((s) => s.status === 'active').length, [stories]);
   const archivedCount = stories.length - activeCount;
@@ -392,8 +405,39 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         ))}
       </View>
 
+      {/* Search bar — client-side caption/title search (hidden for highlights) */}
+      {filter !== 'highlights' && (
+        <View style={styles.searchRow}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search stories"
+              placeholderTextColor={colors.textMuted}
+              style={styles.searchInput}
+              accessibilityLabel="Search stories"
+              accessibilityRole="search"
+            />
+            {searchQuery.length > 0 && (
+              <AnimatedPressable
+                onPress={() => setSearchQuery('')}
+                style={styles.searchClear}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+            )}
+          </View>
+        </View>
+      )}
+
       <FlashList
-        data={filter === 'highlights' ? highlights as unknown as PosterStory[] : filteredStories}
+        data={filter === 'highlights' ? highlights as unknown as PosterStory[] : filteredBySearch}
         keyExtractor={(item) => item.id}
         renderItem={filter === 'highlights' ? renderHighlightItem as unknown as typeof renderItem : renderItem}
         numColumns={2}
@@ -408,25 +452,33 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyBody}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="archive-outline" size={36} color={colors.textMuted} />
+              <Ionicons
+                name={searchQuery.trim().length > 0 ? 'search-outline' : 'archive-outline'}
+                size={36}
+                color={colors.textMuted}
+              />
             </View>
             <Text style={styles.emptyTitle}>
-              {filter === 'active'
-                ? 'No active stories'
-                : filter === 'archived'
-                  ? 'No archived stories'
-                  : filter === 'highlights'
-                    ? 'No highlights yet'
-                    : 'No stories yet'}
+              {searchQuery.trim().length > 0
+                ? `No stories match '${searchQuery.trim()}'`
+                : filter === 'active'
+                  ? 'No active stories'
+                  : filter === 'archived'
+                    ? 'No archived stories'
+                    : filter === 'highlights'
+                      ? 'No highlights yet'
+                      : 'No stories yet'}
             </Text>
             <Text style={styles.emptySubtitle}>
-              {filter === 'active'
-                ? 'Your active stories will appear here while they are live.'
-                : filter === 'archived'
-                  ? 'Archived stories will appear here after 24 hours.'
-                  : filter === 'highlights'
-                    ? 'Create highlights from your archived stories to pin them to your profile.'
-                    : 'Your published and archived stories will appear here.'}
+              {searchQuery.trim().length > 0
+                ? 'Try a different search term or clear the search.'
+                : filter === 'active'
+                  ? 'Your active stories will appear here while they are live.'
+                  : filter === 'archived'
+                    ? 'Archived stories will appear here after 24 hours.'
+                    : filter === 'highlights'
+                      ? 'Create highlights from your archived stories to pin them to your profile.'
+                      : 'Your published and archived stories will appear here.'}
             </Text>
           </View>
         }
@@ -505,6 +557,36 @@ function createStyles(colors: ThemeColors) {
   filterChipTextActive: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
+  },
+  // Search bar — flat, hairline border, no card-on-card.
+  searchRow: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    height: 40,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  searchClear: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   columnWrapper: {
     gap: Space.sm,

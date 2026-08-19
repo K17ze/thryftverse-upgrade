@@ -28,6 +28,18 @@ import { isVideoUri } from '../../utils/media';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
+// ── Feed mode tabs ───────────────────────────────────────────────────────────
+// Pinterest/LTK-style feed segmentation. "For You" is the personalised default,
+// "Following" restricts to creators the viewer follows, and "Trending" surfaces
+// the most-engaged looks. The `sort` value is passed through to the API.
+type FeedMode = 'foryou' | 'following' | 'trending';
+
+const FEED_TABS: { key: FeedMode; label: string; sort: string }[] = [
+  { key: 'foryou', label: 'For You', sort: 'foryou' },
+  { key: 'following', label: 'Following', sort: 'following' },
+  { key: 'trending', label: 'Trending', sort: 'trending' },
+];
+
 // ── Template set ─────────────────────────────────────────────────────────────
 // A deterministic template set drives the mixed-tile Explore canvas with
 // TRUE masonry rhythm — varying heights so the two columns stagger naturally
@@ -199,28 +211,34 @@ export default function LooksTab() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [feedMode, setFeedMode] = useState<FeedMode>('foryou');
 
   // Initial / refresh load. Resets the cursor and replaces the list.
-  const loadLooks = useCallback(async (isRefresh: boolean = false) => {
-    if (isRefresh) {
-      setIsRefreshing(true);
-    }
-    setLoadError(null);
-    try {
-      const res = await fetchLooksFromApi({ status: 'published' });
-      setLooks(res.items ?? []);
-      setCursor(res.nextCursor ?? null);
-    } catch {
-      if (!isRefresh && looks.length === 0) {
-        setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
-      } else if (isRefresh) {
-        setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
+  // The feed mode drives the `sort` parameter so the API can segment the feed.
+  const loadLooks = useCallback(
+    async (isRefresh: boolean = false, mode: FeedMode = feedMode) => {
+      const sort = FEED_TABS.find((t) => t.key === mode)?.sort ?? 'foryou';
+      if (isRefresh) {
+        setIsRefreshing(true);
       }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [looks.length]);
+      setLoadError(null);
+      try {
+        const res = await fetchLooksFromApi({ status: 'published', sort });
+        setLooks(res.items ?? []);
+        setCursor(res.nextCursor ?? null);
+      } catch {
+        if (!isRefresh && looks.length === 0) {
+          setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
+        } else if (isRefresh) {
+          setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
+        }
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [feedMode, looks.length],
+  );
 
   useEffect(() => {
     loadLooks();
@@ -231,13 +249,28 @@ export default function LooksTab() {
     loadLooks(true);
   }, [loadLooks, haptic]);
 
+  // Feed tab switch — haptic, clear the list, reload with the new sort.
+  const handleFeedModeChange = useCallback(
+    (mode: FeedMode) => {
+      if (mode === feedMode) return;
+      haptic.selection();
+      setFeedMode(mode);
+      setLooks([]);
+      setCursor(null);
+      setIsLoading(true);
+      loadLooks(false, mode);
+    },
+    [feedMode, haptic, loadLooks],
+  );
+
   // Cursor-based pagination. The service returns nextCursor; when present we
   // fetch the next page and append. Otherwise onEndReached stays undefined.
   const loadMore = useCallback(async () => {
     if (!cursor || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const res = await fetchLooksFromApi({ status: 'published', cursor });
+      const sort = FEED_TABS.find((t) => t.key === feedMode)?.sort ?? 'foryou';
+      const res = await fetchLooksFromApi({ status: 'published', sort, cursor });
       setLooks((prev) => [...prev, ...(res.items ?? [])]);
       setCursor(res.nextCursor ?? null);
     } catch {
@@ -246,11 +279,44 @@ export default function LooksTab() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [cursor, isLoadingMore]);
+  }, [cursor, isLoadingMore, feedMode]);
 
   const handleCreateLook = useCallback(() => {
     navigation.navigate('CreatorStudio', { type: 'look' });
   }, [navigation]);
+
+  // Pill-style feed tabs — rendered above the masonry grid in every state
+  // except the full-screen error. Active pill uses the brand fill; inactive
+  // pills are plain secondary text. Mirrors Pinterest/LTK feed segmentation.
+  const FeedTabs = useMemo(
+    () => (
+      <View style={styles.feedTabsRow}>
+        {FEED_TABS.map((tab) => {
+          const isActive = feedMode === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={[styles.feedPill, isActive && styles.feedPillActive]}
+              onPress={() => handleFeedModeChange(tab.key)}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text
+                style={[
+                  styles.feedPillText,
+                  isActive ? styles.feedPillTextActive : styles.feedPillTextInactive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    ),
+    [feedMode, handleFeedModeChange, styles],
+  );
 
   // ── Loading / error / empty states (preserved) ────────────────────────────
   if (isLoading) {
@@ -273,6 +339,7 @@ export default function LooksTab() {
         <View style={styles.headerWrap}>
           <DiscoverySectionHeader kicker="Community" title="Looks" />
         </View>
+        {FeedTabs}
         <View style={styles.masonrySkeletonGrid}>
           <View style={styles.masonrySkeletonCol}>
             {leftCol.map((h, i) => (
@@ -325,7 +392,11 @@ export default function LooksTab() {
 
   if (looks.length === 0 && !loadError) {
     return (
-      <View>
+      <View style={styles.scrollContent}>
+        <View style={styles.headerWrap}>
+          <DiscoverySectionHeader kicker="Community" title="Looks" />
+        </View>
+        {FeedTabs}
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
@@ -380,8 +451,7 @@ export default function LooksTab() {
 
   const ListHeaderComponent = useMemo(
     () => (
-      <View style={styles.headerWrap}>
-        <DiscoverySectionHeader kicker="Community" title="Looks" />
+      <>
         {loadError && looks.length > 0 && (
           <View style={styles.refreshErrorBanner}>
             <Text style={styles.refreshErrorText}>
@@ -396,7 +466,7 @@ export default function LooksTab() {
             </Pressable>
           </View>
         )}
-      </View>
+      </>
     ),
     [loadError, looks.length, loadLooks, styles],
   );
@@ -438,24 +508,32 @@ export default function LooksTab() {
   const onEndReached = cursor ? loadMore : undefined;
 
   return (
-    <FlashList
-      ref={scrollRef}
-      data={looks}
-      masonry
-      numColumns={2}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      onEndReached={onEndReached}
-      onEndReachedThreshold={0.5}
-      overrideItemLayout={overrideItemLayout}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-      ListHeaderComponent={ListHeaderComponent}
-      ListFooterComponent={ListFooterComponent}
-      refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
-      }
-    />
+    <View style={styles.feedContainer}>
+      <View style={styles.feedStaticHeader}>
+        <View style={styles.headerWrap}>
+          <DiscoverySectionHeader kicker="Community" title="Looks" />
+        </View>
+        {FeedTabs}
+      </View>
+      <FlashList
+        ref={scrollRef}
+        data={looks}
+        masonry
+        numColumns={2}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
+        overrideItemLayout={overrideItemLayout}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={ListFooterComponent}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
+        }
+      />
+    </View>
   );
 }
 
@@ -477,6 +555,44 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.xl,
+    },
+    // Outer container for the populated feed — holds the static header +
+    // feed tabs above the scrolling FlashList.
+    feedContainer: {
+      flex: 1,
+    },
+    // Static (non-scrolling) header region: section header + feed tabs.
+    // Horizontal padding matches the FlashList content padding so the
+    // header aligns with the masonry grid below.
+    feedStaticHeader: {
+      paddingHorizontal: Space.md,
+    },
+    // ── Feed tabs ──
+    // Pill-style feed segmentation (For You / Following / Trending).
+    // Active pill carries the brand fill; inactive pills are plain text.
+    feedTabsRow: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      paddingBottom: Space.sm,
+    },
+    feedPill: {
+      paddingVertical: Space.xs + 2,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+    },
+    feedPillActive: {
+      backgroundColor: colors.brand,
+    },
+    feedPillText: {
+      fontSize: Type.caption.size,
+    },
+    feedPillTextActive: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+    },
+    feedPillTextInactive: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
     },
     headerWrap: {
       paddingBottom: Space.md,

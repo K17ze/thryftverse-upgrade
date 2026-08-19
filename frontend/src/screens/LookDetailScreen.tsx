@@ -123,6 +123,12 @@ export default function LookDetailScreen() {
   const [moreLooks, setMoreLooks] = useState<LookApiItem[]>([]);
   const [moreLooksLoading, setMoreLooksLoading] = useState(false);
 
+  // Similar looks — style-based recommendations (other creators, prioritised
+  // by shoppability / tag count). Quiet appearance: the rail only renders once
+  // results are available, with no loading spinner.
+  const [similarLooks, setSimilarLooks] = useState<LookApiItem[]>([]);
+  const [similarLooksLoading, setSimilarLooksLoading] = useState(false);
+
   const isOwner = look?.creatorId === currentUser?.id;
 
   const loadLook = useCallback(async () => {
@@ -176,6 +182,39 @@ export default function LookDetailScreen() {
       })
       .finally(() => {
         if (!cancelled) setMoreLooksLoading(false);
+      });
+
+    // Similar looks — published looks from other creators, prioritised by
+    // shoppability (tag count). Runs as an independent async call so a slow
+    // or failing similar-looks fetch never blocks the creator rail.
+    setSimilarLooksLoading(true);
+    fetchLooksFromApi({ status: 'published', limit: 20 })
+      .then((res) => {
+        if (cancelled) return;
+        const currentTagCount = look.tags.length;
+        const similar = res.items
+          .filter((l) => l.id !== look.id && l.creator.id !== creatorId)
+          .sort((a, b) => {
+            // Prefer shoppable looks (those with tags), then by tag-count
+            // proximity to the current look so the rail leans toward looks
+            // with a comparable composition density.
+            const aTags = a.tags.length;
+            const bTags = b.tags.length;
+            const aDelta = Math.abs(aTags - currentTagCount);
+            const bDelta = Math.abs(bTags - currentTagCount);
+            if (aTags === 0 && bTags > 0) return 1;
+            if (bTags === 0 && aTags > 0) return -1;
+            if (aDelta !== bDelta) return aDelta - bDelta;
+            return bTags - aTags;
+          })
+          .slice(0, 8);
+        setSimilarLooks(similar);
+      })
+      .catch(() => {
+        // Non-fatal — rail is simply hidden.
+      })
+      .finally(() => {
+        if (!cancelled) setSimilarLooksLoading(false);
       });
 
     return () => {
@@ -764,6 +803,39 @@ export default function LookDetailScreen() {
                   </AnimatedPressable>
                 ))
               )}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Similar looks — style-based recommendations from other creators.
+            Quiet appearance: nothing renders until results are ready, so there
+            is no loading spinner and no layout shift when the fetch is empty. */}
+        {similarLooks.length > 0 && !similarLooksLoading && (
+          <View style={styles.traySection}>
+            <View style={styles.trayHeader}>
+              <Text style={styles.trayTitle}>Similar looks</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
+              {similarLooks.map((other) => (
+                <AnimatedPressable
+                  key={other.id}
+                  style={styles.moreCard}
+                  onPress={() => handleMoreLookPress(other)}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Similar look${other.caption ? `, ${other.caption}` : ''}`}
+                >
+                  <View style={styles.moreImgWrap}>
+                    <ExpoImage
+                      source={{ uri: other.mediaUrl }}
+                      style={styles.moreImg}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={other.mediaUrl}
+                    />
+                  </View>
+                </AnimatedPressable>
+              ))}
             </ScrollView>
           </View>
         )}

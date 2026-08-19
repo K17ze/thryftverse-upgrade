@@ -132,6 +132,8 @@ export default function PosterViewerScreen() {
   const insets = useSafeAreaInsets();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const toggleSavedPosterStory = useStore((state) => state.toggleSavedPosterStory);
+  const isSavedPosterStory = useStore((state) => state.isSavedPosterStory);
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -1466,6 +1468,12 @@ export default function PosterViewerScreen() {
             viewerCount={activeStory.uniqueViewerCount}
             onShowActivity={() => navigation.navigate('PosterStoryActivity', { storyId: activeStory.id })}
             onShare={handleShare}
+            onSave={() => {
+              haptic.light();
+              toggleSavedPosterStory(activeStory.id);
+              show(isSavedPosterStory(activeStory.id) ? 'Removed from saved' : 'Saved', 'info');
+            }}
+            isSaved={isSavedPosterStory(activeStory.id)}
           />
         </View>
         {/* Sticker interaction panel — slides up from the bottom when a

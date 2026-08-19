@@ -383,6 +383,9 @@ interface StoreState {
   seenPosterIds: string[];
   markPosterSeen: (posterId: string) => void;
   hasSeenPoster: (posterId: string) => boolean;
+  savedPosterStoryIds: string[];
+  toggleSavedPosterStory: (storyId: string) => void;
+  isSavedPosterStory: (storyId: string) => boolean;
   customPosters: Poster[];
   addPoster: (poster: Poster) => void;
   removePoster: (posterId: string) => void;
@@ -763,6 +766,17 @@ export const useStore = create<StoreState>()(
       };
     }),
   hasSeenPoster: (posterId) => get().seenPosterIds.includes(posterId),
+  savedPosterStoryIds: [],
+  toggleSavedPosterStory: (storyId) =>
+    set((state) => {
+      const isSaved = state.savedPosterStoryIds.includes(storyId);
+      return {
+        savedPosterStoryIds: isSaved
+          ? state.savedPosterStoryIds.filter((id) => id !== storyId)
+          : [...state.savedPosterStoryIds, storyId],
+      };
+    }),
+  isSavedPosterStory: (storyId) => get().savedPosterStoryIds.includes(storyId),
   customPosters: [],
   addPoster: (poster) =>
     set((state) => ({
@@ -1954,6 +1968,7 @@ export const useStore = create<StoreState>()(
         savedProducts: state.savedProducts,
         collections: state.collections,
         seenPosterIds: state.seenPosterIds,
+        savedPosterStoryIds: state.savedPosterStoryIds,
         customPosters: state.customPosters,
         conversations: state.conversations,
         savedSearches: state.savedSearches,

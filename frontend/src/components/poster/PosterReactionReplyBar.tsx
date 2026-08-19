@@ -78,6 +78,10 @@ interface PosterReactionReplyBarProps {
   viewerCount?: number;
   /** Share callback — opens the system share sheet or in-app share target. */
   onShare?: () => void;
+  /** Save/bookmark callback — toggles saved state for the story. */
+  onSave?: () => void;
+  /** Whether the story is currently saved by the viewer. */
+  isSaved?: boolean;
 }
 
 export function PosterReactionReplyBar({
@@ -91,6 +95,8 @@ export function PosterReactionReplyBar({
   onShowActivity,
   viewerCount,
   onShare,
+  onSave,
+  isSaved,
 }: PosterReactionReplyBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -413,6 +419,24 @@ export function PosterReactionReplyBar({
             ) : (
               <Ionicons name="send" size={Control.icon} color="#fff" />
             )}
+          </AnimatedPressable>
+        )}
+
+        {/* Save — bookmark the story for later viewing (Instagram pattern).
+            Only show when there is no active reply text to avoid crowding. */}
+        {!replyText.trim() && onSave && (
+          <AnimatedPressable
+            style={styles.iconBtn}
+            onPress={onSave}
+            scaleValue={0.97}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save story'}
+            accessibilityHint="Bookmarks this story for later viewing"
+            accessibilityState={{ selected: !!isSaved }}
+          >
+            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={Control.icon} color="#fff" />
           </AnimatedPressable>
         )}
 
