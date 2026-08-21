@@ -303,7 +303,12 @@ describe('P0.3 — Poster WYSIWYG composition persistence', () => {
     const doc = goldenPosterFixture();
     const { payload } = serialiseToPosterPayload(doc);
     const compDoc = payload.compositionDocument as CreatorDocument;
-    expect(compDoc.canvas.background).toEqual(doc.canvas.background);
+    // The golden poster fixture has a full-bleed media layer (width=1, height=1).
+    // When full-bleed media is present AND the background is the factory default,
+    // the serializer sets the background to 'transparent' — the media IS the
+    // canvas surface, not a layer on top of a card. This is the intended
+    // card-between-media fix (§38.1 of AGENTS.md).
+    expect(compDoc.canvas.background).toEqual({ type: 'color', value: 'transparent' });
     expect(compDoc.canvas.aspectRatio).toBe(doc.canvas.aspectRatio);
   });
 

@@ -254,10 +254,5 @@ const styles = StyleSheet.create({
   gradientFill: {
     flex: 1,
     borderRadius: SEGMENT_RADIUS,
-    // Active segment glow — very subtle white shadow for depth on the fill
-    shadowColor: '#fff',
-    shadowOpacity: 0.15,
-    shadowRadius: 1,
-    shadowOffset: { width: 0, height: 0 },
   },
 });

@@ -506,6 +506,25 @@ export default function PosterViewerScreen() {
   const zoomSavedTranslateY = useSharedValue(0);
   const [isZoomed, setIsZoomed] = React.useState(false);
 
+  // ── Swipe-down dismiss rubber-band ──────────────────────────────────
+  // The content follows the finger downward with diminishing resistance
+  // (rubber-band clamp), and scales down slightly. On release, if past
+  // threshold it animates off-screen then dismisses; otherwise it springs
+  // back to position. This matches Instagram/Snapchat's natural dismiss.
+  const dismissTranslateY = useSharedValue(0);
+  const dismissScale = useSharedValue(1);
+  const dismissOpacity = useSharedValue(1);
+  const DISMISS_THRESHOLD = 120; // px — 30% of typical screen height
+  const DISMISS_VELOCITY = 500;  // px/s — fast flick also dismisses
+
+  const dismissAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: dismissTranslateY.value },
+      { scale: dismissScale.value },
+    ],
+    opacity: dismissOpacity.value,
+  }));
+
   // Reset zoom whenever the frame changes — prevents carrying zoom state
   // across frames. Respects reducedMotion (instant, no animation).
   React.useEffect(() => {
@@ -656,12 +675,53 @@ export default function PosterViewerScreen() {
       Gesture.Pan()
         .activeOffsetX([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
         .activeOffsetY([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
+        .onUpdate((e) => {
+          'worklet';
+          const { translationX: dx, translationY: dy } = e;
+          // Only apply rubber-band during swipe-down (dismiss direction)
+          if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+            // Rubber-band: diminishing resistance past 0
+            const clamped = rubberBand(dy, 0, SCREEN_HEIGHT * 0.5, 0.35);
+            dismissTranslateY.value = clamped;
+            // Scale down slightly as content drags away
+            dismissScale.value = 1 - (clamped / SCREEN_HEIGHT) * 0.25;
+            dismissOpacity.value = 1 - (clamped / SCREEN_HEIGHT) * 0.5;
+          }
+        })
         .onEnd((e) => {
+          'worklet';
           const { translationX: dx, translationY: dy } = e;
           // Swipe-down to dismiss (primary exit gesture per IG/Snapchat)
-          if (dy > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-            runOnJS(handleSwipeDismiss)();
+          if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+            if (dy > DISMISS_THRESHOLD || e.velocityY > DISMISS_VELOCITY) {
+              // Animate off-screen then dismiss
+              dismissTranslateY.value = withSpring(SCREEN_HEIGHT, {
+                damping: 18,
+                stiffness: 200,
+                mass: 0.8,
+              });
+              dismissScale.value = withSpring(0.85, {
+                damping: 18,
+                stiffness: 200,
+              });
+              dismissOpacity.value = withSpring(0, {
+                damping: 18,
+                stiffness: 200,
+              });
+              runOnJS(handleSwipeDismiss)();
+              return;
+            }
+            // Spring back — didn't drag far enough
+            dismissTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+            dismissScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
+            dismissOpacity.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
             return;
+          }
+          // Reset any partial dismiss state
+          if (dismissTranslateY.value !== 0) {
+            dismissTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+            dismissScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
+            dismissOpacity.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
           }
           // Swipe-up to view creator profile
           if (dy < -SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
@@ -677,7 +737,7 @@ export default function PosterViewerScreen() {
             }
           }
         }),
-    [handleSwipeDismiss, handleSwipeUpProfile, goNextStory, goPrevStory]
+    [handleSwipeDismiss, handleSwipeUpProfile, goNextStory, goPrevStory, reducedMotion, dismissTranslateY, dismissScale, dismissOpacity]
   );
 
   // Cleanup single-tap timer on unmount to prevent frame advance after exit.
@@ -718,7 +778,8 @@ export default function PosterViewerScreen() {
       zoomSavedTranslateY.value = 0;
       return;
     }
-    // Not zoomed: trigger heart reaction + zoom to 2.5x
+    // Not zoomed: trigger heart reaction ONLY (Instagram pattern).
+    // Pinch-to-zoom handles zoom-in; double-tap is the heart gesture.
     const now = Date.now();
     if (now - lastHeartBurstRef.current < DOUBLE_TAP_DEBOUNCE_MS) return;
     lastHeartBurstRef.current = now;
@@ -730,12 +791,7 @@ export default function PosterViewerScreen() {
     });
     setTimeout(() => setHeartBurst(null), 2500);
     handleReaction('love');
-    // Zoom to 2.5x on double-tap (only for image frames)
-    if (isImageFrame) {
-      zoomScale.value = reducedMotion ? ZOOM_DOUBLE_TAP : withSpring(ZOOM_DOUBLE_TAP, SPRING_SETTLE);
-      zoomSavedScale.value = ZOOM_DOUBLE_TAP;
-    }
-  }, [haptic, handleReaction, reducedMotion, isImageFrame, zoomScale, zoomTranslateX, zoomTranslateY, zoomSavedScale, zoomSavedTranslateX, zoomSavedTranslateY]);
+  }, [haptic, handleReaction, reducedMotion, zoomScale, zoomTranslateX, zoomTranslateY, zoomSavedScale, zoomSavedTranslateX, zoomSavedTranslateY]);
 
   const handleTapLeft = React.useCallback((absoluteX: number, absoluteY: number) => {
     if (didLongPressRef.current) {
@@ -1060,7 +1116,7 @@ export default function PosterViewerScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <GestureDetector gesture={containerPanGesture}>
-        <View style={StyleSheet.absoluteFill}>
+        <Reanimated.View style={[StyleSheet.absoluteFill, dismissAnimatedStyle]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Background — canonical composition or legacy media.
@@ -1137,8 +1193,7 @@ export default function PosterViewerScreen() {
           Slightly stronger at the top edge so the meta row reads cleanly over
           bright media (white backgrounds, light product photography). */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.50)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0)']}
-        locations={[0, 0.55, 1]}
+        colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)']}
         style={styles.topScrim}
         pointerEvents="none"
       />
@@ -1507,7 +1562,7 @@ export default function PosterViewerScreen() {
         title={`@${creatorName}'s story`}
         imageUri={activeFrame.mediaUrl || activeStory.creator.avatar || undefined}
       />
-        </View>
+        </Reanimated.View>
       </GestureDetector>
     </GestureHandlerRootView>
   );
@@ -2132,11 +2187,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     zIndex: 5,
   },
+  // Instagram-style tap zones: left third for previous frame,
+  // right two-thirds for next frame. The "next" action is the primary
+  // intent (users advance forward far more often than they go back),
+  // so it gets the larger hit area.
   tapLeft: {
     flex: 1,
   },
   tapRight: {
-    flex: 1,
+    flex: 2,
   },
   topMetaRow: {
     marginTop: Space.xs + 2,

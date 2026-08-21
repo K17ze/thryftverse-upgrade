@@ -35,19 +35,20 @@ export interface FinancialNotificationRowProps {
 interface FinancialVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'success' | 'warning';
+  accentSubtleKey: 'successSubtle' | 'warningSubtle';
   typeLabel: string;
 }
 
 function resolveFinancialVisual(eventType: NotificationEventV2['eventType']): FinancialVisual {
   switch (eventType) {
     case 'payout_processed':
-      return { icon: 'cash-outline', accentKey: 'success', typeLabel: 'Payout' };
+      return { icon: 'cash-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Payout' };
     case 'refund_completed':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
     case 'order_refunded':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
     default:
-      return { icon: 'wallet-outline', accentKey: 'success', typeLabel: 'Transaction' };
+      return { icon: 'wallet-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Transaction' };
   }
 }
 
@@ -63,6 +64,7 @@ export function FinancialNotificationRow({
 
   const visual = useMemo(() => resolveFinancialVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
+  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   // Structured amount from the payload — never from prose text.
@@ -81,6 +83,7 @@ export function FinancialNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
+      accentSubtle={accentSubtle}
       colors={colors}
       size={44}
     />

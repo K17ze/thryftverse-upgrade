@@ -14,6 +14,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
@@ -23,7 +24,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import type { CreatorLayer } from './composition';
-import { getLayerAccentColor } from '../components/poster/shared/layerAccents';
+import { getLayerAccentColor, getLayerCategoryLabel } from '../components/poster/shared/layerAccents';
 
 export interface CreatorLayersSheetProps {
   visible: boolean;
@@ -37,7 +38,7 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
-  adjustment: 'color-wand-outline',
+  adjustment: 'options-outline',
   quiz: 'help-circle-outline',
   question: 'chatbubble-outline',
   emojiSlider: 'happy-outline',
@@ -77,7 +78,11 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
   const layers = getAllLayersSorted(page).reverse();
 
   const dragY = useSharedValue(0);
-  const dragStartIndex = useRef(-1);
+  // Shared value (not useRef) so the worklet can read the drag start index
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const dragStartIndex = useSharedValue(-1);
 
   // Haptic: light on sheet open
   useEffect(() => {
@@ -96,7 +101,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     setReorderMode(true);
     setDraggingId(id);
     const idx = layers.findIndex((l) => l.id === id);
-    dragStartIndex.current = idx;
+    dragStartIndex.value = idx;
     dragY.value = 0;
   }, [haptic, layers, dragY]);
 
@@ -212,8 +217,8 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         dragY.value = withSpring(0, spring.press);
         runOnJS(setDraggingId)(null);
         runOnJS(setReorderMode)(false);
-        if (deltaRows !== 0 && dragStartIndex.current >= 0) {
-          const startIdx = dragStartIndex.current;
+        if (deltaRows !== 0 && dragStartIndex.value >= 0) {
+          const startIdx = dragStartIndex.value;
           const targetIdx = Math.max(0, Math.min(layers.length - 1, startIdx + deltaRows));
           let dir: 'forward' | 'backward' | null = null;
           if (targetIdx > startIdx) {
@@ -244,7 +249,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
             }))();
           }
         }
-        dragStartIndex.current = -1;
+        dragStartIndex.value = -1;
       })
   ).current;
 
@@ -258,7 +263,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
           </PressScale>
         ) : (
           <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         )}
       </View>
@@ -362,18 +367,6 @@ function LayerRow({
   onOverflow,
   panGesture,
 }: LayerRowProps) {
-  // Thumbnail spring scale on appearance
-  const thumbScale = useSharedValue(reduceMotion ? 1 : 0.8);
-  useEffect(() => {
-    if (!reduceMotion) {
-      thumbScale.value = withSpring(1, Motion.spring.tap);
-    }
-  }, [thumbScale, reduceMotion]);
-
-  const thumbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: thumbScale.value }],
-  }));
-
   const rowAnimatedStyle = useAnimatedStyle(() => {
     if (!dragY || reduceMotion) {
       return { transform: [{ translateY: 0 }], opacity: 1, zIndex: 0, elevation: 0 };
@@ -385,6 +378,18 @@ function LayerRow({
       elevation: 8,
     };
   });
+
+  // Refined thumbnail appearance: subtle opacity fade (0→1, 150ms, ease-out).
+  // Replaces the old excessive spring scale. Respects reduceMotion.
+  const thumbOpacity = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    if (reduceMotion) {
+      thumbOpacity.value = 1;
+    } else {
+      thumbOpacity.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.ease) });
+    }
+  }, [reduceMotion, thumbOpacity]);
+  const thumbAnimatedStyle = useAnimatedStyle(() => ({ opacity: thumbOpacity.value }));
 
   const rowContent = (
     <View
@@ -410,7 +415,7 @@ function LayerRow({
       >
         <Ionicons
           name="menu-outline"
-          size={22}
+          size={IconGrammar.standard}
           color={reorderMode ? colors.brand : colors.textMuted}
         />
       </PressScale>
@@ -428,22 +433,26 @@ function LayerRow({
           {thumbSource ? (
             <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
           ) : (
-            <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)} />
+            <Ionicons name={LAYER_ICONS[layer.type]} size={IconGrammar.standard} color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)} />
           )}
           {layer.type === 'media' && layer.payload.mediaType === 'video' && (
             <View style={[styles.videoBadge, { backgroundColor: colors.overlay }]}>
-              <Ionicons name="play" size={10} color={colors.textInverse} />
+              <Ionicons name="play" size={IconGrammar.badge} color={colors.textInverse} />
             </View>
           )}
           {layer.locked && (
             <View style={[styles.lockBadge, { backgroundColor: colors.surfaceElevated }]}>
-              <Ionicons name="lock-closed" size={10} color={colors.warning} />
+              <Ionicons name="lock-closed" size={IconGrammar.badge} color={colors.warning} />
             </View>
           )}
         </Reanimated.View>
         <View style={styles.layerInfo}>
           <View style={styles.layerNameRow}>
-            <Ionicons name={LAYER_ICONS[layer.type]} size={16} color={getLayerAccentColor(layer.type)} />
+            <Ionicons
+              name={LAYER_ICONS[layer.type]}
+              size={IconGrammar.metadata}
+              color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)}
+            />
             <Text
               style={[styles.layerName, { color: isSelected && !reorderMode ? colors.brand : colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
               numberOfLines={1}
@@ -451,9 +460,6 @@ function LayerRow({
               {getLayerDisplayName(layer)}
             </Text>
           </View>
-          <Text style={[styles.layerType, { color: colors.textMuted }]} numberOfLines={1}>
-            {layer.type}
-          </Text>
         </View>
       </PressScale>
 
@@ -467,7 +473,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="chevron-up" size={26} color={colors.brand} />
+              <Ionicons name="chevron-up" size={IconGrammar.hero} color={colors.brand} />
             </PressScale>
             <PressScale
               onPress={() => onReorder(layer.id, 'backward')}
@@ -476,7 +482,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="chevron-down" size={26} color={colors.brand} />
+              <Ionicons name="chevron-down" size={IconGrammar.hero} color={colors.brand} />
             </PressScale>
           </>
         ) : (
@@ -488,7 +494,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
+              <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
             </PressScale>
             <PressScale
               onPress={() => onReorder(layer.id, 'backward')}
@@ -497,7 +503,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
+              <Ionicons name="chevron-down" size={IconGrammar.standard} color={colors.textSecondary} />
             </PressScale>
             <PressScale
               onPress={() => onVisibility(layer.id)}
@@ -506,7 +512,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
+              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={IconGrammar.standard} color={colors.textSecondary} />
             </PressScale>
             <PressScale
               onPress={() => onLock(layer.id)}
@@ -517,7 +523,7 @@ function LayerRow({
             >
               <Ionicons
                 name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
-                size={22}
+                size={IconGrammar.standard}
                 color={layer.locked ? colors.warning : colors.textSecondary}
               />
             </PressScale>
@@ -529,7 +535,7 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
+              <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.textSecondary} />
             </PressScale>
           </>
         )}
@@ -660,9 +666,11 @@ function LayerOverflowActionSheet({
         <Text style={[overflowStyles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {layer ? getLayerDisplayName(layer) : ''}
         </Text>
-        <Text style={[overflowStyles.subtitle, { color: colors.textMuted }]}>
-          {layer ? layer.type : ''}
-        </Text>
+        {layer && (
+          <Text style={[overflowStyles.subtitle, { color: colors.textMuted }]}>
+            {capitalizeFirst(getLayerCategoryLabel(layer.type))}
+          </Text>
+        )}
         {options.map((opt) => (
           <Pressable
             key={opt.key}
@@ -676,7 +684,7 @@ function LayerOverflowActionSheet({
             accessibilityHint={opt.danger ? `Deletes the layer` : `Performs ${opt.label.toLowerCase()} on the layer`}
             accessibilityRole="button"
           >
-            <Ionicons name={opt.icon} size={22} color={opt.danger ? colors.danger : colors.textPrimary} />
+            <Ionicons name={opt.icon} size={IconGrammar.standard} color={opt.danger ? colors.danger : colors.textPrimary} />
             <Text style={[overflowStyles.optionText, { color: opt.danger ? colors.danger : colors.textPrimary }]}>
               {opt.label}
             </Text>
@@ -727,7 +735,7 @@ const overflowStyles = StyleSheet.create({
   subtitle: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    textTransform: 'capitalize',
+    marginTop: Space.xxs,
     marginBottom: Space.sm,
   },
   optionRow: {
@@ -755,6 +763,10 @@ const overflowStyles = StyleSheet.create({
     fontSize: Type.body.size,
   },
 });
+
+function capitalizeFirst(s: string): string {
+  return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 
 function getLayerDisplayName(layer: CreatorLayer): string {
   switch (layer.type) {
@@ -979,7 +991,6 @@ const styles = StyleSheet.create({
   layerInfo: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xxs,
   },
   layerNameRow: {
     flexDirection: 'row',
@@ -990,11 +1001,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
     flex: 1,
-  },
-  layerType: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textTransform: 'capitalize',
   },
   rowActions: {
     flexDirection: 'row',

@@ -13,7 +13,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
-import { Space, Radius, FontFamily, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Type, Stroke, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -105,7 +105,7 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
           {CATEGORIES.map((cat) => (
             <View key={cat.title} style={styles.category}>
               <View style={styles.categoryHeader}>
-                <Ionicons name={cat.icon} size={16} color={colors.textSecondary} />
+                <Ionicons name={cat.icon} size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
                   {cat.title}
                 </Text>

@@ -27,6 +27,7 @@ import {
   FontFamily,
   FontSize,
   LetterSpacing,
+  IconGrammar,
 } from '../../../theme/designTokens';
 
 export interface ReverseToggleProps {
@@ -67,7 +68,7 @@ export function ReverseToggle({
     >
       <Ionicons
         name={reversed ? 'swap-horizontal' : 'swap-horizontal-outline'}
-        size={22}
+        size={IconGrammar.standard}
         color={reversed ? colors.textInverse : colors.textPrimary}
       />
       <Text

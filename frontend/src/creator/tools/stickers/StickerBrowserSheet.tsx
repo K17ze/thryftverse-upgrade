@@ -49,6 +49,7 @@ import {
   FontFamily,
   Control,
   Stroke,
+  IconGrammar,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -245,7 +246,7 @@ export function StickerBrowserSheet({
   const keyExtractor = useCallback((item: StickerDef) => item.id, []);
 
   return (
-    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
+    <SheetContainer visible={visible} onClose={handleClose} compact>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -462,7 +463,7 @@ const StickerCell = React.memo(function StickerCell({
         ) : sticker.iconRef ? (
           <Ionicons
             name={sticker.iconRef}
-            size={28}
+            size={IconGrammar.hero}
             color={isInteractive ? colors.brand : colors.textPrimary}
           />
         ) : null}

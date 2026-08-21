@@ -34,6 +34,8 @@ export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
   const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
+  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
   const haptic = useHaptic();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -150,6 +152,13 @@ export default function SearchScreen() {
       itemId: item.id,
     }),
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
+    // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
+    // pattern). The store owns the saved state; the tile reflects it.
+    onToggleSave: (item: DiscoveryListingSummary) => {
+      haptic.light();
+      toggleSavedProduct(item.id);
+    },
+    isSavedListing: (listingId: string) => isSavedProduct(listingId),
   };
 
   const renderScene = (tab: ExploreTab) => {

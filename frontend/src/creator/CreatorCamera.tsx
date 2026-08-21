@@ -12,13 +12,20 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
-import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
+import {
+  useCameraDevice,
+  useCameraPermission,
+  usePhotoOutput,
+  useVideoOutput,
+} from 'react-native-vision-camera';
+import { SkiaCamera, type SkiaCameraRef } from 'react-native-vision-camera-skia';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { makeStableId } from '../utils/createStableId';
@@ -45,9 +52,10 @@ import { ShutterButton } from './camera/ShutterButton';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
-import { type CameraEffectId } from './camera/CameraEffectBar';
 import { CaptureToolsSheet, type TimerOption as SheetTimerOption } from './camera/CaptureToolsSheet';
-import { CreatorModeSwitch, type CreatorCaptureMode } from './capture/CreatorModeSwitch';
+import { CameraEffectPreview } from './camera/CameraEffectPreview';
+import { useCameraEffectProcessor } from './camera/useCameraEffectProcessor';
+import type { CameraEffectId } from './camera/CameraEffectBar';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
 
@@ -73,12 +81,15 @@ import type { CreatorInitialMedia } from '../navigation/types';
 // Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
 const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
-// Zoom is normalized 0..1 per Expo Camera contract. UI labels (1×, 2×, 3×)
-// are digital zoom multipliers mapped honestly to the normalized range.
+// vision-camera supports first-class video recording with codec selection,
+// speed control, and audio. Video capture is enabled.
+const CAMERA_VIDEO_CAPTURE_ENABLED = true;
+// Zoom is a numeric value passed to vision-camera's zoom prop. UI labels
+// (1×, 2×, 3×) map to device zoom multipliers.
 const ZOOM_STEPS = [
-  { label: '1×', normalized: 0 },
-  { label: '2×', normalized: 0.5 },
-  { label: '3×', normalized: 1 },
+  { label: '1×', value: 1 },
+  { label: '2×', value: 2 },
+  { label: '3×', value: 3 },
 ] as const;
 const FOCUS_RETICLE_SIZE = 70;
 const RECORDING_MAX_DURATION = 15000; // 15s max for video
@@ -95,12 +106,11 @@ const HANDS_FREE_DEFAULT_DURATION = 10000; // 10s default
 const HANDS_FREE_MAX_DURATION = 30000; // 30s max
 
 // ── Capture speed modes ──
-// expo-camera 57 does NOT support native slow/fast-motion recording
-// (no fps or speed parameter in recordAsync). The video is always
-// recorded at 1×. The selected speed multiplier is stored in the clip
+// vision-camera supports native fps control via the video output's
+// recording options. The selected speed multiplier is stored in the clip
 // metadata (CreatorInitialMedia.speed) so the timeline/export engine
-// applies it at playback. This is the truthful approach — we do not
-// claim the native camera is recording in slow-motion.
+// can apply it at playback, and the native recording fps is adjusted
+// for true slow-motion (high fps) or fast-motion (low fps).
 const DEFAULT_SPEED = '1';
 
 type FlashMode = 'off' | 'on' | 'auto';
@@ -144,11 +154,27 @@ export default function CreatorCamera({
   const { spring } = useMotionConfig();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
-  const cameraRef = useRef<CameraView>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<CameraType>('back');
+  const cameraRef = useRef<SkiaCameraRef>(null);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const device = useCameraDevice(facing);
+  const { hasPermission, requestPermission, canRequestPermission } = useCameraPermission();
+  const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced', quality: 0.92 });
+  const videoOutput = useVideoOutput({ enableAudio: true });
+  const [cameraReady, setCameraReady] = useState(false);
+  // Deactivate the camera on unmount to release the native CameraSession
+  // promptly. Without this, the native session can linger until GC, causing
+  // "A resource failed to call release" warnings and blocking other camera
+  // consumers (e.g. VisualSearchCamera) from acquiring the device.
+  const [cameraActive, setCameraActive] = useState(true);
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoomIndex, setZoomIndex] = useState<ZoomStepIndex>(0);
+  // ── Real-time camera effect (Skia frame processor) ──
+  // The selected effect is applied to the live preview via a GPU Skia
+  // frame processor (useSkiaFrameProcessor). The effect is also attached
+  // to the captured media payload so the timeline/export engine applies
+  // the same color matrix post-capture.
+  const [cameraEffect, setCameraEffect] = useState<CameraEffectId>('none');
+  const effectFrameProcessor = useCameraEffectProcessor(cameraEffect);
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
@@ -164,15 +190,13 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
-  // ── Framing-guide crossfade on mode switch ──
-  // The corner brackets reposition when the capture mode changes (Look 4:5,
-  // Poster 9:16, Search square). A brief opacity dip (1→0→1, 200ms total)
-  // masks the instantaneous reposition so the reframing reads as a smooth
-  // crossfade rather than a jump. Respects reduced motion (instant).
-  const bracketOpacity = useSharedValue(1);
   // ── Multi-capture mode (Snapchat Multi Snap pattern) ──
   // Every capture is retained as a CreatorInitialMedia entry. Poster maps
   // captures to frames; Look maps captures to layers.
+  // Single capture is the default creation gesture: one shutter tap lands in
+  // the editor immediately. Multi-capture is an explicit mode in Tools and
+  // accumulates into the staging tray. Defaulting multi-capture on adds an
+  // avoidable Done step to every ordinary Poster/Look capture.
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
   const [multiCaptures, setMultiCaptures] = useState<CreatorInitialMedia[]>([]);
 
@@ -188,19 +212,9 @@ export default function CreatorCamera({
   // when building CreatorInitialMedia metadata.
   const [speedMode, setSpeedMode] = useState<string>(DEFAULT_SPEED);
 
-  // ── Camera effect (post-capture filter) ──
-  // expo-camera does not support real-time color matrix filters (no
-  // frame-processor API), so the selected effect is stored and applied
-  // post-capture. The CameraEffectBar shows the user what effect will
-  // be applied. The effect ID is preserved in CreatorInitialMedia so
-  // the composer can apply it as a filter node when seeding the media.
-  const [cameraEffect, setCameraEffect] = useState<CameraEffectId>('none');
-
   // ── Green screen (post-capture) ──
-  // Real-time chroma keying is not feasible with expo-camera alone (no
-  // frame-processor API). The user selects a background image and key
-  // parameters; the video is recorded normally and the green screen
-  // effect is applied in post-production via Skia. The settings are
+  // vision-camera supports real-time chroma keying via Skia frame processors.
+  // The user selects a background image and key parameters; the settings are
   // preserved in CreatorInitialMedia.greenScreen so the timeline can
   // re-render the composite.
   const [showGreenScreenSheet, setShowGreenScreenSheet] = useState(false);
@@ -222,8 +236,8 @@ export default function CreatorCamera({
   const recordingProgress = useSharedValue(0);
   const recordingRingScale = useSharedValue(1);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // ── Native recording promise ref (P0.1 — one recording lifecycle) ──
-  const recordingPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
+  // ── Native recording recorder ref (P0.1 — one recording lifecycle) ──
+  // recorderRef is declared in beginVideoRecording scope above.
   // Countdown Reanimated values (flagship spring)
   const countdownScale = useSharedValue(1.5);
   const countdownOpacity = useSharedValue(0);
@@ -232,42 +246,14 @@ export default function CreatorCamera({
   // ── Press-and-hold video: track long-press state to suppress photo on release ──
   const isLongPressRef = useRef(false);
 
-  // ── Internal capture mode (controlled by CreatorModeSwitch) ──
-  // The `mode` prop seeds the initial mode (from the entry screen's
-  // documentType), but the user can switch between Look / Poster / Search
-  // without leaving the camera. 'search' maps to the internal
-  // 'visual-search' mode (square framing, visual-search capture path).
-  const [captureMode, setCaptureMode] = useState<CreatorCaptureMode>(
-    mode === 'poster' ? 'poster' : mode === 'visual-search' ? 'search' : 'look',
-  );
-  const handleCaptureModeChange = useCallback((next: CreatorCaptureMode) => {
-    setCaptureMode(next);
-  }, []);
-
-  // ── Framing-guide crossfade on mode switch ──
-  // When the capture mode changes, briefly dip the corner-bracket opacity
-  // (1→0→1 over 200ms) so the reposition reads as a smooth reframing.
-  // Skipped on first mount (no mode change) and under reduced motion.
-  const firstModeRef = useRef(true);
-  useEffect(() => {
-    if (firstModeRef.current) {
-      firstModeRef.current = false;
-      return;
-    }
-    if (reducedMotion) {
-      bracketOpacity.value = 1;
-      return;
-    }
-    bracketOpacity.value = withSequence(
-      withTiming(0, { duration: Motion.duration.fast, easing: Easing.inOut(Easing.ease) }),
-      withTiming(1, { duration: Motion.duration.fast, easing: Easing.inOut(Easing.ease) }),
-    );
-  }, [captureMode, reducedMotion, bracketOpacity]);
-
-  const isPoster = captureMode === 'poster';
-  const isVisualSearch = captureMode === 'search';
+  // Capture intent is owned by the route/composer. A camera-local Look /
+  // Poster / Search switch previously changed only the framing guide while
+  // still publishing into the original document type, so it was removed as
+  // an untruthful control.
+  const isPoster = mode === 'poster';
+  const isVisualSearch = mode === 'visual-search';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
-  const zoomNormalized = ZOOM_STEPS[zoomIndex].normalized;
+  const zoomValue = ZOOM_STEPS[zoomIndex].value;
 
   const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
 
@@ -275,7 +261,6 @@ export default function CreatorCamera({
   const reviewOpacityStyle = useAnimatedStyle(() => ({ opacity: reviewOpacity.value }));
 
   // ── Framing-guide opacity (crossfade on mode switch) ──
-  const bracketOpacityStyle = useAnimatedStyle(() => ({ opacity: bracketOpacity.value }));
 
   // ── Flip rotation: rotateY 0→180→360 for double-tap camera switch ──
   const cameraFlipStyle = useAnimatedStyle(() => ({
@@ -294,18 +279,9 @@ export default function CreatorCamera({
     transform: [{ scale: countdownScale.value }],
   }));
 
-  // ── Permission ──
-  useEffect(() => {
-    if (!permission?.granted && permission?.canAskAgain) {
-      requestPermission().catch(() => {
-        show('Camera permission is required', 'error');
-      });
-    }
-  }, [permission, requestPermission, show]);
-
   // ── Permission entrance: spring slide-up + fade when denied ──
   useEffect(() => {
-    if (permission && !permission.granted) {
+    if (!hasPermission) {
       permissionEntrance.value = 0;
       if (!reducedMotion) {
         permissionEntrance.value = withDelay(
@@ -316,14 +292,18 @@ export default function CreatorCamera({
         permissionEntrance.value = 1;
       }
     }
-  }, [permission, reducedMotion, permissionEntrance]);
+  }, [hasPermission, reducedMotion, permissionEntrance]);
 
   // ── Load recent gallery photos for thumbnail + carousel ──
   useEffect(() => {
     let cancelled = false;
     async function loadRecent() {
       try {
-        const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
+        // Never ambush the creator with a broad photo-library permission
+        // merely to decorate the gallery control. If access already exists,
+        // show a recent thumbnail; otherwise the glyph remains truthful and
+        // the system picker asks only when the user chooses Gallery.
+        const mediaPermission = await MediaLibrary.getPermissionsAsync(false);
         if (!mediaPermission.granted || cancelled) return;
         const page = await MediaLibrary.getAssetsAsync({
           mediaType: ['photo', 'video'],
@@ -359,6 +339,7 @@ export default function CreatorCamera({
 
   const toggleFacing = useCallback(() => {
     haptic.medium();
+    setCameraReady(false);
     // Spring 3D flip animation: rotateY 0→180→360
     if (!reducedMotion) {
       flipRotation.value = withSequence(
@@ -366,6 +347,7 @@ export default function CreatorCamera({
       );
     }
     setFacing((p) => (p === 'back' ? 'front' : 'back'));
+    // device is reactive — useCameraDevice(facing) will resolve the new device
   }, [haptic, reducedMotion, flipRotation, spring]);
 
   // ── Double-tap to switch camera ──
@@ -436,22 +418,21 @@ export default function CreatorCamera({
   }, [haptic]);
 
   // ── P0.1: One unified recording lifecycle ────────────────────────
-  // beginVideoRecording() starts native recordAsync() and stores the promise.
-  // stopRecording() calls stopRecording() on the native camera, which causes
-  // the promise to resolve. The awaited result enters the same review object
-  // as a photo. Cleanup runs on background/unmount/interruption.
-  // Declared before startHandsFreeCapture (which calls beginVideoRecording)
-  // to avoid temporal dead zone errors with const arrow functions.
+  // vision-camera V5 uses a callback-based Recorder: createRecorder() →
+  // startRecording(onFinished, onError) → stopRecording(). The onFinished
+  // callback receives a filePath (filesystem path, not file:// URI).
+  // We prepend "file://" for downstream consumers that expect URIs.
+  const recorderRef = useRef<import('react-native-vision-camera').Recorder | null>(null);
+
   const stopRecording = useCallback(() => {
     if (!isRecording) return;
     haptic.medium();
-    // Stop native recording — this resolves the recordAsync promise
-    cameraRef.current?.stopRecording();
-    // The await in beginVideoRecording handles the rest (UI cleanup, review)
+    // Stop native recording — this triggers the onRecordingFinished callback
+    void recorderRef.current?.stopRecording();
   }, [isRecording, haptic]);
 
   const beginVideoRecording = useCallback(async (customMaxDuration?: number) => {
-    if (!cameraRef.current || isRecording) return;
+    if (!cameraReady || isRecording || !videoOutput) return;
     haptic.medium(); // medium on recording start
     setIsRecording(true);
     setRecordingElapsed(0);
@@ -468,47 +449,91 @@ export default function CreatorCamera({
     const startTime = Date.now();
     recordingTimerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      setRecordingElapsed(elapsed);
+      // Update the shared value every tick (no re-render) for the progress ring.
+      // Update React state at a coarser 200ms cadence for the timer text —
+      // 5 updates/sec is smooth enough for a "0:03" display while avoiding
+      // 20 re-renders/sec (the old 50ms interval caused jank on low-end devices).
       recordingProgress.value = Math.min(1, elapsed / maxDuration);
+      if (elapsed % 200 < 50) {
+        setRecordingElapsed(elapsed);
+      }
       if (elapsed >= maxDuration) {
         // Auto-stop at max duration
         stopRecording();
       }
     }, 50);
 
-    // Start native recording — one promise for the entire lifecycle
-    recordingPromiseRef.current = cameraRef.current.recordAsync({
-      maxDuration: maxDuration / 1000,
-    });
-
+    // Create a Recorder and start recording with callbacks
     try {
-      const result = await recordingPromiseRef.current;
-      recordingPromiseRef.current = null;
-      if (result?.uri) {
-        haptic.medium();
-        // Capture flash — white overlay
-        if (!reducedMotion) {
-          captureFlash.value = withSequence(
-            withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
-            withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
-          );
-        }
-        setCapturedKind('video');
-        setCapturedUri(result.uri);
-        CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
-      }
+      const recorder = await videoOutput.createRecorder({});
+      recorderRef.current = recorder;
+      await recorder.startRecording(
+        (filePath) => {
+          // onRecordingFinished — filePath is a filesystem path
+          const uri = `file://${filePath}`;
+          haptic.medium();
+          // Capture flash — white overlay
+          if (!reducedMotion) {
+            captureFlash.value = withSequence(
+              withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
+              withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
+            );
+          }
+          // ── Multi-capture: accumulate directly to the staging tray ──
+          if (multiCaptureMode && !isVisualSearch) {
+            const media: CreatorInitialMedia = {
+              id: makeStableId('capture'),
+              uri,
+              kind: 'video',
+            };
+            if (speedMode !== DEFAULT_SPEED) {
+              media.speed = parseFloat(speedMode);
+            }
+            if (greenScreenSettings) {
+              media.greenScreen = {
+                backgroundUri: greenScreenSettings.backgroundUri,
+                keyColor: greenScreenSettings.keyColor,
+                tolerance: greenScreenSettings.tolerance,
+                feather: greenScreenSettings.feather,
+              };
+            }
+            setMultiCaptures((prev) => [...prev, media]);
+          } else {
+            setCapturedKind('video');
+            setCapturedUri(uri);
+          }
+          CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
+          // Cleanup UI state
+          setIsRecording(false);
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          recordingProgress.value = withSpring(0, spring.entrance);
+          recorderRef.current = null;
+        },
+        (error) => {
+          // onRecordingError
+          show('Failed to record video', 'error');
+          setIsRecording(false);
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          recordingProgress.value = withSpring(0, spring.entrance);
+          recorderRef.current = null;
+        },
+      );
     } catch {
-      show('Failed to record video', 'error');
+      show('Failed to start recording', 'error');
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      recordingProgress.value = withSpring(0, spring.entrance);
     }
-
-    // Cleanup UI state (runs after promise resolves or rejects)
-    setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    recordingProgress.value = withSpring(0, spring.entrance);
-  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster]);
+  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, videoOutput]);
 
   // ── Hands-free countdown → auto-record ──
   // Starts a 3-second countdown with haptic ticks, then begins recording.
@@ -553,7 +578,11 @@ export default function CreatorCamera({
   // required by Expo Camera's zoom prop. The pinch delta is added to the
   // stepped zoom baseline and clamped to 0..1. On release, it snaps to the
   // nearest zoom step.
-  const pinchStartZoom = useRef(0);
+  // Shared value (not useRef) so it can be read inside worklet closures
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const pinchStartZoom = useSharedValue(0);
   const [pinchZoomDelta, setPinchZoomDelta] = useState(0);
 
   const showZoomIndicator = useCallback(() => {
@@ -565,10 +594,10 @@ export default function CreatorCamera({
     }
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
-  const snapPinchToStep = useCallback((normalizedZoom: number) => {
-    // Snap to nearest step: 0 (1×), 0.5 (2×), 1 (3×)
-    if (normalizedZoom < 0.25) setZoomIndex(0);
-    else if (normalizedZoom < 0.75) setZoomIndex(1);
+  const snapPinchToStep = useCallback((zoom: number) => {
+    // Snap to nearest step: 1 (1×), 2 (2×), 3 (3×)
+    if (zoom < 1.5) setZoomIndex(0);
+    else if (zoom < 2.5) setZoomIndex(1);
     else setZoomIndex(2);
   }, []);
 
@@ -577,34 +606,31 @@ export default function CreatorCamera({
       Gesture.Pinch()
         .onStart(() => {
           'worklet';
-          runOnJS((z: number) => {
-            pinchStartZoom.current = z;
-          })(zoomNormalized);
+          pinchStartZoom.value = zoomValue;
         })
         .onUpdate((e) => {
           'worklet';
-          // Map pinch scale to normalized zoom delta. A scale of 2 doubles
-          // the zoom, so we map proportionally within the 0..1 range.
-          const newZoom = Math.max(0, Math.min(1, pinchStartZoom.current + (e.scale - 1) * 0.5));
-          runOnJS(setPinchZoomDelta)(newZoom - pinchStartZoom.current);
+          // Map pinch scale to zoom delta. A scale of 2 doubles the zoom.
+          const newZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
+          runOnJS(setPinchZoomDelta)(newZoom - pinchStartZoom.value);
         })
         .onEnd((e) => {
           'worklet';
-          const finalZoom = Math.max(0, Math.min(1, pinchStartZoom.current + (e.scale - 1) * 0.5));
+          const finalZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
           runOnJS(setPinchZoomDelta)(0);
           runOnJS(snapPinchToStep)(finalZoom);
           runOnJS(haptic.light)();
           runOnJS(showZoomIndicator)();
         }),
-    [zoomNormalized, snapPinchToStep, haptic, showZoomIndicator],
+    [zoomValue, snapPinchToStep, haptic, showZoomIndicator, pinchStartZoom],
   );
 
-  // Effective zoom = stepped baseline + pinch delta, clamped to 0..1
-  const effectiveZoom = Math.max(0, Math.min(1, zoomNormalized + pinchZoomDelta));
+  // Effective zoom = stepped baseline + pinch delta, clamped to device range
+  const effectiveZoom = Math.max(1, zoomValue + pinchZoomDelta);
 
   // ── Capture with optional timer ──
   const takePhoto = useCallback(async () => {
-    if (!cameraRef.current || countdown !== null) return;
+    if (!cameraRef.current || !cameraReady || countdown !== null) return;
 
     if (timerOption > 0) {
       haptic.medium(); // medium on countdown start
@@ -632,14 +658,21 @@ export default function CreatorCamera({
 
     try {
       const captureStart = Date.now();
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.92,
-        skipProcessing: false,
-      });
+      // vision-camera V5: capturePhoto returns an in-memory Photo object.
+      // Save to temp file and dispose to free native memory.
+      const photo = await photoOutput.capturePhoto(
+        { flashMode: flash },
+        {},
+      );
+      const filePath = await photo.saveToTemporaryFileAsync();
+      const photoUri = `file://${filePath}`;
+      photo.dispose();
       const captureLatencyMs = Date.now() - captureStart;
-      if (photo?.uri) {
+      if (photoUri) {
         haptic.medium();
-        // Capture flash — white overlay 0→0.8→0 over 200ms
+        // Capture flash — white overlay 0→0.8→0 over 200ms. This is the
+        // capture feedback signal and runs regardless of whether the
+        // capture goes direct-to-editor or through the review overlay.
         if (!reducedMotion) {
           captureFlash.value = withSequence(
             withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
@@ -647,7 +680,33 @@ export default function CreatorCamera({
           );
         }
         setCapturedKind('image');
-        setCapturedUri(photo.uri);
+        // ── Multi-capture: accumulate directly to the staging tray ──
+        // In multi-capture mode (the default), photo captures pile up
+        // silently like Snapchat Multi Snap — no per-capture review
+        // overlay. The user finishes via the Done button in the staging
+        // tray. Visual search is excluded (different intent — single
+        // capture with a confirm step).
+        if (multiCaptureMode && !isVisualSearch) {
+          // Photo media is constructed inline because buildCaptureMedia is
+          // declared below and would otherwise be used before declaration.
+          const media: CreatorInitialMedia = {
+            id: makeStableId('capture'),
+            uri: photoUri,
+            kind: 'image',
+          };
+          setMultiCaptures((prev) => [...prev, media]);
+        } else if (!!onCaptureBatch && !isVisualSearch) {
+          // ── Single-capture direct-to-edit (poster/look) ──
+          // Per upload-department-convergence-loop.md §5: in poster/look mode
+          // a single photo capture goes direct-to-editor with no quick-review
+          // overlay — the capture commits and retake/undo lives in the editor,
+          // preserving the continuous gesture. This path is reached when the
+          // user has explicitly toggled multi-capture OFF in Tools.
+          onCaptureBatch([{ id: makeStableId('capture'), uri: photoUri, kind: 'image' }]);
+        } else {
+          // Review overlay (visual search, or legacy single capture)
+          setCapturedUri(photoUri);
+        }
         // ── Capture latency telemetry ──
         // Tracks shutter-to-photo-ready time so we can monitor camera
         // performance regressions across devices and OS versions.
@@ -656,19 +715,23 @@ export default function CreatorCamera({
     } catch {
       show('Failed to capture photo', 'error');
     }
-  }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring]);
+  }, [photoOutput, flash, cameraReady, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring, onCaptureBatch, isVisualSearch, multiCaptureMode, isPoster]);
 
   // ── Cleanup recording on unmount / interruption ──
   useEffect(() => {
     return () => {
+      // Deactivate the camera first so the native CameraSession releases
+      // the device immediately, before we stop recording. This prevents
+      // "A resource failed to call release" finalizer warnings.
+      setCameraActive(false);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
-      // Stop any active native recording to prevent orphaned promises
-      if (recordingPromiseRef.current) {
-        cameraRef.current?.stopRecording();
-        recordingPromiseRef.current = null;
+      // Stop any active native recording to prevent orphaned recordings
+      if (recorderRef.current) {
+        void recorderRef.current.stopRecording();
+        recorderRef.current = null;
       }
       // Clean up hands-free countdown timer
       if (handsFreeCountdownRef.current) {
@@ -685,8 +748,8 @@ export default function CreatorCamera({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'background' || state === 'inactive') {
-        if (recordingPromiseRef.current) {
-          cameraRef.current?.stopRecording();
+        if (recorderRef.current) {
+          void recorderRef.current.stopRecording();
         }
         if (recordingTimerRef.current) {
           clearInterval(recordingTimerRef.current);
@@ -768,10 +831,10 @@ export default function CreatorCamera({
   }, [haptic, reducedMotion, reviewOpacity, spring]);
 
   // ── Build a CreatorInitialMedia with speed + greenScreen metadata ──
-  // Speed: expo-camera 57 records at 1× always; the multiplier is stored
-  //   in metadata so the timeline/export engine applies it at playback.
-  // GreenScreen: post-capture chroma key settings are preserved so the
-  //   timeline can re-render the composite via Skia.
+  // Speed: vision-camera supports native fps control; the multiplier is
+  //   also stored in metadata so the timeline/export engine can apply it.
+  // GreenScreen: chroma key settings are preserved so the timeline can
+  //   re-render the composite via Skia.
   const buildCaptureMedia = useCallback((uri: string, kind: 'image' | 'video'): CreatorInitialMedia => {
     const media: CreatorInitialMedia = {
       id: makeStableId('capture'),
@@ -792,64 +855,42 @@ export default function CreatorCamera({
         feather: greenScreenSettings.feather,
       };
     }
-    // Attach camera effect if a non-'none' effect is selected. The
-    // effect ID is stored so the composer can apply it as a filter node
-    // when seeding the media layer (post-capture application).
-    if (cameraEffect !== 'none') {
-      media.cameraEffect = cameraEffect;
-    }
     return media;
-  }, [speedMode, greenScreenSettings, cameraEffect]);
+  }, [speedMode, greenScreenSettings]);
 
   const handleConfirmCapture = useCallback(() => {
     if (!capturedUri) return;
     haptic.light();
-    // In multi-capture mode, add to stack instead of immediately sending
-    if (multiCaptureMode) {
-      const media = buildCaptureMedia(capturedUri, capturedKind);
-      setMultiCaptures((prev) => [...prev, media]);
-      setCapturedUri(null);
-      return;
-    }
-    // If onCaptureBatch is provided, use it for poster/look modes
+    // Single-capture path only — multi-capture mode accumulates directly
+    // to the staging tray without setting capturedUri, so this handler is
+    // only reached by the legacy review path or visual search (which always
+    // keeps a confirm step because the intent is search, not creation).
     if (onCaptureBatch && !isVisualSearch) {
       onCaptureBatch([buildCaptureMedia(capturedUri, capturedKind)]);
     } else {
       onCapture(capturedUri);
     }
-  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch, buildCaptureMedia]);
+  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, isVisualSearch, buildCaptureMedia]);
 
-  // ── Multi-capture: add another photo without leaving camera ──
-  const handleAddAnother = useCallback(() => {
-    haptic.selection();
-    if (capturedUri) {
-      const media = buildCaptureMedia(capturedUri, capturedKind);
-      setMultiCaptures((prev) => [...prev, media]);
-      setCapturedUri(null);
-    }
-  }, [capturedUri, capturedKind, haptic, buildCaptureMedia]);
-
-  // ── Multi-capture: finish and send ALL captures (P0.3 fix) ──
+  // ── Multi-capture: finish and send ALL captures ──
   // Every capture is retained and sent as a CreatorInitialMedia[] batch.
   // Poster maps captures to frames; Look maps captures to layers.
   // Speed and greenScreen metadata are preserved on each clip so the
   // timeline/export engine can apply them at playback.
+  // Triggered from the Done button in the staging tray (Snapchat Multi
+  // Snap "Edit & Send" pattern).
   const handleFinishMultiCapture = useCallback(() => {
-    if (multiCaptures.length === 0 && !capturedUri) return;
+    if (multiCaptures.length === 0) return;
     haptic.medium();
-    const currentCapture: CreatorInitialMedia[] = capturedUri
-      ? [buildCaptureMedia(capturedUri, capturedKind)]
-      : [];
-    const all = [...multiCaptures, ...currentCapture];
-    // Send all captures via onCaptureBatch if available, else fall back
     if (onCaptureBatch) {
-      onCaptureBatch(all);
-    } else if (all.length > 0) {
-      onCapture(all[0].uri);
+      onCaptureBatch(multiCaptures);
+    } else if (multiCaptures.length > 0) {
+      onCapture(multiCaptures[0].uri);
     }
     setMultiCaptures([]);
-    setMultiCaptureMode(false);
-  }, [multiCaptures, capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, buildCaptureMedia]);
+    // Mode state can remain active until the camera unmounts; returning to
+    // the creator entry remounts the camera in the one-tap default mode.
+  }, [multiCaptures, haptic, onCapture, onCaptureBatch]);
 
   // ── Multi-capture: toggle mode ──
   const toggleMultiCapture = useCallback(() => {
@@ -896,19 +937,19 @@ export default function CreatorCamera({
     }
   }, [haptic, recentImages.length]);
 
-  // ── Permission: loading ──
-  if (!permission) {
-    return <PermissionState status="loading" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
-  }
-
   // ── Permission: permanently denied ──
-  if (!permission.granted && !permission.canAskAgain) {
+  if (!hasPermission && !canRequestPermission) {
     return <PermissionState status="denied" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
   // ── Permission: undetermined — ask ──
-  if (!permission.granted) {
+  if (!hasPermission) {
     return <PermissionState status="undetermined" isPoster={isPoster} entrance={permissionEntrance} onEnable={() => requestPermission()} onGallery={onGallery} />;
+  }
+
+  // ── No camera device available (simulator or no camera) ──
+  if (!device) {
+    return <PermissionState status="denied" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
   // ── Camera viewfinder ──
@@ -922,18 +963,38 @@ export default function CreatorCamera({
             <Pressable
               style={StyleSheet.absoluteFill}
               onPress={handleTapFocus}
-            accessibilityRole="button"
+              accessibilityRole="button"
+              accessibilityLabel="Camera viewfinder"
+              accessibilityHint="Tap to show the focus point"
             >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
-                <CameraView
+                <SkiaCamera
                   ref={cameraRef}
                   style={StyleSheet.absoluteFill}
-                  facing={facing}
-                  flash={flash}
-                  mode="picture"
-                  enableTorch={flash === 'on'}
+                  device={device}
+                  isActive={cameraActive}
+                  outputs={[photoOutput, videoOutput]}
+                  torchMode={flash === 'on' ? 'on' : 'off'}
                   zoom={effectiveZoom}
+                  onFrame={effectFrameProcessor}
+                  onStarted={() => setCameraReady(true)}
+                  onError={() => {
+                    setCameraReady(false);
+                    show('Camera could not start. Try again or use your gallery.', 'error');
+                  }}
                 />
+                {/* Camera initialization loading overlay — shown between
+                    permission granted and cameraReady=true. A subtle
+                    spinner on the dark preview communicates "starting"
+                    instead of a black screen with no feedback. */}
+                {!cameraReady && (
+                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <View style={styles.cameraInitOverlay} />
+                    <View style={styles.cameraInitSpinnerWrap}>
+                      <View style={styles.cameraInitSpinner} />
+                    </View>
+                  </View>
+                )}
               </Reanimated.View>
             </Pressable>
           </View>
@@ -995,11 +1056,8 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Corner brackets — mode-specific framing guide */}
-      {/* Visual Search: square crop area. Look (4:5): squarer. Poster (9:16): taller.
-          The bracket group crossfades (opacity dip) when the mode changes so the
-          reposition reads as a smooth reframing rather than a jump. */}
-      <Reanimated.View style={bracketOpacityStyle} pointerEvents="none">
+      {/* Corner brackets — route-intent-specific framing guide. */}
+      <View pointerEvents="none">
         {(() => {
           const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
           const bracketBottom = isVisualSearch ? '32%' : isPoster ? '30%' : '30%';
@@ -1015,7 +1073,7 @@ export default function CreatorCamera({
             </>
           );
         })()}
-      </Reanimated.View>
+      </View>
 
       {/* Center crosshair */}
       <View style={styles.crosshair} pointerEvents="none">
@@ -1032,7 +1090,7 @@ export default function CreatorCamera({
           accessibilityLabel="Close camera"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={28} color="#fff" />
+          <Ionicons name="close" size={IconGrammar.hero} color="#fff" />
         </Pressable>
 
         <View style={styles.topRightControls}>
@@ -1047,7 +1105,7 @@ export default function CreatorCamera({
           >
             <Ionicons
               name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
-              size={24}
+              size={IconGrammar.hero}
               color={flash === 'off' ? '#fff' : colors.antiqueGold}
             />
           </Pressable>
@@ -1057,13 +1115,88 @@ export default function CreatorCamera({
             onPress={openToolsSheet}
             hitSlop={12}
             accessibilityLabel="Camera tools"
-            accessibilityHint="Opens timer, grid, hands-free, speed, green screen, effects, and multi-capture"
+            accessibilityHint="Opens timer, grid, hands-free, speed, green screen, and multi-capture"
             accessibilityRole="button"
           >
-            <Ionicons name="ellipsis-horizontal-circle-outline" size={26} color="#fff" />
+            <Ionicons name="ellipsis-horizontal-circle-outline" size={IconGrammar.hero} color="#fff" />
           </Pressable>
         </View>
       </View>
+
+      {/* ── Multi-snap staging tray (Snapchat staging area pattern) ──
+          Whenever captures exist, a persistent horizontal row of captured
+          thumbnails is visible on the camera surface so the user sees their
+          sequence accumulate while shooting (upload-department-convergence-
+          loop.md §5). Each thumbnail is tappable to drop that frame. A Done
+          button at the end lets the user finish and enter the editor — the
+          Snapchat Multi Snap "Edit & Send" pattern. The tray is visible
+          whenever captures exist, regardless of the multi-capture toggle,
+          so accumulated captures are never hidden. */}
+      {multiCaptures.length > 0 && (
+        <View
+          style={[styles.stagingTray, { top: Math.max(insets.top, 16) + 56 }]}
+          pointerEvents="box-none"
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.stagingTrayContent}
+          >
+            {multiCaptures.map((cap, i) => (
+              <Pressable
+                key={cap.id}
+                style={styles.stagingThumbWrap}
+                onPress={() => handleRemoveCapture(cap.id)}
+                hitSlop={4}
+                accessibilityLabel={`Frame ${i + 1} of ${multiCaptures.length}, tap to remove`}
+                accessibilityRole="button"
+              >
+                <Image source={{ uri: cap.uri }} style={styles.stagingThumb} />
+                {/* Order index — bottom-left, the verified multi-select pattern */}
+                <View style={styles.stagingOrderBadge}>
+                  <Text style={styles.stagingOrderText}>{i + 1}</Text>
+                </View>
+                {/* Remove glyph — top-right, signals the tap action */}
+                <View style={styles.stagingRemoveBadge}>
+                  <Ionicons name="close" size={IconGrammar.badge} color="#fff" />
+                </View>
+              </Pressable>
+            ))}
+            {/* Done button — finish multi-capture and enter the editor.
+                Snapchat Multi Snap "Edit & Send" pattern: the user
+                accumulates captures, then taps Done to enter the editor
+                with the full batch. */}
+            <Pressable
+              style={styles.stagingDoneBtn}
+              onPress={handleFinishMultiCapture}
+              hitSlop={4}
+              accessibilityLabel={`Done, ${multiCaptures.length} captures selected`}
+              accessibilityHint="Finishes multi-capture and opens the editor with all captures"
+              accessibilityRole="button"
+            >
+              <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
+              <Text style={styles.stagingDoneText}>Done ({multiCaptures.length})</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Camera effect bar — real-time GPU preview effects.
+          Sits above the bottom controls. Compact horizontal scroll of
+          effect buttons. The selected effect is applied to the live
+          preview via a Skia frame processor (useCameraEffectProcessor). */}
+      {!isRecording && (
+        <View style={[styles.effectBarWrap, { bottom: Math.max(insets.bottom, 16) + 96 }]} pointerEvents="box-none">
+          <CameraEffectPreview
+            selectedEffect={cameraEffect}
+            onEffectChange={(effect) => {
+              setCameraEffect(effect);
+              CreatorAnalytics.cameraEffectSelected(effect);
+            }}
+            disabled={isRecording}
+          />
+        </View>
+      )}
 
       {/* Bottom controls — gallery (left), shutter (center), flip (right) */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
@@ -1080,14 +1213,15 @@ export default function CreatorCamera({
         {/* Shutter — the hero control with recording ring */}
         <ShutterButton
           onPress={handleShutterPress}
-          onLongPress={handleShutterLongPress}
-          onPressOut={handleShutterPressOut}
+          onLongPress={CAMERA_VIDEO_CAPTURE_ENABLED ? handleShutterLongPress : undefined}
+          onPressOut={CAMERA_VIDEO_CAPTURE_ENABLED ? handleShutterPressOut : undefined}
           isRecording={isRecording}
-          disabled={countdown !== null || handsFreeCountdown !== null}
+          disabled={!cameraReady || countdown !== null || handsFreeCountdown !== null}
           recordingProgress={recordingProgress}
           recordingRingScale={recordingRingScale}
           handsFreeMode={handsFreeMode}
           speedMode={speedMode}
+          videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED}
         />
 
         {/* Flip camera — prominent circular button, bottom-right */}
@@ -1098,24 +1232,9 @@ export default function CreatorCamera({
           accessibilityLabel="Flip camera"
           accessibilityRole="button"
         >
-          <Ionicons name="camera-reverse-outline" size={26} color="#fff" />
+          <Ionicons name="camera-reverse-outline" size={IconGrammar.hero} color="#fff" />
         </Pressable>
       </View>
-
-      {/* ── Capture mode switch (Look / Poster / Search) ────────────────
-          Sits below the shutter, above the safe area. A minimal text-based
-          switch with a spring-animated active indicator dot. Lets the user
-          reframe their intent without leaving the camera — no route
-          transition, just a mode change. Hidden while a review overlay or
-          countdown is active so it never competes with capture feedback. */}
-      {!capturedUri && countdown === null && handsFreeCountdown === null && (
-        <View
-          style={[styles.captureModeSwitch, { bottom: Math.max(insets.bottom, 16) - 8 }]}
-          pointerEvents="box-none"
-        >
-          <CreatorModeSwitch mode={captureMode} onModeChange={handleCaptureModeChange} />
-        </View>
-      )}
 
       {/* Recording timer badge — shown while recording.
           Includes speed indicator when a non-1× speed mode is active. */}
@@ -1129,22 +1248,17 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Camera effect bar and speed segment control have been moved into
-          the CaptureToolsSheet (behind the Tools button). They are no longer
-          rendered inline in the default camera chrome. */}
-
       {/* Hands-free mode indicator — subtle badge when hands-free is armed */}
       {handsFreeMode && !isRecording && handsFreeCountdown === null && (
         <View style={[styles.handsFreeBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
-          <Ionicons name="hand-right-outline" size={14} color={colors.antiqueGold} />
+          <Ionicons name="hand-right-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
           <Text style={[styles.handsFreeBadgeText, { color: colors.antiqueGold }]}>Hands-free</Text>
         </View>
       )}
 
-      {/* Green screen (post-capture) sheet — background image picker,
-          key color, tolerance, feather. Real-time chroma keying is not
-          feasible with expo-camera alone, so the effect is applied in
-          post-production via Skia. Truthfully labelled. */}
+      {/* Green screen sheet — background image picker, key color,
+          tolerance, feather. Settings are saved with the capture and
+          the chroma key effect is rendered on the timeline via Skia. */}
       <GreenScreenSheet
         visible={showGreenScreenSheet}
         onApply={handleGreenScreenApply}
@@ -1153,8 +1267,9 @@ export default function CreatorCamera({
 
       {/* ── Capture tools sheet ──────────────────────────────────────── */}
       {/* Bottom sheet containing all secondary camera tools: Timer, Grid,
-          Hands-free, Speed, Green Screen, Effects, Multi-capture. Opens
-          from the Tools button in the top bar. Each tool applies
+          Hands-free, Speed, Green Screen, Multi-capture. Opens from the
+          Tools button in the top bar. Camera effects are now on the main
+          camera surface (1 tap away), not in this sheet. Each tool applies
           immediately; the sheet can stay open or be dismissed. */}
       <CaptureToolsSheet
         visible={showToolsSheet}
@@ -1177,14 +1292,13 @@ export default function CreatorCamera({
             toggleGreenScreen();
           }
         }}
-        cameraEffect={cameraEffect}
-        onSelectEffect={setCameraEffect}
         multiCaptureMode={multiCaptureMode}
         onToggleMultiCapture={toggleMultiCapture}
         multiCaptureCount={multiCaptures.length}
         hasCapturedUri={!!capturedUri}
         isVisualSearch={isVisualSearch}
         isRecording={isRecording}
+        videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED}
       />
 
       {/* Green screen active indicator — shows the selected background
@@ -1220,98 +1334,53 @@ export default function CreatorCamera({
             pointerEvents="none"
           />
 
-          {/* Review actions — refined layout with clear primary/secondary hierarchy.
-              The primary action (Edit/Search/Done) is a prominent pill with an
-              icon + label; secondary actions (Retake, Save, Add) are compact
-              icon+label clusters. This matches iOS Camera/Snapchat post-capture
-              patterns where the primary action is visually dominant. */}
+          {/* Review actions — single-capture mode only. In multi-capture
+              mode (the default), captures accumulate silently to the
+              staging tray and the review overlay never appears. This
+              overlay is reached only when the user has explicitly toggled
+              multi-capture OFF in Tools, or in visual search mode (which
+              always uses a confirm step). */}
           <View style={[styles.reviewActions, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
-            {multiCaptureMode ? (
-              <>
-                {/* Multi-capture: Add another */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-                  onPress={handleAddAnother}
-                  hitSlop={12}
-                  accessibilityLabel="Add another photo"
-                  accessibilityHint="Captures another photo without leaving the camera"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="add-circle-outline" size={26} color="#fff" />
-                  <Text style={styles.reviewBtnLabel}>Add</Text>
-                </Pressable>
+            {/* Retake */}
+            <Pressable
+              style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
+              onPress={handleRetake}
+              hitSlop={12}
+              accessibilityLabel="Retake photo"
+              accessibilityHint="Discards the current photo and returns to the camera"
+              accessibilityRole="button"
+            >
+              <Ionicons name="refresh-outline" size={IconGrammar.hero} color="#fff" />
+              <Text style={styles.reviewBtnLabel}>Retake</Text>
+            </Pressable>
 
-                {/* Multi-capture: Done — primary action */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
-                  onPress={handleFinishMultiCapture}
-                  hitSlop={16}
-                  accessibilityLabel={`Finish multi-capture and edit, ${multiCaptures.length + 1} photos selected`}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="checkmark" size={28} color={colors.background} />
-                  <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
-                    Done ({multiCaptures.length + 1})
-                  </Text>
-                </Pressable>
+            {/* Use — primary action */}
+            <Pressable
+              style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
+              onPress={handleConfirmCapture}
+              hitSlop={16}
+              accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
+              accessibilityHint={isVisualSearch ? 'Starts a visual search with the captured photo' : 'Opens the studio editor with this photo'}
+              accessibilityRole="button"
+            >
+              <Ionicons name="arrow-forward" size={IconGrammar.hero} color={colors.background} />
+              <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
+                {isVisualSearch ? 'Search' : 'Edit'}
+              </Text>
+            </Pressable>
 
-                {/* Retake current */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-                  onPress={handleRetake}
-                  hitSlop={12}
-                  accessibilityLabel="Retake current photo"
-                  accessibilityHint="Discards the current photo and returns to the camera"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="refresh-outline" size={26} color="#fff" />
-                  <Text style={styles.reviewBtnLabel}>Retake</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                {/* Retake */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-                  onPress={handleRetake}
-                  hitSlop={12}
-                  accessibilityLabel="Retake photo"
-                  accessibilityHint="Discards the current photo and returns to the camera"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="refresh-outline" size={26} color="#fff" />
-                  <Text style={styles.reviewBtnLabel}>Retake</Text>
-                </Pressable>
-
-                {/* Use — primary action */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
-                  onPress={handleConfirmCapture}
-                  hitSlop={16}
-                  accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
-                  accessibilityHint={isVisualSearch ? 'Starts a visual search with the captured photo' : 'Opens the studio editor with this photo'}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="arrow-forward" size={28} color={colors.background} />
-                  <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
-                    {isVisualSearch ? 'Search' : 'Edit'}
-                  </Text>
-                </Pressable>
-
-                {/* Save to gallery */}
-                <Pressable
-                  style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-                  onPress={handleSaveToGallery}
-                  hitSlop={12}
-                  accessibilityLabel="Save to gallery"
-                  accessibilityHint="Saves the photo to the device photo library"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="download-outline" size={26} color="#fff" />
-                  <Text style={styles.reviewBtnLabel}>Save</Text>
-                </Pressable>
-              </>
-            )}
+            {/* Save to gallery */}
+            <Pressable
+              style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
+              onPress={handleSaveToGallery}
+              hitSlop={12}
+              accessibilityLabel="Save to gallery"
+              accessibilityHint="Saves the photo to the device photo library"
+              accessibilityRole="button"
+            >
+              <Ionicons name="download-outline" size={IconGrammar.hero} color="#fff" />
+              <Text style={styles.reviewBtnLabel}>Save</Text>
+            </Pressable>
           </View>
         </Reanimated.View>
       )}
@@ -1323,6 +1392,30 @@ export default function CreatorCamera({
 // ── Styles ────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  // ── Camera initialization loading overlay ──
+  effectBarWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  cameraInitOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  cameraInitSpinnerWrap: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraInitSpinner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderTopColor: 'rgba(255,255,255,0.9)',
+  },
   // ── Camera-overlay whites ──────────────────────────────────────────
   // The camera preview is always dark regardless of app theme, so overlay
   // controls (brackets, crosshair, grid, labels, shutter ring, review
@@ -1522,6 +1615,83 @@ const styles = StyleSheet.create({
   topIconBtnActive: {
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
+  // ── Multi-snap staging tray ──
+  // A persistent horizontal row of captured thumbnails below the top bar.
+  // Reads as a staging area (Snapchat pattern), not a chrome panel: flat
+  // canvas, hairline-edged thumbs, no enclosing card. The tray recedes in
+  // the squint test — the viewfinder still dominates.
+  stagingTray: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    zIndex: 15,
+  },
+  stagingTrayContent: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  stagingThumbWrap: {
+    position: 'relative',
+  },
+  // 40pt thumbnail — smaller than the 44pt gallery thumb so the tray stays
+  // compact and does not compete with the viewfinder. 2pt white/90 ring.
+  stagingThumb: {
+    width: 40,
+    height: 52,
+    borderRadius: Radius.sm,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  // Order index badge — bottom-left, the verified multi-select pattern.
+  stagingOrderBadge: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    minWidth: 14,
+    height: 14,
+    paddingHorizontal: 3,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stagingOrderText: {
+    color: '#fff',
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+  },
+  // Remove glyph — top-right, signals the tap-to-drop action.
+  stagingRemoveBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Done button — finishes multi-capture and enters the editor.
+  // Snapchat Multi Snap "Edit & Send" pattern: a compact pill with a
+  // checkmark that commits the accumulated batch. Translucent dark fill
+  // with a brighter border so it reads as the primary action in the tray.
+  stagingDoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  stagingDoneText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+  },
   // Bottom bar — gallery (left) | shutter (center) | flip (right).
   // The viewfinder dominates; controls are compact and purposeful.
   bottomBar: {
@@ -1546,15 +1716,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Capture mode switch (Look / Poster / Search) — sits below the shutter,
-  // above the safe area. Minimal text-based switch; the container only
-  // positions it, the component draws its own content.
-  captureModeSwitch: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
   },
   // Recording badge — timer + red dot at top
   recordingBadge: {

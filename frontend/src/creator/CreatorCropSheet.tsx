@@ -13,6 +13,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -393,7 +394,7 @@ export function CreatorCropSheet({
             accessibilityLabel="Close crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -463,7 +464,7 @@ export function CreatorCropSheet({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="refresh-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="refresh-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.rotateLabel, { color: colors.textSecondary }]}>
               {rotation}°
             </Text>

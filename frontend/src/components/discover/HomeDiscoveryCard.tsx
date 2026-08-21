@@ -175,9 +175,24 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                   {getCategoryPlaceholderTint(item.category, colors) ? (
                     <View style={[StyleSheet.absoluteFill, { backgroundColor: getCategoryPlaceholderTint(item.category, colors) }]} />
                   ) : null}
-                  <Text style={styles.mediaPlaceholderText} numberOfLines={1}>
-                    {getCategoryPlaceholderLabel(item.category, item.identity.primary)}
-                  </Text>
+                  {(() => {
+                    const label = getCategoryPlaceholderLabel(item.category, item.identity.primary);
+                    // Brand initial → large confident monogram (art-directed,
+                    // not a tiny label). Category name → quieter but still
+                    // confident. The object is the label (AGENTS.md §4).
+                    if (label.length === 1) {
+                      return (
+                        <Text style={styles.mediaPlaceholderMonogram} numberOfLines={1}>
+                          {label}
+                        </Text>
+                      );
+                    }
+                    return (
+                      <Text style={styles.mediaPlaceholderText} numberOfLines={1}>
+                        {label}
+                      </Text>
+                    );
+                  })()}
                 </View>
               )}
             </SharedTransitionView>
@@ -335,13 +350,24 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
     },
+    // Category label: 13sp, medium, letter-spaced — quiet but confident.
     mediaPlaceholderText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
+      fontSize: 13,
+      lineHeight: 18,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: 0.3,
+    } as TextStyle,
+    // Brand monogram: 36sp, light weight, low opacity — art-directed
+    // typographic treatment. The initial IS the artwork, not a label.
+    mediaPlaceholderMonogram: {
+      fontSize: 36,
+      lineHeight: 40,
+      fontFamily: FontFamily.light,
+      color: colors.textMuted,
+      opacity: 0.5,
+      letterSpacing: -0.5,
+    } as TextStyle,
     // Save glyph: 44pt transparent hit area, 22pt visible icon, top-right
     saveButton: {
       position: 'absolute',

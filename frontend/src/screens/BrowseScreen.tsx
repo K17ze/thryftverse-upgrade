@@ -462,6 +462,7 @@ export default function BrowseScreen() {
     };
 
     const hasBackendFilters =
+      browseFilters.query.trim().length > 0 ||
       browseFilters.brands.length > 0 ||
       browseFilters.sizes.length > 0 ||
       browseFilters.condition !== 'Any' ||
@@ -478,10 +479,13 @@ export default function BrowseScreen() {
     setBackendError(null);
 
     fetchFilteredListings({
+      query: browseFilters.query.trim() || undefined,
       category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
       brand: browseFilters.brands[0],
       size: browseFilters.sizes[0],
       condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
+      minPrice: browseFilters.priceMin ?? undefined,
+      maxPrice: browseFilters.priceMax ?? undefined,
       sort: sortMap[browseFilters.sort] || 'newest',
     })
       .then((result) => {
@@ -716,7 +720,7 @@ export default function BrowseScreen() {
       {/* Heavy Typography Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} aria-hidden={true} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -727,10 +731,10 @@ export default function BrowseScreen() {
             accessibilityLabel={gridDensity === 'comfortable' ? 'Switch to compact 3 column grid' : 'Switch to comfortable 2 column grid'}
             accessibilityState={{ selected: true }}
           >
-            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={20} color={colors.textPrimary} />
+            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={22} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityRole="button" accessibilityLabel="Search listings">
-            <Ionicons name="search" size={20} color={colors.textPrimary} />
+            <Ionicons name="search" size={22} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
       </View>
@@ -738,7 +742,7 @@ export default function BrowseScreen() {
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
-          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
         </View>
       </View>
@@ -754,7 +758,7 @@ export default function BrowseScreen() {
             accessibilityState={{ selected: hasActiveFilters }}
             accessibilityHint={hasActiveFilters ? 'Filters are applied' : 'Opens filter options'}
           >
-            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
             <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -765,9 +769,9 @@ export default function BrowseScreen() {
             accessibilityLabel={`Sort by ${browseFilters.sort}`}
             accessibilityState={{ expanded: sortMenuOpen }}
           >
-            <Ionicons name="swap-vertical" size={14} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="swap-vertical" size={16} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
             <Text style={[styles.sortTriggerText, browseFilters.sort !== 'Recommended' && styles.sortTriggerTextActive]}>{browseFilters.sort}</Text>
-            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -778,7 +782,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.brands.length > 0 ? `${browseFilters.brands.length} brands selected` : 'Opens brand filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.brands.length > 0 && styles.filterPillTextActive]}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -789,7 +793,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.sizes.length > 0 ? `${browseFilters.sizes.length} sizes selected` : 'Opens size filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.sizes.length > 0 && styles.filterPillTextActive]}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -800,7 +804,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.condition !== 'Any' ? `Condition: ${browseFilters.condition}` : 'Opens condition filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.condition !== 'Any' && styles.filterPillTextActive]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.filterPillOutline, browseFilters.sustainableOnly && styles.filterPillActive]}
@@ -815,8 +819,9 @@ export default function BrowseScreen() {
           >
             <Ionicons
               name="leaf"
-              size={14}
+              size={16}
               color={browseFilters.sustainableOnly ? colors.textPrimary : colors.textMuted}
+              aria-hidden={true}
             />
             <Text
               style={[
@@ -839,8 +844,9 @@ export default function BrowseScreen() {
             >
               <Ionicons
                 name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
-                size={14}
+                size={16}
                 color={isCurrentSaved ? colors.brand : colors.textSecondary}
+                aria-hidden={true}
               />
               <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
@@ -867,7 +873,7 @@ export default function BrowseScreen() {
                 <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]}>
                   {opt.label}
                 </Text>
-                {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+                {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} /> : null}
               </Pressable>
             );
           })}
@@ -892,7 +898,7 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Remove brand filter ${brand}`}
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ))}
@@ -911,7 +917,7 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Remove size filter ${size}`}
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ))}
@@ -930,7 +936,7 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Remove condition filter"
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ) : null}
@@ -949,7 +955,7 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Remove sustainable filter"
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ) : null}

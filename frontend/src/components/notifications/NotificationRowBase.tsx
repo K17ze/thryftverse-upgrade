@@ -100,6 +100,7 @@ export function NotificationRowBase({
     <AnimatedPressable
       style={[
         styles.row,
+        isUnread && styles.rowUnread,
         inAttentionSection && styles.rowAttention,
         style,
       ]}
@@ -176,19 +177,28 @@ export function NotificationThumbnail({
   );
 }
 
-/** Status icon chip — small rounded square with an accent-tinted background. */
+/**
+ * Status icon chip — small rounded square with an accent-tinted background.
+ *
+ * The subtle tint lets the row's type be scanned at a glance before any text
+ * is read (Instagram/TikTok 2026 pattern). The tint uses the semantic
+ * `*Subtle` tokens so it stays restrained and theme-correct in light/dark.
+ */
 export function NotificationStatusIcon({
   icon,
   accentColor,
+  accentSubtle,
   colors,
   size = 44,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   accentColor: string;
+  /** Subtle background tint — pass the matching `*Subtle` token (e.g. successSubtle). */
+  accentSubtle?: string;
   colors: ThemeColors;
   size?: number;
 }) {
-  const styles = useMemo(() => createStatusIconStyles(colors, size), [colors, size]);
+  const styles = useMemo(() => createStatusIconStyles(colors, size, accentSubtle), [colors, size, accentSubtle]);
   return (
     <View style={styles.container}>
       <Ionicons name={icon} size={size * 0.42} color={accentColor} />
@@ -241,6 +251,12 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
+    },
+    // Unread rows get a single quiet brand tint — the scannable signal.
+    // Paired with the semibold title, this is enough (Courier/Instagram
+    // pattern: one tint + one weight delta, not a dot + tint + border + bold).
+    rowUnread: {
+      backgroundColor: colors.brandSubtle,
     },
     rowAttention: {
       // Subtle accent — left border tint, not a giant card.
@@ -332,7 +348,7 @@ function createThumbnailStyles(colors: ThemeColors, size: number) {
   });
 }
 
-function createStatusIconStyles(colors: ThemeColors, size: number) {
+function createStatusIconStyles(colors: ThemeColors, size: number, accentSubtle?: string) {
   return StyleSheet.create({
     container: {
       width: size,
@@ -340,6 +356,7 @@ function createStatusIconStyles(colors: ThemeColors, size: number) {
       borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: accentSubtle ?? 'transparent',
     },
   });
 }

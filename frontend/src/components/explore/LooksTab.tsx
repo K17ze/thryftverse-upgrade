@@ -22,7 +22,6 @@ import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { EmptyState } from '../EmptyState';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
-import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 
@@ -30,14 +29,14 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Feed mode tabs ───────────────────────────────────────────────────────────
 // Pinterest/LTK-style feed segmentation. "For You" is the personalised default,
-// "Following" restricts to creators the viewer follows, and "Trending" surfaces
-// the most-engaged looks. The `sort` value is passed through to the API.
-type FeedMode = 'foryou' | 'following' | 'trending';
+// "Following" restricts to creators the viewer follows. The `sort` value is
+// passed through to the API; unsupported ranking modes are not exposed as
+// decorative controls.
+type FeedMode = 'foryou' | 'following';
 
 const FEED_TABS: { key: FeedMode; label: string; sort: string }[] = [
   { key: 'foryou', label: 'For You', sort: 'foryou' },
   { key: 'following', label: 'Following', sort: 'following' },
-  { key: 'trending', label: 'Trending', sort: 'trending' },
 ];
 
 // ── Template set ─────────────────────────────────────────────────────────────
@@ -212,11 +211,16 @@ export default function LooksTab() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [feedMode, setFeedMode] = useState<FeedMode>('foryou');
+  const loadedLookCountRef = useRef(0);
+
+  useEffect(() => {
+    loadedLookCountRef.current = looks.length;
+  }, [looks.length]);
 
   // Initial / refresh load. Resets the cursor and replaces the list.
   // The feed mode drives the `sort` parameter so the API can segment the feed.
   const loadLooks = useCallback(
-    async (isRefresh: boolean = false, mode: FeedMode = feedMode) => {
+    async (isRefresh: boolean = false, mode: FeedMode) => {
       const sort = FEED_TABS.find((t) => t.key === mode)?.sort ?? 'foryou';
       if (isRefresh) {
         setIsRefreshing(true);
@@ -227,7 +231,7 @@ export default function LooksTab() {
         setLooks(res.items ?? []);
         setCursor(res.nextCursor ?? null);
       } catch {
-        if (!isRefresh && looks.length === 0) {
+        if (!isRefresh && loadedLookCountRef.current === 0) {
           setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
         } else if (isRefresh) {
           setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
@@ -237,17 +241,17 @@ export default function LooksTab() {
         setIsRefreshing(false);
       }
     },
-    [feedMode, looks.length],
+    [],
   );
 
   useEffect(() => {
-    loadLooks();
-  }, [loadLooks]);
+    void loadLooks(false, feedMode);
+  }, [feedMode, loadLooks]);
 
   const handleRefresh = useCallback(() => {
     haptic.patterns.refresh();
-    loadLooks(true);
-  }, [loadLooks, haptic]);
+    void loadLooks(true, feedMode);
+  }, [feedMode, loadLooks, haptic]);
 
   // Feed tab switch — haptic, clear the list, reload with the new sort.
   const handleFeedModeChange = useCallback(
@@ -258,9 +262,8 @@ export default function LooksTab() {
       setLooks([]);
       setCursor(null);
       setIsLoading(true);
-      loadLooks(false, mode);
     },
-    [feedMode, haptic, loadLooks],
+    [feedMode, haptic],
   );
 
   // Cursor-based pagination. The service returns nextCursor; when present we
@@ -336,9 +339,6 @@ export default function LooksTab() {
 
     return (
       <View style={styles.scrollContent}>
-        <View style={styles.headerWrap}>
-          <DiscoverySectionHeader kicker="Community" title="Looks" />
-        </View>
         {FeedTabs}
         <View style={styles.masonrySkeletonGrid}>
           <View style={styles.masonrySkeletonCol}>
@@ -378,7 +378,7 @@ export default function LooksTab() {
           style={styles.retryBtn}
           onPress={() => {
             setIsLoading(true);
-            loadLooks();
+            void loadLooks(false, feedMode);
           }}
           activeOpacity={0.85}
           accessibilityRole="button"
@@ -393,9 +393,6 @@ export default function LooksTab() {
   if (looks.length === 0 && !loadError) {
     return (
       <View style={styles.scrollContent}>
-        <View style={styles.headerWrap}>
-          <DiscoverySectionHeader kicker="Community" title="Looks" />
-        </View>
         {FeedTabs}
         <EmptyState
           icon="camera-outline"
@@ -414,66 +411,59 @@ export default function LooksTab() {
   }
 
   // ── FlashList v2 masonry canvas ───────────────────────────────────────────
-  const keyExtractor = useCallback((item: LookApiItem) => `look-${item.id}`, []);
+  const keyExtractor = (item: LookApiItem) => `look-${item.id}`;
 
-  const renderItem = useCallback(
-    ({ item, index }: { item: LookApiItem; index: number }) => {
-      const template = resolveLookTemplate(item, index);
-      return (
-        <View
-          style={[
-            styles.tileCell,
-            { paddingHorizontal: styles.tileCell.paddingHorizontal / 2 },
-          ]}
-        >
-          <LookTile
-            look={item}
-            template={template}
-            onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
-            colors={colors}
-            styles={styles}
-          />
-        </View>
-      );
-    },
-    [colors, styles, navigation],
-  );
+  const renderItem = ({ item, index }: { item: LookApiItem; index: number }) => {
+    const template = resolveLookTemplate(item, index);
+    return (
+      <View
+        style={[
+          styles.tileCell,
+          { paddingHorizontal: styles.tileCell.paddingHorizontal / 2 },
+        ]}
+      >
+        <LookTile
+          look={item}
+          template={template}
+          onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
+          colors={colors}
+          styles={styles}
+        />
+      </View>
+    );
+  };
 
   // Deterministic span: editorial anchors + cinematic (video / multi-layer)
   // looks span both columns. Everything else is a single-column tile.
-  const overrideItemLayout = useCallback(
-    (layout: { span?: number }, item: LookApiItem, index: number) => {
-      const template = resolveLookTemplate(item, index);
-      layout.span = template.span;
-    },
-    [],
+  const overrideItemLayout = (
+    layout: { span?: number },
+    item: LookApiItem,
+    index: number,
+  ) => {
+    const template = resolveLookTemplate(item, index);
+    layout.span = template.span;
+  };
+
+  const ListHeaderComponent = (
+    <>
+      {loadError && looks.length > 0 && (
+        <View style={styles.refreshErrorBanner}>
+          <Text style={styles.refreshErrorText}>
+            Looks could not be refreshed. Showing the last loaded posts.
+          </Text>
+          <Pressable
+            onPress={() => loadLooks(true, feedMode)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry refresh"
+          >
+            <Text style={styles.retryLink}>Retry</Text>
+          </Pressable>
+        </View>
+      )}
+    </>
   );
 
-  const ListHeaderComponent = useMemo(
-    () => (
-      <>
-        {loadError && looks.length > 0 && (
-          <View style={styles.refreshErrorBanner}>
-            <Text style={styles.refreshErrorText}>
-              Looks could not be refreshed. Showing the last loaded posts.
-            </Text>
-            <Pressable
-              onPress={() => loadLooks(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Retry refresh"
-            >
-              <Text style={styles.retryLink}>Retry</Text>
-            </Pressable>
-          </View>
-        )}
-      </>
-    ),
-    [loadError, looks.length, loadLooks, styles],
-  );
-
-  const ListFooterComponent = useMemo(
-    () =>
-      isLoadingMore ? (
+  const ListFooterComponent = isLoadingMore ? (
         <View style={styles.footer}>
           <View style={styles.masonrySkeletonGrid}>
             <View style={styles.masonrySkeletonCol}>
@@ -499,9 +489,7 @@ export default function LooksTab() {
           <View style={styles.endOfListHairline} />
           <Text style={styles.endOfListText}>You've reached the end</Text>
         </View>
-      ) : null,
-    [isLoadingMore, windowWidth, cursor, looks.length],
-  );
+      ) : null;
 
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.
@@ -510,9 +498,6 @@ export default function LooksTab() {
   return (
     <View style={styles.feedContainer}>
       <View style={styles.feedStaticHeader}>
-        <View style={styles.headerWrap}>
-          <DiscoverySectionHeader kicker="Community" title="Looks" />
-        </View>
         {FeedTabs}
       </View>
       <FlashList
@@ -566,6 +551,7 @@ function createStyles(colors: ThemeColors) {
     // header aligns with the masonry grid below.
     feedStaticHeader: {
       paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
     },
     // ── Feed tabs ──
     // Pill-style feed segmentation (For You / Following / Trending).
@@ -593,9 +579,6 @@ function createStyles(colors: ThemeColors) {
     feedPillTextInactive: {
       color: colors.textSecondary,
       fontFamily: Typography.family.medium,
-    },
-    headerWrap: {
-      paddingBottom: Space.md,
     },
     errorWrap: {
       alignItems: 'center',

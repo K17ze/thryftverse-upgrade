@@ -257,17 +257,26 @@ export default function SellerAnalyticsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [partialError, setPartialError] = useState(false);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
+      setPartialError(false);
       const [listingsRes, analyticsData, topData] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
         fetchSellerAnalytics(currentUser.id, period).catch(() => null),
         fetchTopPerformers(currentUser.id, 10).catch(() => [] as TopPerformerListing[]),
       ]);
       setListings(listingsRes.items);
-      if (analyticsData) setAnalytics(analyticsData);
+      if (analyticsData) {
+        setAnalytics(analyticsData);
+      } else {
+        // Analytics endpoint failed — surface a partial-error state instead
+        // of silently rendering zero KPIs (AGENTS.md §11 — unknown outcome is
+        // not success).
+        setPartialError(true);
+      }
       setTopPerformersData(topData);
       setIsError(false);
     } catch {
@@ -485,6 +494,13 @@ export default function SellerAnalyticsScreen() {
     >
       {isOffline ? (
         <OfflineBanner onRetry={() => void onRefresh()} />
+      ) : null}
+      {partialError ? (
+        <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
+          <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18 }}>
+            Analytics details couldn't be loaded — showing listing data only. Pull to retry.
+          </Text>
+        </View>
       ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}

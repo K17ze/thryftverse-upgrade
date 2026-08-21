@@ -3,6 +3,7 @@ export { TabRail, SegmentedControl, type TabKey, type SegmentKey } from './Profi
 export { ClosetBoardCard } from './ClosetBoardCard';
 export { MoodboardCollectionGrid } from './MoodboardCollectionGrid';
 export { LookPreviewCard } from './LookPreviewCard';
+export { ProfileLooksGrid, type ProfileLooksGridProps } from './ProfileLooksGrid';
 export { BoardEmptyGraphic } from './BoardEmptyGraphic';
 export { ProfileTrustSignals, type ProfileTrustSignalsProps } from './ProfileTrustSignals';
 export { VerificationBadge, resolveVerificationTier, type VerificationBadgeProps } from './VerificationBadge';

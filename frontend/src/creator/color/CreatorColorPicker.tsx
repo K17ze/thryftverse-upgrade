@@ -50,6 +50,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -256,7 +257,7 @@ export function CreatorColorPicker({
             accessibilityLabel="Expand color picker"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-down-outline" size={20} color={colors.textSecondary} />
+            <Ionicons name="chevron-down-outline" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -367,7 +368,7 @@ export function CreatorColorPicker({
           accessibilityLabel="Collapse color picker"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-up-outline" size={20} color={colors.textSecondary} />
+          <Ionicons name="chevron-up-outline" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </ScrollView>
     </GestureHandlerRootView>

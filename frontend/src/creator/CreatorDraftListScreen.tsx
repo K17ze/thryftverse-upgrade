@@ -28,6 +28,7 @@ import { Space, Radius, Type, Typography, Control, Stroke, IconGrammar } from '.
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta, type Folder } from './drafts';
 import { createStableId, makeStableId } from '../utils/createStableId';
+import { formatRelativeTime } from '../utils/dateFormat';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
 import { PressScale } from './CreatorAnimations';
@@ -443,7 +444,7 @@ export function CreatorDraftListScreen() {
             accessibilityLabel="Back"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Drafts</Text>
           <View style={styles.organizeBtn} />
@@ -462,7 +463,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
         <Pressable
@@ -472,7 +473,7 @@ export function CreatorDraftListScreen() {
           accessibilityRole="button"
           hitSlop={8}
         >
-          <Ionicons name="folder-open-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="folder-open-outline" size={IconGrammar.standard} color={colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -686,7 +687,7 @@ function UndoToast({
         accessibilityRole="button"
         hitSlop={8}
       >
-        <Ionicons name="close" size={18} color={colors.textSecondary} />
+        <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
       </Pressable>
     </Reanimated.View>
   );
@@ -724,34 +725,29 @@ function DraftCard({
   onDelete,
   onSwipeDelete,
 }: DraftCardProps) {
-  // Stagger entrance: 50ms delay per card
-  const cardScale = useSharedValue(reduceMotion ? 1 : 0.92);
-  const cardOpacity = useSharedValue(reduceMotion ? 1 : 0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const delay = Math.min(index * 50, 400);
-    const timer = setTimeout(() => {
-      cardScale.value = withSpring(1, springCfg);
-      cardOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [cardScale, cardOpacity, reduceMotion, springCfg, index]);
-
-  const cardAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: cardScale.value }],
-    opacity: cardOpacity.value,
-  }));
-
   // Thumbnail press spring scale
   const thumbScale = useSharedValue(1);
   const thumbAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: thumbScale.value }],
   }));
 
+  // Refined stagger entrance — opacity only (no scale), 30ms delay per
+  // card, 200ms duration. Respects reduceMotion (opacity = 1 immediately).
+  const entranceOpacity = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    if (reduceMotion) {
+      entranceOpacity.value = 1;
+    } else {
+      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: 200 }));
+    }
+  }, [reduceMotion, index, entranceOpacity]);
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: entranceOpacity.value,
+  }));
+
   return (
-    <Reanimated.View style={cardAnimatedStyle}>
-      <SwipeableRow
+    <Reanimated.View style={entranceStyle}>
+    <SwipeableRow
         accessibilityLabel={`Open draft ${item.title}`}
         accessibilityHint="Swipe left to delete"
         onPress={onPress}
@@ -781,34 +777,25 @@ function DraftCard({
                     canvasHeight={finalThumbH}
                     mode="view"
                   />
-                  {/* Title overlay on thumbnail */}
-                  <View style={styles.thumbOverlay}>
-                    <Text style={styles.thumbOverlayText} numberOfLines={1}>{item.title}</Text>
-                  </View>
                 </View>
               ) : (
                 <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discoverySubtle : colors.bronzeSubtle }]}>
                   <Ionicons
                     name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-                    size={36}
+                    size={IconGrammar.hero}
                     color={item.type === 'look' ? colors.discovery : colors.bronze}
                   />
-                  <View style={styles.thumbOverlay}>
-                    <Text style={styles.thumbOverlayText} numberOfLines={1}>{item.title}</Text>
-                  </View>
                 </View>
               )}
             </Reanimated.View>
           </Pressable>
           <View style={styles.draftInfo}>
             <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.draftMeta} numberOfLines={1}>
-              {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
-            </Text>
-            <View style={styles.statusRow}>
-              <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
-                <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
-              </View>
+            <View style={styles.draftMetaRow}>
+              <View style={[styles.typeDot, { backgroundColor: item.type === 'poster' ? colors.antiqueGold : '#FFFFFF' }]} />
+              <Text style={styles.draftMeta} numberOfLines={1}>
+                {item.type === 'look' ? 'Look' : 'Poster'} · {formatRelativeTime(item.updatedAt)}
+              </Text>
             </View>
           </View>
           <View style={styles.actions}>
@@ -819,7 +806,7 @@ function DraftCard({
               accessibilityLabel={`Duplicate draft ${item.title}`}
               accessibilityRole="button"
             >
-              <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
+              <Ionicons name="copy-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
             </Pressable>
             <Pressable
               onPress={onDelete}
@@ -828,7 +815,7 @@ function DraftCard({
               accessibilityLabel={`Delete draft ${item.title}`}
               accessibilityRole="button"
             >
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
             </Pressable>
           </View>
         </View>
@@ -868,7 +855,6 @@ function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraft
       <Reanimated.View style={entranceStyle}>
         <Text style={styles.emptyTitle}>No drafts yet</Text>
       </Reanimated.View>
-      <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
       <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
       <PressScale
         onPress={onCreate}
@@ -1070,20 +1056,6 @@ function createStyles(colors: ThemeColors) {
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
-  thumbOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: Space.xs,
-    paddingVertical: Space.xxs,
-  },
-  thumbOverlayText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: '#FFFFFF',
-  },
   draftIcon: {
     borderRadius: Radius.lg,
     justifyContent: 'center',
@@ -1103,26 +1075,15 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     color: colors.textSecondary,
   },
-  statusRow: {
+  draftMetaRow: {
     flexDirection: 'row',
-    marginTop: Space.xs,
+    alignItems: 'center',
+    gap: Space.xxs,
   },
-  typeBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xxs,
+  typeDot: {
+    width: 8,
+    height: 8,
     borderRadius: Radius.full,
-  },
-  typeBadgeLook: {
-    backgroundColor: colors.discoverySubtle,
-  },
-  typeBadgePoster: {
-    backgroundColor: colors.bronzeSubtle,
-  },
-  typeBadgeText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
   },
   actions: {
     flexDirection: 'row',

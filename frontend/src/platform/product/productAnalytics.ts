@@ -40,8 +40,20 @@ export function trackProductEvent(
 }
 
 export const ProductAnalytics = {
-  itemView: (listingId: string) =>
-    trackProductEvent('item_detail_view', { listingId }),
+  itemView: (
+    listingId: string,
+    sectionKey?: string,
+    position?: number,
+    reasonCode?: string,
+    personalised?: boolean
+  ) =>
+    trackProductEvent('item_detail_view', {
+      listingId,
+      sectionKey,
+      position,
+      reasonCode,
+      personalised,
+    }),
   mediaView: (listingId: string, position: number) =>
     trackProductEvent('item_media_view', { listingId, position }),
   mediaZoom: (listingId: string) =>

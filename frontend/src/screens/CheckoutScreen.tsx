@@ -268,6 +268,8 @@ export default function CheckoutScreen() {
     footer: { borderTopColor: colors.border, backgroundColor: colors.background },
     payBtn: { backgroundColor: colors.brand },
     payBtnText: { color: colors.textInverse },
+    payBtnSecondary: { backgroundColor: colors.surfaceAlt, borderWidth: Stroke.standard, borderColor: colors.border },
+    payBtnSecondaryText: { color: colors.textPrimary },
     signedOutTitle: { color: colors.textPrimary },
     signedOutBody: { color: colors.textMuted },
     signedOutBtn: { backgroundColor: colors.brand },
@@ -278,14 +280,11 @@ export default function CheckoutScreen() {
     partialDataMessage: { color: colors.warning },
     partialDataAction: { borderColor: `${colors.warning}80`, backgroundColor: `${colors.surfaceAlt}99` },
     partialDataActionText: { color: colors.warning },
-    applePayBtn: { backgroundColor: colors.brand },
-    applePayBtnText: { color: colors.textInverse },
     compactSummaryRow: { color: colors.textSecondary },
     compactSummaryValue: { color: colors.textPrimary },
     compactSummaryTotalLabel: { color: colors.textPrimary },
     compactSummaryTotalValue: { color: colors.textPrimary },
     compactSummaryDivider: { backgroundColor: colors.border },
-    footerTrustText: { color: colors.success },
     breakdownChevronText: { color: colors.textMuted },
     breakdownSheetTitle: { color: colors.textPrimary },
     breakdownSheetLabel: { color: colors.textSecondary },
@@ -1153,7 +1152,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
@@ -1181,13 +1180,13 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Sign in to checkout</Text>
           <Text style={[styles.signedOutBody, t.signedOutBody]}>
             You need to be signed in to complete your purchase.
@@ -1217,13 +1216,13 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="person-circle-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="person-circle-outline" size={28} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Cannot purchase your own listing</Text>
           <Text style={[styles.signedOutBody, t.signedOutBody]}>
             You cannot buy an item you listed for sale.
@@ -1274,13 +1273,26 @@ export default function CheckoutScreen() {
     ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}\n${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} · ${savedAddress.postalCode}\n${savedAddress.country}`
     : 'Required for delivery';
 
+  // Whether a digital wallet (Apple Pay / Google Pay) is available as a
+  // one-tap primary CTA. Per 2026 UX research: "Place Google Pay at the top
+  // of the list of payment options, above manual entry fields." When a
+  // wallet is available it becomes the primary CTA and the card button
+  // becomes secondary ("Pay with card"), creating a clear hierarchy that
+  // surfaces biometric one-tap payment before manual card entry.
+  const walletAvailable = !isSubmitting && (
+    (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay'))
+    || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay'))
+  );
+
   const payLabel = isSubmitting
     ? STAGE_LABELS[stage] || 'Processing'
     : stage === 'payment_failed'
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation'
-        : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
+        : walletAvailable
+          ? 'Pay with card'
+          : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1302,7 +1314,7 @@ export default function CheckoutScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close checkout"
         >
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
         </Pressable>
         <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
         <View style={styles.headerSpacer} />
@@ -1314,7 +1326,7 @@ export default function CheckoutScreen() {
           still usable. Distinct from full error states. */}
       {partialDataPrompt ? (
         <View style={[styles.partialDataBanner, t.partialDataBanner]}>
-          <Ionicons name={partialDataPrompt.icon} size={15} color={colors.warning} />
+          <Ionicons name={partialDataPrompt.icon} size={16} color={colors.warning} aria-hidden={true} />
           <Text style={[styles.partialDataMessage, t.partialDataMessage]} numberOfLines={3}>
             {partialDataPrompt.message}
           </Text>
@@ -1431,7 +1443,7 @@ export default function CheckoutScreen() {
             "A 'Secure checkout' message next to the card number field is more
             effective than security badges in the footer." */}
         <View style={styles.securePaymentRow}>
-          <Ionicons name="lock-closed" size={12} color={colors.success} />
+          <Ionicons name="lock-closed" size={12} color={colors.success} aria-hidden={true} />
           <Text style={[styles.securePaymentText, { color: colors.success }]}>
             Secure payment · card details encrypted
           </Text>
@@ -1478,7 +1490,7 @@ export default function CheckoutScreen() {
 
         {useBalance && balanceApplied > 0 && (
           <View style={[styles.savingsBadge, t.savingsBadge]}>
-            <Ionicons name="wallet-outline" size={11} color={colors.success} />
+            <Ionicons name="wallet-outline" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.savingsText, t.savingsText]}>
               Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
             </Text>
@@ -1576,31 +1588,26 @@ export default function CheckoutScreen() {
             </View>
             <View style={styles.breakdownChevron}>
               <Text style={[styles.breakdownChevronText, t.breakdownChevronText]}>View full breakdown</Text>
-              <Ionicons name="chevron-up" size={14} color={colors.textMuted} />
+              <Ionicons name="chevron-up" size={16} color={colors.textMuted} aria-hidden={true} />
             </View>
           </View>
         </Pressable>
 
-        {/* Compact buyer-protection trust line — between summary and Pay */}
-        <View style={styles.footerTrustRow}>
-          <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
-          <Text style={[styles.footerTrustText, t.footerTrustText]} numberOfLines={1}>
-            Buyer protection — money held in escrow until you confirm
-          </Text>
-        </View>
-
-        {/* Pay button row — digital wallet buttons first (Apple Pay/Google Pay),
-            then the generic Pay button. Per 2026 UX research: "Place Google Pay
-            at the top of the list of payment options, above manual entry fields."
-            This ordering surfaces one-tap biometric payment before card entry. */}
+        {/* Pay button column — digital wallet buttons stacked ABOVE the card
+            Pay button. Per 2026 UX research: "Reorder the payment list so
+            Apple Pay sits above 'Pay with card' — a 15-25% lift in mobile
+            checkout completion." The wallet button is the primary one-tap
+            biometric CTA; the card button is the secondary fallback.
+            The buyer-protection trust narrative is carried by the
+            BuyerProtectionStrip above — no duplicate trust line here. */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
           {Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting && (
             <Pressable
               onPress={() => { haptics.press(); handlePay(); }}
               style={({ pressed }) => [
-                styles.applePayBtn,
-                t.applePayBtn,
+                styles.walletBtn,
+                { backgroundColor: colors.textPrimary },
                 pressed && styles.payBtnPressed,
                 (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
               ]}
@@ -1609,8 +1616,8 @@ export default function CheckoutScreen() {
               accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
-              <Ionicons name="logo-apple" size={18} color={colors.textInverse} />
-              <Text style={[styles.applePayBtnText, t.applePayBtnText]}>Pay</Text>
+              <Ionicons name="logo-apple" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]}>Pay with Apple Pay</Text>
             </Pressable>
           )}
 
@@ -1619,7 +1626,7 @@ export default function CheckoutScreen() {
             <Pressable
               onPress={() => { haptics.press(); handlePay(); }}
               style={({ pressed }) => [
-                styles.googlePayBtn,
+                styles.walletBtn,
                 { backgroundColor: colors.textPrimary },
                 pressed && styles.payBtnPressed,
                 (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
@@ -1629,22 +1636,26 @@ export default function CheckoutScreen() {
               accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Google Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
-              <Ionicons name="logo-google" size={18} color={colors.textInverse} />
-              <Text style={[styles.applePayBtnText, { color: colors.textInverse }]}>G Pay</Text>
+              <Ionicons name="logo-google" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]}>Pay with Google Pay</Text>
             </Pressable>
           )}
 
           <Pressable
             style={({ pressed }) => [
               styles.payBtn,
-              t.payBtn,
+              walletAvailable ? t.payBtnSecondary : t.payBtn,
               (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
               pressed && !(!checkoutEligible || isInteractionLocked) && styles.payBtnPressed,
             ]}
             onPress={() => { haptics.press(); handlePay(); }}
             disabled={!checkoutEligible || isInteractionLocked}
             accessibilityRole="button"
-            accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')}`}
+            accessibilityLabel={
+              walletAvailable
+                ? `Pay ${formatFromFiat(TOTAL, 'GBP')} with card`
+                : `Pay ${formatFromFiat(TOTAL, 'GBP')}`
+            }
             accessibilityState={{
               disabled: !checkoutEligible || isInteractionLocked,
               busy: isSubmitting,
@@ -1653,9 +1664,21 @@ export default function CheckoutScreen() {
             {isSubmitting ? (
               <PulsingDot color={colors.textInverse} reducedMotion={reducedMotionEnabled} />
             ) : (
-              <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
+              <Ionicons
+                name="lock-closed"
+                size={16}
+                color={walletAvailable ? colors.textPrimary : colors.textInverse}
+                aria-hidden={true}
+              />
             )}
-            <Text style={[styles.payBtnText, t.payBtnText]}>{payLabel}</Text>
+            <Text
+              style={[
+                styles.payBtnText,
+                walletAvailable ? t.payBtnSecondaryText : t.payBtnText,
+              ]}
+            >
+              {payLabel}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -1694,13 +1717,13 @@ export default function CheckoutScreen() {
         <View style={styles.breakdownSheetContent}>
           <Text style={[styles.breakdownSheetTitle, t.breakdownSheetTitle]}>Full breakdown</Text>
           <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
-          <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
+          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
           <PriceRow
             label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
               Includes buyer protection — funds held in escrow until you confirm
             </Text>
@@ -1726,7 +1749,7 @@ export default function CheckoutScreen() {
           </View>
           <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
           <View style={styles.breakdownSheetPolicyRow}>
-            <Ionicons name="return-down-back-outline" size={14} color={colors.textMuted} />
+            <Ionicons name="return-down-back-outline" size={16} color={colors.textMuted} aria-hidden={true} />
             <Text style={[styles.breakdownSheetPolicyText, t.breakdownSheetLabel]}>
               Returns accepted within 14 days. Refunds issued to your original payment method.
             </Text>
@@ -1835,19 +1858,19 @@ function PaymentStateBanner({
       case 'payment_succeeded':
         return {
           accentColor: colors.success,
-          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} />,
+          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_failed':
         return {
           accentColor: colors.danger,
-          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} />,
+          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_pending':
         return {
           accentColor: colors.textMuted,
-          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} />,
+          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} aria-hidden={true} />,
           showDot: false,
         };
       default:
@@ -2147,7 +2170,7 @@ function CheckoutSkeleton({ colors }: { colors: ThemeColors }) {
     <View style={skeletonStyles.container}>
       <View style={skeletonStyles.header}>
         <View style={{ width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
         </View>
         <Text style={skeletonStyles.headerTitle}>Checkout</Text>
         <View style={skeletonStyles.headerSpacer} />
@@ -2478,17 +2501,6 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs + 1,
   },
-  footerTrustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    paddingVertical: Space.xs,
-  },
-  footerTrustText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-  },
   compactSummaryTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2523,9 +2535,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   footerPayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     gap: Space.sm,
     paddingTop: Space.xs,
   },
@@ -2571,41 +2582,26 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
   },
   payBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    minWidth: 180,
-    paddingVertical: Space.md + Space.sm,
+    paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
     borderRadius: RadiusRoleValue.pillAvatar,
-    minHeight: 72,
+    minHeight: 56,
   },
-  applePayBtn: {
+  walletBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-    minWidth: 140,
-    height: 72,
+    gap: Space.xs + 2,
+    height: 56,
     borderRadius: RadiusRoleValue.pillAvatar,
-    marginBottom: Space.xs,
   },
-  googlePayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    minWidth: 140,
-    height: 72,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    marginBottom: Space.xs,
-  },
-  applePayBtnText: {
+  walletBtnText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'],
   },
   payBtnDisabled: {
     opacity: 0.5,

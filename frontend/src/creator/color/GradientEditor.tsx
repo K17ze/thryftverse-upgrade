@@ -16,7 +16,7 @@
  * uses the CreatorColorPicker in a compact popover.
  */
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -38,6 +38,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -86,7 +87,11 @@ function StopThumb({
 }: StopThumbProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
-  const layoutRef = useRef({ width: barWidth });
+  // Shared value (not useRef) so the worklet can read the measured width
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const layoutWidth = useSharedValue(barWidth);
 
   const thumbX = useSharedValue(stop.position * barWidth);
 
@@ -99,25 +104,25 @@ function StopThumb({
       .activateAfterLongPress(0)
       .onBegin((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
         runOnJS(onDragChange)(pos);
       })
       .onChange((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
         runOnJS(onDragChange)(pos);
       })
       .onEnd(() => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, thumbX.value / w));
         runOnJS(onDragCommit)(pos);
       });
-  }, [thumbX, onDragChange, onDragCommit]);
+  }, [thumbX, onDragChange, onDragCommit, layoutWidth]);
 
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
@@ -366,7 +371,7 @@ export function GradientEditor({
           accessibilityRole="button"
           accessibilityState={{ disabled: !canAddStop }}
         >
-          <Ionicons name="add-circle-outline" size={20} color={canAddStop ? colors.textPrimary : colors.textMuted} />
+          <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={canAddStop ? colors.textPrimary : colors.textMuted} />
         </PressScale>
 
         <PressScale
@@ -377,7 +382,7 @@ export function GradientEditor({
           accessibilityRole="button"
           accessibilityState={{ disabled: !canRemoveStop }}
         >
-          <Ionicons name="remove-circle-outline" size={20} color={canRemoveStop ? colors.textPrimary : colors.textMuted} />
+          <Ionicons name="remove-circle-outline" size={IconGrammar.standard} color={canRemoveStop ? colors.textPrimary : colors.textMuted} />
         </PressScale>
 
         <PressScale
@@ -386,7 +391,7 @@ export function GradientEditor({
           accessibilityLabel="Reverse gradient stops"
           accessibilityRole="button"
         >
-          <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} />
+          <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
         </PressScale>
 
         <PressScale
@@ -404,7 +409,7 @@ export function GradientEditor({
         >
           <Ionicons
             name="color-palette-outline"
-            size={20}
+            size={IconGrammar.standard}
             color={showColorPicker ? colors.brand : colors.textPrimary}
           />
         </PressScale>
@@ -452,7 +457,11 @@ interface AngleSliderProps {
 function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
-  const layoutRef = useRef({ width });
+  // Shared value (not useRef) so the worklet can read the measured width
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const layoutWidth = useSharedValue(width);
   // Canvas-specific interaction geometry — no design token maps to these.
   const THUMB_SIZE = 20;
   const HEIGHT = 28;
@@ -469,25 +478,25 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
       .activateAfterLongPress(0)
       .onBegin((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
         runOnJS(onChange)(a);
       })
       .onChange((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
         runOnJS(onChange)(a);
       })
       .onEnd(() => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, thumbX.value / w)) * 360;
         runOnJS(onCommit)(a);
       });
-  }, [thumbX, onChange, onCommit]);
+  }, [thumbX, onChange, onCommit, layoutWidth]);
 
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
@@ -505,7 +514,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
   return (
     <GestureDetector gesture={panGesture}>
       <View
-        onLayout={(e) => { layoutRef.current = { width: e.nativeEvent.layout.width }; }}
+        onLayout={(e) => { layoutWidth.value = e.nativeEvent.layout.width; }}
         style={[styles.angleSlider, { width, height: HEIGHT }]}
         accessibilityRole="adjustable"
         accessibilityLabel="Gradient angle"

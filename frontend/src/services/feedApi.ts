@@ -94,6 +94,71 @@ export interface SearchApiResult {
   error?: string;
 }
 
+export type SearchAutocompleteSuggestionType = 'query' | 'item' | 'brand' | 'category';
+
+export interface SearchAutocompleteSuggestion {
+  text: string;
+  type: SearchAutocompleteSuggestionType;
+  score: number;
+}
+
+export interface SearchAutocompleteResult {
+  suggestions: SearchAutocompleteSuggestion[];
+  fromCache?: boolean;
+  responseTimeMs?: number;
+  error?: string;
+}
+
+/**
+ * Production autocomplete backed by the search index.
+ *
+ * Keep this separate from full listing search: typeahead is a small,
+ * latency-sensitive contract and must never depend on whichever feed rows
+ * happen to be resident on the device.
+ */
+export async function fetchSearchAutocomplete(
+  query: string,
+  limit: number = 6,
+): Promise<SearchAutocompleteResult> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return { suggestions: [] };
+
+  const params = new URLSearchParams();
+  params.set('q', trimmed);
+  params.set('limit', String(Math.min(Math.max(limit, 1), 20)));
+
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      query: string;
+      suggestions: Array<{
+        text: string;
+        type?: SearchAutocompleteSuggestionType;
+        score?: number;
+      }>;
+      fromCache?: boolean;
+      responseTimeMs?: number;
+    }>(`/search/autocomplete?${params.toString()}`);
+
+    return {
+      suggestions: (payload.suggestions ?? [])
+        .filter((suggestion) => suggestion.text.trim().length > 0)
+        .map((suggestion) => ({
+          text: suggestion.text.trim(),
+          type: suggestion.type ?? 'query',
+          score: Number.isFinite(suggestion.score) ? Number(suggestion.score) : 0,
+        })),
+      fromCache: payload.fromCache,
+      responseTimeMs: payload.responseTimeMs,
+    };
+  } catch (error) {
+    return {
+      suggestions: [],
+      error: friendlyBackendError(error),
+    };
+  }
+}
+
 export async function searchListingsFromApi(query: string, limit?: number): Promise<SearchApiResult> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return { items: [] };

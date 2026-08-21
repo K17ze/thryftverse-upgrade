@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
@@ -24,7 +25,7 @@ import { makeStableId } from '../../utils/createStableId';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer } from '../composition';
-import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO } from '../composition';
+import { computeLookLayout, hasFullBleedMedia, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
 import { CreatorPublishSheet } from '../CreatorPublishSheet';
@@ -35,13 +36,14 @@ import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
 import { CreatorEntryEditorCrossfade } from '../CreatorEntryEditorCrossfade';
 import { CreatorCropSheet } from '../CreatorCropSheet';
-import { InCanvasCropOverlay } from '../surfaces/InCanvasCropOverlay';
 import { CreatorCutoutSheet } from '../CreatorCutoutSheet';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
 import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
 import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/CutoutService';
 import { PressScale } from '../CreatorAnimations';
+import { InlineTextEditor } from '../tools/text/InlineTextEditor';
+import { TrashZone } from '../surfaces/TrashZone';
 import { BackgroundSheet } from './BackgroundSheet';
 import type { CreatorBackground } from '../composition';
 import { LookSourceTray } from './LookSourceTray';
@@ -188,6 +190,11 @@ function LookComposerInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
+  // ── In-place text content editing (Snapchat/Instagram pattern) ──────
+  // When set, an InlineTextEditor renders AT the text layer's position on
+  // the canvas so the user can type in place. The bottom contextual rail
+  // remains the single styling surface for the selected text layer.
+  const [editingTextLayerId, setEditingTextLayerId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -195,7 +202,6 @@ function LookComposerInner() {
   const [showBackground, setShowBackground] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
-  const [cropMode, setCropMode] = useState(false);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
   // ── True cutout (segmentation) state ───────────────────────────────
   // `cutoutPreviewTarget` holds the media layer being previewed in the
@@ -242,6 +248,7 @@ function LookComposerInner() {
   }, []);
 
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
+  const sourceMode = route.params?.sourceMode ?? 'edit';
 
   // ── Edit mode: load an existing published look for editing ────────
   // When sourceDocumentId refers to a published look (not a local draft),
@@ -255,21 +262,40 @@ function LookComposerInner() {
     fetchLookByIdFromApi(sourceDocumentId)
       .then((res) => {
         if (cancelled || !res.ok || !res.look) return;
-        const doc = lookToDocument({
-          id: res.look.id,
-          title: res.look.title,
-          caption: res.look.caption,
-          mediaUrl: res.look.mediaUrl,
-          tags: res.look.tags.map((t) => ({
-            id: t.id,
-            label: t.label,
-            listingId: t.listingId,
-            x: t.x,
-            y: t.y,
-          })),
-        });
-        setDocument(doc);
-        setEditingLookId(sourceDocumentId);
+        const persisted = safeValidateDocument(res.look.compositionDocument);
+        const baseDoc = persisted.success && persisted.data
+          ? persisted.data
+          : lookToDocument({
+              id: res.look.id,
+              title: res.look.title,
+              caption: res.look.caption,
+              mediaUrl: res.look.mediaUrl,
+              mediaType: res.look.mediaType,
+              visibility: res.look.visibility,
+              tags: res.look.tags.map((t) => ({
+                id: t.id,
+                label: t.label,
+                listingId: t.listingId,
+                x: t.x,
+                y: t.y,
+              })),
+            });
+        if (sourceMode === 'remix') {
+          setDocument({
+            ...baseDoc,
+            id: makeStableId('look'),
+            metadata: {
+              ...baseDoc.metadata,
+              sourceDocumentId: res.look.id,
+              sourceCreatorId: res.look.creatorId,
+            },
+            updatedAt: new Date().toISOString(),
+          });
+          setEditingLookId(null);
+        } else {
+          setDocument(baseDoc);
+          setEditingLookId(sourceDocumentId);
+        }
       })
       .catch(() => {
         // Not a published look — the remix path in CreatorContext handles
@@ -279,7 +305,7 @@ function LookComposerInner() {
         if (!cancelled) setIsLoadingSourceLook(false);
       });
     return () => { cancelled = true; };
-  }, [sourceDocumentId, route.params?.draftId, route.params?.templateId, setDocument]);
+  }, [sourceDocumentId, sourceMode, route.params?.draftId, route.params?.templateId, setDocument]);
 
   // Show entry screen when document is empty and not loading
   const hasContent = document.pages.some((p) => p.layers.length > 0);
@@ -289,22 +315,36 @@ function LookComposerInner() {
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  // ── 4:5 canvas geometry ────────────────────────────────────────────
-  // Look is spatial, not full-bleed story. The 4:5 canvas sits in a
-  // neutral workspace with breathing room above and below. The canvas
-  // width fills the screen; height = width / aspectRatio (0.8).
-  // It centers vertically in the available space between top bar and
-  // bottom actions.
+  // ── Canvas geometry ───────────────────────────────────────────────
+  // The 4:5 aspect ratio is the EXPORT ratio, not the edit surface ratio.
+  // When a full-bleed media layer (width=1, height=1) is present, the
+  // media IS the canvas surface — it should fill the available screen
+  // height (minus top bar + bottom tool dock chrome) so there is no black
+  // card framing the media. The media uses contentFit="cover" to fill the
+  // canvas. Without full-bleed media, the canvas keeps its 4:5 shape and
+  // centers vertically in the neutral workspace.
   const canvasWidth = screenWidth;
+  const fullBleed = hasFullBleedMedia(page);
+  // Chrome heights mirror the safe-zone values used below (top bar 56pt +
+  // status inset; bottom tool dock 120pt + home inset).
+  const topChrome = insets.top + 56;
+  const bottomChrome = insets.bottom + 120;
   const canvasHeight = useMemo(() => {
+    if (fullBleed) {
+      // Fill the available vertical space between top bar and bottom dock.
+      const available = screenHeight - topChrome - bottomChrome;
+      return Math.max(Math.floor(available), Math.floor(screenWidth / document.canvas.aspectRatio));
+    }
     return Math.floor(screenWidth / document.canvas.aspectRatio);
-  }, [screenWidth, document.canvas.aspectRatio]);
+  }, [fullBleed, screenHeight, topChrome, bottomChrome, screenWidth, document.canvas.aspectRatio]);
 
-  // Canvas is vertically centered in the viewport
+  // Canvas vertical position. Full-bleed: pinned just below the top bar.
+  // Otherwise: vertically centered in the viewport.
   const canvasVerticalOffset = useMemo(() => {
+    if (fullBleed) return topChrome;
     if (canvasHeight >= screenHeight) return 0;
     return Math.floor((screenHeight - canvasHeight) / 2);
-  }, [canvasHeight, screenHeight]);
+  }, [fullBleed, topChrome, canvasHeight, screenHeight]);
 
   // ── Truthful back — offers Save Draft / Discard / Keep Editing ─────
   const handleBack = useCallback(() => {
@@ -363,12 +403,12 @@ function LookComposerInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (showHelp) setShowHelp(false);
+        if (editingTextLayerId) setEditingTextLayerId(null);
+        else if (showHelp) setShowHelp(false);
         else if (showAIEffects) setShowAIEffects(false);
         else if (bottomSurface !== 'tools') setBottomSurface('tools');
         else if (showA11yMove) setShowA11yMove(false);
         else if (showA11yZOrder) setShowA11yZOrder(false);
-        else if (cropMode) setCropMode(false);
         else if (cropTarget) setCropTarget(null);
         else if (cutoutTarget) setCutoutTarget(null);
         else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
@@ -395,18 +435,18 @@ function LookComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (editingTextLayerId) { setEditingTextLayerId(null); return true; }
         if (showHelp) { setShowHelp(false); return true; }
         if (showAIEffects) { setShowAIEffects(false); return true; }
         if (bottomSurface !== 'tools') { setBottomSurface('tools'); return true; }
         if (showA11yMove) { setShowA11yMove(false); return true; }
         if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
-        if (cropMode) { setCropMode(false); return true; }
         if (cropTarget) { setCropTarget(null); return true; }
         if (cutoutTarget) { setCutoutTarget(null); return true; }
         if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
@@ -425,7 +465,7 @@ function LookComposerInner() {
         return false;
       };
       return onBackPress;
-    }, [showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
+    }, [editingTextLayerId, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -483,9 +523,36 @@ function LookComposerInner() {
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
 
+  // Background media URI for draw-on-media (Snapchat/Instagram pattern)
+  const backgroundMediaUri = useMemo(() => {
+    const mediaLayer = page?.layers
+      .filter((l) => l.type === 'media' && !l.hidden)
+      .sort((a, b) => a.zIndex - b.zIndex)[0];
+    return mediaLayer?.type === 'media' ? mediaLayer.payload.mediaUri : undefined;
+  }, [page]);
+
+  // Chrome-recedes-during-manipulation (Snapchat/Instagram pattern)
+  const manipulationActiveSV = useSharedValue(0);
+  const [isManipulating, setIsManipulating] = useState(false);
+  // Drag-to-trash: set to 1 by CreatorCanvas while the dragged layer's
+  // center is inside the bottom trash zone. Drives the TrashZone overlay
+  // highlight.
+  const isInTrashZoneSV = useSharedValue(0);
+  const chromeFadeStyle = useAnimatedStyle(() => ({
+    opacity: withSpring(manipulationActiveSV.value === 1 ? 0.15 : 1, { damping: 20, stiffness: 200 }),
+  }));
+
   // ── Entry screen media handling ────────────────────────────────────
   // For Look, each asset becomes an auto-arranged media layer on page 0
   // via computeLookLayout — never N identical full-bleed overlaps.
+  const [entryPinnedUri, setEntryPinnedUri] = useState<string | null>(null);
+  const [entryPinnedKind, setEntryPinnedKind] = useState<'image' | 'video'>('image');
+  const [entryPinnedDestination, setEntryPinnedDestination] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
     const mediaLayers: CreatorLayer[] = media.map((asset, i) => ({
       id: makeStableId(`media_${i}`),
@@ -515,6 +582,15 @@ function LookComposerInner() {
       },
     }));
     const arranged = computeLookLayout(mediaLayers);
+    const firstMedia = arranged.find((layer) => layer.type === 'media');
+    setEntryPinnedUri(media[0]?.uri ?? null);
+    setEntryPinnedKind(media[0]?.kind ?? 'image');
+    setEntryPinnedDestination(firstMedia ? {
+      left: (firstMedia.x - firstMedia.width / 2) * canvasWidth,
+      top: canvasVerticalOffset + (firstMedia.y - firstMedia.height / 2) * canvasHeight,
+      width: firstMedia.width * canvasWidth,
+      height: firstMedia.height * canvasHeight,
+    } : null);
     const newDoc = {
       ...document,
       pages: [{ id: document.pages[0]?.id ?? 'page_1', layers: arranged }],
@@ -522,9 +598,12 @@ function LookComposerInner() {
     };
     setDocument(newDoc);
     setEntryComplete(true);
-  }, [document, setDocument]);
+  }, [canvasHeight, canvasVerticalOffset, canvasWidth, document, setDocument]);
 
   const handleEntryBlankStart = useCallback(() => {
+    setEntryPinnedUri(null);
+    setEntryPinnedKind('image');
+    setEntryPinnedDestination(null);
     setEntryComplete(true);
   }, []);
 
@@ -664,28 +743,29 @@ function LookComposerInner() {
   }, [selectedLayer, haptic, cutoutSupported]);
 
   // ── Crop action for selected media ──────────────────────────────────
-  // Enters in-canvas crop mode — crop handles render directly over the
-  // selected layer while the composition stays visible (spec 04 §1).
-  // The old CreatorCropSheet remains as a fallback path.
+  // Perform a real pixel crop. Resizing the layer frame would only change
+  // the collage layout and must never be labelled as cropping.
   const handleCropAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
       haptic.light();
       return;
     }
     haptic.medium();
-    setCropMode(true);
+    setCropTarget(selectedLayer);
   }, [selectedLayer, haptic]);
 
-  // ── Adjust (opacity) action for selected media ──────────────────────
-  // Opens the crop sheet which provides manual cropping; the adjust
-  // concept maps to the existing crop/opacity workflow.
+  // ── Adjust action for selected media ───────────────────────────────
+  // Opens the effects bottom surface which contains the AdjustPanel
+  // (fine-tuning sliders for brightness, contrast, saturation, etc).
+  // This is the correct surface for "Adjust" — not the cutout sheet
+  // (which is background removal, a separate tool in overflow).
   const handleAdjustAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
       haptic.light();
       return;
     }
     haptic.medium();
-    setCutoutTarget(selectedLayer);
+    setBottomSurface('effects');
   }, [selectedLayer, haptic]);
 
   // ── Effects action for selected media ───────────────────────────────
@@ -758,14 +838,6 @@ function LookComposerInner() {
   }, [selectedLayer, handleEditLayer, haptic]);
 
   // ── Product tag actions ─────────────────────────────────────────────
-  const handleProductTagStyleAction = useCallback(() => {
-    if (!selectedLayer || selectedLayer.type !== 'product') {
-      haptic.light();
-      return;
-    }
-    handleEditLayer(selectedLayer);
-  }, [selectedLayer, handleEditLayer, haptic]);
-
   const handleProductPriceAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'product') {
       haptic.light();
@@ -833,7 +905,6 @@ function LookComposerInner() {
         handleTextFontAction,
         handleTextColorAction,
         handleTextAlignAction,
-        handleProductTagStyleAction,
         handleProductPriceAction,
         handleCropAction,
         handleMultiFront,
@@ -869,7 +940,6 @@ function LookComposerInner() {
       handleTextFontAction,
       handleTextColorAction,
       handleTextAlignAction,
-      handleProductTagStyleAction,
       handleProductPriceAction,
       handleCropAction,
       handleMultiFront,
@@ -998,6 +1068,9 @@ function LookComposerInner() {
       onClose={handleEntryClose}
       onMediaSelected={handleEntryMediaSelected}
       onBlankStart={handleEntryBlankStart}
+      onVisualSearchCapture={(uri: string) => {
+        navigation.navigate('VisualSearch', { initialImageUri: uri });
+      }}
     />
   ) : null;
 
@@ -1009,7 +1082,7 @@ function LookComposerInner() {
           last saved project or dismiss the prompt. */}
       {hasPendingRecovery && (
         <View style={styles.recoveryBanner}>
-          <Ionicons name="alert-circle-outline" size={20} color={colors.textPrimary} />
+          <Ionicons name="alert-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
           <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
           <PressScale
             onPress={() => { void recoverCrashedProject(); }}
@@ -1025,7 +1098,7 @@ function LookComposerInner() {
             accessibilityLabel="Dismiss recovery prompt"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={18} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
           </PressScale>
         </View>
       )}
@@ -1052,8 +1125,9 @@ function LookComposerInner() {
               }
               const l = page?.layers.find((x) => x.id === layerId);
               if (l?.type === 'text') {
-                setEditingLayer(l);
-                setPickerMode('text');
+                // In-place content editing — the TextInput renders AT the
+                // layer's position on the canvas. The canvas stays visible.
+                setEditingTextLayerId(l.id);
               }
             }}
             onLayerLongPress={(layerId) => {
@@ -1065,10 +1139,51 @@ function LookComposerInner() {
             onMultiDragStart={handleMultiDragStart}
             onMultiDragUpdate={handleMultiDragUpdate}
             onMultiDragCommit={handleMultiDragCommit}
+            onLayerDelete={removeLayer}
+            onTrashZoneEnter={() => {
+              // Medium haptic when the dragged layer enters the trash
+              // zone — "you're about to delete" feedback.
+              haptic.medium();
+            }}
             showSafeZone={showSafeZone}
             safeZoneTop={insets.top + 56}
             safeZoneBottom={insets.bottom + 120}
+            manipulationActiveSV={manipulationActiveSV}
+            onManipulationChange={setIsManipulating}
+            isInTrashZoneSV={isInTrashZoneSV}
           />
+
+          {/* Drag-to-trash overlay — fades in during layer drag, highlights
+              when the dragged layer enters the bottom zone. Visual-only. */}
+          <TrashZone
+            manipulationActiveSV={manipulationActiveSV}
+            isInTrashZoneSV={isInTrashZoneSV}
+          />
+
+          {/* ── In-place text content editor (Snapchat/Instagram pattern) ── */}
+          {/* Renders a TextInput AT the text layer's position so the user can
+              type in place while the canvas stays visible. The modal
+              TextEditorSheet is reserved for advanced styling (More button). */}
+          {editingTextLayerId && (() => {
+            const editingTextLayer = page?.layers.find((l) => l.id === editingTextLayerId);
+            if (!editingTextLayer || editingTextLayer.type !== 'text') return null;
+            return (
+              <InlineTextEditor
+                layer={editingTextLayer}
+                canvasWidth={canvasWidth}
+                canvasHeight={canvasHeight}
+                canvasTopOffset={canvasVerticalOffset}
+                screenWidth={screenWidth}
+                screenHeight={screenHeight}
+                onCommit={(text) => {
+                  updateLayer(editingTextLayer.id, {
+                    payload: { ...editingTextLayer.payload, text },
+                  } as Partial<CreatorLayer>, 'Edit text content');
+                }}
+                onDismiss={() => setEditingTextLayerId(null)}
+              />
+            );
+          })()}
         </View>
 
         {/* Canvas loading overlay */}
@@ -1108,8 +1223,13 @@ function LookComposerInner() {
       {/* Look uses a neutral top bar (not the full-bleed gradient scrim
           of Poster). Close · Undo · Redo on the left; Next on the right.
           During selection: Done · object label · More. */}
-      <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
-        <View style={[styles.topBar, { backgroundColor: colors.surface }]}>
+      <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+        <LinearGradient
+          colors={['rgba(10,10,10,0.6)', 'transparent']}
+          style={styles.topBarScrim}
+          pointerEvents="none"
+        />
+        <View style={styles.topBar}>
           <View style={styles.topBarRow}>
             {multiSelectMode ? (
               <>
@@ -1144,7 +1264,7 @@ function LookComposerInner() {
                     accessibilityHint="Selects all objects on the canvas"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="checkmark-done-outline" size={24} color={colors.textPrimary} />
+                    <Ionicons name="checkmark-done-outline" size={IconGrammar.hero} color={colors.textPrimary} />
                   </PressScale>
                 </View>
               </>
@@ -1174,7 +1294,7 @@ function LookComposerInner() {
                     accessibilityHint="Opens layers, preview, drafts and settings"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
+                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.hero} color={colors.textPrimary} />
                   </PressScale>
                 </View>
               </>
@@ -1188,7 +1308,7 @@ function LookComposerInner() {
                     accessibilityHint="Closes the composer, offers to save draft if there are unsaved changes"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="close" size={26} color={colors.textPrimary} />
+                    <Ionicons name="close" size={IconGrammar.hero} color={colors.textPrimary} />
                   </PressScale>
                   {isDirty && (
                     <View style={[styles.unsavedDot, { backgroundColor: colors.brand }]} />
@@ -1206,7 +1326,7 @@ function LookComposerInner() {
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={22} color={colors.textPrimary} />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
@@ -1218,7 +1338,7 @@ function LookComposerInner() {
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={22} color={colors.textPrimary} />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
 
@@ -1238,7 +1358,7 @@ function LookComposerInner() {
             )}
           </View>
         </View>
-      </View>
+      </Reanimated.View>
 
       {/* ── Bottom surface state machine ────────────────────────────────── */}
       {/* Per spec: "One lower interaction surface at a time." Only ONE of
@@ -1255,8 +1375,13 @@ function LookComposerInner() {
           Product selected → look-product-selected (Item, Tag Style, Price, Duplicate).
           Each tool's onPress calls an EXISTING handler — no new capabilities. */}
       {bottomSurface === 'tools' && (
-        <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        <Reanimated.View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+          <LinearGradient
+            colors={['transparent', 'rgba(10,10,10,0.8)']}
+            style={styles.bottomBarScrim}
+            pointerEvents="none"
+          />
+          <View style={styles.bottomBar}>
             <ContextToolRail
               context={activeToolContext}
               groups={toolGroups}
@@ -1264,7 +1389,7 @@ function LookComposerInner() {
               style={styles.toolRail}
             />
           </View>
-        </View>
+        </Reanimated.View>
       )}
 
       {/* ── 'items' surface: Items drawer (LookSourceTray expanded) ── */}
@@ -1275,7 +1400,7 @@ function LookComposerInner() {
       {bottomSurface === 'items' && (
         <SlideUpSurface>
           <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-            <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={styles.bottomBar}>
               <LookSourceTray
                 expanded={true}
                 onToggle={handleCloseSurface}
@@ -1295,7 +1420,7 @@ function LookComposerInner() {
       {bottomSurface === 'layout' && (
         <SlideUpSurface>
           <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-            <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={styles.bottomBar}>
               <LayoutPanel
                 title="Layout"
                 onClose={handleCloseSurface}
@@ -1372,16 +1497,16 @@ function LookComposerInner() {
                   live inside the effects surface. */}
               <PressScale
                 onPress={() => { haptic.medium(); setShowAIEffects(true); }}
-                style={[styles.aiEffectsBtn, { borderColor: colors.border }]}
+                style={styles.aiEffectsBtn}
                 accessibilityLabel="AI Effects"
                 accessibilityHint="Opens the effects browser to browse and apply photo effects"
                 scale={0.97}
               >
-                <Ionicons name="bulb-outline" size={18} color={colors.textPrimary} />
+                <Ionicons name="bulb-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
                 <Text style={[styles.aiEffectsBtnText, { color: colors.textPrimary }]}>
                   AI Effects
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
               </PressScale>
               <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
                 <View style={styles.effectsAutoRow}>
@@ -1443,7 +1568,7 @@ function LookComposerInner() {
               colors={colors}
             />
             <OverflowItem
-              icon={showSafeZone ? 'shield-checkmark-outline' : 'shield-outline'}
+              icon={showSafeZone ? 'scan-circle-outline' : 'scan-outline'}
               label={showSafeZone ? 'Safe Zone On' : 'Safe Zone'}
               onPress={() => { setShowSafeZone(!showSafeZone); setShowOverflow(false); haptic.light(); }}
               colors={colors}
@@ -1542,29 +1667,6 @@ function LookComposerInner() {
       {/* In-canvas crop overlay — non-destructive crop handles rendered
           directly over the canvas (spec 07 §6, spec 04 §1). The
           composition remains visible while the user adjusts the crop. */}
-      {cropMode && selectedLayer && selectedLayer.type === 'media' && (
-        <InCanvasCropOverlay
-          visible={cropMode}
-          layerBounds={{
-            x: selectedLayer.x,
-            y: selectedLayer.y,
-            width: selectedLayer.width,
-            height: selectedLayer.height,
-          }}
-          onConfirm={(cropRect) => {
-            if (selectedLayer && selectedLayer.type === 'media') {
-              updateLayer(selectedLayer.id, {
-                x: cropRect.x,
-                y: cropRect.y,
-                width: cropRect.width,
-                height: cropRect.height,
-              });
-            }
-            setCropMode(false);
-          }}
-          onCancel={() => setCropMode(false)}
-        />
-      )}
       {/* Crop sheet — legacy fallback for aspect-ratio crop (kept as
           fallback per spec — not removed). */}
       {cropTarget && cropTarget.type === 'media' && (
@@ -1576,7 +1678,12 @@ function LookComposerInner() {
             if (cropTarget && cropTarget.type === 'media') {
               updateLayer(cropTarget.id, {
                 type: 'media',
-                payload: { ...cropTarget.payload, mediaUri: newUri },
+                payload: {
+                  ...cropTarget.payload,
+                  mediaUri: newUri,
+                  mediaFinalizationId: undefined,
+                  mediaAssetId: undefined,
+                },
               });
             }
             setCropTarget(null);
@@ -1643,6 +1750,7 @@ function LookComposerInner() {
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}
         editingLayer={editingLayer}
+        backgroundUri={backgroundMediaUri}
         onClose={() => { setPickerMode(null); setEditingLayer(null); }}
         onAddLayer={(layer) => {
           if (editingLayer) {
@@ -1674,6 +1782,9 @@ function LookComposerInner() {
       showEntry={showEntryScreen}
       entryElement={entryContent}
       editorElement={editorContent}
+      pinnedMediaUri={entryPinnedUri}
+      pinnedMediaKind={entryPinnedKind}
+      pinnedMediaDestination={entryPinnedDestination}
     />
   );
 }
@@ -1738,7 +1849,7 @@ const OverflowItem = React.memo(function OverflowItem({
       accessibilityRole="button"
       hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
     >
-      <Ionicons name={icon} size={20} color={colors.textPrimary} />
+      <Ionicons name={icon} size={IconGrammar.standard} color={colors.textPrimary} />
       <Text style={[styles.overflowItemText, { color: colors.textPrimary }]}>{label}</Text>
     </PressScale>
   );
@@ -1850,32 +1961,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0a0a0a',
   },
-  // ── Crash recovery banner ──
+  // ── Crash recovery banner (inline notification, not a card) ──
+  // Calm but noticeable: soft tinted background + left accent bar gives the
+  // banner proper visual hierarchy (accent → text → action) without heavy chrome.
   recoveryBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 10,
-    backgroundColor: 'rgba(201, 164, 106, 0.15)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(201, 164, 106, 0.3)',
     paddingTop: 50,
+    backgroundColor: 'rgba(201, 164, 106, 0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#C9A46A',
   },
   recoveryText: {
     flex: 1,
-    color: '#ffffff',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     marginLeft: 8,
   },
   recoveryBtn: {
+    backgroundColor: 'rgba(201, 164, 106, 0.15)',
+    borderRadius: Radius.sm,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: '#C9A46A',
-    borderRadius: Radius.md,
   },
   recoveryBtnText: {
-    color: '#0a0a0a',
-    fontSize: 13,
+    color: '#C9A46A',
+    fontSize: 14,
     fontWeight: '600',
   },
   recoveryDismiss: {
@@ -1894,10 +2007,19 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
+  // Gradient scrim behind the top bar so chrome reads over the canvas
+  // without a hard edge — "Liquid Glass" translucent separation.
+  topBarScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    zIndex: -1,
+  },
   topBar: {
     height: 56,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -2004,17 +2126,20 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyStrong.size,
     color: 'rgba(255,255,255,0.4)',
   },
-  // ── AI Effects button (inside the effects surface) ──
+  // ── AI Effects button (inline button, not a card) ──
+  // Premium button: subtle tinted fill + refined hairline border + radius.
   aiEffectsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     marginTop: Space.sm,
     minHeight: Control.hit,
+    backgroundColor: 'rgba(201, 164, 106, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 164, 106, 0.2)',
+    borderRadius: Radius.md,
   },
   aiEffectsBtnText: {
     flex: 1,
@@ -2029,8 +2154,17 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
+  // Gradient scrim above the bottom bar content gives the tools visual
+  // separation from the canvas without a hard border.
+  bottomBarScrim: {
+    position: 'absolute',
+    top: -80,
+    left: 0,
+    right: 0,
+    height: 80,
+    zIndex: -1,
+  },
   bottomBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
   },
   toolRail: {

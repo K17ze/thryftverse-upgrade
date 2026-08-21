@@ -37,6 +37,7 @@ import Reanimated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -338,7 +339,7 @@ export function ProjectFolderOrganizeMode({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="checkmark" size={24} color={colors.brand} />
+            <Ionicons name="checkmark" size={IconGrammar.hero} color={colors.brand} />
           </Pressable>
           <Text style={styles.headerTitle}>Organize</Text>
           <View style={styles.headerSpacer} />
@@ -363,9 +364,9 @@ export function ProjectFolderOrganizeMode({
               accessibilityRole="button"
               scale={0.97}
             >
-              <Ionicons name="folder-open-outline" size={20} color={colors.brand} />
+              <Ionicons name="folder-open-outline" size={IconGrammar.standard} color={colors.brand} />
               <Text style={styles.newFolderText}>New Folder</Text>
-              <Ionicons name="add" size={20} color={colors.brand} />
+              <Ionicons name="add" size={IconGrammar.standard} color={colors.brand} />
             </PressScale>
 
             {/* Root (unfiled) drop zone */}
@@ -386,7 +387,7 @@ export function ProjectFolderOrganizeMode({
               <View style={styles.dropZoneHeader}>
                 <Ionicons
                   name={dropTargetFolderId === null && draggingProjectId ? 'folder-open' : 'folder-outline'}
-                  size={18}
+                  size={IconGrammar.metadata}
                   color={dropTargetFolderId === null && draggingProjectId ? colors.brand : colors.textSecondary}
                 />
                 <Text style={styles.dropZoneTitle}>All Projects</Text>
@@ -436,7 +437,7 @@ export function ProjectFolderOrganizeMode({
                   <View style={styles.dropZoneHeader}>
                     <Ionicons
                       name={isDropTarget ? 'folder' : 'folder-outline'}
-                      size={18}
+                      size={IconGrammar.metadata}
                       color={isDropTarget ? colors.brand : colors.textSecondary}
                     />
                     <Pressable
@@ -459,7 +460,7 @@ export function ProjectFolderOrganizeMode({
                       accessibilityRole="button"
                       hitSlop={8}
                     >
-                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                      <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
                     </Pressable>
                   </View>
                   {folderProjects.length === 0 ? (
@@ -570,7 +571,7 @@ export function ProjectFolderOrganizeMode({
           <Reanimated.View style={[styles.dragItem, dragItemStyle]} pointerEvents="none">
             <Ionicons
               name={draggingProject.type === 'look' ? 'shirt-outline' : 'film-outline'}
-              size={16}
+              size={IconGrammar.metadata}
               color={colors.textInverse}
             />
             <Text style={styles.dragItemText} numberOfLines={1}>
@@ -633,13 +634,13 @@ const DraggableProjectRow = React.memo(function DraggableProjectRow({
       >
         <Ionicons
           name={project.type === 'look' ? 'shirt-outline' : 'film-outline'}
-          size={16}
+          size={IconGrammar.metadata}
           color={colors.textSecondary}
         />
         <Text style={styles.projectTitle} numberOfLines={1}>
           {project.title}
         </Text>
-        <Ionicons name="menu" size={16} color={colors.textMuted} />
+        <Ionicons name="menu" size={IconGrammar.metadata} color={colors.textMuted} />
       </Reanimated.View>
     </GestureDetector>
   );

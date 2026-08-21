@@ -459,8 +459,20 @@ export default function AssetDetailScreen() {
   void recsLoading;
   void railSections;
 
-  const handlePressRecommendation = (recItem: RecommendationItem) => {
-    navigation.push('ItemDetail', { itemId: recItem.id });
+  const handlePressRecommendation = (
+    recItem: RecommendationItem,
+    sectionKey?: string,
+    position?: number,
+    reasonCode?: string,
+    personalised?: boolean,
+  ) => {
+    navigation.push('ItemDetail', {
+      itemId: recItem.id,
+      sectionKey,
+      position,
+      reasonCode,
+      personalised,
+    });
   };
   const handlePressLook = (lookItem: RecommendationLook) => {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
@@ -1464,11 +1476,11 @@ export default function AssetDetailScreen() {
             <RecommendationRail
               section={seenInLooksSection}
               listingId={asset.listingId}
-              onPressItem={(recItem) => {
+              onPressItem={(recItem, sectionKey, position, reasonCode, personalised) => {
                 if (isRecommendationLook(recItem)) {
                   handlePressLook(recItem);
                 } else {
-                  handlePressRecommendation(recItem as unknown as RecommendationItem);
+                  handlePressRecommendation(recItem as unknown as RecommendationItem, sectionKey, position, reasonCode, personalised);
                 }
               }}
             />

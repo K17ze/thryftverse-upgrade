@@ -69,6 +69,10 @@ export class CreatorDraftService {
     const raw = await AsyncStorage.getItem(DRAFT_INDEX_KEY);
     const items: DraftMeta[] = raw ? JSON.parse(raw) : [];
     const existingIdx = items.findIndex((i) => i.id === doc.id);
+    // Extract a thumbnail URI from the first media layer's mediaUri or
+    // thumbnailUri. This lets the draft list show visual previews instead
+    // of generic icons, so users can identify drafts at a glance.
+    const thumbnailUri = extractThumbnailUri(doc);
     const meta: DraftMeta = {
       id: doc.id,
       type: doc.type,
@@ -76,6 +80,10 @@ export class CreatorDraftService {
       updatedAt: doc.updatedAt,
       // Preserve existing folder assignment when re-saving a draft
       folderId: existingIdx >= 0 ? items[existingIdx].folderId : undefined,
+      // Set thumbnail from the document's first media layer. Preserve
+      // the existing thumbnail if the new document has no media (e.g.
+      // a text-only poster saved over a media draft).
+      thumbnailUri: thumbnailUri ?? (existingIdx >= 0 ? items[existingIdx].thumbnailUri : undefined),
     };
     if (existingIdx >= 0) {
       items[existingIdx] = meta;
@@ -176,4 +184,33 @@ export class CreatorDraftService {
       return [];
     }
   }
+}
+
+// ── Thumbnail extraction ──────────────────────────────────────────────
+
+/**
+ * Extract a thumbnail URI from the first media layer in the document.
+ * For video layers, prefers `thumbnailUri` (the poster frame) over
+ * `mediaUri` (the video file). For image layers, uses `mediaUri`.
+ * Returns undefined for text-only documents (no media layers).
+ *
+ * Local URIs (file://, ph://, etc.) are returned as-is — the draft list
+ * can display them directly via expo-image. Remote URIs are also returned
+ * as-is for drafts that were saved after a successful upload.
+ */
+function extractThumbnailUri(doc: CreatorDocument): string | undefined {
+  for (const page of doc.pages) {
+    for (const layer of page.layers) {
+      if (layer.type === 'media') {
+        // For video, prefer the thumbnail (poster frame) over the video URI
+        if (layer.payload.mediaType === 'video' && layer.payload.thumbnailUri) {
+          return layer.payload.thumbnailUri;
+        }
+        if (layer.payload.mediaUri) {
+          return layer.payload.mediaUri;
+        }
+      }
+    }
+  }
+  return undefined;
 }

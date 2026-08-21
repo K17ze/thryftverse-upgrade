@@ -50,21 +50,19 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     quickActions: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.md,
-      gap: Space.sm,
     },
     quickActionRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + 2,
-      paddingVertical: Space.sm + 2,
-      paddingHorizontal: Space.sm + 2,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
+      gap: Space.sm,
+      minHeight: 64,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     quickActionIcon: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -392,7 +390,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Create a new group conversation with multiple people"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brandSubtle }]}>
+            <View style={styles.quickActionIcon}>
               <Ionicons name="people-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
@@ -406,7 +404,6 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           <AnimatedPressable
             style={styles.quickActionRow}
             onPress={() => {
-              haptic.light();
               setAgentPickerVisible(true);
             }}
             activeOpacity={0.85}
@@ -416,12 +413,12 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Start a conversation with an AI shopping, styling, or negotiation assistant"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brandSubtle }]}>
+            <View style={styles.quickActionIcon}>
               <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>
-              <Caption color={colors.textMuted} numberOfLines={1}>Shop Scout, Style Muse, Deal Maker & more</Caption>
+              <Caption color={colors.textMuted} numberOfLines={1}>Shopping, style and offer guidance</Caption>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
@@ -437,7 +434,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel={`${messageRequests.length} message requests`}
               accessibilityRole="button"
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.quickActionIcon}>
                 <Ionicons name="mail-unread-outline" size={20} color={colors.textSecondary} />
               </View>
               <View style={styles.quickActionBody}>

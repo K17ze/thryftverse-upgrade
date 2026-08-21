@@ -146,7 +146,7 @@ export function AutoAdjustButton({
           <ActivityIndicator size="small" color={accentColor} style={styles.spinner} />
         ) : (
           <Ionicons
-            name={showingApplied ? 'checkmark-circle' : 'color-wand-outline'}
+            name={showingApplied ? 'checkmark-circle' : 'bulb-outline'}
             size={Control.icon}
             color={accentColor}
           />

@@ -28,6 +28,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -129,7 +130,7 @@ export function AccessibilityMoveSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Move
@@ -230,7 +231,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-up" size={28} color={colors.textPrimary} />
+                  <Ionicons name="chevron-up" size={IconGrammar.hero} color={colors.textPrimary} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -243,10 +244,10 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+                  <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
                 </PressScale>
                 <View style={styles.nudgeCenter}>
-                  <Ionicons name="move" size={22} color={colors.textMuted} />
+                  <Ionicons name="move" size={IconGrammar.standard} color={colors.textMuted} />
                 </View>
                 <PressScale
                   onPress={() => nudge('x', step)}
@@ -256,7 +257,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-forward" size={28} color={colors.textPrimary} />
+                  <Ionicons name="chevron-forward" size={IconGrammar.hero} color={colors.textPrimary} />
                 </PressScale>
               </View>
               <View style={styles.nudgeRow}>
@@ -269,7 +270,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
+                  <Ionicons name="chevron-down" size={IconGrammar.hero} color={colors.textPrimary} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -333,7 +334,7 @@ export function AccessibilityMoveSheet({
               accessibilityRole="button"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="locate-outline" size={20} color={colors.textInverse} />
+              <Ionicons name="locate-outline" size={IconGrammar.standard} color={colors.textInverse} />
               <Text style={[styles.centerBtnText, { color: colors.textInverse }]}>
                 Center on Canvas
               </Text>

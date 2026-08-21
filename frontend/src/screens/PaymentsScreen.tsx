@@ -207,7 +207,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           style={styles.paymentRow}
         >
           <View style={styles.iconCircle}>
-            <Ionicons name={iconOutline} size={20} color={colors.textPrimary} />
+            <Ionicons name={iconOutline} size={20} color={colors.textPrimary} aria-hidden={true} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
@@ -229,7 +229,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             activeOpacity={0.8}
           >
             <View style={[styles.iconCircle, { backgroundColor: `${brand.color}12` }]}>
-              <Ionicons name={brand.icon} size={20} color={brand.color} />
+              <Ionicons name={brand.icon} size={20} color={brand.color} aria-hidden={true} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.paymentTitle}>{method.label}</Text>
@@ -237,7 +237,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             </View>
             {method.isDefault ? (
               <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
-                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 <Text style={[styles.defaultText, { color: colors.success }]}>Default</Text>
               </View>
             ) : null}
@@ -247,7 +247,7 @@ export default function PaymentsScreen({ navigation }: Props) {
     }
     return (
       <View style={styles.emptyState}>
-        <Ionicons name={iconOutline} size={40} color={colors.textMuted} />
+        <Ionicons name={iconOutline} size={28} color={colors.textMuted} aria-hidden={true} />
         <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
         <Text style={styles.emptyStateSub}>{emptySub}</Text>
       </View>
@@ -300,7 +300,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Add payment method"
             >
-              <Ionicons name="add" size={23} color={colors.brand} />
+              <Ionicons name="add" size={22} color={colors.brand} aria-hidden={true} />
             </AnimatedPressable>
           }
         />
@@ -315,7 +315,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="card" size={20} color={colors.textInverse} />
+              <Ionicons name="card" size={20} color={colors.textInverse} aria-hidden={true} />
             </View>
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
@@ -327,7 +327,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             </View>
             {defaultMethod && (
               <View style={[styles.heroBadge, { backgroundColor: colors.successSubtle }]}>
-                <Ionicons name="lock-closed-outline" size={12} color={colors.success} />
+                <Ionicons name="lock-closed-outline" size={12} color={colors.success} aria-hidden={true} />
                 <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
               </View>
             )}
@@ -361,14 +361,14 @@ export default function PaymentsScreen({ navigation }: Props) {
                 {allowApplePay && Platform.OS === 'ios' && (
                   <View style={styles.walletRow}>
                     <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
-                      <Ionicons name="logo-apple" size={20} color={colors.textInverse} />
+                      <Ionicons name="logo-apple" size={20} color={colors.textInverse} aria-hidden={true} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walletTitle}>Apple Pay</Text>
                       <Text style={styles.walletSub}>Pay with Face ID or Touch ID</Text>
                     </View>
                     <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                       <Text style={[styles.walletBadgeText, { color: colors.success }]}>Ready</Text>
                     </View>
                   </View>
@@ -376,14 +376,14 @@ export default function PaymentsScreen({ navigation }: Props) {
                 {allowGooglePay && Platform.OS === 'android' && (
                   <View style={styles.walletRow}>
                     <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
-                      <Ionicons name="logo-google" size={18} color={colors.textInverse} />
+                      <Ionicons name="logo-google" size={18} color={colors.textInverse} aria-hidden={true} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walletTitle}>Google Pay</Text>
                       <Text style={styles.walletSub}>Pay with biometric authentication</Text>
                     </View>
                     <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                       <Text style={[styles.walletBadgeText, { color: colors.success }]}>Ready</Text>
                     </View>
                   </View>
@@ -397,7 +397,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               checkout' message next to the card number field is more
               effective than security badges in the footer." */}
           <View style={[styles.inlineTrustRow, { borderColor: colors.border }]}>
-            <Ionicons name="lock-closed-outline" size={14} color={colors.success} />
+            <Ionicons name="lock-closed-outline" size={14} color={colors.success} aria-hidden={true} />
             <Text style={[styles.inlineTrustText, { color: colors.textSecondary }]}>
               Secure checkout · card details encrypted by Stripe
             </Text>
@@ -417,7 +417,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                 <View style={styles.primaryCardHeader}>
                   <Text style={[styles.primaryCardLabel, { color: colors.textMuted }]}>PRIMARY METHOD</Text>
                   <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                     <Text style={[styles.defaultText, { color: colors.success }]}>Default</Text>
                   </View>
                 </View>
@@ -427,19 +427,20 @@ export default function PaymentsScreen({ navigation }: Props) {
                       name="card"
                       size={22}
                       color={getCardBrand(defaultMethod.brand).color}
+                      aria-hidden={true}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.primaryCardTitle}>{defaultMethod.label}</Text>
                     <Text style={styles.primaryCardSub}>{defaultMethod.details ?? (defaultMethod.type === 'card' ? 'Card ending in ••••' : 'Bank account')}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
                 </View>
               </AnimatedPressable>
             ) : (
               <View style={[styles.primaryCard, styles.primaryCardEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[styles.brandIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="card-outline" size={24} color={colors.textMuted} />
+                  <Ionicons name="card-outline" size={24} color={colors.textMuted} aria-hidden={true} />
                 </View>
                 <Text style={styles.primaryCardTitle}>No payment method</Text>
                 <Text style={styles.primaryCardSub}>Add a card to check out faster</Text>
@@ -449,7 +450,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                   activeOpacity={0.85}
                   hapticFeedback="medium"
                 >
-                  <Ionicons name="add" size={16} color={colors.background} />
+                  <Ionicons name="add" size={16} color={colors.background} aria-hidden={true} />
                   <Text style={[styles.primaryCardCtaText, { color: colors.background }]}>Add payment method</Text>
                 </AnimatedPressable>
               </View>
@@ -488,7 +489,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               {allowCards ? (
                 <AppButton
                   title="Add new card"
-                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} />}
+                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} aria-hidden={true} />}
                   style={styles.addBtn}
                   variant="secondary"
                   size="sm"
@@ -507,7 +508,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               primary trust signal now lives inline near the payment methods. */}
           <View>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} aria-hidden={true} />
               <Text style={styles.trustNoteText}>
                 Thryftverse stores provider references and limited display details, not card numbers or security codes.
               </Text>
@@ -748,7 +749,6 @@ function createStyles(colors: ThemeColors) {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Space.sm + Space.xs,

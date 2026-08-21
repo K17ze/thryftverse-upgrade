@@ -127,12 +127,14 @@ export function ListingPublishFooter({
           accessibilityRole="button"
           accessibilityLabel="Preview listing"
         >
+          <Ionicons name="eye-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
           <Text style={styles.previewText}>Preview</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
             styles.publishBtn,
             publishDisabled && styles.publishBtnDisabled,
+            !publishDisabled && styles.publishBtnReady,
             pressed && !publishDisabled && styles.publishBtnPressed,
           ]}
           onPress={onPublish}
@@ -144,14 +146,19 @@ export function ListingPublishFooter({
           {isPublishing ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text
-              style={[
-                styles.publishText,
-                publishDisabled && styles.publishTextDisabled,
-              ]}
-            >
-              {getPublishLabel(mode, false)}
-            </Text>
+            <>
+              {!publishDisabled && (
+                <Ionicons name="arrow-up-circle" size={18} color={colors.textInverse} style={{ marginRight: 6 }} />
+              )}
+              <Text
+                style={[
+                  styles.publishText,
+                  publishDisabled && styles.publishTextDisabled,
+                ]}
+              >
+                {getPublishLabel(mode, false)}
+              </Text>
+            </>
           )}
         </Pressable>
       </View>
@@ -215,16 +222,18 @@ function createStyles(colors: ThemeColors) {
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
+    alignItems: 'center',
   },
   previewBtn: {
     flex: 1,
-    height: 48,
+    height: 50,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
   previewBtnPressed: {
     opacity: 0.7,
@@ -236,12 +245,16 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   publishBtn: {
-    flex: 1.5,
-    height: 48,
+    flex: 1.6,
+    height: 50,
     borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  publishBtnReady: {
+    height: 52,
   },
   publishBtnPressed: {
     opacity: 0.9,

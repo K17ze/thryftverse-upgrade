@@ -11,6 +11,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
@@ -56,6 +57,8 @@ function formatRelativeTime(iso: string): string {
 // Items (ProductBrowserSheet) and Templates (CreatorTemplateBrowser) are
 // accessible from inside the editor, NOT from the entry screen.
 
+export type CreatorCameraMode = 'look' | 'poster' | 'visual-search';
+
 export interface CreatorEntryScreenProps {
   documentType: 'look' | 'poster';
   onClose: () => void;
@@ -79,6 +82,14 @@ export interface CreatorEntryScreenProps {
    * tappable control without a handler).
    */
   onOpenDraft?: (draftId: string) => void;
+  /**
+   * Optional: invoked when the user captures a photo while the in-camera
+   * mode switcher is set to "Search" (visual-search). The caller (composer
+   * screen) should navigate to the VisualSearch screen with the captured
+   * URI. When not provided, the "Search" mode is still selectable but the
+   * capture falls back to onMediaSelected.
+   */
+  onVisualSearchCapture?: (uri: string) => void;
 }
 
 export function CreatorEntryScreen({
@@ -87,11 +98,18 @@ export function CreatorEntryScreen({
   onMediaSelected,
   onBlankStart,
   onOpenDraft,
+  onVisualSearchCapture,
 }: CreatorEntryScreenProps) {
   const insets = useSafeAreaInsets();
   const isPoster = documentType === 'poster';
   const haptic = useHaptic();
   const { colors } = useAppTheme();
+
+  // ── In-camera mode switcher (Look / Poster / Search) ──
+  // The camera is the root creator state; the mode switcher lets the user
+  // reframe the capture intent without leaving the viewfinder. Initialized
+  // from the documentType prop so the default mode matches the entry intent.
+  const [mode, setMode] = useState<CreatorCameraMode>(documentType);
 
   // ── Sheet visibility ──
   const [showPhotos, setShowPhotos] = useState(false);
@@ -123,7 +141,15 @@ export function CreatorEntryScreen({
   // Legacy single-URI path (visual search, backward-compatible callers).
   // For poster/look modes, the camera sends a typed batch via
   // onCaptureBatch instead, preserving the correct kind (image/video).
+  // When the in-camera mode switcher is set to "Search" (visual-search),
+  // the capture is routed to onVisualSearchCapture so the caller can
+  // navigate to the VisualSearch screen instead of entering the editor.
   const handleCapture = useCallback((uri: string) => {
+    if (mode === 'visual-search') {
+      haptic.light();
+      onVisualSearchCapture?.(uri);
+      return;
+    }
     RNImage.getSize(uri, (imgW: number, imgH: number) => {
       const media: CreatorInitialMedia = {
         id: `capture_${Date.now()}`,
@@ -141,7 +167,7 @@ export function CreatorEntryScreen({
       };
       onMediaSelected([media]);
     });
-  }, [onMediaSelected]);
+  }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
 
   // ── Camera batch capture → typed media payload → enter editor ──
   // Direct capture → editor: a single capture is sent as a single-element
@@ -185,27 +211,51 @@ export function CreatorEntryScreen({
           CAMERA — the root creator state. Full-screen viewfinder.
           The user lands here immediately — no dashboard, no tiles. ═════ */}
       <CreatorCamera
-        mode={documentType}
+        mode={mode}
         onCapture={handleCapture}
         onCaptureBatch={handleCaptureBatch}
         onGallery={() => { haptic.selection(); setShowPhotos(true); }}
         onClose={onClose}
+        renderBottomOverlay={() => (
+          <View
+            pointerEvents="box-none"
+            style={[styles.modeSwitcherContainer, { bottom: insets.bottom + 100 }]}
+          >
+            <View style={styles.modeSwitcher}>
+              {(['look', 'poster', 'visual-search'] as const).map((m) => (
+                <Pressable
+                  key={m}
+                  onPress={() => { haptic.selection(); setMode(m); }}
+                  style={styles.modeSwitcherItem}
+                  accessibilityLabel={`${m === 'visual-search' ? 'Search' : m === 'poster' ? 'Poster' : 'Look'} mode`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mode === m }}
+                >
+                  <Text
+                    style={[
+                      styles.modeSwitcherText,
+                      mode === m && styles.modeSwitcherTextActive,
+                    ]}
+                  >
+                    {m === 'visual-search' ? 'Search' : m === 'poster' ? 'Poster' : 'Look'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+        renderTopRightAccessory={() => (
+          <Pressable
+            style={styles.textModeAccessory}
+            onPress={() => { haptic.light(); onBlankStart(); }}
+            accessibilityLabel="Create text poster"
+            accessibilityHint="Starts a blank text poster"
+            accessibilityRole="button"
+          >
+            <Text style={styles.textModeBtnLabel}>Aa</Text>
+          </Pressable>
+        )}
       />
-
-      {/* "Aa" text-mode button — Instagram "Create" pattern, top-right.
-          Stays as a small top-right button on the camera. Refined chrome:
-          subtle dark fill + hairline border for definition over bright
-          previews, semibold "Aa" glyph for a premium affordance. */}
-      <Pressable
-        style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        onPress={() => { haptic.light(); onBlankStart(); }}
-        accessibilityLabel="Create text poster"
-        accessibilityHint="Starts a blank text poster"
-        accessibilityRole="button"
-      >
-        <Text style={styles.textModeBtnLabel}>Aa</Text>
-      </Pressable>
 
       {/* Drafts button — small affordance in the camera top bar, next to
           close (top-left). Only shown when draft resumption is supported
@@ -220,7 +270,7 @@ export function CreatorEntryScreen({
           accessibilityHint="Shows your saved creator drafts"
           accessibilityRole="button"
         >
-          <Ionicons name="documents-outline" size={22} color="#fff" />
+          <Ionicons name="documents-outline" size={IconGrammar.standard} color="#fff" />
           {drafts.length > 1 ? (
             <View style={styles.draftsCountBadge}>
               <Text style={styles.draftsCountText}>{drafts.length}</Text>
@@ -259,7 +309,7 @@ export function CreatorEntryScreen({
             accessibilityLabel="Close drafts"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={IconGrammar.hero} color={colors.textPrimary} />
           </Pressable>
         </View>
         <ScrollView
@@ -289,7 +339,7 @@ export function CreatorEntryScreen({
                     <View style={[styles.draftThumb, styles.draftThumbPlaceholder]}>
                       <Ionicons
                         name={draft.type === 'poster' ? 'film-outline' : 'square-outline'}
-                        size={32}
+                        size={IconGrammar.hero}
                         color="rgba(255,255,255,0.2)"
                       />
                     </View>
@@ -299,7 +349,7 @@ export function CreatorEntryScreen({
                   </Text>
                   {draft.updatedAt ? (
                     <Text style={styles.draftTimestamp} numberOfLines={1}>
-                      Last edited {formatRelativeTime(draft.updatedAt)}
+                      {formatRelativeTime(draft.updatedAt)}
                     </Text>
                   ) : null}
                 </PressScale>
@@ -323,8 +373,7 @@ const styles = StyleSheet.create({
   // Camera view — "Aa" text-mode button (Instagram "Create" pattern).
   // Refined chrome: subtle dark fill + hairline white/10 border for
   // definition over bright previews. 44pt hit target, visible glyph only.
-  textModeBtn: {
-    position: 'absolute',
+  textModeAccessory: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
@@ -333,7 +382,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 20,
   },
   textModeBtnLabel: {
     color: '#fff',
@@ -425,14 +473,13 @@ const styles = StyleSheet.create({
     width: 140,
     height: 175,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   draftThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 0,
   },
   draftTitle: {
     fontSize: Type.caption.size,
@@ -453,5 +500,38 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.5)',
+  },
+
+  // ── In-camera mode switcher (Look / Poster / Search) ──
+  // Subtle text-based segmented control rendered into the camera's bottom
+  // overlay area, above the shutter. Instagram-style progressive disclosure:
+  // the viewfinder is default, modes are a tap away but never dominant.
+  // pointerEvents="box-none" so taps pass through to the camera except on
+  // the labels themselves.
+  modeSwitcherContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  modeSwitcher: {
+    flexDirection: 'row',
+    gap: 16,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  modeSwitcherItem: {
+    padding: 4,
+  },
+  modeSwitcherText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: Typography.family.regular,
+  },
+  modeSwitcherTextActive: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
   },
 });

@@ -52,6 +52,7 @@ import {
   LetterSpacing,
   Type,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 
 export interface KeyframeEditorProps {
   layerId: string;
@@ -261,7 +262,7 @@ export function KeyframeEditor({
                 accessibilityLabel="Decrease value"
                 hitSlop={Control.hit / 2}
               >
-                <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                <Ionicons name="remove" size={IconGrammar.metadata} color={colors.textPrimary} />
               </Pressable>
               <Text style={[styles.valueText, { color: colors.textPrimary }]}>
                 {formatValue(selected.value, activeProperty)}
@@ -275,7 +276,7 @@ export function KeyframeEditor({
                 accessibilityLabel="Increase value"
                 hitSlop={Control.hit / 2}
               >
-                <Ionicons name="add" size={18} color={colors.textPrimary} />
+                <Ionicons name="add" size={IconGrammar.metadata} color={colors.textPrimary} />
               </Pressable>
             </View>
           </View>
@@ -330,7 +331,7 @@ export function KeyframeEditor({
               { backgroundColor: colors.danger },
             ]}
           >
-            <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="trash-outline" size={IconGrammar.metadata} color="#FFFFFF" />
             <Text style={styles.deleteLabel}>Delete</Text>
           </Pressable>
         </View>

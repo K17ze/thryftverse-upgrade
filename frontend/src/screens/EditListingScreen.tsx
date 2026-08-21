@@ -705,7 +705,7 @@ export default function EditListingScreen() {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Could not load listing</Text>
           <Pressable
             style={({ pressed }) => [styles.retryBtn, t.retryBtn, pressed && { opacity: 0.7 }]}
@@ -818,23 +818,23 @@ export default function EditListingScreen() {
               accessibilityRole="button"
               accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
             >
-              <Ionicons name="camera-outline" size={15} color={colors.textSecondary} />
+              <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
               <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
-              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={14} color={colors.textMuted} />
+              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {!photoGuideCollapsed && (
               <View style={styles.photoGuideTips}>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="sunny-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="cube-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="leaf-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
                 </View>
               </View>
@@ -851,7 +851,7 @@ export default function EditListingScreen() {
 
           {isEditingRestricted && (
             <View style={styles.restrictedRow}>
-              <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+              <Ionicons name="lock-closed" size={16} color={colors.textMuted} aria-hidden={true} />
               <Text style={[styles.restrictedText, t.restrictedText]}>Editing is limited for this listing status.</Text>
             </View>
           )}
@@ -864,7 +864,7 @@ export default function EditListingScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
                 {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                 )}
@@ -891,7 +891,7 @@ export default function EditListingScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
                   {category ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -900,7 +900,7 @@ export default function EditListingScreen() {
                   {category || 'Select category'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             <View style={[styles.hairline, t.hairline]} />
 
@@ -914,7 +914,7 @@ export default function EditListingScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
                   {brand ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : editCompleteness.policy.brandlessValid ? (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
@@ -925,7 +925,7 @@ export default function EditListingScreen() {
                   {brand || 'Select brand'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             <View style={[styles.hairline, t.hairline]} />
 
@@ -939,7 +939,7 @@ export default function EditListingScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
                   {size ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : editCompleteness.policy.sizelessValid ? (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
@@ -950,7 +950,7 @@ export default function EditListingScreen() {
                   {size || 'Select size'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             <View style={[styles.hairline, t.hairline]} />
 
@@ -964,7 +964,7 @@ export default function EditListingScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
                   {condition ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -973,7 +973,7 @@ export default function EditListingScreen() {
                   {condition || 'Select condition'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           </View>
 
@@ -985,7 +985,7 @@ export default function EditListingScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, t.fieldLabel]}>Price</Text>
                 {hasValidPrice ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                 )}
@@ -1008,7 +1008,7 @@ export default function EditListingScreen() {
               {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                 <View style={styles.priceSuggestionBlock}>
                   <View style={styles.soldCompsHint}>
-                    <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                     <Text style={[styles.soldCompsText, t.soldCompsText]}>
                       Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
                       {' '}({soldComps.sampleSize} sold)
@@ -1016,7 +1016,7 @@ export default function EditListingScreen() {
                   </View>
                   {soldComps.medianPrice != null && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="bulb-outline" size={13} color={colors.brand} />
+                      <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
                       <Text style={[styles.soldCompsText, t.priceSuggestion]}>
                         Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
                       </Text>
@@ -1024,7 +1024,7 @@ export default function EditListingScreen() {
                   )}
                   {priceVsMarket === 'above' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-up-outline" size={13} color={colors.warning} />
+                      <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
                       <Text style={[styles.soldCompsText, t.priceMarketHigh]}>
                         Priced above recent sold range
                       </Text>
@@ -1032,7 +1032,7 @@ export default function EditListingScreen() {
                   )}
                   {priceVsMarket === 'below' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-down-outline" size={13} color={colors.textMuted} />
+                      <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                       <Text style={[styles.soldCompsText, t.priceMarketLow]}>
                         Priced below recent sold range
                       </Text>
@@ -1040,7 +1040,7 @@ export default function EditListingScreen() {
                   )}
                   {priceVsMarket === 'in_range' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                       <Text style={[styles.soldCompsText, t.priceMarketGood]}>
                         Within recent sold range
                       </Text>
@@ -1049,7 +1049,7 @@ export default function EditListingScreen() {
                 </View>
               ) : (
                 <View style={styles.soldCompsHint}>
-                  <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.soldCompsText, t.priceNoCompsHint]}>
                     Price competitively for faster sales
                   </Text>
@@ -1082,7 +1082,7 @@ export default function EditListingScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, t.fieldLabel]}>Description</Text>
                 {description.trim().length >= 10 ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                 )}
@@ -1120,7 +1120,7 @@ export default function EditListingScreen() {
                   {shippingMethod === 'standard' ? 'Standard' : shippingMethod === 'express' ? 'Express' : 'Select method'}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
+              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             <View style={[styles.hairline, t.hairline]} />
 
@@ -1136,14 +1136,14 @@ export default function EditListingScreen() {
                   {shippingPayer === 'buyer' ? 'Buyer pays' : shippingPayer === 'seller' ? 'I pay' : 'Select payer'}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
+              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={14} color={colors.danger} />
+              <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
               <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1154,8 +1154,9 @@ export default function EditListingScreen() {
           <View style={styles.completenessRow}>
             <Ionicons
               name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={15}
+              size={16}
               color={editCompleteness.canActivate ? colors.success : colors.warning}
+              aria-hidden={true}
             />
             <View style={styles.completenessTextWrap}>
               <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
@@ -1179,8 +1180,9 @@ export default function EditListingScreen() {
             <View style={styles.qualityBarLeft}>
               <Ionicons
                 name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-                size={14}
+                size={16}
                 color={colors.textSecondary}
+                aria-hidden={true}
               />
               <Text style={[styles.qualityBarLabel, t.qualityBarLabel]}>Listing quality</Text>
             </View>
@@ -1195,7 +1197,7 @@ export default function EditListingScreen() {
                 accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
               >
                 <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
-                <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
+                <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} aria-hidden={true} />
               </Pressable>
             </View>
           </View>
@@ -1206,7 +1208,7 @@ export default function EditListingScreen() {
             <View style={[styles.qualityTipsRow, t.qualityTipsRow]}>
               {qualityResult.missingItems.slice(0, 6).map((item) => (
                 <View key={item.key} style={styles.qualityTipChip}>
-                  <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={colors.textMuted} />
+                  <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{item.label}</Text>
                 </View>
               ))}

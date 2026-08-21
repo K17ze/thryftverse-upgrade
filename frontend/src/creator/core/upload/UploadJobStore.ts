@@ -26,6 +26,10 @@ import type { UploadJob } from './UploadTypes';
  */
 export class UploadJobStore {
   private storageKey: string;
+  /** AsyncStorage read-modify-write operations must be serialized. Without
+   *  this queue, progress events from concurrent jobs can overwrite each
+   *  other's newer snapshots. */
+  private mutationChain: Promise<void> = Promise.resolve();
 
   constructor(storageKey = 'creator_upload_jobs_v2') {
     this.storageKey = storageKey;
@@ -50,7 +54,27 @@ export class UploadJobStore {
           j !== null &&
           'localPath' in j &&
           'status' in j,
-      );
+      ).map((job) => {
+        // A process kill cannot leave an active native/XHR task attached to
+        // this JS runtime. Rehydrate transient work as queued so the manager
+        // restarts it instead of polling an impossible `uploading` state.
+        if (job.status === 'uploading' || job.status === 'initiating') {
+          return { ...job, status: 'queued' as const, error: undefined };
+        }
+        // Versionless jobs completed by the old manager contain only an
+        // unverified presign URL. They must re-enter the trusted pipeline.
+        if (job.status === 'completed' && !job.finalizationId) {
+          return {
+            ...job,
+            status: 'queued' as const,
+            progress: 0,
+            remoteUrl: undefined,
+            error: undefined,
+            retries: 0,
+          };
+        }
+        return job;
+      });
     } catch {
       // Corrupt or unreadable store — start fresh rather than crashing
       // the publish flow. The caller will re-queue from source of truth.
@@ -60,39 +84,42 @@ export class UploadJobStore {
 
   /** Persist the full job list, replacing any previous value. */
   async saveJobs(jobs: UploadJob[]): Promise<void> {
-    try {
-      await AsyncStorage.setItem(this.storageKey, JSON.stringify(jobs));
-    } catch {
-      // Storage failures (e.g. quota) must not abort in-flight uploads.
-      // The manager keeps working from memory; persistence is best-effort.
-    }
+    await this.enqueueMutation(async () => {
+      await this.writeJobs(jobs);
+    });
   }
 
   /** Add a new job and persist. */
   async addJob(job: UploadJob): Promise<void> {
-    const jobs = await this.loadJobs();
-    jobs.push(job);
-    await this.saveJobs(jobs);
+    await this.enqueueMutation(async () => {
+      const jobs = await this.loadJobs();
+      jobs.push(job);
+      await this.writeJobs(jobs);
+    });
   }
 
   /** Apply partial updates to a job and persist. */
   async updateJob(jobId: string, updates: Partial<UploadJob>): Promise<void> {
-    const jobs = await this.loadJobs();
-    const idx = jobs.findIndex((j) => j.id === jobId);
-    if (idx === -1) return;
-    jobs[idx] = {
-      ...jobs[idx],
-      ...updates,
-      updatedAt: Date.now(),
-    };
-    await this.saveJobs(jobs);
+    await this.enqueueMutation(async () => {
+      const jobs = await this.loadJobs();
+      const idx = jobs.findIndex((j) => j.id === jobId);
+      if (idx === -1) return;
+      jobs[idx] = {
+        ...jobs[idx],
+        ...updates,
+        updatedAt: Date.now(),
+      };
+      await this.writeJobs(jobs);
+    });
   }
 
   /** Remove a job and persist. */
   async removeJob(jobId: string): Promise<void> {
-    const jobs = await this.loadJobs();
-    const next = jobs.filter((j) => j.id !== jobId);
-    await this.saveJobs(next);
+    await this.enqueueMutation(async () => {
+      const jobs = await this.loadJobs();
+      const next = jobs.filter((j) => j.id !== jobId);
+      await this.writeJobs(next);
+    });
   }
 
   /** Return all jobs belonging to a project. */
@@ -105,5 +132,20 @@ export class UploadJobStore {
   async getPendingJobs(): Promise<UploadJob[]> {
     const jobs = await this.loadJobs();
     return jobs.filter((j) => j.status !== 'completed');
+  }
+
+  private async writeJobs(jobs: UploadJob[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(this.storageKey, JSON.stringify(jobs));
+    } catch {
+      // Storage failures must not abort an in-flight upload. The manager
+      // continues from memory and surfaces transport failures separately.
+    }
+  }
+
+  private enqueueMutation(operation: () => Promise<void>): Promise<void> {
+    const next = this.mutationChain.then(operation, operation);
+    this.mutationChain = next.catch(() => undefined);
+    return next;
   }
 }

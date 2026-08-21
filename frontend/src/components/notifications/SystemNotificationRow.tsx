@@ -36,6 +36,7 @@ export interface SystemNotificationRowProps {
 interface SystemVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'warning' | 'danger' | 'brand';
+  accentSubtleKey: 'warningSubtle' | 'dangerSubtle' | 'brandSubtle';
   statusLabel: string;
   actionLabel?: string;
 }
@@ -43,11 +44,11 @@ interface SystemVisual {
 function resolveSystemVisual(eventType: NotificationEventV2['eventType']): SystemVisual {
   switch (eventType) {
     case 'resolution_opened':
-      return { icon: 'alert-circle-outline', accentKey: 'warning', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
+      return { icon: 'alert-circle-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
     case 'resolution_status_changed':
-      return { icon: 'document-text-outline', accentKey: 'brand', statusLabel: 'Status updated' };
+      return { icon: 'document-text-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'Status updated' };
     default:
-      return { icon: 'information-circle-outline', accentKey: 'brand', statusLabel: 'System update' };
+      return { icon: 'information-circle-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'System update' };
   }
 }
 
@@ -64,6 +65,7 @@ export function SystemNotificationRow({
 
   const visual = useMemo(() => resolveSystemVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
+  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const subject = event.objectRef?.label ?? readPayloadString(event.payload, 'ticketSubject') ?? event.title;
@@ -77,6 +79,7 @@ export function SystemNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
+      accentSubtle={accentSubtle}
       colors={colors}
       size={44}
     />

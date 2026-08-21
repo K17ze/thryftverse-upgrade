@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../../../lib/apiClient';
+import { finalizePresignedMedia } from '../../../services/mediaUpload';
 import { createStableId } from '../../../utils/createStableId';
 import { detectMimeType, deriveFileName } from './MimeDetector';
 import { MultipartUploader } from './MultipartUploader';
@@ -45,6 +46,8 @@ interface PresignResponse {
 interface UploadAttemptResult {
   ok: boolean;
   remoteUrl?: string;
+  finalizationId?: string;
+  mediaAssetId?: string;
   uploadedBytes?: number;
   error?: string;
 }
@@ -135,6 +138,20 @@ export class UploadManager {
     // Idempotency: check for an existing job with the same key.
     const existingJob = this.findExistingJob(params);
     if (existingJob) {
+      // Jobs completed by the former manager contain only the raw presign
+      // URL. They are not trusted publication receipts and must pass through
+      // the verified upload flow before they can be reused.
+      if (existingJob.status === 'completed' && !existingJob.finalizationId) {
+        await this.persistState(existingJob.id, {
+          status: 'queued',
+          progress: 0,
+          remoteUrl: undefined,
+          error: undefined,
+          retries: 0,
+        });
+        void this.processQueue();
+        return existingJob.id;
+      }
       // If the existing job is in a terminal state, re-queue it.
       if (existingJob.status === 'failed' || existingJob.status === 'paused') {
         await this.persistState(existingJob.id, {
@@ -343,6 +360,8 @@ export class UploadManager {
           status: 'completed',
           progress: 1,
           remoteUrl: result.remoteUrl,
+          finalizationId: result.finalizationId,
+          mediaAssetId: result.mediaAssetId,
           error: undefined,
         });
         const done = this.jobsCache.get(job.id);
@@ -388,7 +407,10 @@ export class UploadManager {
         if (this.multipartEnabled && job.sizeBytes > MULTIPART_THRESHOLD_BYTES) {
           return await this.performMultipartUpload(job, signal);
         }
-        return await this.performSinglePutUpload(job, signal);
+        return await this.performSinglePutUpload(
+          this.jobsCache.get(job.id) ?? job,
+          signal,
+        );
       } catch (err: unknown) {
         if (signal.aborted) {
           return { ok: false, error: 'Aborted' };
@@ -416,6 +438,7 @@ export class UploadManager {
    * Flow:
    *   1. POST /uploads/presign → obtain presigned PUT URL
    *   2. XHR PUT the file to S3 with `upload.onprogress` for real bytes
+   *   3. POST /uploads/finalize and wait for the canonical publishable asset
    *
    * This transport is **retryable** (the whole file is re-uploaded on
    * failure) but not **resumable** (no part-level checkpoint).
@@ -424,34 +447,75 @@ export class UploadManager {
     job: UploadJob,
     signal: AbortSignal,
   ): Promise<UploadAttemptResult> {
-    // Step 1 — presign via the backend (with auth + base URL).
-    const presign = await fetchJson<PresignResponse>('/uploads/presign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileName: job.fileName,
-        contentType: job.mimeType,
-        folder: job.folder,
-        sizeBytes: job.sizeBytes,
-      }),
-    });
+    let presign: PresignResponse;
+    if (job.uploadedObject) {
+      // A prior PUT completed but finalization was interrupted. Reconcile the
+      // same object; do not create an orphaned duplicate on every retry.
+      presign = {
+        ...job.uploadedObject,
+        url: '',
+        maxSizeBytes: job.uploadedObject.sizeBytes,
+        expiresInSeconds: Math.max(
+          0,
+          Math.floor((Date.parse(job.uploadedObject.expiresAt) - Date.now()) / 1000),
+        ),
+      };
+    } else {
+      // Step 1 — presign via the backend (with auth + base URL).
+      presign = await fetchJson<PresignResponse>('/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: job.fileName,
+          contentType: job.mimeType,
+          folder: job.folder,
+          sizeBytes: job.sizeBytes,
+        }),
+        signal,
+      });
 
-    // Step 2 — PUT the file to S3 via XHR for real byte progress.
-    await this.xhrPutFile(
-      presign.url,
-      job.localPath,
-      job.mimeType,
-      job.sizeBytes,
-      job.id,
-      signal,
-    );
+      // Step 2 — PUT the file to S3 via XHR for real byte progress.
+      await this.xhrPutFile(
+        presign.url,
+        job.localPath,
+        job.mimeType,
+        job.sizeBytes,
+        job.id,
+        signal,
+      );
 
-    // Report completion progress.
+      // Persist the post-PUT checkpoint before finalization. If the response
+      // to finalize is lost, retrying uses the same idempotent object key.
+      await this.persistState(job.id, {
+        uploadedObject: {
+          uploadIntentId: presign.uploadIntentId,
+          bucket: presign.bucket,
+          key: presign.key,
+          publicUrl: presign.publicUrl,
+          contentType: presign.contentType,
+          sizeBytes: presign.sizeBytes,
+          expiresAt: presign.expiresAt,
+        },
+      });
+    }
+
+    // The bytes have landed, but the job is not complete until the backend
+    // verifies and publishes a canonical asset.
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
+    const uploaded = await finalizePresignedMedia({
+      presign,
+      fileName: job.fileName,
+      folder: job.folder,
+      scopeRefId: job.projectId,
+      metadata: { clientAssetId: job.assetId },
+      signal,
+    });
 
     return {
       ok: true,
-      remoteUrl: presign.publicUrl,
+      remoteUrl: uploaded.publicUrl,
+      finalizationId: uploaded.finalizationId,
+      mediaAssetId: uploaded.mediaAssetId,
       uploadedBytes: job.sizeBytes,
     };
   }
@@ -509,9 +573,8 @@ export class UploadManager {
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
     return {
-      ok: true,
-      remoteUrl,
-      uploadedBytes: job.sizeBytes,
+      ok: false,
+      error: `Multipart object ${remoteUrl} cannot publish until the backend returns a verified finalization receipt`,
     };
   }
 
@@ -534,8 +597,26 @@ export class UploadManager {
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      let settled = false;
       xhr.open('PUT', url);
       xhr.setRequestHeader('Content-Type', mimeType);
+
+      const cleanup = () => {
+        signal.removeEventListener('abort', onAbort);
+        xhr.upload.onprogress = null;
+      };
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
 
       // Real byte progress — actual transmitted bytes / total bytes.
       xhr.upload.onprogress = (event) => {
@@ -546,18 +627,18 @@ export class UploadManager {
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
+          succeed();
         } else {
-          reject(new Error(`Upload PUT failed: HTTP ${xhr.status}`));
+          fail(new Error(`Upload PUT failed: HTTP ${xhr.status}`));
         }
       };
 
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.onerror = () => fail(new Error('Network error during upload'));
+      xhr.ontimeout = () => fail(new Error('Upload timed out'));
 
       const onAbort = () => {
         xhr.abort();
-        reject(new Error('Aborted'));
+        fail(new Error('Aborted'));
       };
       if (signal.aborted) {
         onAbort();

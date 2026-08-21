@@ -138,7 +138,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Celebration Header */}
         <View style={styles.heroSection}>
           <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={64} color={colors.brand} />
+            <Ionicons name="checkmark" size={28} color={colors.brand} aria-hidden={true} />
           </View>
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
@@ -177,6 +177,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 name="bag-handle-outline"
                 size={20}
                 color={colors.textMuted}
+                aria-hidden={true}
               />
             </View>
           )}
@@ -197,7 +198,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {smartSellEnabled && (
           <View>
             <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
-              <Ionicons name="trending-up-outline" size={18} color={colors.brand} />
+              <Ionicons name="trending-up-outline" size={18} color={colors.brand} aria-hidden={true} />
               <View style={styles.smartSellBannerBody}>
                 <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
                 <Text style={styles.smartSellBannerText}>
@@ -223,6 +224,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                   name="eye-outline"
                   size={20}
                   color={colors.textPrimary}
+                  aria-hidden={true}
                 />
               </View>
               <Text style={styles.actionText}>view listing</Text>
@@ -231,6 +233,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               name="chevron-forward"
               size={16}
               color={colors.textMuted}
+              aria-hidden={true}
             />
           </AnimatedPressable>
         ) : null}
@@ -247,6 +250,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                   name="settings-outline"
                   size={20}
                   color={colors.textPrimary}
+                  aria-hidden={true}
                 />
               </View>
               <Text style={styles.actionText}>manage listing</Text>
@@ -255,6 +259,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               name="chevron-forward"
               size={16}
               color={colors.textMuted}
+              aria-hidden={true}
             />
           </AnimatedPressable>
         ) : null}
@@ -271,6 +276,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                   name="share-outline"
                   size={20}
                   color={colors.textPrimary}
+                  aria-hidden={true}
                 />
               </View>
               <Text style={styles.actionText}>share listing</Text>
@@ -279,6 +285,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               name="chevron-forward"
               size={16}
               color={colors.textMuted}
+              aria-hidden={true}
             />
           </AnimatedPressable>
         ) : null}
@@ -294,6 +301,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 name="add-circle-outline"
                 size={20}
                 color={colors.textPrimary}
+                aria-hidden={true}
               />
             </View>
             <Text style={styles.actionText}>create another listing</Text>
@@ -302,6 +310,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             name="chevron-forward"
             size={16}
             color={colors.textMuted}
+            aria-hidden={true}
           />
         </AnimatedPressable>
 
@@ -316,11 +325,12 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 name="home-outline"
                 size={20}
                 color={colors.textPrimary}
+                aria-hidden={true}
               />
             </View>
             <Text style={styles.actionText}>back to feed</Text>
           </View>
-          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} aria-hidden={true} />
         </AnimatedPressable>
 
         </ElevatedSurface>
@@ -329,23 +339,23 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Tips for selling — first-listing guidance */}
         <View style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
+            <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="camera-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Respond quickly to buyer questions and offers</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="share-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="share-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
         </View>
@@ -359,8 +369,9 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           >
             <Ionicons
               name="help-circle-outline"
-              size={14}
+              size={16}
               color={colors.textMuted}
+              aria-hidden={true}
             />
             <Text style={styles.supportLinkText}>
               Need help? Visit the Help Centre

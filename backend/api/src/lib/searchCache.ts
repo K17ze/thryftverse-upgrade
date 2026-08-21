@@ -71,7 +71,7 @@ export interface CachedSearchResult {
 
 export interface AutocompleteSuggestion {
   text: string;
-  type: 'query' | 'brand' | 'category';
+  type: 'query' | 'item' | 'brand' | 'category';
   score: number;
 }
 

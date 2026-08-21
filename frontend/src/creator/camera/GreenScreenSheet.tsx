@@ -1,16 +1,12 @@
 /**
  * GreenScreenSheet — bottom sheet for green screen (chroma key) configuration.
  *
- * Real-time chroma keying is not feasible with expo-camera alone (no
- * frame-processor API). The user selects a background image and key
- * parameters; the video is recorded normally and the green screen effect
- * is applied in post-production via Skia. The settings are preserved in
- * CreatorInitialMedia.greenScreen so the timeline can re-render the
- * composite.
- *
- * This is a minimal stub — the full Skia processing pipeline is a future
- * phase. The sheet captures the user's intent (background + key color +
- * tolerance + feather) so the camera and timeline can store it.
+ * vision-camera v5 supports real-time chroma keying via Skia frame
+ * processors. The user selects a background image and key parameters;
+ * the settings are preserved in CreatorInitialMedia.greenScreen so the
+ * timeline can re-render the composite. The real-time frame processor
+ * wiring is a future phase — until then, the effect is applied
+ * post-capture via Skia.
  */
 import React, { useState } from 'react';
 import {
@@ -180,8 +176,8 @@ export function GreenScreenSheet({
               style={styles.infoIcon}
             />
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Green screen is applied in post-production via Skia. The video is
-              recorded normally and the chroma key effect is rendered on the timeline.
+              Green screen settings are saved with the capture. The chroma key
+              effect is rendered on the timeline via Skia.
             </Text>
           </View>
 

@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing, Type } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
@@ -36,11 +36,12 @@ import { fetchFollowCounts } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipProfileMedia } from '../components/flagship';
-import { LookPreviewCard } from '../components/profile';
+import { LookPreviewCard, ProfileLooksGrid } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
@@ -50,6 +51,7 @@ import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -240,15 +242,25 @@ export default function MyProfileScreen() {
   const user = currentUser;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
   const [looksLoading, setLooksLoading] = React.useState(false);
+  const [looksError, setLooksError] = React.useState(false);
 
-  React.useEffect(() => {
+  const loadMyLooks = React.useCallback(async () => {
     if (!currentUser?.id) return;
     setLooksLoading(true);
-    fetchLooksFromApi({ creatorId: currentUser.id })
-      .then((res) => setMyLooks(res.items ?? []))
-      .catch(() => setMyLooks([]))
-      .finally(() => setLooksLoading(false));
+    setLooksError(false);
+    try {
+      const res = await fetchLooksFromApi({ creatorId: currentUser.id, status: 'published', limit: 24 });
+      setMyLooks(res.items ?? []);
+    } catch {
+      setLooksError(true);
+    } finally {
+      setLooksLoading(false);
+    }
   }, [currentUser?.id]);
+
+  React.useEffect(() => {
+    void loadMyLooks();
+  }, [loadMyLooks]);
 
   // Story highlights — fetched for the highlights rail between identity hero
   // and the utility rail. Renders nothing when empty (no fabricated content).
@@ -317,39 +329,25 @@ export default function MyProfileScreen() {
     prevAvatarStatus.current = avatarState.status;
   }, [avatarState.status, show]);
 
-  if (!user) {
-    return (
-      <View style={[styles.container, t.container]}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <EmptyState
-          icon="person-outline"
-          title="Not signed in"
-          subtitle="Sign in to view your profile, listings, and wallet."
-          ctaLabel="Sign In"
-          onCtaPress={() => navigation.navigate('Login')}
-        />
-      </View>
-    );
-  }
-
-  const profileUserId = user.id;
-  const profileMediaOverride = profileMediaOverrides[profileUserId] ?? null;
+  const profileUserId = user?.id ?? null;
+  const profileMediaOverride = profileUserId ? (profileMediaOverrides[profileUserId] ?? null) : null;
 
   // Display priority: pending local > confirmed remote > store > override
   const displayCover = coverState.pendingLocal
     || coverState.confirmedRemote
-    || user.coverPhoto
+    || user?.coverPhoto
     || userCover
     || profileMediaOverride?.cover
     || '';
   const displayAvatar = avatarState.pendingLocal
     || avatarState.confirmedRemote
-    || user.avatar
+    || user?.avatar
     || userAvatar
     || profileMediaOverride?.avatar
     || null;
 
   const allOwnedListings = React.useMemo(() => {
+    if (!profileUserId) return [];
     // Pinned/featured listings appear first in the Shop grid (2026 pattern).
     // Stable sort preserves backend ordering for non-featured items.
     return listings
@@ -369,14 +367,14 @@ export default function MyProfileScreen() {
   // "incomplete" because nobody has followed them or they haven't listed yet.
   const completion = React.useMemo(() => {
     const checks = [
-      Boolean(user.displayName?.trim()),
-      Boolean(user.bio?.trim()),
+      Boolean(user?.displayName?.trim()),
+      Boolean(user?.bio?.trim()),
       Boolean(displayAvatar),
       Boolean(displayCover),
     ];
     const done = checks.filter(Boolean).length;
     return { percent: Math.round((done / checks.length) * 100), done, total: checks.length };
-  }, [user.displayName, user.bio, displayAvatar, displayCover]);
+  }, [user?.displayName, user?.bio, displayAvatar, displayCover]);
 
   // Once every direct identity field is filled the profile is "sufficiently
   // complete" and the completion card is permanently removed from the ordinary
@@ -388,12 +386,12 @@ export default function MyProfileScreen() {
   // direct profile field. Listing/audience growth CTAs live in the separate
   // growth-tasks section below the identity hero.
   const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover' }>(() => {
-    if (!user.displayName?.trim()) return { label: 'Add name' };
-    if (!user.bio?.trim()) return { label: 'Add bio' };
+    if (!user?.displayName?.trim()) return { label: 'Add name' };
+    if (!user?.bio?.trim()) return { label: 'Add bio' };
     if (!displayAvatar) return { label: 'Add photo', focus: 'avatar' };
     if (!displayCover) return { label: 'Add cover', focus: 'cover' };
     return { label: 'Edit profile' };
-  }, [user.displayName, user.bio, displayAvatar, displayCover]);
+  }, [user?.displayName, user?.bio, displayAvatar, displayCover]);
 
   const [completionDismissed, setCompletionDismissed] = React.useState(false);
   // Re-show the prompt when completion improves so progress is celebrated once.
@@ -468,6 +466,7 @@ export default function MyProfileScreen() {
   });
 
   const handleShare = async () => {
+    if (!user) return;
     haptic.light();
     try {
       await Share.share({
@@ -536,6 +535,21 @@ export default function MyProfileScreen() {
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
   );
 
+  if (!user) {
+    return (
+      <View style={[styles.container, t.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <EmptyState
+          icon="person-outline"
+          title="Not signed in"
+          subtitle="Sign in to view your profile, listings, and wallet."
+          ctaLabel="Sign In"
+          onCtaPress={() => navigation.navigate('Login')}
+        />
+      </View>
+    );
+  }
+
   const memberSince = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
     : undefined;
@@ -567,6 +581,18 @@ export default function MyProfileScreen() {
           isUploadingAvatar={avatarState.status === 'uploading'}
           style={{ width: '100%' }}
         />
+        {/* Top gradient fade — improves floating control contrast over any cover media */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
+          style={styles.coverTopFade}
+          pointerEvents="none"
+        />
+        {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.10)']}
+          style={styles.coverBottomFade}
+          pointerEvents="none"
+        />
       </Reanimated.View>
 
       {/* ── 2. FLOATING PERSONALISATION, SHARE AND SETTINGS ── */}
@@ -574,13 +600,13 @@ export default function MyProfileScreen() {
         <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
-            onPress={() => { haptic.light(); navigation.navigate('Personalisation'); }}
-            accessibilityLabel="Open personalisation settings"
+            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+            accessibilityLabel="Open settings"
             accessibilityRole="button"
-            accessibilityHint="Opens your style and experience preferences"
+            accessibilityHint="Opens settings"
           >
             <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-              <Ionicons name="options-outline" size={19} color={colors.textInverse} />
+              <Ionicons name="settings-outline" size={22} color={colors.textInverse} aria-hidden={true} />
             </View>
           </AnimatedPressable>
 
@@ -593,7 +619,7 @@ export default function MyProfileScreen() {
               accessibilityHint="Opens the system share sheet to share your profile"
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="share-outline" size={18} color={colors.textInverse} />
+                <Ionicons name="share-outline" size={18} color={colors.textInverse} aria-hidden={true} />
               </View>
             </AnimatedPressable>
 
@@ -605,7 +631,7 @@ export default function MyProfileScreen() {
               accessibilityHint="Opens account and app settings"
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
+                <Ionicons name="settings-outline" size={22} color={colors.textInverse} aria-hidden={true} />
               </View>
             </AnimatedPressable>
           </View>
@@ -614,7 +640,7 @@ export default function MyProfileScreen() {
         {coverState.status === 'failed' ? (
           <View style={[styles.coverFailure, t.coverFailure]}>
             <View style={styles.coverFailureCopy}>
-              <Ionicons name="alert-circle-outline" size={17} color={colors.textInverse} />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.textInverse} aria-hidden={true} />
               <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
                 {coverState.error || 'Cover upload failed'}
               </Text>
@@ -656,7 +682,7 @@ export default function MyProfileScreen() {
               {coverState.status === 'uploading' ? (
                 <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Ionicons name="image-outline" size={17} color={colors.textInverse} />
+                <Ionicons name="image-outline" size={16} color={colors.textInverse} aria-hidden={true} />
               )}
             </View>
           </AnimatedPressable>
@@ -691,6 +717,7 @@ export default function MyProfileScreen() {
             emailVerified={user.emailVerified}
             ratingAverage={sellerTrust?.rating ?? null}
             reviewCount={sellerTrust?.reviewCount}
+            responseTimeLabel={sellerTrust?.responseTimeLabel ?? null}
             followerCount={followCounts.followerCount}
             followingCount={followCounts.followingCount}
             followCountsStatus={followCountsStatus}
@@ -710,14 +737,14 @@ export default function MyProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Holiday mode is on — tap to manage"
             >
-              <Ionicons name="pause-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
                 <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>Holiday mode is on</Text>
                 <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
                   Your shop is paused. Tap to manage.
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           ) : null}
 
@@ -769,7 +796,7 @@ export default function MyProfileScreen() {
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
-                <Ionicons name="bag-add-outline" size={27} color={colors.textSecondary} />
+                <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
                 <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>List your first item</Text>
                 <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
                   Photograph an item and publish it when you are ready.
@@ -823,7 +850,7 @@ export default function MyProfileScreen() {
                         />
                         {isFeatured ? (
                           <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
-                            <Ionicons name="pin" size={11} color={colors.scrimTextPrimary} />
+                            <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
                           </View>
                         ) : null}
                         {item.isSold ? (
@@ -831,13 +858,38 @@ export default function MyProfileScreen() {
                             <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
                           </View>
                         ) : null}
+                        {/* Hero card: price overlays on a bottom gradient so the
+                            first viewport is media-dense (Pinterest/Instagram
+                            pattern). Regular cards keep price below the image. */}
+                        {isHero && !item.isSold ? (
+                          <>
+                            <LinearGradient
+                              colors={['transparent', 'rgba(0,0,0,0.55)']}
+                              style={styles.heroPriceGradient}
+                              pointerEvents="none"
+                            />
+                            <View style={styles.heroPriceOverlay} pointerEvents="none">
+                              <Text style={[styles.heroPriceText, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
+                                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                              </Text>
+                              {item.brand ? (
+                                <Text style={[styles.heroBrandText, { color: colors.scrimTextSecondary }]} numberOfLines={1}>{item.brand}</Text>
+                              ) : null}
+                            </View>
+                          </>
+                        ) : null}
                       </SharedTransitionView>
-                      <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
-                      </Text>
-                      {item.brand ? (
-                        <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
-                      ) : null}
+                      {/* Regular cards: price + brand below the image */}
+                      {isHero ? null : (
+                        <>
+                          <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
+                            {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                          </Text>
+                          {item.brand ? (
+                            <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
+                          ) : null}
+                        </>
+                      )}
                     </AnimatedPressable>
                     );
                   })}
@@ -847,13 +899,23 @@ export default function MyProfileScreen() {
           </View>
         )}
 
-        {/* LOOKS TAB — fetched from backend */}
+        {/* LOOKS TAB — 2-column grid (Instagram/Pinterest profile pattern) */}
         {activeTab === 'looks' && (
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
-              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: colors.textMuted, fontSize: TypographyV2.body.size }}>Loading looks...</Text>
+              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel="Loading your Looks">
+                <SkeletonLoader width="100%" height={360} borderRadius={RadiusRoleValue.standalonePanel} />
+                <SkeletonLoader width="100%" height={280} borderRadius={RadiusRoleValue.standalonePanel} />
               </View>
+            ) : looksError ? (
+              <EmptyState
+                density="compact"
+                icon="cloud-offline-outline"
+                title="Couldn't load your Looks"
+                subtitle="Check your connection and try again."
+                ctaLabel="Try again"
+                onCtaPress={() => { void loadMyLooks(); }}
+              />
             ) : myLooks.length === 0 ? (
               <EmptyState
                 density="compact"
@@ -864,23 +926,15 @@ export default function MyProfileScreen() {
                 onCtaPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}
               />
             ) : (
-              <View style={{ paddingHorizontal: Space.md }}>
-                {myLooks.map((look, index) => (
-                  <LookPreviewCard
-                    key={look.id}
-                    id={look.id}
-                    title={look.caption || look.title}
-                    coverImage={look.mediaUrl}
-                    items={look.tags.map((t) => ({ id: t.id, label: t.label, x: t.x, y: t.y }))}
-                    creatorName={look.creator.username ?? user.username}
-                    creatorAvatar={look.creator.avatar ?? undefined}
-                    likes={look.likeCount}
-                    saved={look.savedByViewer}
-                    onPress={() => navigation.navigate('LookDetail', { lookId: look.id })}
-                    index={index}
-                  />
-                ))}
-              </View>
+              <ProfileLooksGrid
+                looks={myLooks}
+                isLoading={false}
+                error={null}
+                isSelfProfile
+                onRetry={() => { void loadMyLooks(); }}
+                onCreateLook={() => navigation.navigate('CreatorStudio', { type: 'look' })}
+                navigation={navigation}
+              />
             )}
           </View>
         )}
@@ -904,7 +958,7 @@ export default function MyProfileScreen() {
                   <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
                     <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                    <Ionicons name="chevron-forward" size={12} color={colors.textMuted} aria-hidden={true} />
                   </View>
                 </View>
                 <View style={styles.portfolioHoldings}>
@@ -939,7 +993,7 @@ export default function MyProfileScreen() {
                   <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
                     <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
-                    <Ionicons name="open-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="open-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   </View>
                 </View>
               </View>
@@ -1008,7 +1062,7 @@ export default function MyProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss profile completion prompt"
               >
-                <Ionicons name="close" size={15} color={colors.textMuted} />
+                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
             </View>
             <View style={[styles.completionTrack, t.completionTrack]}>
@@ -1024,7 +1078,7 @@ export default function MyProfileScreen() {
               accessibilityLabel={completionCta.label}
             >
               <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
+              <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -1039,7 +1093,7 @@ export default function MyProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss growth prompts"
               >
-                <Ionicons name="close" size={15} color={colors.textMuted} />
+                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
             </View>
 
@@ -1057,7 +1111,7 @@ export default function MyProfileScreen() {
                     Photograph and publish an item to start selling.
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
             ) : null}
 
@@ -1075,7 +1129,7 @@ export default function MyProfileScreen() {
                     Share your profile and create content to attract followers.
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
             ) : null}
           </View>
@@ -1126,6 +1180,23 @@ const styles = StyleSheet.create({
     height: COVER_HEIGHT,
     zIndex: 0,
     overflow: 'hidden',
+  },
+  // Cover gradient fades — match the public ProfileHero treatment for control
+  // contrast and a premium authored cover. Top fade improves floating button
+  // legibility; bottom fade softens the avatar seam.
+  coverTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  coverBottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
   },
   coverActionLayer: {
     position: 'absolute',
@@ -1330,6 +1401,34 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  // Hero card gradient overlay — price sits on a subtle bottom fade so the
+  // first viewport is media-dense without a separate text block below.
+  heroPriceGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 56,
+    borderBottomLeftRadius: RadiusRoleValue.compactControl,
+    borderBottomRightRadius: RadiusRoleValue.compactControl,
+  },
+  heroPriceOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    right: 10,
+  },
+  heroPriceText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: -0.1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  heroBrandText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    marginTop: 1,
+  },
   soldOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
@@ -1341,13 +1440,13 @@ const styles = StyleSheet.create({
     letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: TypographyV2.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.bold,
     marginTop: Space.xs + 1,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridBrand: {
-    fontSize: TypographyV2.meta.size,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.regular,
     marginTop: 1,
   },

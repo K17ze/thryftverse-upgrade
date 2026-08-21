@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { Space, FontFamily } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -82,7 +83,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
             accessibilityState={{ selected: isPlaying }}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color={colors.textPrimary} />
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={IconGrammar.metadata} color={colors.textPrimary} />
           </PressScale>
           <Text style={[toolbarStyles.timecode, { color: colors.textSecondary }]}>
             {formatTimecode(currentTimeMs ?? 0)} / {formatTimecode(totalDurationMs ?? 0)}
@@ -181,7 +182,7 @@ const ToolButton = React.memo(function ToolButton({
       accessibilityRole="button"
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
     >
-      <Ionicons name={icon} size={22} color={tint} />
+      <Ionicons name={icon} size={IconGrammar.standard} color={tint} />
       <Text style={[toolbarStyles.toolLabel, { color: tint }]} numberOfLines={1}>
         {label}
       </Text>
@@ -251,7 +252,7 @@ const SliderRow = React.memo(function SliderRow({
 
   return (
     <View style={toolbarStyles.sliderRow}>
-      <Ionicons name={icon} size={16} color={colors.textSecondary} />
+      <Ionicons name={icon} size={IconGrammar.metadata} color={colors.textSecondary} />
       <Text style={[toolbarStyles.sliderLabel, { color: colors.textSecondary }]}>{label}</Text>
       <GestureDetector gesture={panGesture}>
         <View

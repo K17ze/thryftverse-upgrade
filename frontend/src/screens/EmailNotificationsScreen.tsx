@@ -11,14 +11,7 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Switch,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -191,13 +184,11 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     }
   };
 
-  // Count enabled categories for hero summary
-  const allCategories = GROUPS.flatMap(g => g.categories);
-  const enabledCount = allCategories.filter(c => preferences?.[c.key] ?? c.defaultEnabled).length;
-
   if (isLoading) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}
+      >
         <FlagshipState variant="loading" />
       </FlagshipScreen>
     );
@@ -211,37 +202,32 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => {
+              setIsRefreshing(true);
+              void load();
+            }}
+            tintColor={colors.textSecondary}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero summary — visual identity */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="mail" size={22} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Email preferences</Text>
-                <Text style={styles.heroSubtitle}>
-                  {enabledCount} of {allCategories.length} categories active
-                </Text>
-              </View>
-            </View>
-          </View>
-
         {error && !preferences ? (
           <EmptyState
             icon="cloud-offline-outline"
             title="Couldn't load preferences"
             subtitle={error}
             ctaLabel="Retry"
-            onCtaPress={() => { setIsLoading(true); void load(); }}
+            onCtaPress={() => {
+              setIsLoading(true);
+              void load();
+            }}
           />
         ) : (
           GROUPS.map((group, groupIdx) => (
-            <View
-              key={group.title}
-            >
+            <View key={group.title}>
               {/* Section header */}
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{group.title}</Text>
@@ -254,7 +240,9 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                   const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
                   const isUpdating = updatingKeys.has(category.key);
                   const isLocked = category.locked;
-                  const iconColor = category.iconColor ? colors[category.iconColor] : colors.textSecondary;
+                  const iconColor = category.iconColor
+                    ? colors[category.iconColor]
+                    : colors.textSecondary;
                   return (
                     <View
                       key={category.key}
@@ -263,8 +251,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                         catIdx < group.categories.length - 1 && styles.categoryRowBorder,
                       ]}
                     >
-                      {/* Coloured icon badge — visual identity per category */}
-                      <View style={[styles.categoryIcon, { backgroundColor: iconColor + '18' }]}>
+                      <View style={styles.categoryIcon}>
                         <Ionicons name={category.icon} size={20} color={iconColor} />
                       </View>
                       <View style={styles.categoryInfo}>
@@ -308,46 +295,10 @@ function createStyles(colors: ThemeColors) {
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
-    // Hero summary
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
-      marginTop: Space.sm,
-    },
-    heroIconRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
-
     // Section headers
     sectionHeader: {
       marginTop: Space.lg,
-      marginBottom: Space.sm,
-      paddingHorizontal: Space.xs,
+      marginBottom: Space.xs,
     },
     sectionTitle: {
       fontSize: Type.meta.size,
@@ -366,27 +317,23 @@ function createStyles(colors: ThemeColors) {
 
     // Category cards
     categoriesList: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      overflow: 'hidden',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
     },
     categoryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      gap: Space.md,
+      minHeight: 72,
+      paddingVertical: Space.sm,
+      gap: Space.sm,
     },
     categoryRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle,
     },
     categoryIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.md,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
     },

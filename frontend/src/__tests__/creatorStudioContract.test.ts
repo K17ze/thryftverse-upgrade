@@ -357,6 +357,33 @@ describe('serialiseToPosterPayload', () => {
     expect(remixAttribution.sourceDocumentId).toBeUndefined();
   });
 
+  it('binds each published frame to its authoritative upload receipt', () => {
+    const doc = makePosterDoc();
+    const withReceipt: CreatorDocument = {
+      ...doc,
+      pages: doc.pages.map((page) => ({
+        ...page,
+        layers: page.layers.map((layer) => layer.type === 'media'
+          ? {
+              ...layer,
+              payload: {
+                ...layer.payload,
+                mediaFinalizationId: 'ufinal_poster_1',
+                mediaAssetId: 'masset_poster_1',
+              },
+            }
+          : layer),
+      })),
+    };
+
+    const { payload } = serialiseToPosterPayload(withReceipt);
+    expect(payload.frames[0]).toMatchObject({
+      mediaUrl: 'https://cdn.example.com/poster1.jpg',
+      mediaFinalizationId: 'ufinal_poster_1',
+      mediaAssetId: 'masset_poster_1',
+    });
+  });
+
   it('throws when serialising non-poster document', () => {
     const doc = makeLookDoc();
     expect(() => serialiseToPosterPayload(doc)).toThrow('non-poster');

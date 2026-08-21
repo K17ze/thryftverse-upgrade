@@ -146,6 +146,10 @@ export interface DiscoverSceneProps {
   onPressSeller?: (listing: DiscoveryListingSummary) => void;
   onMessageSeller?: (listing: DiscoveryListingSummary) => void;
   onBrowseCategories: () => void;
+  /** Fired when the bookmark button on a listing tile is tapped. */
+  onToggleSave?: (listing: DiscoveryListingSummary) => void;
+  /** Returns whether a listing is currently saved. */
+  isSavedListing?: (listingId: string) => boolean;
 }
 
 /**
@@ -173,6 +177,8 @@ export function DiscoverScene({
   onLoadMore,
   onPressItem,
   onBrowseCategories,
+  onToggleSave,
+  isSavedListing,
 }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -296,6 +302,8 @@ export function DiscoverScene({
       <PinterestMasonryGrid
         items={units}
         onItemPress={onPressItem}
+        onItemSaveToggle={onToggleSave}
+        isItemSaved={isSavedListing}
         onEndReached={onLoadMore}
         isLoading={showLoadingSkeleton}
         isLoadingMore={isLoadingMore}

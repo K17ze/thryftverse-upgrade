@@ -81,14 +81,21 @@ export function PermissionState({
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
           onPress={onEnable}
-        accessibilityRole="switch"
+          accessibilityRole="button"
+          accessibilityLabel={isDenied ? 'Open camera settings' : 'Enable camera'}
+          accessibilityHint={
+            isDenied
+              ? 'Opens device settings so you can allow camera access'
+              : 'Requests permission to use the camera'
+          }
         >
-          <Text style={styles.btnText}>Enable Camera</Text>
+          <Text style={styles.btnText}>{isDenied ? 'Open Settings' : 'Enable Camera'}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
           onPress={onGallery}
-        accessibilityRole="button"
+          accessibilityRole="button"
+          accessibilityLabel="Use gallery instead"
         >
           <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
         </Pressable>

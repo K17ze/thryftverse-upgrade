@@ -15,7 +15,7 @@
  * VoiceOver / TalkBack support (AGENTS.md §11).
  */
 
-import type { ToolContext, ToolGroup } from '../core/toolRegistry';
+import type { ToolContext, ToolGroup, ToolDefinition } from '../core/toolRegistry';
 import type { CreatorLayer } from '../composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 
@@ -56,7 +56,6 @@ export interface LookToolRailParams {
   handleTextFontAction: () => void;
   handleTextColorAction: () => void;
   handleTextAlignAction: () => void;
-  handleProductTagStyleAction: () => void;
   handleProductPriceAction: () => void;
   handleCropAction: () => void;
 
@@ -103,6 +102,20 @@ export function deriveLookToolContext(
     case 'media': return 'look-media-selected';
     case 'text': return 'look-text-selected';
     case 'product': return 'look-product-selected';
+    case 'quiz': return 'look-quiz-selected';
+    case 'question': return 'look-question-selected';
+    case 'countdown': return 'look-countdown-selected';
+    case 'emojiSlider': return 'look-emojiSlider-selected';
+    case 'draw': return 'look-draw-selected';
+    case 'gif': return 'look-gif-selected';
+    case 'music': return 'look-music-selected';
+    case 'link': return 'look-link-selected';
+    case 'location': return 'look-location-selected';
+    case 'hashtag': return 'look-hashtag-selected';
+    case 'vote': return 'look-vote-selected';
+    case 'mention': return 'look-mention-selected';
+    case 'decorative': return 'look-decorative-selected';
+    case 'look': return 'look-look-selected';
     default: return 'look-default';
   }
 }
@@ -140,7 +153,6 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     handleTextFontAction,
     handleTextColorAction,
     handleTextAlignAction,
-    handleProductTagStyleAction,
     handleProductPriceAction,
     handleCropAction,
     handleMultiFront,
@@ -175,6 +187,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-items',
         label: 'Items',
         icon: 'bag-outline',
+        glyph: 'product-tag',
         onPress: handleOpenItems,
         accessibilityLabel: 'Items',
         accessibilityHint: 'Opens the items drawer to add products from your closet, listings, or search',
@@ -184,6 +197,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-text',
         label: 'Text',
         icon: 'text',
+        glyph: 'text',
         onPress: handleAddText,
         accessibilityLabel: 'Add text',
         accessibilityHint: 'Opens the text picker to add a text layer',
@@ -203,7 +217,8 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
       {
         id: 'look-cutout',
         label: cutoutSupported ? 'Cutout' : 'Crop',
-        icon: cutoutSupported ? 'sparkles-outline' : 'crop-outline',
+        icon: cutoutSupported ? 'cut-outline' : 'crop-outline',
+        glyph: cutoutSupported ? 'cutout' : 'crop',
         onPress: handleCutoutAction,
         accessibilityLabel: cutoutSupported ? 'Cutout' : 'Crop',
         accessibilityHint: cutoutSupported
@@ -216,6 +231,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-layers',
         label: 'Layers',
         icon: 'layers-outline',
+        glyph: 'layers',
         onPress: () => { haptic.light(); setShowLayers(true); },
         accessibilityLabel: 'Layers',
         accessibilityHint: 'Opens the layers panel to reorder, lock, or hide objects',
@@ -251,7 +267,9 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     ],
   });
 
-  // ── look-media-selected: Replace, Crop, Auto, Adjust, Effects, More ──
+  // ── look-media-selected: Replace, Crop, Auto, Adjust, More ──
+  // Effects moved to overflow — the rail caps at 4 primary tools, so a
+  // 5th primary would be silently dropped. Effects is reachable via More.
   groups.push({
     context: 'look-media-selected',
     primary: [
@@ -268,6 +286,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-media-crop',
         label: 'Crop',
         icon: 'crop-outline',
+        glyph: 'crop',
         onPress: () => selectedLayer && setCropTarget(selectedLayer),
         accessibilityLabel: 'Crop',
         accessibilityHint: 'Opens the crop sheet to adjust the aspect ratio',
@@ -277,6 +296,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-media-auto',
         label: 'Auto',
         icon: 'bulb-outline',
+        glyph: 'enhance',
         onPress: handleAutoAdjust,
         accessibilityLabel: 'Auto',
         accessibilityHint: 'Applies one-tap intelligent color correction',
@@ -286,22 +306,36 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-media-adjust',
         label: 'Adjust',
         icon: 'contrast-outline',
+        glyph: 'adjust',
         onPress: handleAdjustAction,
         accessibilityLabel: 'Adjust',
-        accessibilityHint: 'Opens background removal for the selected media',
+        accessibilityHint: 'Opens exposure and color adjustment sliders for the selected media',
         hapticFeedback: 'medium',
       },
+    ],
+    overflow: [
       {
         id: 'look-media-effects',
         label: 'Effects',
-        icon: 'color-wand-outline',
+        icon: 'color-filter-outline',
+        glyph: 'filter',
         onPress: handleEffectsAction,
         accessibilityLabel: 'Effects',
         accessibilityHint: 'Opens the effects panel for the selected media',
         hapticFeedback: 'medium',
       },
-    ],
-    overflow: [
+      {
+        id: 'look-media-cutout',
+        label: cutoutSupported ? 'Cutout' : 'Crop',
+        icon: cutoutSupported ? 'cut-outline' : 'crop-outline',
+        glyph: cutoutSupported ? 'cutout' : 'crop',
+        onPress: handleCutoutAction,
+        accessibilityLabel: cutoutSupported ? 'Cutout' : 'Crop',
+        accessibilityHint: cutoutSupported
+          ? 'Removes the background using on-device subject segmentation'
+          : 'Crops the selected media to a rectangle',
+        hapticFeedback: 'medium',
+      },
       {
         id: 'look-media-front',
         label: 'Front',
@@ -342,6 +376,15 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
   });
 
   // ── look-text-selected: Edit, Font, Color, Align, More ──
+  // The Align tool's glyph is dynamic — it reflects the current alignment
+  // state of the selected text layer (Snapchat/Instagram pattern).
+  const lookCurrentAlignment = selectedLayer?.type === 'text'
+    ? (selectedLayer.payload.alignment ?? 'center')
+    : 'center';
+  const lookAlignGlyph: ToolDefinition['glyph'] =
+    lookCurrentAlignment === 'left' ? 'align-left'
+    : lookCurrentAlignment === 'right' ? 'align-right'
+    : 'align-center';
   groups.push({
     context: 'look-text-selected',
     primary: [
@@ -376,6 +419,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-text-align',
         label: 'Align',
         icon: 'list-outline',
+        glyph: lookAlignGlyph,
         onPress: handleTextAlignAction,
         accessibilityLabel: 'Align',
         accessibilityHint: 'Opens the text editor to change the text alignment',
@@ -422,7 +466,9 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     ],
   });
 
-  // ── look-product-selected: Item, Tag Style, Price, Duplicate, More ──
+  // ── look-product-selected: Item, Price, Duplicate, More ──
+  // "Tag Style" removed — it opened the product picker (same as "Item"),
+  // not a tag style editor. A tag style editor does not exist yet.
   groups.push({
     context: 'look-product-selected',
     primary: [
@@ -430,18 +476,10 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         id: 'look-product-item',
         label: 'Item',
         icon: 'pricetag-outline',
+        glyph: 'product-tag',
         onPress: () => selectedLayer && handleLinkItem(selectedLayer),
         accessibilityLabel: 'Change item',
         accessibilityHint: 'Opens the product picker to link a different listing',
-        hapticFeedback: 'light',
-      },
-      {
-        id: 'look-product-tag-style',
-        label: 'Tag Style',
-        icon: 'pricetags-outline',
-        onPress: handleProductTagStyleAction,
-        accessibilityLabel: 'Tag style',
-        accessibilityHint: 'Opens the editor to change the product tag style',
         hapticFeedback: 'light',
       },
       {
@@ -537,6 +575,86 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     ],
     overflow: [],
   });
+
+  // ── Interactive sticker contexts: Edit, Front, Back, Delete ──
+  // All interactive sticker types (quiz, question, countdown, emojiSlider,
+  // draw, gif, music, link, location, hashtag, vote, mention, decorative,
+  // look) share the same tool pattern: Edit (opens the sticker's editor),
+  // layer reordering (Front/Back in overflow), and Delete.
+  // The Edit tool's onPress delegates to handleEditLayer which routes to
+  // the correct editor based on the layer type.
+  const interactiveStickerContexts: ToolContext[] = [
+    'look-quiz-selected',
+    'look-question-selected',
+    'look-countdown-selected',
+    'look-emojiSlider-selected',
+    'look-draw-selected',
+    'look-gif-selected',
+    'look-music-selected',
+    'look-link-selected',
+    'look-location-selected',
+    'look-hashtag-selected',
+    'look-vote-selected',
+    'look-mention-selected',
+    'look-decorative-selected',
+    'look-look-selected',
+  ];
+
+  for (const ctx of interactiveStickerContexts) {
+    const stickerType = ctx.replace('look-', '').replace('-selected', '');
+    groups.push({
+      context: ctx,
+      primary: [
+        {
+          id: `look-${stickerType}-edit`,
+          label: 'Edit',
+          icon: 'create-outline',
+          onPress: () => selectedLayer && handleEditLayer(selectedLayer),
+          accessibilityLabel: 'Edit',
+          accessibilityHint: `Edit the selected ${stickerType}`,
+          hapticFeedback: 'light',
+        },
+        {
+          id: `look-${stickerType}-duplicate`,
+          label: 'Copy',
+          icon: 'copy-outline',
+          onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
+          accessibilityLabel: 'Duplicate',
+          accessibilityHint: `Duplicates the selected ${stickerType}`,
+          hapticFeedback: 'light',
+        },
+        {
+          id: `look-${stickerType}-delete`,
+          label: 'Delete',
+          icon: 'trash-outline',
+          onPress: () => selectedLayer && handleDeleteLayer(selectedLayer.id),
+          accessibilityLabel: 'Delete',
+          accessibilityHint: `Deletes the selected ${stickerType}`,
+          hapticFeedback: 'medium',
+        },
+      ],
+      overflow: [
+        {
+          id: `look-${stickerType}-front`,
+          label: 'Front',
+          icon: 'arrow-up',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'forward'),
+          accessibilityLabel: 'Bring forward',
+          accessibilityHint: `Moves the selected ${stickerType} forward in the layer stack`,
+          hapticFeedback: 'light',
+        },
+        {
+          id: `look-${stickerType}-back`,
+          label: 'Back',
+          icon: 'arrow-down',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'backward'),
+          accessibilityLabel: 'Send backward',
+          accessibilityHint: `Moves the selected ${stickerType} backward in the layer stack`,
+          hapticFeedback: 'light',
+        },
+      ],
+    });
+  }
 
   return groups;
 }

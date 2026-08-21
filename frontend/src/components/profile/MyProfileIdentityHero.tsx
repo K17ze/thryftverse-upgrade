@@ -103,6 +103,10 @@ interface MyProfileIdentityHeroProps {
   soldCount?: number;
   followerCount?: number;
   followingCount?: number;
+  /** Seller response time label (e.g. "within 2h") — surfaced in the trust
+   *  line so the most important marketplace trust signal is visible in the
+   *  first viewport, not buried in the About tab. */
+  responseTimeLabel?: string | null;
   /** Distinguishes loading/error from a real zero count (M2 — truthful UI). */
   followCountsStatus?: 'loading' | 'error' | 'loaded';
   onEditAvatar: () => void;
@@ -130,6 +134,7 @@ export function MyProfileIdentityHero({
   soldCount,
   followerCount = 0,
   followingCount = 0,
+  responseTimeLabel,
   followCountsStatus = 'loaded',
   onEditAvatar,
   onEditProfile,
@@ -148,15 +153,6 @@ export function MyProfileIdentityHero({
   const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
 
   const hasRating = ratingAverage !== null && ratingAverage !== undefined && (reviewCount ?? 0) > 0;
-
-  // Trust line: "4.9 ★ · 47 sold · Joined June 2026" — one row, no chips
-  const trustParts: string[] = [];
-  if (hasRating && ratingAverage !== null && ratingAverage !== undefined) {
-    trustParts.push(`${ratingAverage.toFixed(1)} ★`);
-  }
-  if (completedSales > 0) trustParts.push(`${completedSales} sold`);
-  if (memberSince) trustParts.push(`Joined ${memberSince}`);
-  const trustLine = trustParts.join(' · ');
 
   // Follow-count display: show a muted dash while loading or on error so a
   // real zero is distinguishable from an unknown count (M2 — truthful UI).
@@ -280,18 +276,28 @@ export function MyProfileIdentityHero({
           </Pressable>
         ) : null}
 
-        {/* Trust line — one row, no chips, no second trust surface */}
-        {trustLine ? (
+        {/* Trust line — one row, no chips, no second trust surface.
+            Hierarchy: rating (15pt, star icon) > sold (13pt) > joined/response (12pt).
+            Response time is surfaced here (not buried in About) because Depop/Grailed
+            2026 research shows it is a top-3 conversion signal for marketplace profiles. */}
+        {(hasRating || completedSales > 0 || memberSince || responseTimeLabel) ? (
           <View style={styles.trustRow}>
             {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
-              <Text style={styles.trustLink}>{ratingAverage.toFixed(1)} ★</Text>
+              <View style={styles.trustRatingWrap}>
+                <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} />
+                <Text style={styles.trustRating}>{ratingAverage.toFixed(1)}</Text>
+              </View>
             ) : null}
             {hasRating && completedSales > 0 ? <Text style={styles.trustDot}> · </Text> : null}
             {completedSales > 0 ? (
-              <Text style={styles.trustLink}>{completedSales} sold</Text>
+              <Text style={styles.trustSold}>{completedSales} sold</Text>
             ) : null}
             {(hasRating || completedSales > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
             {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+            {(hasRating || completedSales > 0 || memberSince) && responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+            {responseTimeLabel ? (
+              <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -500,7 +506,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
   },
 
-  // Trust line — compact, no badge container
+  // Trust line — 3-level hierarchy: rating (15pt) > sold (13pt) > joined/response (12pt)
   trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -508,14 +514,31 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 2,
     marginBottom: Space.xs,
   },
-  trustLink: {
-    fontSize: Type.caption.size,
+  trustRatingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  trustRating: {
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    letterSpacing: -0.1,
+  },
+  trustSold: {
+    fontSize: Type.numericMeta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   trustStatic: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  trustResponse: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   trustDot: {

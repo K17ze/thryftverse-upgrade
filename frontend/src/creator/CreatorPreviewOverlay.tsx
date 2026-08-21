@@ -21,6 +21,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { PressScale } from './CreatorAnimations';
@@ -218,7 +219,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
           style={styles.topBtn}
           accessibilityLabel="Close preview"
         >
-          <Ionicons name="close" size={28} color={colors.textInverse} />
+          <Ionicons name="close" size={IconGrammar.hero} color={colors.textInverse} />
         </PressScale>
 
         <View style={styles.topCenter}>
@@ -256,7 +257,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
             style={styles.pageNavBtn}
             accessibilityLabel="Previous page"
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textInverse} />
+            <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textInverse} />
           </PressScale>
           <View style={styles.pageDots}>
             {document.pages.map((p, i) => (
@@ -276,7 +277,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
             style={styles.pageNavBtn}
             accessibilityLabel="Next page"
           >
-            <Ionicons name="chevron-forward" size={24} color={colors.textInverse} />
+            <Ionicons name="chevron-forward" size={IconGrammar.hero} color={colors.textInverse} />
           </PressScale>
         </View>
       )}

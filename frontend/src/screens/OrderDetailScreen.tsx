@@ -463,7 +463,7 @@ function InspectionBanner({
     <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
       <View style={styles.inspectionHeader}>
         <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand} />
+          <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} aria-hidden={true} />
         </View>
         <View style={styles.inspectionHeaderText}>
           <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>
@@ -488,7 +488,7 @@ function InspectionBanner({
           accessibilityRole="button"
           accessibilityLabel="Confirm receipt — everything is OK"
         >
-          <Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />
+          <Ionicons name="checkmark-circle-outline" size={22} color={colors.textInverse} aria-hidden={true} />
           <Text style={[styles.inspectionPrimaryBtnText, { color: colors.textInverse }]}>
             Everything is OK
           </Text>
@@ -500,7 +500,7 @@ function InspectionBanner({
           accessibilityRole="button"
           accessibilityLabel="Report an issue with this order"
         >
-          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={22} color={colors.danger} aria-hidden={true} />
           <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
             Report an issue
           </Text>
@@ -631,7 +631,7 @@ function IssueCategorySelector({
               <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
               <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
           </Pressable>
         ))}
         <Pressable
@@ -686,9 +686,9 @@ function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel="View receipt"
       >
-        <Ionicons name="receipt-outline" size={20} color={colors.brand} />
+        <Ionicons name="receipt-outline" size={22} color={colors.brand} aria-hidden={true} />
         <Text style={[styles.completedActionText, themed.actionText]}>View receipt</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
 
       {!hasReview ? (
@@ -698,9 +698,9 @@ function CompletedOrderSummary({
           accessibilityRole="button"
           accessibilityLabel="Leave a review"
         >
-          <Ionicons name="star-outline" size={20} color={colors.brand} />
+          <Ionicons name="star-outline" size={22} color={colors.brand} aria-hidden={true} />
           <Text style={[styles.completedActionText, themed.actionText]}>Leave a review</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
       ) : null}
 
@@ -710,9 +710,9 @@ function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel="Buy again from this seller"
       >
-        <Ionicons name="bag-outline" size={20} color={colors.brand} />
+        <Ionicons name="bag-outline" size={22} color={colors.brand} aria-hidden={true} />
         <Text style={[styles.completedActionText, themed.actionText]}>Buy again from this seller</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
 
       <Pressable
@@ -721,9 +721,9 @@ function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel="View support history"
       >
-        <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
+        <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
         <Text style={[styles.completedActionText, themed.actionText]}>Support history</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
     </View>
   );
@@ -1557,7 +1557,7 @@ export default function OrderDetailScreen() {
           }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Order could not be loaded</Text>
           <Text style={[styles.errorBody, t.errorBody]}>Check your connection and try again.</Text>
           <Pressable
@@ -1589,7 +1589,7 @@ export default function OrderDetailScreen() {
           }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="document-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="document-outline" size={28} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Order not found</Text>
         </View>
       </SafeAreaView>
@@ -1626,7 +1626,7 @@ export default function OrderDetailScreen() {
               {isRefreshing ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
               ) : (
-                <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} />
+                <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
               )}
             </Pressable>
             <Pressable
@@ -1636,7 +1636,7 @@ export default function OrderDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} aria-hidden={true} />
             </Pressable>
           </View>
         }
@@ -1680,7 +1680,7 @@ export default function OrderDetailScreen() {
 
         {loadError && backendOrder ? (
           <View style={styles.refreshErrorRow}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.textMuted} aria-hidden={true} />
             <Text style={[styles.refreshErrorText, t.refreshErrorText]}>{loadError}</Text>
             <Pressable
               onPress={() => { haptics.tap(); void refreshOrder(false); }}
@@ -1765,7 +1765,7 @@ export default function OrderDetailScreen() {
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
           <View style={[styles.escrowBanner, t.escrowBanner]}>
-            <Ionicons name="lock-closed" size={16} color={colors.success} />
+            <Ionicons name="lock-closed" size={16} color={colors.success} aria-hidden={true} />
             <View style={styles.escrowTextWrap}>
               <Text style={[styles.escrowTitle, t.escrowTitle]}>Funds held in escrow</Text>
               <Text style={[styles.escrowSub, t.escrowSub]}>
@@ -1864,7 +1864,7 @@ export default function OrderDetailScreen() {
           {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
             <View style={[styles.etaBanner, t.etaBanner]}>
               <View style={[styles.etaIconWrap, t.etaIconWrap]}>
-                <Ionicons name="cube-outline" size={16} color={colors.brand} />
+                <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
               </View>
               <View style={styles.etaContent}>
                 <Text style={[styles.etaLabel, t.etaLabel]}>ESTIMATED DELIVERY</Text>
@@ -1881,7 +1881,7 @@ export default function OrderDetailScreen() {
           {/* Stale tracking warning — last event > 48h old while in transit */}
           {isStaleTracking ? (
             <View style={[styles.staleBanner, t.staleBanner]}>
-              <Ionicons name="time-outline" size={14} color={colors.warning} />
+              <Ionicons name="time-outline" size={16} color={colors.warning} aria-hidden={true} />
               <Text style={[styles.staleText, t.staleText]}>
                 Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
               </Text>
@@ -1914,7 +1914,7 @@ export default function OrderDetailScreen() {
                     accessibilityLabel={`Copy tracking number ${backendOrder.trackingNumber}`}
                   >
                     <Text style={[styles.detailValueLink, t.detailValueLink]}>{backendOrder.trackingNumber}</Text>
-                    <Ionicons name="copy-outline" size={16} color={colors.brand} />
+                    <Ionicons name="copy-outline" size={16} color={colors.brand} aria-hidden={true} />
                   </Pressable>
                 </View>
               ) : null}
@@ -1925,7 +1925,7 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Track on carrier website"
                 >
-                  <Ionicons name="navigate-outline" size={16} color={colors.brand} />
+                  <Ionicons name="navigate-outline" size={16} color={colors.brand} aria-hidden={true} />
                   <Text style={[styles.shippingLabelBtnText, t.shippingLabelBtnText]}>Track on carrier site</Text>
                 </Pressable>
               ) : null}
@@ -1945,7 +1945,7 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open shipping label"
                 >
-                  <Ionicons name="open-outline" size={16} color={colors.brand} />
+                  <Ionicons name="open-outline" size={16} color={colors.brand} aria-hidden={true} />
                   <Text style={[styles.shippingLabelBtnText, t.shippingLabelBtnText]}>Open shipping label</Text>
                 </Pressable>
               ) : null}
@@ -1982,12 +1982,12 @@ export default function OrderDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Open support request: ${openTicket.topicLabel}`}
             >
-              <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
+              <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
               <View style={styles.supportInfo}>
                 <Text style={[styles.supportLabel, t.supportLabel]}>Support request open</Text>
                 <Text style={[styles.supportSub, t.supportSub]}>{openTicket.topicLabel}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           ) : (
             <Pressable
@@ -1996,11 +1996,11 @@ export default function OrderDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Get support for this order"
             >
-              <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
+              <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
               <View style={styles.supportInfo}>
                 <Text style={[styles.supportLabel, t.supportLabel]}>Get support</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           )}
         </View>

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
@@ -245,7 +246,7 @@ export function CreatorTemplateBrowser({
               mode="preview"
             />
             <View style={styles.featuredBadge}>
-              <Ionicons name="star" size={10} color={colors.textPrimary} />
+              <Ionicons name="star" size={IconGrammar.badge} color={colors.textPrimary} />
               <Text style={styles.featuredBadgeText}>Featured</Text>
             </View>
           </View>
@@ -302,14 +303,14 @@ export function CreatorTemplateBrowser({
           accessibilityHint="Closes the template browser"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </View>
 
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+          <Ionicons name="search-outline" size={IconGrammar.metadata} color={colors.textMuted} />
           <TextInput
             ref={searchInputRef}
             value={searchQuery}
@@ -329,7 +330,7 @@ export function CreatorTemplateBrowser({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={IconGrammar.metadata} color={colors.textMuted} />
             </Pressable>
           )}
         </View>

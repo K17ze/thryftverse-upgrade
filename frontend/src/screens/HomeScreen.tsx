@@ -628,9 +628,6 @@ export default function HomeScreen() {
     if (postersLoading) {
       return (
         <View style={styles.postersSection}>
-          <View style={styles.posterSectionHeading}>
-            <Text style={styles.posterSectionTitle}>Posters</Text>
-          </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
               <PremiumSkeletonTile
@@ -649,10 +646,6 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.postersSection}>
-        <View style={styles.posterSectionHeading}>
-          <Text style={styles.posterSectionTitle}>Posters</Text>
-        </View>
-
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
@@ -960,6 +953,7 @@ export default function HomeScreen() {
       <AnimatedFlashList
         ref={scrollRef}
         data={feedGridData}
+        masonry
         numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
@@ -1017,6 +1011,26 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {/* Search prompt — compact tappable field that communicates
+                marketplace discoverability in the first viewport. Grailed's
+                #1 discovery finding: users didn't know how to search. A
+                prominent search affordance is the single highest-impact
+                first-viewport signal for a commerce app. Hairline-bordered
+                (not filled) so it reads as the one functional panel, not
+                decorative chrome. */}
+            <Pressable
+              style={styles.searchPrompt}
+              onPress={() => navigation.navigate('GlobalSearch')}
+              accessibilityRole="search"
+              accessibilityLabel="Search drops, brands, sellers"
+              accessibilityHint="Opens global search"
+            >
+              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <Text style={styles.searchPromptText} numberOfLines={1}>
+                Search drops, brands, sellers
+              </Text>
+            </Pressable>
 
             {hasPosters ? renderPosters() : null}
 
@@ -1251,12 +1265,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingBottom: 120,
   },
   feedTabBar: {
-    minHeight: 46,
+    minHeight: 44,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: Space.lg,
+    gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -1307,6 +1321,30 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.textPrimary,
   },
+  // Search prompt: compact hairline-bordered field. One functional panel
+  // above the fold (AGENTS.md §4 surface budget). 44pt touch target,
+  // hairline border (not filled) so it defers to media below.
+  searchPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    height: 44,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  searchPromptText: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    color: colors.textMuted,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
   newListingsBannerWrap: {
     marginTop: Space.xs,
     marginBottom: Space.sm + Space.xs,
@@ -1341,22 +1379,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   postersSection: {
     marginTop: 0,
     paddingBottom: Space.sm,
-  },
-  posterSectionHeading: {
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs + 2,
-  },
-  // Poster rail label: quiet eyebrow (meta/uppercase/muted) so "Explore"
-  // remains the single dominant heading and the poster rail reads as a
-  // supporting module. Avoids competing same-size headings in the first
-  // viewport (AGENTS.md §4 text budget: max 3 type sizes + 1 eyebrow).
-  posterSectionTitle: {
-    color: colors.textMuted,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1581,7 +1603,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreLoadingGrid: {
     flexDirection: 'row',
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     gap: Space.sm,
   },
   exploreLoadingColumn: {

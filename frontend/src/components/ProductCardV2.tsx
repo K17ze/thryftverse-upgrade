@@ -3,8 +3,8 @@
  * Geometry is reserved before media loads to prevent masonry reflow.
  */
 
-import React, { useState } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -17,7 +17,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { Listing } from '../domain';
-import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
+import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT, getListingCoverUri } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
@@ -689,6 +689,12 @@ interface ProductDiscoveryTileProps {
   /** Target display width in dp for CDN downscaling (optional). */
   downscaleWidth?: number;
   testID?: string;
+  /** Whether this item is currently saved. Drives the bookmark glyph state. */
+  isSaved?: boolean;
+  /** Toggle the saved state. When provided, a bookmark button renders over
+   *  the media (top-right) — the Pinterest/Depop quick-save pattern that
+   *  turns passive browsing into engagement. */
+  onSaveToggle?: () => void;
 }
 
 function ProductDiscoveryTileBase({
@@ -697,12 +703,26 @@ function ProductDiscoveryTileBase({
   aspectRatio,
   downscaleWidth,
   testID,
+  isSaved,
+  onSaveToggle,
 }: ProductDiscoveryTileProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
+  const haptic = useHaptic();
   const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
   const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
-  const primaryImage = (item.images ?? [])[0] ?? '';
+  // Use getListingCoverUri to always pick an image (not a video) — ExpoImage
+  // cannot render video URIs, and the discovery tile is image-only.
+  const primaryImage = getListingCoverUri(item.images ?? [], '');
+  const showSaveButton = !!onSaveToggle;
+  // Category-sensitive focal point for art-directed crops (AGENTS.md §15:
+  // "Do not rely on cover blindly"). Converted to ExpoImage's
+  // `contentPosition` format — the same mechanism CachedImage uses.
+  const focalPoint = getCategoryFocalPoint(item.category);
+  const contentPosition = {
+    top: `${Math.round(focalPoint.y * 100)}%`,
+    left: `${Math.round(focalPoint.x * 100)}%`,
+  };
 
   // Condition badge — single state marker only (sold > condition). Sits over
   // the media on the semantic `overlay` scrim; "New with tags" uses the
@@ -718,13 +738,25 @@ function ProductDiscoveryTileBase({
         }
       : null;
 
+  const handleSavePress = useCallback(
+    (e: { stopPropagation?: () => void; preventDefault?: () => void }) => {
+      // Prevent the press from bubbling to the tile's onPress (which would
+      // open the detail page when the user just wanted to save).
+      e.stopPropagation?.();
+      e.preventDefault?.();
+      haptic.light();
+      onSaveToggle?.();
+    },
+    [haptic, onSaveToggle],
+  );
+
   return (
     <AnimatedPressable
       onPress={onPress}
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -734,6 +766,7 @@ function ProductDiscoveryTileBase({
             source={{ uri: primaryImage }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            contentPosition={contentPosition}
             recyclingKey={item.id}
             placeholder={colors.surfaceAlt}
             transition={200}
@@ -747,9 +780,27 @@ function ProductDiscoveryTileBase({
             <Text style={tileStyles.conditionText}>{conditionBadge.label}</Text>
           </View>
         ) : null}
+        {showSaveButton ? (
+          <Pressable
+            onPress={handleSavePress}
+            style={tileStyles.saveHitTarget}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
+            accessibilityHint="Toggles this product in your saved items"
+            accessibilityState={{ checked: isSaved }}
+          >
+            <Ionicons
+              name={isSaved ? 'bookmark' : 'bookmark-outline'}
+              size={18}
+              color={isSaved ? colors.brand : colors.textInverse}
+              style={[tileStyles.saveGlyph, { textShadowColor: colors.shadow }]}
+            />
+          </Pressable>
+        ) : null}
       </View>
       <View style={tileStyles.info}>
-        <Text style={tileStyles.title} numberOfLines={2}>{item.title}</Text>
+        <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
         <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
@@ -789,18 +840,41 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],
   },
+  // Save button — transparent 36pt hit target (AGENTS.md §4: separate hit
+  // area from visible shape) with a glyph that legibility comes from the
+  // shadow, not from decorative circular chrome. Top-right over the media.
+  saveHitTarget: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // textShadowColor is set inline from `colors.shadow` — the static style
+  // sheet cannot reference theme tokens, so only the geometry lives here.
+  saveGlyph: {
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
   info: {
-    paddingTop: Space.sm,
-    paddingHorizontal: Space.xs,
-    gap: Space.xxs,
+    paddingTop: Space.xs,
+    paddingHorizontal: Space.xxs,
+    gap: 0,
   },
+  // Title — 1 line, caption size, muted. The image is the dominant object;
+  // the title is a quiet label, not a competing headline. Pinterest pattern:
+  // media dominates, text recedes.
   title: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
   },
+  // Price — body size, bold, primary. The price is the actionable metadata
+  // for a marketplace tile; it carries more weight than the title.
   price: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,

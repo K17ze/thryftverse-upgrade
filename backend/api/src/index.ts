@@ -1173,6 +1173,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/looks\/[^/]+$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && /^\/auctions\/(?!watchlist$)[^/]+$/.test(path)) {
     return true;
   }
@@ -1483,6 +1487,10 @@ app.addHook('preHandler', async (request, reply) => {
   const requestPath = getRoutePath(request.raw.url ?? request.url);
 
   if (isPublicRoute(request.method, requestPath)) {
+    // Public discovery routes still benefit from optional viewer context:
+    // saved/liked state, owner visibility, and relationship-aware content
+    // must not silently downgrade authenticated people to anonymous users.
+    await optionalAuthenticate(request, requestPath);
     return;
   }
 
@@ -16598,10 +16606,18 @@ app.get('/users/search', async (request, reply) => {
   });
   const { q, limit, cursor } = querySchema.parse(request.query ?? {});
 
-  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null }>(
+  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null; is_following: boolean }>(
     `
       WITH params AS (SELECT $1::text AS q)
-      SELECT u.id, u.username, u.display_name, u.avatar
+      SELECT
+        u.id,
+        u.username,
+        u.display_name,
+        u.avatar,
+        EXISTS (
+          SELECT 1 FROM user_follows f
+          WHERE f.follower_id = $2 AND f.following_id = u.id
+        ) AS is_following
       FROM users u, params
       WHERE u.id <> $2
         AND u.id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = $2)
@@ -16631,6 +16647,7 @@ app.get('/users/search', async (request, reply) => {
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: row.is_following,
     })),
     nextCursor: result.rows.length === limit ? result.rows[result.rows.length - 1].username : undefined,
   };
@@ -18561,6 +18578,7 @@ app.delete('/users/me', async (request, reply) => {
 
 app.get('/listings', async (request) => {
   const querySchema = z.object({
+    q: z.string().trim().min(1).max(120).optional(),
     category: z.string().optional(),
     brand: z.string().optional(),
     size: z.string().optional(),
@@ -18575,6 +18593,16 @@ app.get('/listings', async (request) => {
 
   const conditions: string[] = ["status = 'active'"];
   const args: unknown[] = [];
+
+  if (params.q) {
+    conditions.push(`(
+      l.title ILIKE $${args.length + 1}
+      OR COALESCE(l.description, '') ILIKE $${args.length + 1}
+      OR COALESCE(l.brand, '') ILIKE $${args.length + 1}
+      OR COALESCE(l.category, '') ILIKE $${args.length + 1}
+    )`);
+    args.push(`%${params.q}%`);
+  }
 
   if (params.category) {
     conditions.push(`category = $${args.length + 1}`);
@@ -19098,25 +19126,28 @@ app.get('/search/autocomplete', async (request) => {
   }
 
   // Query database for autocomplete suggestions
-  const result = await readDb.query<{ term: string; frequency: string }>(
+  const result = await readDb.query<{ term: string; suggestion_type: 'item' | 'brand' | 'category'; frequency: string }>(
     `
-      SELECT term, COUNT(*)::text AS frequency
+      SELECT
+        MIN(display_term) AS term,
+        suggestion_type,
+        COUNT(*)::text AS frequency
       FROM (
-        SELECT lower(l.title) AS term
+        SELECT trim(l.title) AS display_term, lower(trim(l.title)) AS normalized_term, 'item' AS suggestion_type
         FROM listings l
-        WHERE l.status = 'active' AND lower(l.title) LIKE lower($1 || '%')
+        WHERE l.status = 'active' AND lower(trim(l.title)) LIKE lower($1 || '%')
         UNION ALL
-        SELECT lower(COALESCE(l.brand, '')) AS term
+        SELECT trim(COALESCE(l.brand, '')) AS display_term, lower(trim(COALESCE(l.brand, ''))) AS normalized_term, 'brand' AS suggestion_type
         FROM listings l
-        WHERE l.status = 'active' AND lower(COALESCE(l.brand, '')) LIKE lower($1 || '%')
+        WHERE l.status = 'active' AND lower(trim(COALESCE(l.brand, ''))) LIKE lower($1 || '%')
         UNION ALL
-        SELECT lower(COALESCE(l.category, '')) AS term
+        SELECT trim(COALESCE(l.category, '')) AS display_term, lower(trim(COALESCE(l.category, ''))) AS normalized_term, 'category' AS suggestion_type
         FROM listings l
-        WHERE l.status = 'active' AND lower(COALESCE(l.category, '')) LIKE lower($1 || '%')
+        WHERE l.status = 'active' AND lower(trim(COALESCE(l.category, ''))) LIKE lower($1 || '%')
       ) AS suggestions
-      WHERE term != ''
-      GROUP BY term
-      ORDER BY frequency DESC
+      WHERE normalized_term != ''
+      GROUP BY normalized_term, suggestion_type
+      ORDER BY frequency DESC, length(normalized_term) ASC
       LIMIT $2
     `,
     [q, limit]
@@ -19124,7 +19155,7 @@ app.get('/search/autocomplete', async (request) => {
 
   const suggestions = result.rows.map((row) => ({
     text: row.term,
-    type: 'query' as const,
+    type: row.suggestion_type,
     score: Number(row.frequency),
   }));
 
@@ -19664,7 +19695,7 @@ app.post('/posters', async (request, reply) => {
   const bodySchema = z.object({
     id: z.string().min(2).max(120),
     mediaUrl: z.string().url().min(3),
-    caption: z.string().max(500).default(''),
+    caption: z.string().max(2200).default(''),
     textOverlay: z.record(z.unknown()).optional(),
     backgroundColor: z.string().max(30).optional(),
     layout: z.string().max(30).default('single'),
@@ -19718,6 +19749,7 @@ app.get('/posters', async (request) => {
     conditions.push(`creator_id = $${args.length + 1}`);
     args.push(params.creatorId);
   }
+
   if (params.status) {
     conditions.push(`status = $${args.length + 1}`);
     args.push(params.status);
@@ -19984,6 +20016,8 @@ async function enrichLooks(
     title: string;
     caption: string;
     media_url: string;
+    media_type: 'image' | 'video';
+    composition_document: unknown | null;
     status: string;
     visibility: string;
     created_at: string;
@@ -20082,6 +20116,8 @@ async function enrichLooks(
     title: row.title,
     caption: row.caption,
     mediaUrl: row.media_url,
+    mediaType: row.media_type,
+    compositionDocument: row.composition_document,
     visibility: row.visibility,
     status: row.status,
     createdAt: row.created_at,
@@ -20096,7 +20132,8 @@ async function enrichLooks(
 }
 
 const LOOK_SELECT_COLUMNS = `
-  l.id, l.creator_id, l.title, l.caption, l.media_url, l.status, l.visibility,
+  l.id, l.creator_id, l.title, l.caption, l.media_url, l.media_type,
+  l.composition_document, l.status, l.visibility,
   l.created_at, l.updated_at,
   u.username AS creator_username,
   u.avatar AS creator_avatar
@@ -20142,8 +20179,10 @@ app.post('/looks', async (request, reply) => {
   const bodySchema = z.object({
     id: z.string().min(2).max(120),
     title: z.string().max(120).default(''),
-    caption: z.string().max(500).default(''),
+    caption: z.string().max(2200).default(''),
     mediaUrl: z.string().url().min(3),
+    mediaType: z.enum(['image', 'video']).default('image'),
+    compositionDocument: z.unknown().optional(),
     visibility: z.enum(['public', 'followers', 'private']).default('public'),
     tags: z.array(
       z.object({
@@ -20174,9 +20213,22 @@ app.post('/looks', async (request, reply) => {
     }
 
     await client.query(
-      `INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
+      `INSERT INTO looks (
+         id, creator_id, title, caption, media_url, media_type,
+         composition_document, status, visibility
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        payload.id,
+        actorUserId,
+        payload.title,
+        payload.caption,
+        payload.mediaUrl,
+        payload.mediaType,
+        payload.compositionDocument ?? null,
+        payload.status,
+        payload.visibility,
+      ]
     );
 
     for (const tag of payload.tags) {
@@ -20210,6 +20262,8 @@ app.get('/looks', async (request) => {
   const querySchema = z.object({
     creatorId: z.string().optional(),
     status: z.enum(['draft', 'published', 'archived']).optional(),
+    sort: z.enum(['foryou', 'following']).default('foryou'),
+    cursor: z.string().datetime().optional(),
     limit: z.coerce.number().int().min(1).max(120).default(40),
   });
   const params = querySchema.parse(request.query ?? {});
@@ -20221,6 +20275,23 @@ app.get('/looks', async (request) => {
   if (params.creatorId) {
     conditions.push(`l.creator_id = $${args.length + 1}`);
     args.push(params.creatorId);
+  }
+
+  if (params.sort === 'following') {
+    if (!viewerUserId) {
+      return { items: [], nextCursor: null };
+    }
+    conditions.push(`EXISTS (
+      SELECT 1 FROM user_follows uf
+      WHERE uf.follower_id = $${args.length + 1}
+        AND uf.following_id = l.creator_id
+    )`);
+    args.push(viewerUserId);
+  }
+
+  if (params.cursor) {
+    conditions.push(`l.created_at < $${args.length + 1}::timestamptz`);
+    args.push(params.cursor);
   }
 
   if (params.status && params.status !== 'published') {
@@ -20251,6 +20322,8 @@ app.get('/looks', async (request) => {
     title: string;
     caption: string;
     media_url: string;
+    media_type: 'image' | 'video';
+    composition_document: unknown | null;
     status: string;
     visibility: string;
     created_at: string;
@@ -20266,12 +20339,17 @@ app.get('/looks', async (request) => {
       ORDER BY l.created_at DESC
       LIMIT $${args.length + 1}
     `,
-    [...args, params.limit]
+    [...args, params.limit + 1]
   );
 
-  const items = await enrichLooks(looksResult.rows, viewerUserId);
+  const hasMore = looksResult.rows.length > params.limit;
+  const pageRows = hasMore ? looksResult.rows.slice(0, params.limit) : looksResult.rows;
+  const items = await enrichLooks(pageRows, viewerUserId);
+  const nextCursor = hasMore
+    ? pageRows[pageRows.length - 1]?.created_at ?? null
+    : null;
 
-  return { items };
+  return { items, nextCursor };
 });
 
 app.get('/looks/:lookId', async (request, reply) => {
@@ -20291,6 +20369,8 @@ app.get('/looks/:lookId', async (request, reply) => {
     title: string;
     caption: string;
     media_url: string;
+    media_type: 'image' | 'video';
+    composition_document: unknown | null;
     status: string;
     visibility: string;
     created_at: string;
@@ -20319,14 +20399,18 @@ app.patch('/looks/:lookId', async (request, reply) => {
 
   const bodySchema = z.object({
     title: z.string().max(120).optional(),
-    caption: z.string().max(500).optional(),
+    caption: z.string().max(2200).optional(),
+    mediaUrl: z.string().url().optional(),
+    mediaType: z.enum(['image', 'video']).optional(),
+    compositionDocument: z.unknown().nullable().optional(),
     visibility: z.enum(['public', 'followers', 'private']).optional(),
     status: z.enum(['draft', 'published', 'archived']).optional(),
     tags: z.array(z.object({
-      productId: z.string().min(2).max(120).optional(),
-      x: z.number().min(0).max(1).optional(),
-      y: z.number().min(0).max(1).optional(),
-      label: z.string().max(120).optional(),
+      id: z.string().min(2).max(120),
+      listingId: z.string().min(2).max(120).optional(),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      label: z.string().max(200).default(''),
     })).optional(),
   });
   const payload = bodySchema.parse(request.body);
@@ -20345,31 +20429,45 @@ app.patch('/looks/:lookId', async (request, reply) => {
 
   // Build update query dynamically
   const updates: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
   let paramIdx = 1;
 
   if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
   if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
+  if (payload.mediaUrl !== undefined) { updates.push(`media_url = $${paramIdx++}`); values.push(payload.mediaUrl); }
+  if (payload.mediaType !== undefined) { updates.push(`media_type = $${paramIdx++}`); values.push(payload.mediaType); }
+  if (payload.compositionDocument !== undefined) {
+    updates.push(`composition_document = $${paramIdx++}::jsonb`);
+    values.push(payload.compositionDocument === null ? null : JSON.stringify(payload.compositionDocument));
+  }
   if (payload.visibility !== undefined) { updates.push(`visibility = $${paramIdx++}`); values.push(payload.visibility); }
   if (payload.status !== undefined) { updates.push(`status = $${paramIdx++}`); values.push(payload.status); }
   updates.push(`updated_at = NOW()`);
 
-  if (updates.length > 1) {
-    values.push(lookId);
-    await db.query(`UPDATE looks SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
-  }
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    if (updates.length > 1 || payload.tags !== undefined) {
+      values.push(lookId);
+      await client.query(`UPDATE looks SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
+    }
 
-  // Update tags if provided
-  if (payload.tags !== undefined) {
-    await db.query('DELETE FROM look_tags WHERE look_id = $1', [lookId]);
-    for (const tag of payload.tags) {
-      if (tag.productId) {
-        await db.query(
-          'INSERT INTO look_tags (look_id, product_id, x, y, label) VALUES ($1, $2, $3, $4, $5)',
-          [lookId, tag.productId, tag.x ?? 0.5, tag.y ?? 0.5, tag.label ?? '']
+    if (payload.tags !== undefined) {
+      await client.query('DELETE FROM look_tags WHERE look_id = $1', [lookId]);
+      for (const tag of payload.tags) {
+        await client.query(
+          `INSERT INTO look_tags (id, look_id, listing_id, x, y, label)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [`${lookId}_${tag.id}`, lookId, tag.listingId ?? null, tag.x, tag.y, tag.label]
         );
       }
     }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 
   return { ok: true, lookId };
@@ -47440,7 +47538,7 @@ async function enrichPosterFrames(
 }
 
 async function enrichPosterStory(
-  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
   viewerUserId: string | null
 ): Promise<Record<string, unknown>> {
   const frames = await enrichPosterFrames(storyRow.id, viewerUserId);
@@ -47472,6 +47570,7 @@ async function enrichPosterStory(
     status: storyRow.status,
     expiresAt: storyRow.expires_at,
     createdAt: storyRow.created_at,
+    compositionDocument: storyRow.composition_document ?? undefined,
     frames,
     seenByViewer: viewedFrameCount > 0,
     viewedFrameCount,
@@ -47499,7 +47598,7 @@ app.post('/poster-stories', async (request, reply) => {
     snapshotImageUrl: z.string().url().optional(),
     snapshotPriceGbp: z.number().optional(),
     lookId: z.string().min(2).max(120).optional(),
-    snapshotCaption: z.string().max(500).optional(),
+    snapshotCaption: z.string().max(2200).optional(),
     question: z.string().max(200).optional(),
     options: z.array(z.object({ id: z.string().min(1).max(60), label: z.string().min(1).max(80) })).length(2).optional(),
   });
@@ -47519,8 +47618,10 @@ app.post('/poster-stories', async (request, reply) => {
     id: z.string().min(2).max(120),
     mediaType: z.enum(['image', 'video', 'text']),
     mediaUrl: z.string().url().optional(),
+    mediaFinalizationId: z.string().min(2).max(160).optional(),
+    mediaAssetId: z.string().min(2).max(160).optional(),
     backgroundColor: z.string().max(30).optional(),
-    caption: z.string().max(500).default(''),
+    caption: z.string().max(2200).default(''),
     durationMs: z.number().int().min(1000).max(30000).default(5000),
     sortOrder: z.number().int().default(0),
     stickers: z.array(stickerSchema).default([]),
@@ -47533,9 +47634,14 @@ app.post('/poster-stories', async (request, reply) => {
     allowReactions: z.boolean().default(true),
     expiresInHours: z.number().int().min(1).max(168).default(24),
     frames: z.array(frameSchema).min(1).max(10),
+    compositionDocument: z.unknown().optional(),
   });
 
   const payload = bodySchema.parse(request.body);
+  const payloadHash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex');
 
   // Validate frame IDs unique
   const frameIds = payload.frames.map((f) => f.id);
@@ -47546,9 +47652,19 @@ app.post('/poster-stories', async (request, reply) => {
 
   // Validate media requirements
   for (const frame of payload.frames) {
-    if ((frame.mediaType === 'image' || frame.mediaType === 'video') && !frame.mediaUrl) {
-      reply.code(400);
-      return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+    if (frame.mediaType === 'image' || frame.mediaType === 'video') {
+      if (!frame.mediaUrl) {
+        reply.code(400);
+        return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+      }
+      if (!frame.mediaFinalizationId) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Frame ${frame.id}: verified upload finalization is required`,
+          code: 'MEDIA_FINALIZATION_REQUIRED',
+        };
+      }
     }
     // Validate sticker payloads per type
     for (const sticker of frame.stickers) {
@@ -47575,33 +47691,164 @@ app.post('/poster-stories', async (request, reply) => {
     }
   }
 
-  // Check for duplicate story ID
-  const existing = await db.query(`SELECT id FROM poster_stories WHERE id = $1`, [payload.id]);
-  if (existing.rowCount) {
-    reply.code(409);
-    return { ok: false, error: 'Story ID already exists' };
-  }
-
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [payload.id]);
+
+    // The document ID is the publication idempotency key. Lock and compare
+    // the accepted payload so a lost 201 response can be retried safely,
+    // while a reused key with different content fails closed.
+    const existing = await client.query<{
+      creator_id: string;
+      publication_payload_hash: string | null;
+    }>(
+      `SELECT creator_id, publication_payload_hash
+       FROM poster_stories
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.id],
+    );
+    if (existing.rowCount) {
+      const row = existing.rows[0];
+      if (
+        row.creator_id === actorUserId
+        && row.publication_payload_hash === payloadHash
+      ) {
+        await client.query('COMMIT');
+        reply.code(200);
+        return { ok: true, storyId: payload.id, replayed: true };
+      }
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: row.creator_id === actorUserId
+          ? 'Publication key was already used with different content'
+          : 'Story ID belongs to another creator',
+        code: 'IDEMPOTENCY_CONFLICT',
+      };
+    }
+
+    const verifiedMediaByFrame = new Map<string, {
+      finalizationId: string;
+      mediaAssetId: string | null;
+      resolvedUrl: string;
+    }>();
+    for (const frame of payload.frames) {
+      if (frame.mediaType === 'text') continue;
+
+      const verified = await client.query<{
+        id: string;
+        owner_id: string;
+        public_url: string;
+        content_type: string;
+        status: string;
+        scope_ref_id: string | null;
+        media_asset_id: string | null;
+        media_asset_status: string | null;
+        canonical_url: string | null;
+      }>(
+        `SELECT finalization.id, finalization.owner_id,
+                finalization.public_url, finalization.content_type,
+                finalization.status, finalization.scope_ref_id,
+                finalization.media_asset_id,
+                asset.status AS media_asset_status,
+                asset.canonical_url
+         FROM upload_finalizations finalization
+         LEFT JOIN media_assets asset
+           ON asset.id = finalization.media_asset_id
+         WHERE finalization.id = $1
+         LIMIT 1
+         FOR UPDATE OF finalization`,
+        [frame.mediaFinalizationId],
+      );
+      const receipt = verified.rows[0];
+      const expectedContentPrefix = frame.mediaType === 'video' ? 'video/' : 'image/';
+      const suppliedUrlMatches = receipt
+        && (receipt.public_url === frame.mediaUrl || receipt.canonical_url === frame.mediaUrl);
+      const suppliedAssetMatches = !frame.mediaAssetId
+        || receipt?.media_asset_id === frame.mediaAssetId;
+      const scopeMatches = !receipt?.scope_ref_id || receipt.scope_ref_id === payload.id;
+      if (
+        !receipt
+        || receipt.owner_id !== actorUserId
+        || receipt.status !== 'finalized'
+        || !receipt.content_type.startsWith(expectedContentPrefix)
+        || !suppliedUrlMatches
+        || !suppliedAssetMatches
+        || !scopeMatches
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Frame ${frame.id} does not match its verified upload`,
+          code: 'MEDIA_RECEIPT_MISMATCH',
+        };
+      }
+      if (
+        config.mediaPublicationGateEnabled
+        && (receipt.media_asset_status !== 'published' || !receipt.canonical_url)
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Frame ${frame.id} is still processing or under review`,
+          code: 'MEDIA_NOT_PUBLISHED',
+          mediaStatus: receipt.media_asset_status ?? 'missing',
+        };
+      }
+      verifiedMediaByFrame.set(frame.id, {
+        finalizationId: receipt.id,
+        mediaAssetId: receipt.media_asset_status === 'published'
+          ? receipt.media_asset_id
+          : null,
+        resolvedUrl: config.mediaPublicationGateEnabled
+          ? receipt.canonical_url!
+          : (receipt.canonical_url ?? receipt.public_url),
+      });
+    }
 
     const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);
 
     await client.query(
-      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
-      [payload.id, actorUserId, payload.audience, payload.allowReplies, payload.allowReactions, expiresAt]
+      `INSERT INTO poster_stories (
+         id, creator_id, audience, allow_replies, allow_reactions,
+         status, expires_at, composition_document, publication_payload_hash
+       )
+       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7::jsonb, $8)`,
+      [
+        payload.id,
+        actorUserId,
+        payload.audience,
+        payload.allowReplies,
+        payload.allowReactions,
+        expiresAt,
+        payload.compositionDocument ? JSON.stringify(payload.compositionDocument) : null,
+        payloadHash,
+      ]
     );
 
     for (const frame of payload.frames) {
+      const verifiedMedia = verifiedMediaByFrame.get(frame.id);
       await client.query(
-        `INSERT INTO posters (id, creator_id, media_url, caption, poster_caption, background_color, layout, status, expiry_hours, story_id, media_type, sort_order, duration_ms)
-         VALUES ($1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7, $8, $9, $10)`,
+        `INSERT INTO posters (
+           id, creator_id, media_url, caption, poster_caption,
+           background_color, layout, status, expiry_hours, story_id,
+           media_type, sort_order, duration_ms, upload_finalization_id,
+           media_asset_id
+         )
+         VALUES (
+           $1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7,
+           $8, $9, $10, $11, $12
+         )`,
         [
           frame.id,
           actorUserId,
-          frame.mediaUrl ?? '',
+          verifiedMedia?.resolvedUrl ?? '',
           frame.caption,
           frame.backgroundColor ?? null,
           payload.expiresInHours,
@@ -47609,8 +47856,38 @@ app.post('/poster-stories', async (request, reply) => {
           frame.mediaType,
           frame.sortOrder,
           frame.durationMs,
+          verifiedMedia?.finalizationId ?? null,
+          verifiedMedia?.mediaAssetId ?? null,
         ]
       );
+
+      if (verifiedMedia) {
+        await client.query(
+          `UPDATE upload_finalizations
+           SET scope = 'poster', scope_ref_id = $2, updated_at = NOW()
+           WHERE id = $1`,
+          [verifiedMedia.finalizationId, payload.id],
+        );
+        if (verifiedMedia.mediaAssetId) {
+          await client.query(
+            `INSERT INTO media_bindings (
+               id, media_asset_id, owner_id, target_type,
+               target_ref_id, role, sort_order
+             )
+             VALUES ($1, $2, $3, 'creator_document', $4, $5, $6)
+             ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+             DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+            [
+              `mbind_${crypto.randomUUID()}`,
+              verifiedMedia.mediaAssetId,
+              actorUserId,
+              payload.id,
+              `frame:${frame.sortOrder}`,
+              frame.sortOrder,
+            ],
+          );
+        }
+      }
 
       for (const sticker of frame.stickers) {
         await client.query(
@@ -47634,10 +47911,10 @@ app.post('/poster-stories', async (request, reply) => {
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
-    client.release();
     throw error;
+  } finally {
+    client.release();
   }
-  client.release();
 
   reply.code(201);
   return { ok: true, storyId: payload.id };
@@ -47678,8 +47955,10 @@ app.get('/poster-stories', async (request) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -47700,7 +47979,7 @@ app.get('/poster-stories', async (request) => {
     };
     if (!canViewerAccessPosterStory(storyRow, viewerUserId)) continue;
     const enriched = await enrichPosterStory(
-      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
       viewerUserId
     );
     stories.push(enriched);
@@ -47740,8 +48019,10 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -47755,7 +48036,7 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
   }
 
   const enriched = await enrichPosterStory(
-    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
     viewerUserId
   );
   return enriched;
@@ -48183,8 +48464,10 @@ app.get('/poster-stories/archive', async (request) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -48196,7 +48479,7 @@ app.get('/poster-stories/archive', async (request) => {
   const stories: Array<Record<string, unknown>> = [];
   for (const row of result.rows) {
     const enriched = await enrichPosterStory(
-      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
       actorUserId
     );
     stories.push(enriched);

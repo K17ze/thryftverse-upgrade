@@ -123,7 +123,7 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
   {
     id: 'decorative',
     name: 'Decorative',
-    icon: 'sparkles-outline',
+    icon: 'shapes-outline',
     stickers: [
       { id: 'deco-sparkles', name: 'Sparkles', iconRef: 'sparkles', category: 'decorative' },
       { id: 'deco-flower', name: 'Flower', iconRef: 'flower-outline', category: 'decorative' },

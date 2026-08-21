@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, FontFamily } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -105,7 +106,7 @@ export function FrameTray({
                   />
                 ) : (
                   <View style={styles.thumbPlaceholder}>
-                    <Ionicons name="image-outline" size={16} color="rgba(255,255,255,0.4)" />
+                    <Ionicons name="image-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.4)" />
                   </View>
                 )}
                 {/* Video duration marker — tappable to show trim info */}
@@ -155,7 +156,7 @@ export function FrameTray({
             accessibilityHint="Adds a new frame to the story"
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={20} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="add" size={IconGrammar.standard} color="rgba(255,255,255,0.7)" />
           </Pressable>
         )}
       </ScrollView>

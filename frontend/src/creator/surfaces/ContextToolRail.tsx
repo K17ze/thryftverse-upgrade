@@ -22,8 +22,7 @@
  *   - Badge: small circle on top-right of icon for counts
  *   - "More" button: always last, ellipsis-horizontal icon
  *   - 4pt spacing between tools, 16pt horizontal padding on rail
- *   - Reduced motion: no entrance animation
- *   - Haptic feedback: light haptic on press (unless overridden)
+ *   - Haptic feedback has one owner: CreatorToolButton
  *
  * Anatomy:
  *   ┌────────────────────────────────────────┐
@@ -37,8 +36,6 @@ import { ScrollView, StyleSheet, View, Text, type ViewStyle } from 'react-native
 
 import { Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { useHaptic } from '../../hooks/useHaptic';
 import {
   CreatorToolButton,
   type SelectedStyle,
@@ -111,15 +108,13 @@ const RailToolButton = React.memo(function RailToolButton({
   tool,
   onToolUsed,
 }: RailToolButtonProps) {
-  const haptic = useHaptic();
   const handlePress = useCallback(() => {
     if (tool.disabled) return;
-    haptic.light();
     tool.onPress();
     // Record usage for personalization (pinning / recent tools).
     // Fire-and-forget — the hook persists asynchronously.
     if (onToolUsed) onToolUsed(tool.id);
-  }, [tool, onToolUsed, haptic]);
+  }, [tool, onToolUsed]);
 
   // Determine whether to show the label. Universally familiar tools
   // (close, back, play, etc.) are icon-only; ambiguous creative tools
@@ -201,8 +196,6 @@ export function ContextToolRail({
   onOverflowPress,
   style,
 }: ContextToolRailProps) {
-  const reduceMotion = useReducedMotion();
-  const haptic = useHaptic();
   const { pinned, recordUse } = usePinnedTools();
 
   // Resolve the active tool set from the registry.
@@ -252,18 +245,6 @@ export function ContextToolRail({
   const handleToolUsed = useCallback((toolId: string) => {
     void recordUse(toolId);
   }, [recordUse]);
-
-  // Light haptic when the context changes (tool set swaps) — respects
-  // reduced motion via the haptic hook's internal gate.
-  const prevContextRef = React.useRef<ToolContext>(context);
-  React.useEffect(() => {
-    if (prevContextRef.current !== context) {
-      prevContextRef.current = context;
-      if (!reduceMotion) {
-        haptic.light();
-      }
-    }
-  }, [context, reduceMotion, haptic]);
 
   // Colors are now resolved inside CreatorToolButton (theme-aware).
   // The neutral default keeps the rail visually restrained per AGENTS.md §4

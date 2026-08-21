@@ -34,7 +34,7 @@ import Reanimated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
@@ -595,7 +595,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="close" size={22} color="#fff" />
+            <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
           </Pressable>
           <Pressable
             onPress={handleConfirm}
@@ -604,7 +604,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="checkmark" size={22} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} />
           </Pressable>
         </View>
 

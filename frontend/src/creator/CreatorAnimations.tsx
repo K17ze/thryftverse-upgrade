@@ -105,14 +105,24 @@ interface SheetContainerProps {
   onClose: () => void;
   children: React.ReactNode;
   maxHeight?: number; // fraction of screen, default 0.85
+  /**
+   * Compact mode (Snapchat/Instagram-style sticker tray):
+   *   - shorter sheet (42% of screen height)
+   *   - no dimming backdrop (canvas stays visible while browsing)
+   *   - swipe-to-dismiss preserved
+   * Default false keeps the existing full-sheet + backdrop behaviour.
+   */
+  compact?: boolean;
 }
 
 export function SheetContainer({
   visible,
   onClose,
   children,
-  maxHeight = 0.85,
+  maxHeight,
+  compact = false,
 }: SheetContainerProps) {
+  const effectiveMaxHeight = maxHeight ?? (compact ? 0.42 : 0.85);
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -122,14 +132,14 @@ export function SheetContainer({
   const mountedRef = useRef(false);
   // Live window height (not module-level Dimensions.get) so the initial
   // estimate responds to rotation/multi-window before onLayout fires.
-  const sheetHeightRef = useRef(windowHeight * maxHeight);
+  const sheetHeightRef = useRef(windowHeight * effectiveMaxHeight);
   const isDismissingRef = useRef(false);
 
   // Keep the initial estimate in sync with window changes until onLayout
   // provides the measured sheet height.
   useEffect(() => {
-    sheetHeightRef.current = windowHeight * maxHeight;
-  }, [windowHeight, maxHeight]);
+    sheetHeightRef.current = windowHeight * effectiveMaxHeight;
+  }, [windowHeight, effectiveMaxHeight]);
 
   useEffect(() => {
     if (visible) {
@@ -203,11 +213,14 @@ export function SheetContainer({
   if (!visible && !mountedRef.current) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, sheetStyles.layer]} pointerEvents={visible ? 'auto' : 'none'}>
-      {/* Backdrop */}
-      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close sheet" accessibilityHint="Dismisses the sheet" accessibilityRole="button" />
-      </Reanimated.View>
+    <View style={[StyleSheet.absoluteFill, sheetStyles.layer]} pointerEvents={compact ? 'box-none' : (visible ? 'auto' : 'none')}>
+      {/* Backdrop — dimming scrim (skipped in compact mode so the canvas
+          stays visible and interactive while browsing). */}
+      {!compact && (
+        <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close sheet" accessibilityHint="Dismisses the sheet" accessibilityRole="button" />
+        </Reanimated.View>
+      )}
 
       {/* Sheet — swipe-down-to-dismiss via GestureDetector */}
       <GestureDetector gesture={panGesture}>
@@ -218,7 +231,7 @@ export function SheetContainer({
               backgroundColor: colors.surface,
               borderTopLeftRadius: Radius.xl,
               borderTopRightRadius: Radius.xl,
-              maxHeight: `${maxHeight * 100}%`,
+              maxHeight: `${effectiveMaxHeight * 100}%`,
               paddingBottom: Math.max(insets.bottom, Space.lg),
             },
             sheetStyle,

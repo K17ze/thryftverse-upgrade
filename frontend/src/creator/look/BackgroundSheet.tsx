@@ -38,6 +38,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -87,7 +88,7 @@ type BgType = CreatorBackground['type'];
 
 const TYPE_CHIPS: { id: BgType; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { id: 'color', label: 'Solid', icon: 'square-outline' },
-  { id: 'gradient', label: 'Gradient', icon: 'color-wand-outline' },
+  { id: 'gradient', label: 'Gradient', icon: 'color-filter-outline' },
   { id: 'image', label: 'Image', icon: 'image-outline' },
   { id: 'blur', label: 'Blurred', icon: 'aperture-outline' },
 ];
@@ -382,7 +383,7 @@ export function BackgroundSheet({
           accessibilityLabel="Close background picker"
           accessibilityHint="Discards changes and closes the background picker"
         >
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </View>
 
@@ -463,7 +464,7 @@ export function BackgroundSheet({
                         <View style={styles.swatchCheck}>
                           <Ionicons
                             name="checkmark"
-                            size={14}
+                            size={IconGrammar.badge}
                             color={sw.value === '#ffffff' || sw.value === '#f5f5f5' || sw.value === '#e8e8e8' ? '#000' : '#fff'}
                           />
                         </View>
@@ -534,7 +535,7 @@ export function BackgroundSheet({
                       />
                       {isActive && (
                         <View style={styles.swatchCheck}>
-                          <Ionicons name="checkmark" size={14} color="#fff" />
+                          <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
                         </View>
                       )}
                     </View>
@@ -626,7 +627,7 @@ export function BackgroundSheet({
                   accessibilityLabel="Change image"
                   accessibilityHint="Opens the photo library to pick a different background image"
                 >
-                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+                  <Ionicons name="swap-horizontal-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
                   <Text style={[styles.imageChangeBtnText, { color: colors.textPrimary }]}>
                     {isPickingImage ? 'Opening…' : 'Change Image'}
                   </Text>

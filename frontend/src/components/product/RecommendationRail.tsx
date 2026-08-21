@@ -26,7 +26,13 @@ interface RailCardProps {
   reasonCode?: string;
   personalised?: boolean;
   listingId: string;
-  onPress: (item: Listing) => void;
+  onPress: (
+    item: Listing,
+    sectionKey: string,
+    position: number,
+    reasonCode?: string,
+    personalised?: boolean,
+  ) => void;
   cardWidth: number;
   cardHeight: number;
   showAccent: boolean;
@@ -52,7 +58,7 @@ function RailCard({
 
   const handlePress = () => {
     ProductAnalytics.recommendationClick(listingId, sectionKey, index, reasonCode, personalised);
-    onPress(item);
+    onPress(item, sectionKey, index, reasonCode, personalised);
   };
 
   return (
@@ -98,7 +104,13 @@ function RailCard({
 export interface RecommendationRailProps {
   section: RecommendationSection;
   listingId: string;
-  onPressItem: (item: Listing) => void;
+  onPressItem: (
+    item: Listing,
+    sectionKey: string,
+    position: number,
+    reasonCode?: string,
+    personalised?: boolean,
+  ) => void;
   onSeeAll?: () => void;
 }
 

@@ -457,6 +457,22 @@ Delete for me     → when deletion is local
 Delete message    → when the message is genuinely deleted from the shared system
 ```
 
+### Fail-closed trust signals
+
+Every trust signal (verified tier, safeguarded status, custody coverage, appraisal value, escrow ETA, rights TBC, response-rate, dispatch time) must be **evidenced by a backend row**, not asserted by the frontend. Fail-closed policy throughout (the `84e289f7` standard):
+
+- null means no render — no badge, no pill, no checkmark
+- no badge without a tier
+- no TBC without a reason
+- no stale without an action
+- no failure without a recovery
+
+A badge rendered from a hardcoded value or a frontend default is a lie of the same kind as a fabricated success state. See §37.5 for the binding execution loop.
+
+### Unknown-outcome is not success
+
+When a mutation request is sent and the network drops before the response, the outcome is ambiguous — not an error, not a success. Never show a success state for an ambiguous outcome. Show a distinct unknown-outcome treatment (warning color, "Check result", safe-retry hint via the idempotency key). Fabricating success on uncertainty is the most damaging form of untruthful UI on money surfaces. See §37.7.
+
 ---
 
 ## 12. NAVIGATION QUALITY
@@ -722,6 +738,21 @@ Passing TypeScript alone is not completion. Passing tests alone is not completio
 
 The improvement must be obvious at thumbnail size.
 
+### Live-signs completion (functional surfaces)
+
+For any task that touches data, endpoints, mutations, or trust signals, completion **also** requires (§37.10):
+
+- the UI renders real data from a live endpoint, not mock/hardcoded data in production mode
+- the live endpoint has been hit and returns the expected rows (recorded)
+- every mutation propagates to its full surface set (re-fetch on focus / query invalidation / cross-entity transactional update)
+- the full state matrix is honest, including unknown-outcome (no fabricated success)
+- every trust signal is evidenced by a backend row (fail-closed)
+- money/creation mutations are transactional + idempotent
+- auth + privacy projections are correct
+- no timer/subscription leak
+
+A flagship-looking screen backed by mock data is not complete. A live-wired screen that looks prototype-grade is not complete. Both loops (§31 visual, §37 live-signs) must pass. When the backend cannot be run live, use `IMPLEMENTED — LIVE ENDPOINT VALIDATION PENDING` and list the endpoints awaiting verification — do not claim `COMPLETE — TARGET MET`.
+
 ---
 
 ## 23. FINAL RESPONSE FORMAT
@@ -935,6 +966,9 @@ This protocol scales with the prompt. A one-line fix still requires codebase res
 - Composition over decoration. Hierarchy over ornament.
 - Motion is restrained and purposeful, not decorative.
 - Truthful UI always. No fabricated success, data, or capability.
+- The live endpoint is the source of truth, not TypeScript. A screen that renders without a real endpoint is a prototype. Live signs come from end-to-end closure of one functional surface, not from mass visual passes (§37).
+- Trust signals are evidenced by backend rows, fail-closed. No badge without a tier, no success on an unknown-outcome.
+- A real product is coherent across surfaces — mutations propagate everywhere.
 - Preserve working features. Elevate, don't strip.
 - The device render is the source of truth. Iterate against it.
 
@@ -1690,3 +1724,241 @@ Do not propagate a visual grammar across the codebase until one screen has passe
 ### 31.7 Enforcement
 
 The visual release gate (`.devin/release-gates.md`, `check-visual-release-gates.mjs`) is enforced: it fails on P0 violations by default. A TypeScript pass cannot override an obviously inferior native render (§4, §29). The native render is the source of truth.
+
+---
+
+## 37. LIVE-SIGNS CONVERGENCE — FUNCTIONAL TRUTH AS THE OBJECTIVE
+
+> **Authority:** `.devin/workflows/live-signs-convergence-loop.md`. This section is binding and is the functional counterpart to §31 (Visual Flagship Convergence). A surface is not complete until it has passed **both** loops.
+
+### 37.1 The implementation unit for functional truth is one surface's full data path
+
+The Visual Flagship Convergence Loop (§31) governs how the app *looks*. It exposed the failure mode of department-wide mass visual commits: large diffs, impressive commit messages, no proportional visual jump.
+
+The same failure mode exists on the **functional** axis and is more dangerous because it is invisible. A 40-screen visual pass can look impressive in a commit log while every screen still renders mock data, every mutation stays local, every trust badge is asserted by the frontend, and every coupled surface desyncs. The app "works" in TypeScript and "looks flagship" in a screenshot, but it is a prototype with flagship makeup — not a product.
+
+The commits that actually moved ThryftVerse from prototype to product were not the mass visual waves. They were focused, end-to-end functional closures: live-endpoint bug fixes (`46a17968`), real-data seeding + honest error (`0afcdf6a`), cross-surface propagation (`0d2fb8b2`), transaction/race/auth/leak hardening (`c113dd1b`), backend-row-evidenced trust (`84e289f7`), idempotent unknown-outcome UI (`211b5f7e`), backend↔frontend integration (`d0697208`, `d993d364`, `e5f60987`, `c88599e2`), and fabrication removal (`5debc0ce`).
+
+**Live signs come from end-to-end closure of one functional surface, not from mass visual passes.** The implementation unit for functional truth is one surface's full data path (DB → API → serializer → hook → state → UI → and back), not one department.
+
+### 37.2 The live-signs test (replace "it works")
+
+"It works" and "TypeScript passes" are not live signs. Translate vague functional claims into observable live-signs outcomes:
+
+```text
+- A real GET /endpoint returns real rows that the UI renders (not mock, not hardcoded).
+- A mutation POST/PATCH persists to the DB and is reflected on every surface that shows that entity.
+- A 401 on a protected route expires the session and redirects to auth — no stale state.
+- An unknown-outcome (network drop after send) shows "Check result" + safe retry with the same idempotency key, never a fake success.
+- A trust badge renders only when a backend row evidences it. Fail-closed: null = no render.
+- A race that could double-sell / double-create / double-charge is closed by a transaction with FOR UPDATE.
+- A setTimeout / setInterval / subscription is cleaned up on unmount — no leak.
+- A listing paused by an auction/co-own stays paused everywhere; sold by an auction win is sold everywhere.
+```
+
+These are testable against the live backend. "It works" is not.
+
+### 37.3 The loop
+
+```
+For one functional surface:
+  1. TRACE       → map DB → API → serializer → hook → state → UI (and back)
+  2. WIRE        → connect UI to the real endpoint; no production mock fallback
+  3. SERVE       → ensure the backend returns real data (migration / endpoint / seed)
+  4. VERIFY LIVE → hit the live endpoint; confirm real rows render; not just TypeScript
+  5. PROPAGATE   → every coupled surface reflects the mutation; re-fetch on focus
+  6. STATE-COVER → loading / empty / error / offline / partial / unknown-outcome — all honest
+  7. HARDEN      → transactions, idempotency, races, auth, privacy, resource cleanup
+  8. CRITIQUE    → cold critic: "does this surface lie? fabricate? desync? leak? race?"
+  9. SIGN OFF    → live endpoint verified + no fabrication + propagation confirmed + states honest
+```
+
+A functional surface is not done until step 9. See the workflow file for the full per-step detail.
+
+### 37.4 The live endpoint is the source of truth, not TypeScript
+
+TypeScript passing is necessary, not sufficient. The verification standard is: **hit the live endpoint and confirm real rows render.** Run the backend against real Postgres/Redis and exercise each P0 endpoint. The commits that found the worst bugs found them this way — never via typecheck (a SQL double-comma that 500'd `/auctions`, a parameter mismatch that 500'd Buy Now, public routes blocked by preHandler auth — all typechecked clean, all broken live).
+
+Record the live verification:
+```text
+GET /listings        → 12 rich listings with images + dimensions
+POST /auctions/:id/buy-now → creates order + returns orderId
+GET /co-own/assets/:id     → custodyCoverageGbp=5000
+```
+
+When the backend cannot be run live, mark `IMPLEMENTED — LIVE ENDPOINT VALIDATION PENDING` and list the endpoints awaiting verification. Do not claim `COMPLETE — TARGET MET` without a live endpoint check.
+
+### 37.5 Fail-closed trust — no badge without a backend row
+
+Every trust signal (verified tier, safeguarded status, custody coverage, appraisal value, escrow ETA, rights TBC) must be **evidenced by a backend row**, not asserted by the frontend. Fail-closed policy throughout:
+
+- null means no render
+- no badge without a tier
+- no TBC without a reason
+- no stale without an action
+- no failure without a recovery
+
+A badge rendered from a hardcoded value or a frontend default is a lie (§11). This is the `84e289f7` standard.
+
+### 37.6 Cross-surface propagation — the app is one system
+
+A real product is coherent. For every mutation on the worked surface:
+
+- identify the **propagation surface set** — every screen that reads the mutated entity
+- after a successful mutation, invalidate queries and re-fetch (`refreshListings()`, query invalidation, store update)
+- replace `useEffect` data loading with `useFocusEffect` on screens that must re-fetch on focus
+- backend mutations that affect other entities must update those entities in the same transaction (auction creation pauses the listing; auction win marks the listing sold; co-own trade closing sets `is_open = FALSE` when units reach 0)
+
+A listing edited on one screen that doesn't update on another until a 55-second polling cycle is a prototype, not a product.
+
+### 37.7 Unknown-outcome is a state, not a success
+
+When a mutation request is sent and the network drops before the response, the outcome is **ambiguous** — not an error, not a success. Never show a success state for an ambiguous outcome (that is a fabricated success, §11). Show a distinct unknown-outcome treatment: warning color, "Check result" action, hint that retry is safe via the idempotency key. The backend must support idempotent replay on every money/creation mutation.
+
+### 37.8 Hardening is part of the deliverable
+
+For the worked surface:
+
+- **Transactions + `FOR UPDATE`** on any read-then-write mutation (ownership check → insert → status change). A race between check and write is a double-sell/double-create bug.
+- **Idempotency keys** on every money/creation mutation; replay returns the original result, never a duplicate.
+- **Auth:** public routes in `isPublicRoute`; protected routes reject unauthenticated; 401 on refresh failure → logout → redirect.
+- **Privacy:** cross-user → 403; unauthenticated → 401; aggregate projections never leak user IDs, entry prices, or P&L. Add a privacy projection test for any new entity exposing holdings/bids.
+- **Resource cleanup:** every timer/subscription tracked in a ref and cleared on unmount.
+- **Realtime ordering:** every event carries `seq` + `v`; `/realtime/seq` lets reconnects detect gaps.
+
+### 37.9 The cold critic (functional)
+
+The same agent must not wire → verify → approve its own functional work. The functional reviewer receives only `data-path trace + live endpoint responses + state matrix + propagation surface set` — not commit messages, not "TypeScript passes." It asks: does any surface render mock data in production? does any mutation fail to propagate? does any badge lack a backend row? does any money mutation lack idempotency/transaction guard? does any state fabricate success? does any route leak data? does any timer leak? would a live hit expose a 500 that TypeScript hid?
+
+### 37.10 Definition of done — live signs
+
+```text
+TypeScript 0 errors + tests pass = engineering-ready. NOT functional completion.
+
+Functional completion requires:
+  - UI renders real data from a live endpoint (not mock, not hardcoded).
+  - the live endpoint has been hit and returns expected rows (recorded).
+  - every mutation propagates to its full surface set.
+  - the full state matrix is honest, including unknown-outcome.
+  - every trust signal is evidenced by a backend row (fail-closed).
+  - money/creation mutations are transactional + idempotent.
+  - auth + privacy projections are correct (with a test for new entities).
+  - no timer/subscription leak.
+  - live-endpoint cold-critic pass.
+```
+
+### 37.11 Two loops, one completion
+
+A surface is complete only when it has passed **both** the Visual Flagship Convergence Loop (§31) and the Live-Signs Convergence Loop (§37). A flagship-looking screen backed by mock data is not done. A live-wired screen that looks prototype-grade is not done. Mass visual passes that leave screens on mock data are not upgrades — they are decoration over a prototype.
+
+### 37.12 Priority order
+
+Work functional surfaces where the code proves the largest truth gap — surfaces that look done but are not live:
+
+```
+1. Money surfaces (checkout, wallet, payouts, buy-now, auction settlement) — fabrication here is most damaging.
+2. Trust surfaces (co-own dossier, buyer protection, seller verification, KYC) — badges without backend rows are lies.
+3. Discovery / feed surfaces — must render real data, not mock catalogues.
+4. Creator surfaces — publish/edit must persist; analytics must be real.
+5. Cross-surface propagation hotspots — anywhere a mutation desyncs another surface.
+6. Remaining CRUD / utility surfaces.
+```
+
+## 38. CREATOR UPLOAD DEPARTMENT — ARCHITECTURE FINDINGS (2026)
+
+### 38.1 Card-between-media defect — FIXED
+
+**The defect:** The canvas had its own background fill (`#1a1a1a` poster / `#000000` look) rendered as a full-fill layer BEHIND the media layer. Media was a `type: 'media'` layer at `zIndex: 0` on top of this background — not the canvas itself. This created a visible "card" between the screen and the media, unlike Snapchat/Instagram where the media IS the canvas.
+
+**The fix:** `CreatorCanvas.renderBackground()` now skips the background fill when (a) a full-bleed media layer exists (`width ≥ 1, height ≥ 1`) AND (b) the background is still the factory default (no user customisation). User-customised backgrounds (gradient, image, non-default colors) are preserved. The serializers (`serialiseToLookPayload`, `serialiseToPosterPayload`) and viewer adapters (`lookToDocument`, `posterStoryToDocument`) set the background to `'transparent'` in exported/viewer documents when full-bleed media exists, so the published output also has no card frame.
+
+**Key helpers:** `hasFullBleedMedia(page)`, `isDefaultBackground(bg, docType)` in `composition.ts`. Constants: `LOOK_DEFAULT_BACKGROUND = '#000000'`, `POSTER_DEFAULT_BACKGROUND = '#1a1a1a'`.
+
+### 38.2 Icon grammar — banned metaphors and discipline
+
+**Banned icon metaphors (enforced):** `sparkles-outline` (AI/magic), `color-wand-outline` (magic), `rocket-outline` (novelty boost), `shield-outline` outside protection-program contexts. All replaced with semantically correct alternatives: `color-filter-outline` (effects), `bulb-outline` (auto/suggest), `cut-outline` (cutout), `trending-up-outline` (boost), `scan-outline` (safe zone), `eyedrop-outline` (eyedropper), `compass-outline` (discover), `flash-outline` (express shipping), `options-outline` (adjust).
+
+**Icon family:** The codebase uses exactly ONE family (Ionicons, 506 files) + the custom `CreatorGlyph` SVG system for creative-tool glyphs. No family mixing. The dead `SemanticIcon`/`iconRegistry` abstraction (0 consumers) was deleted. Icon discipline is enforced via `IconGrammar` tokens (standard:22, metadata:16, badge:12, hero:28) — all hardcoded sizes should migrate to these bands.
+
+**Fill/outline rule:** Outlined = resting/default. Filled = selected/active state only. The tab bar already follows this correctly.
+
+### 38.3 Capture-to-edit continuity — ALREADY FLAGSHIP
+
+The `CreatorEntryEditorCrossfade` implements pinned-media element-continuity at 240ms with position/size interpolation and reduced-motion fallback. Camera chrome restraint: 7 idle actions (within Snapchat's ≤7 benchmark), gallery thumb = no label + transparent 44pt target, multi-snap staging tray with "Done (N)" button, single-capture goes direct-to-editor (no review screen). No work needed.
+
+### 38.4 Look composer tool rail — FIXED
+
+- **Effects tool was unreachable** (5 primary tools but rail caps at 4). Effects moved to overflow.
+- **Adjust opened the cutout sheet** instead of adjustment controls. Now opens the effects surface (which contains the AdjustPanel).
+- **Cutout tool added to media-selected overflow** so background removal is still accessible.
+- **Tag Style tool removed** — it opened the product picker (same as "Item"), not a tag style editor. No tag style editor exists.
+- **`computeLookLayout` and `autoCompose` aligned** for 3-image default — both now produce the "editorial" layout (60% hero left + two 28% images stacked right).
+
+### 38.5 Backend truth — clean
+
+- Look API: 100% real data, no mocks.
+- Poster API: real DB-backed, mock fallback only in dev mode (`ENABLE_RUNTIME_MOCKS`).
+- **Fixed:** `snapshotcaption` typo in backend Zod schema (was `snapshotcaption`, should be `snapshotCaption` to match frontend contract) — look sticker captions were being silently dropped.
+- **Fixed:** `OverflowItem` in poster composer now passes `glyph` prop so CreatorGlyph icons render in the overflow menu (previously silently dropped).
+
+### 38.6 Icon size discipline — migrated to IconGrammar tokens
+
+**The defect:** 100+ hardcoded icon sizes across 40+ files in the creator directory — `size={20}`, `size={24}`, `size={18}`, `size={14}`, `size={26}`, `size={16}`, `size={22}`, `size={28}`, `size={32}`, `size={36}`, `size={40}`, `size={10}`, `size={12}`, `size={13}`. This is the "inconsistent primitives" AI tell — no single optical size band, no stable system.
+
+**The fix:** All hardcoded Ionicons/CreatorGlyph sizes migrated to `IconGrammar` tokens from `designTokens.ts`:
+- `IconGrammar.standard` (22) — navigation/standard glyphs
+- `IconGrammar.metadata` (16) — small metadata glyphs
+- `IconGrammar.badge` (12) — badges and micro-indicators
+- `IconGrammar.hero` (28) — hero/large glyphs
+
+Only 2 exceptions remain: `size={92}` (large empty-state illustration, not a glyph) and `size={8}` (micro play indicator on a thumbnail, too small for the badge band).
+
+### 38.7 Dead code removed
+
+- **`StickerPicker.tsx`** (1644 lines) — legacy sticker picker with 0 imports. Replaced by `StickerBrowserSheet` and `CreatorAssetPicker`.
+- **`InlineTextToolbar.tsx`** — floating text toolbar with 0 imports. Only referenced in comments. The inline text editing flow uses `InlineTextEditor` directly.
+- **`SemanticIcon.tsx` / `iconRegistry.ts`** — dead icon abstraction layer (0 external consumers, deleted in previous pass).
+
+### 38.8 Card-between-media defect — FIXED (architectural)
+
+**Root cause:** The poster and look composers rendered a fixed-aspect-ratio canvas (9:16 for poster, 4:5 for look) centered on a black screen. On a 390×844px phone, the poster canvas was 390×693 — leaving ~75px black bars above and below. The look canvas was 390×488 — leaving ~178px black bars. The media looked like it was inside a card, not filling the screen. In Snapchat/Instagram, the media IS the screen.
+
+**Fix:** The edit surface geometry now distinguishes the EXPORT ratio from the EDIT SURFACE ratio:
+- **Poster (`PosterComposerScreen.tsx`):** When a full-bleed media layer exists (width=1, height=1), `canvasHeight = screenHeight` and `canvasVerticalOffset = 0` — the canvas fills the entire screen. The media uses `contentFit="cover"` to fill it. Without full-bleed media, the centered 9:16 canvas is kept so the authoring surface communicates the export shape.
+- **Look (`LookComposerScreen.tsx`):** When full-bleed media exists, `canvasHeight` fills the available space between the top bar (56pt + status inset) and bottom tool dock (120pt + home inset), with a floor at the 4:5 height. `canvasVerticalOffset` pins the canvas just below the top bar.
+- The export pipeline is untouched — it still crops to the document's `aspectRatio`.
+
+### 38.9 AI-slop patterns removed — 7 files
+
+Per 2026 research (VP0 Journal: "Why Does My AI App Look Generic?"), the AI-slop fingerprint is: same fonts, decorative chrome on every surface, label-everything disease, generic dashboard silhouette, excessive motion. The fix is structural, not verbal.
+
+**Files fixed:**
+- **`CreatorEntryScreen.tsx`:** Removed decorative border on draft thumbnails, removed "Last edited" prefix (relative time is sufficient).
+- **`CreatorPublishSheet.tsx`:** Removed all uppercase eyebrow labels ("Preview", "Cover", "Caption", "Audience"), removed verbose hint copy, removed `audienceDescription` restating the segmented control, flattened `captionCard` (border+background+radius) into `captionField` (hairline bottom border only), removed card shadows on preview pages and cover thumbnails, replaced scale spring entrance on error states with simple opacity fade.
+- **`CreatorToolDock.tsx`:** Removed mount slide-in animation (translateY 120→0 spring), removed context transition spring on selection mode change, reduced floating dock shadow from 0.3 opacity/20px radius to 0.15/12px.
+- **`CreatorLayersSheet.tsx`:** Removed duplicate type icon from layer name row (thumbnail already shows type), removed `layer.type` subtitle text, removed thumbnail spring scale on row mount, removed type subtitle from overflow action sheet.
+- **`CreatorDraftListScreen.tsx`:** Removed title overlay on thumbnails (title already in info section), removed "Look"/"Poster" type badge pill (type already in meta text), removed stagger entrance animation, fixed duplicated empty-state text bug.
+- **`PosterComposerScreen.tsx`:** Removed colored background + border on recovery banner (now inline notification), removed filled gold pill button (now brand-colored text), removed `bottomRailHairline` decorative separator.
+- **`LookComposerScreen.tsx`:** Removed solid `backgroundColor: colors.surface` from top bar (now transparent), removed `borderBottomWidth` from top bar, removed colored background + border on recovery banner, removed `borderRadius` + `borderWidth` from AI Effects button (now inline button row), removed `borderTopWidth` from bottom bar, removed inline `backgroundColor` + `borderTopColor` from all 3 bottom bar instances.
+
+### 38.10 AI-slop fix REFINEMENT — upgrade, not deletion (Loop 4)
+
+**Lesson learned:** The initial AI-slop fix (§38.9) took the lazy approach of *stripping* elements instead of *upgrading* them. Deleting labels, chrome, and animations without replacing them with better design is not an upgrade — it's just deletion. This loop corrected that with proper REDESIGN based on 2026 research (Carbon Design System notification patterns, Figma layer panel feedback, Instagram Liquid Glass chrome, Pinterest Shuffles collage UX).
+
+**Files RE-UPGRADED with proper hierarchy:**
+
+- **`CreatorLayersSheet.tsx`:** Restored type icon in layer name row (16pt, accent color) — the icon IS the type label, providing a visual anchor for scanning. Kept the removal of the redundant "media"/"text" subtitle text. Restored a REFINED thumbnail animation (opacity fade 0→1, 150ms) instead of the old excessive spring scale (0.8→1). Restored type subtitle in overflow sheet using `getLayerCategoryLabel()` for human-readable labels ("Image", "Text", "GIF") instead of raw `layer.type`.
+
+- **`PosterComposerScreen.tsx` + `LookComposerScreen.tsx` recovery banners:** Redesigned with proper notification hierarchy per Carbon Design System: subtle tinted background (8% opacity, not the old 15%), left accent bar (3pt `#C9A46A`), brighter text (85% opacity), proper action button (15% opacity background, `Radius.sm`, brand-colored text). "Calm but noticeable" — not stripped, not heavy.
+
+- **`LookComposerScreen.tsx` chrome scrims:** Added `LinearGradient` scrims for top bar (60%→transparent, 120pt) and bottom bar (transparent→80%, 80pt) — proper visual separation without hard borders, matching Instagram's Liquid Glass pattern.
+
+- **`LookComposerScreen.tsx` AI Effects button:** Upgraded to premium button: subtle tinted background (8% opacity), refined border (1pt, 20% opacity), `Radius.md` — a proper button, not a stripped text row.
+
+- **`CreatorToolDock.tsx`:** Restored REFINED motion: mount fade (opacity 0→1, 200ms, ease-out) and context transition fade (0.5→1, 150ms) — premium subtlety, not the old excessive slide+spring+haptic, and not the jarring instant appearance.
+
+- **`CreatorPublishSheet.tsx`:** Added SUBTLE section labels ("Preview", "Caption", "Audience" — 11pt, textMuted, regular weight) and hairline separators between sections — scannable organization, not the old uppercase eyebrows, and not the unorganized flat list.
+
+- **`CreatorDraftListScreen.tsx`:** Added subtle type indicator (8pt colored dot: Poster=gold, Look=white) + relative time in meta line — scannable type distinction without the old pill badge. Restored REFINED stagger animation (30ms delay, opacity only, 200ms) — premium list entrance, not the old 50ms scale spring, and not the jarring instant appearance.
+
+- **`CreatorEntryScreen.tsx`:** Restored REFINED thumbnail border (1pt, 6% opacity white) — a finished edge, not the old 10% decorative border, and not the unfinished borderless look.

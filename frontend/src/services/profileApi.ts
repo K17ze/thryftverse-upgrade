@@ -221,6 +221,8 @@ export interface UserSearchResult {
   username: string;
   displayName: string | null;
   avatar: string | null;
+  /** Present on authenticated search responses; optional for local adapters. */
+  isFollowing?: boolean;
 }
 
 export async function searchUsers(query: string, limit?: number): Promise<UserSearchResult[]> {

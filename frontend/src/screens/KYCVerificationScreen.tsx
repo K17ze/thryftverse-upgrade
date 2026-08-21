@@ -247,7 +247,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
           style={styles.submittedWrap}
         >
           <View style={[styles.submittedIcon, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="hourglass-outline" size={44} color={colors.warning} />
+            <Ionicons name="hourglass-outline" size={28} color={colors.warning} aria-hidden={true} />
           </View>
           <Text style={styles.submittedTitle}>Verification in review</Text>
           <Text style={styles.submittedBody}>
@@ -296,7 +296,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <View style={[styles.privacyBanner, { backgroundColor: colors.commerceTrustSubtle, borderBottomColor: colors.commerceTrustBorder }]}>
           <View style={styles.privacyBannerContent}>
             <View style={[styles.privacyIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-              <Ionicons name="lock-closed" size={16} color={colors.commerceTrust} />
+              <Ionicons name="lock-closed" size={16} color={colors.commerceTrust} aria-hidden={true} />
             </View>
             <View style={styles.privacyTextWrap}>
               <Text style={[styles.privacyTitle, { color: colors.textPrimary }]}>
@@ -471,7 +471,7 @@ function StepIndicator({
                 ]}
               >
                 {isComplete ? (
-                  <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+                  <Ionicons name="checkmark" size={14} color={colors.textInverse} aria-hidden={true} />
                 ) : (
                   <Text
                     style={[
@@ -580,7 +580,7 @@ function StepIdentity({
       </View>
 
       <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+        <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} aria-hidden={true} />
         <Text style={styles.trustNoteText}>
           Your information is encrypted and used only for identity verification.
         </Text>
@@ -635,7 +635,7 @@ function StepDocument({
       />
 
       <View style={[styles.qualityNote, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="sunny-outline" size={14} color={colors.warning} />
+        <Ionicons name="sunny-outline" size={14} color={colors.warning} aria-hidden={true} />
         <Text style={styles.qualityNoteText}>
           Ensure the document is well-lit and all text is readable.
         </Text>
@@ -694,7 +694,7 @@ function StepSelfie({
       </Text>
 
       <View style={[styles.livenessNote, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="person-outline" size={14} color={colors.brand} />
+        <Ionicons name="person-outline" size={14} color={colors.brand} aria-hidden={true} />
         <Text style={styles.livenessNoteText}>
           Look straight ahead, then turn your head slowly left and right.
         </Text>
@@ -761,7 +761,7 @@ function StepBusiness({
           accessibilityState={{ selected: !isBusiness }}
           accessibilityLabel="Selling as an individual"
         >
-          <Ionicons name="person-outline" size={20} color={!isBusiness ? colors.brand : colors.textMuted} />
+          <Ionicons name="person-outline" size={20} color={!isBusiness ? colors.brand : colors.textMuted} aria-hidden={true} />
           <Text style={[styles.toggleLabel, { color: !isBusiness ? colors.textPrimary : colors.textMuted }]}>
             Individual
           </Text>
@@ -777,7 +777,7 @@ function StepBusiness({
           accessibilityState={{ selected: isBusiness }}
           accessibilityLabel="Selling as a business"
         >
-          <Ionicons name="business-outline" size={20} color={isBusiness ? colors.brand : colors.textMuted} />
+          <Ionicons name="business-outline" size={20} color={isBusiness ? colors.brand : colors.textMuted} aria-hidden={true} />
           <Text style={[styles.toggleLabel, { color: isBusiness ? colors.textPrimary : colors.textMuted }]}>
             Business
           </Text>
@@ -815,7 +815,7 @@ function StepBusiness({
         </View>
       ) : (
         <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} aria-hidden={true} />
           <Text style={styles.trustNoteText}>
             Add business details later if your selling activity changes.
           </Text>
@@ -918,7 +918,7 @@ function StepReview({
         accessibilityLabel="Confirm information is accurate"
       >
         <View style={[styles.termsCheckbox, termsAccepted && { backgroundColor: colors.brand, borderColor: colors.brand }, { borderColor: colors.border }]}>
-          {termsAccepted ? <Ionicons name="checkmark" size={16} color={colors.textInverse} /> : null}
+          {termsAccepted ? <Ionicons name="checkmark" size={16} color={colors.textInverse} aria-hidden={true} /> : null}
         </View>
         <Text style={styles.termsText}>
           I confirm the information provided is accurate
@@ -931,13 +931,13 @@ function StepReview({
 
       {submitError ? (
         <View style={[styles.submitErrorWrap, { backgroundColor: colors.dangerSubtle }]}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
           <Text style={[styles.submitErrorText, { color: colors.danger }]}>{submitError}</Text>
         </View>
       ) : null}
 
       <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="time-outline" size={14} color={colors.warning} />
+        <Ionicons name="time-outline" size={14} color={colors.warning} aria-hidden={true} />
         <Text style={styles.trustNoteText}>
           Review typically takes within 24 hours. We'll notify you when it is complete.
         </Text>
@@ -985,7 +985,7 @@ function CaptureTile({
               accessibilityRole="button"
               accessibilityLabel={`Retake ${label}`}
             >
-              <Ionicons name="camera-outline" size={16} color={colors.textPrimary} />
+              <Ionicons name="camera-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
               <Text style={styles.retakeText}>Retake</Text>
             </Pressable>
             <Pressable
@@ -995,7 +995,7 @@ function CaptureTile({
               accessibilityLabel={`Remove ${label}`}
               hitSlop={8}
             >
-              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Ionicons name="trash-outline" size={16} color={colors.danger} aria-hidden={true} />
               <Text style={[styles.retakeText, { color: colors.danger }]}>Remove</Text>
             </Pressable>
           </View>
@@ -1016,7 +1016,7 @@ function CaptureTile({
         accessibilityHint="Opens the camera to take a photo"
       >
         <View style={[styles.captureIconWrap, circular && { borderRadius: Radius.full }]}>
-          <Ionicons name={icon} size={32} color={colors.textMuted} />
+          <Ionicons name={icon} size={28} color={colors.textMuted} aria-hidden={true} />
         </View>
         <Text style={styles.captureTileText}>Tap to capture</Text>
         <Text style={styles.captureTileHint}>Use good lighting · fill the frame</Text>
@@ -1063,7 +1063,7 @@ function SubmittedStep({
   const color = status === 'complete' ? colors.success : colors.warning;
   return (
     <View style={styles.submittedStepRow}>
-      <Ionicons name={icon} size={18} color={color} />
+      <Ionicons name={icon} size={18} color={color} aria-hidden={true} />
       <Text style={[styles.submittedStepText, { color: colors.textPrimary }]}>{label}</Text>
     </View>
   );

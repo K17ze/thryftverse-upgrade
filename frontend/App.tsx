@@ -20,6 +20,7 @@ import { Lobster_400Regular } from '@expo-google-fonts/lobster';
 import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { PlayfairDisplay_400Regular, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
+import { loadAsync as fontLoadAsync } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
@@ -117,6 +118,12 @@ export default function App() {
   usePushNotificationTap();
   useUnreadNotificationCount();
 
+  // Performance: only block first paint on the Inter family (used on every
+  // screen from boot). The 8 display fonts below are used exclusively in the
+  // Creator canvas/text tools, which the user always navigates to after the
+  // first paint. Loading them lazily after appReady removes ~8 font decode
+  // operations from the critical cold-start path and directly reduces the
+  // "Skipped 185 frames" jank observed on cold start.
   const [fontsLoaded, fontLoadError] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -124,15 +131,6 @@ export default function App() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    Anton_400Regular,
-    BebasNeue_400Regular,
-    Caveat_400Regular,
-    DancingScript_400Regular,
-    Lobster_400Regular,
-    Pacifico_400Regular,
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_700Bold,
-    PressStart2P_400Regular,
   });
 
   React.useEffect(() => {
@@ -245,6 +243,23 @@ export default function App() {
 
   const fontsReady = fontsLoaded || !!fontLoadError || bootTimedOut;
   const appReady = fontsReady && themeInitialized && !!ThemeReadyNavigator;
+
+  // Lazy-load display fonts after the app is interactive so they are
+  // available when the user opens the Creator, without blocking boot.
+  React.useEffect(() => {
+    if (!appReady) return;
+    void fontLoadAsync({
+      Anton_400Regular,
+      BebasNeue_400Regular,
+      Caveat_400Regular,
+      DancingScript_400Regular,
+      Lobster_400Regular,
+      Pacifico_400Regular,
+      PlayfairDisplay_400Regular,
+      PlayfairDisplay_700Bold,
+      PressStart2P_400Regular,
+    });
+  }, [appReady]);
 
   const processedInviteTokensRef = React.useRef<Set<string>>(new Set());
 

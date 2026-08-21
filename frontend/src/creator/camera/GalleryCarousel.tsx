@@ -1,7 +1,8 @@
 import React from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // 2026 Apple HIG: gallery thumbnail is a compact 44pt — large enough to
@@ -11,7 +12,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 const GALLERY_THUMB_SIZE = 44;
 
 export interface GalleryCarouselProps {
-  /** Most recent gallery image URI (shown as the 64×64 thumbnail). */
+  /** Most recent gallery image URI (shown as the 44×44 thumbnail). */
   lastImageUri: string | null;
   /** Recent gallery image URIs for the long-press carousel. */
   recentImages: string[];
@@ -23,6 +24,9 @@ export interface GalleryCarouselProps {
   onGallery: () => void;
   /** Called when the thumbnail is long-pressed (toggles the carousel). */
   onLongPress: () => void;
+  /** Called when a specific recent photo is tapped. When provided, tapping
+   * a recent photo opens that photo directly instead of the general gallery. */
+  onRecentPhotoPress?: (uri: string) => void;
 }
 
 /**
@@ -40,6 +44,7 @@ export function GalleryCarousel({
   carouselBottom,
   onGallery,
   onLongPress,
+  onRecentPhotoPress,
 }: GalleryCarouselProps) {
   const haptic = useHaptic();
 
@@ -59,7 +64,11 @@ export function GalleryCarousel({
                 style={({ pressed }) => [styles.recentThumbWrap, pressed && styles.btnPressed]}
                 onPress={() => {
                   haptic.selection();
-                  onGallery();
+                  if (onRecentPhotoPress) {
+                    onRecentPhotoPress(uri);
+                  } else {
+                    onGallery();
+                  }
                 }}
                 hitSlop={12}
                 accessibilityLabel={`Recent photo ${i + 1}`}
@@ -72,7 +81,14 @@ export function GalleryCarousel({
         </View>
       )}
 
-      {/* Gallery thumbnail — 64×64 with long-press for recent carousel */}
+      {/* Gallery thumbnail — the thumbnail IS the label (Snapchat/Instagram
+          pattern). No "Gallery" text below: a text label under an obvious
+          gallery thumbnail is label-everything disease (AGENTS.md §4).
+          44pt rounded-rect thumbnail with a 1.5pt white/90 ring for
+          definition over bright previews. The hit zone is 44pt (meets the
+          touch-target minimum). When no recent image exists, a transparent
+          44pt target with a 24pt glyph — no bordered placeholder box
+          (visible containment without meaning is banned). */}
       <Pressable
         style={styles.galleryBtn}
         onPress={onGallery}
@@ -84,12 +100,12 @@ export function GalleryCarousel({
         {lastImageUri ? (
           <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
         ) : (
-          <View style={styles.galleryThumbPlaceholder}>
-            {/* Camera overlay — always high contrast on dark preview */}
-            <Ionicons name="images-outline" size={24} color="rgba(255,255,255,0.6)" />
+          // Transparent 44pt target + glyph only. No fill, no bordered box.
+          // The glyph reads as "gallery" on its own over the dark preview.
+          <View style={styles.galleryGlyphTarget}>
+            <Ionicons name="images-outline" size={IconGrammar.hero} color="rgba(255,255,255,0.85)" />
           </View>
         )}
-        <Text style={styles.bottomLabel}>Gallery</Text>
       </Pressable>
     </>
   );
@@ -114,18 +130,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   recentThumb: {
-    width: 48,
-    height: 48,
+    width: GALLERY_THUMB_SIZE,
+    height: GALLERY_THUMB_SIZE,
     borderRadius: Radius.md,
   },
   galleryBtn: {
     alignItems: 'center',
-    gap: Space.xs,
-    width: 56,
-    minHeight: 56,
     justifyContent: 'center',
+    width: GALLERY_THUMB_SIZE,
+    minHeight: GALLERY_THUMB_SIZE,
   },
   // 44pt rounded-rect thumbnail — calmer than a circle, still clearly tappable.
+  // The 1.5pt white/90 ring defines the edge over bright previews without
+  // being a decorative chrome card.
   galleryThumb: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
@@ -133,19 +150,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
   },
-  galleryThumbPlaceholder: {
+  // Transparent 44pt target for the no-recent-image state. No fill, no border —
+  // the glyph alone communicates "gallery" over the dark camera preview.
+  // Visible containment without meaning is banned (AGENTS.md §4).
+  galleryGlyphTarget: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  bottomLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 10.5,
-    color: 'rgba(255,255,255,0.7)',
   },
   btnPressed: {
     opacity: 0.7,

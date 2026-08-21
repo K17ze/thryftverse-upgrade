@@ -23,7 +23,7 @@ export interface LookApiItem {
   mediaUrl: string;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
-  visibility: 'public' | 'closeFriends' | 'private';
+  visibility: 'public' | 'followers' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt?: string;
@@ -62,7 +62,8 @@ export interface LookCreateBody {
   title: string;
   caption?: string;
   mediaUrl: string;
-  visibility?: 'public' | 'closeFriends' | 'private';
+  mediaType?: 'image' | 'video';
+  visibility?: 'public' | 'followers' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
   compositionDocument?: unknown;

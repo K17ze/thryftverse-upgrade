@@ -49,6 +49,9 @@ import {
   type ProductReference,
   type ProductReferenceKind,
 } from '../platform/product/openProductDetail';
+import { ApiRequestError } from '../lib/apiClient';
+import { CreatorCanvas } from '../creator/CreatorCanvas';
+import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -104,7 +107,10 @@ export default function LookDetailScreen() {
 
   const [look, setLook] = useState<LookApiItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{
+    kind: 'not-found' | 'connection';
+    message: string;
+  } | null>(null);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -113,6 +119,8 @@ export default function LookDetailScreen() {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [heroAspectRatio, setHeroAspectRatio] = useState<number>(AspectRatio.marketplace);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
+  const [mediaRetryNonce, setMediaRetryNonce] = useState(0);
 
   // Creator relationship — fetched so the Follow button reflects server truth.
   const [creatorProfile, setCreatorProfile] = useState<PublicProfileAggregate | null>(null);
@@ -140,10 +148,23 @@ export default function LookDetailScreen() {
         setLook(res.look);
         setCommentCount(res.look.commentCount);
       } else {
-        setLoadError(res.error ?? 'Look not found');
+        setLoadError({
+          kind: 'not-found',
+          message: res.error ?? 'This look may have been removed or is unavailable.',
+        });
       }
-    } catch {
-      setLoadError('Failed to load look');
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        setLoadError({
+          kind: 'not-found',
+          message: 'This look may have been removed or is unavailable.',
+        });
+      } else {
+        setLoadError({
+          kind: 'connection',
+          message: 'Check your connection and try again.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +185,7 @@ export default function LookDetailScreen() {
       .then((agg) => {
         if (cancelled) return;
         setCreatorProfile(agg);
-        setIsFollowing(agg.viewer.isFollowing);
+        setIsFollowing(agg.viewer?.isFollowing ?? false);
       })
       .catch(() => {
         // Profile fetch is non-fatal — the Follow button simply stays in its
@@ -243,6 +264,7 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
+      sourceMode: 'edit',
     });
   }, [look, isOwner, navigation, haptic]);
 
@@ -254,6 +276,7 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
+      sourceMode: 'remix',
     });
   }, [look, navigation, haptic]);
 
@@ -378,7 +401,18 @@ export default function LookDetailScreen() {
     return [{ id: 'media-0', uri: look.mediaUrl, isVideo }];
   }, [look]);
 
-  const heroHeight = SCREEN_W / heroAspectRatio;
+  const compositionDocument = useMemo<CreatorDocument | null>(() => {
+    if (!look?.compositionDocument) return null;
+    const parsed = safeValidateDocument(look.compositionDocument);
+    const candidate = parsed.data;
+    if (!parsed.success || !candidate || candidate.type !== 'look' || !candidate.pages[0]) {
+      return null;
+    }
+    return candidate;
+  }, [look?.compositionDocument]);
+
+  const resolvedHeroAspectRatio = compositionDocument?.canvas.aspectRatio || heroAspectRatio;
+  const heroHeight = SCREEN_W / resolvedHeroAspectRatio;
 
   const tags: HydratedLookTag[] = (look?.tags ?? []) as HydratedLookTag[];
 
@@ -386,16 +420,16 @@ export default function LookDetailScreen() {
   const captionIsLong = captionText.length > 140;
 
   const creatorDisplayName =
-    creatorProfile?.user.displayName || look?.creator.username || 'unknown';
+    creatorProfile?.user?.displayName || look?.creator.username || 'unknown';
   const creatorHandle = look?.creator.username ?? 'unknown';
-  const followerCount = creatorProfile?.stats.followerCount;
+  const followerCount = creatorProfile?.stats?.followerCount;
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
         <ScrollView
@@ -409,19 +443,20 @@ export default function LookDetailScreen() {
   }
 
   if (!look || loadError) {
+    const canRetry = loadError?.kind === 'connection';
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
         <EmptyState
-          icon="images-outline"
-          title="Look not found"
-          subtitle={loadError ?? 'This look may have been removed or is unavailable.'}
-          ctaLabel="Back to Explore"
-          onCtaPress={() => navigation.goBack()}
+          icon={canRetry ? 'cloud-offline-outline' : 'images-outline'}
+          title={canRetry ? "Couldn't load this look" : 'Look not found'}
+          subtitle={loadError?.message ?? 'This look may have been removed or is unavailable.'}
+          ctaLabel={canRetry ? 'Try again' : 'Back to Explore'}
+          onCtaPress={canRetry ? loadLook : () => navigation.goBack()}
         />
       </SafeAreaView>
     );
@@ -432,8 +467,8 @@ export default function LookDetailScreen() {
       {/* Floating Header — transparent 44pt hit targets; glyph legibility from
           the text-shadow scrim. No circular chrome. */}
       <View style={styles.headerRow}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
+        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+          <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -443,7 +478,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
+            <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
           </AnimatedPressable>
           {isOwner && (
             <AnimatedPressable
@@ -453,7 +488,7 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit look"
             >
-              <Ionicons name="create-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
+              <Ionicons name="create-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
             </AnimatedPressable>
           )}
           {isOwner && (
@@ -467,7 +502,7 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="More look options"
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
             </AnimatedPressable>
           )}
         </View>
@@ -478,56 +513,94 @@ export default function LookDetailScreen() {
             ratio (defaulting to 4:5 until the first frame loads), not a fixed
             value imposed by the screen. */}
         <View style={[styles.heroWrap, { height: heroHeight }]}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-              setActiveMediaIndex(idx);
-            }}
-            accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
-          >
-            {mediaPages.map((page) => (
-              <View
-                key={page.id}
-                style={styles.heroPage}
-                accessibilityLabel={captionText || 'Look media'}
-              >
-                {page.isVideo ? (
-                  <Video
-                    source={{ uri: page.uri }}
-                    style={styles.heroImage}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay
-                    isMuted
-                    isLooping
-                    useNativeControls
-                  />
-                ) : (
-                  <ExpoImage
-                    source={{ uri: page.uri }}
-                    style={styles.heroImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    recyclingKey={page.uri}
-                    transition={reducedMotion ? 0 : 240}
-                    onLoad={(e) => {
-                      const { width, height } = e.source;
-                      if (width && height && width > 0 && height > 0) {
-                        setHeroAspectRatio((prev) =>
-                          prev === AspectRatio.marketplace ? width / height : prev
-                        );
-                      }
-                    }}
-                  />
-                )}
-              </View>
-            ))}
-          </ScrollView>
+          {compositionDocument ? (
+            <View
+              style={styles.heroPage}
+              accessibilityLabel={captionText || 'Authored Look composition'}
+            >
+              <CreatorCanvas
+                document={compositionDocument}
+                page={compositionDocument.pages[0]}
+                canvasWidth={SCREEN_W}
+                canvasHeight={heroHeight}
+                mode="view"
+              />
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                setActiveMediaIndex(idx);
+              }}
+              accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
+            >
+              {mediaPages.map((page) => (
+                <View
+                  key={page.id}
+                  style={styles.heroPage}
+                  accessibilityLabel={captionText || 'Look media'}
+                >
+                  {failedMediaIds.has(page.id) ? (
+                    <View style={styles.heroMediaError}>
+                      <Ionicons name="image-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+                      <Text style={styles.heroMediaErrorText}>Media couldn't be loaded</Text>
+                      <Pressable
+                        style={({ pressed }) => [styles.heroMediaRetry, pressed && { opacity: 0.6 }]}
+                        onPress={() => {
+                          setFailedMediaIds((current) => {
+                            const next = new Set(current);
+                            next.delete(page.id);
+                            return next;
+                          });
+                          setMediaRetryNonce((value) => value + 1);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry Look media"
+                      >
+                        <Text style={styles.heroMediaRetryText}>Try again</Text>
+                      </Pressable>
+                    </View>
+                  ) : page.isVideo ? (
+                    <Video
+                      source={{ uri: page.uri }}
+                      style={styles.heroImage}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay
+                      isMuted
+                      isLooping
+                      useNativeControls
+                    />
+                  ) : (
+                    <ExpoImage
+                      source={{ uri: page.uri }}
+                      style={styles.heroImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={`${page.uri}-${mediaRetryNonce}`}
+                      transition={reducedMotion ? 0 : 240}
+                      onLoad={(e) => {
+                        const { width, height } = e.source;
+                        if (width && height && width > 0 && height > 0) {
+                          setHeroAspectRatio((prev) =>
+                            prev === AspectRatio.marketplace ? width / height : prev
+                          );
+                        }
+                      }}
+                      onError={() => {
+                        setFailedMediaIds((current) => new Set(current).add(page.id));
+                      }}
+                    />
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
           {/* Pager indicators — only when multiple pages exist */}
-          {mediaPages.length > 1 && (
+          {!compositionDocument && mediaPages.length > 1 && (
             <View style={styles.pagerDots} pointerEvents="none">
               {mediaPages.map((page, i) => (
                 <View
@@ -573,7 +646,7 @@ export default function LookDetailScreen() {
                         <Text style={styles.tagTooltipPrice}>£{tag.price}</Text>
                       ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} />
+                    <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />
                   </View>
                 )}
               </Pressable>
@@ -587,11 +660,10 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Info — editorial chapter: eyebrow + provenance, expandable caption,
-            creator row with follow. Lives below the media so it never covers
-            the creator's composition. */}
+        {/* Info — expandable caption, creator row with follow.
+            Lives below the media so it never covers the creator's composition.
+            No "Look" eyebrow — the media is the label. */}
         <View style={styles.infoSection}>
-          <Text style={styles.eyebrow}>Look</Text>
           {captionText ? (
             <Pressable
               onPress={() => {
@@ -634,7 +706,7 @@ export default function LookDetailScreen() {
                   recyclingKey={look.creator.avatar}
                 />
               ) : (
-                <Ionicons name="person-circle" size={36} color={colors.textMuted} />
+                <Ionicons name="person-circle" size={28} color={colors.textMuted} aria-hidden={true} />
               )}
             </View>
             <View style={styles.creatorInfo}>
@@ -697,7 +769,7 @@ export default function LookDetailScreen() {
             accessibilityLabel="Remix this look"
             accessibilityHint="Opens the creator studio seeded from this look"
           >
-            <Ionicons name="color-wand-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
             <Text style={styles.actionBtnLabel}>Remix</Text>
           </AnimatedPressable>
           <View style={styles.actionDivider} />
@@ -709,7 +781,7 @@ export default function LookDetailScreen() {
             accessibilityLabel="Report this look"
             accessibilityHint="Reports the creator of this look"
           >
-            <Ionicons name="flag-outline" size={20} color={colors.danger} />
+            <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
             <Text style={[styles.actionBtnLabel, { color: colors.danger }]}>Report</Text>
           </AnimatedPressable>
         </View>
@@ -749,7 +821,7 @@ export default function LookDetailScreen() {
                         />
                       ) : (
                         <View style={styles.trayImgEmpty}>
-                          <Ionicons name="pricetag" size={20} color={colors.textMuted} />
+                          <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} aria-hidden={true} />
                         </View>
                       )}
                       {tag.isSold && <View style={styles.traySoldScrim} />}
@@ -893,7 +965,7 @@ export default function LookDetailScreen() {
                         />
                       ) : (
                         <View style={styles.inspectImgEmpty}>
-                          <Ionicons name="pricetag" size={28} color={colors.textMuted} />
+                          <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} aria-hidden={true} />
                         </View>
                       )}
                       {inspectTag.isSold && <View style={styles.traySoldScrim} />}
@@ -921,7 +993,7 @@ export default function LookDetailScreen() {
                     <Text style={styles.inspectCtaText}>
                       {ref ? 'View details' : 'Unavailable'}
                     </Text>
-                    <Ionicons name="arrow-forward" size={18} color={colors.textInverse} />
+                    <Ionicons name="arrow-forward" size={18} color={colors.textInverse} aria-hidden={true} />
                   </AnimatedPressable>
                 </>
               );
@@ -950,7 +1022,7 @@ export default function LookDetailScreen() {
               accessibilityRole="menuitem"
               accessibilityLabel="Edit look"
             >
-              <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+              <Ionicons name="create-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
               <Text style={styles.overflowItemText}>Edit look</Text>
             </Pressable>
             <View style={styles.overflowDivider} />
@@ -960,7 +1032,7 @@ export default function LookDetailScreen() {
               accessibilityRole="menuitem"
               accessibilityLabel="Delete look"
             >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Ionicons name="trash-outline" size={20} color={colors.danger} aria-hidden={true} />
               <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
             </Pressable>
           </Pressable>
@@ -1020,6 +1092,30 @@ function createStyles(colors: ThemeColors) {
     },
     heroPage: { width: SCREEN_W, height: '100%' },
     heroImage: { width: '100%', height: '100%' },
+    heroMediaError: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+    },
+    heroMediaErrorText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+    },
+    heroMediaRetry: {
+      minHeight: 48,
+      paddingHorizontal: Space.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroMediaRetryText: {
+      color: colors.textPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
     heroGradient: {
       position: 'absolute',
       bottom: 0,

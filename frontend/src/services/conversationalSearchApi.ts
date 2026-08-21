@@ -353,6 +353,9 @@ const MOCK_CONVERSATIONS = new Map<string, SearchConversation>();
  * Fetch suggested starting queries for the empty / first-viewport state.
  */
 export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
+  if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
+    throw new Error('Conversational Search API not configured for production');
+  }
   await delay(180);
   return [...MOCK_SUGGESTIONS];
 }
@@ -363,6 +366,9 @@ export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
  * assistant's response (extracted filters + suggestions).
  */
 export async function startConversation(query: string): Promise<SearchConversation> {
+  if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
+    throw new Error('Conversational Search API not configured for production');
+  }
   await delay(520); // simulate processing latency for honest loading state
 
   const conversationId = generateId('conv');
@@ -407,6 +413,9 @@ export async function continueConversation(
   conversationId: string,
   query: string,
 ): Promise<ChatMessage> {
+  if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
+    throw new Error('Conversational Search API not configured for production');
+  }
   await delay(520);
 
   const conversation = MOCK_CONVERSATIONS.get(conversationId);

@@ -1,5 +1,5 @@
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
-import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO } from './composition';
+import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_BACKGROUND, POSTER_DEFAULT_BACKGROUND } from './composition';
 
 // ── Look viewer adapter ────────────────────────────────────────────
 
@@ -8,6 +8,8 @@ export interface LookViewData {
   title: string;
   caption: string;
   mediaUrl: string;
+  mediaType?: 'image' | 'video';
+  visibility?: 'public' | 'followers' | 'private';
   tags: Array<{
     id: string;
     label: string;
@@ -35,7 +37,7 @@ export function lookToDocument(look: LookViewData): CreatorDocument {
     opacity: 1,
     payload: {
       mediaUri: look.mediaUrl,
-      mediaType: 'image',
+      mediaType: look.mediaType ?? 'image',
       contentFit: 'cover',
       opacity: 1,
     },
@@ -70,13 +72,16 @@ export function lookToDocument(look: LookViewData): CreatorDocument {
     version: 1,
     canvas: {
       aspectRatio: LOOK_DEFAULT_ASPECT_RATIO,
-      background: { type: 'color', value: '#000000' },
+      // Transparent when media exists — the media IS the canvas surface,
+      // not a layer on top of a card. Falls back to the default dark color
+      // only for text-only looks with no media.
+      background: { type: 'color', value: look.mediaUrl ? 'transparent' : LOOK_DEFAULT_BACKGROUND },
     },
     pages: [{ id: 'page_1', layers }],
     metadata: {
       caption: look.caption,
       title: look.title,
-      visibility: 'public',
+      visibility: look.visibility === 'followers' ? 'closeFriends' : (look.visibility ?? 'public'),
       allowReplies: true,
       allowReactions: true,
       allowRemix: false,
@@ -91,12 +96,19 @@ export interface PosterFrameViewData {
   id: string;
   mediaType: 'image' | 'video' | 'text';
   mediaUrl?: string;
+  thumbnailUrl?: string;
   caption?: string;
   backgroundColor?: string | null;
   durationMs?: number;
+  videoDurationMs?: number;
+  // Video timeline metadata (preserved when viewing legacy posters)
+  speed?: number;
+  trimStartMs?: number;
+  trimEndMs?: number;
+  filterId?: string;
   stickers: Array<{
     id: string;
-    type: 'text' | 'mention' | 'listing' | 'look' | 'style_vote';
+    type: 'text' | 'mention' | 'listing' | 'look' | 'style_vote' | 'quiz' | 'question' | 'countdown' | 'poll';
     x: number;
     y: number;
     scale?: number;
@@ -163,6 +175,13 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
           mediaType: frame.mediaType === 'video' ? 'video' : 'image',
           contentFit: 'cover',
           opacity: 1,
+          // Preserve video metadata when viewing legacy posters
+          ...(frame.thumbnailUrl ? { thumbnailUri: frame.thumbnailUrl } : {}),
+          ...(frame.videoDurationMs != null ? { videoDurationMs: frame.videoDurationMs } : {}),
+          ...(frame.speed != null ? { speed: frame.speed } : {}),
+          ...(frame.trimStartMs != null ? { trimStartMs: frame.trimStartMs } : {}),
+          ...(frame.trimEndMs != null ? { trimEndMs: frame.trimEndMs } : {}),
+          ...(frame.filterId ? { filterId: frame.filterId } : {}),
         },
       });
     }
@@ -266,6 +285,54 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
             },
           });
           break;
+        case 'quiz':
+          layers.push({
+            ...baseFields,
+            type: 'quiz',
+            payload: {
+              question: pStr(sticker.payload, 'question'),
+              options: pOptions(sticker.payload),
+              correctOptionId: pStr(sticker.payload, 'correctOptionId'),
+              emoji: pStr(sticker.payload, 'emoji', '🎯'),
+            },
+          });
+          break;
+        case 'question':
+          layers.push({
+            ...baseFields,
+            type: 'question',
+            payload: {
+              prompt: pStr(sticker.payload, 'question') || pStr(sticker.payload, 'prompt'),
+              placeholder: pStr(sticker.payload, 'placeholder', 'Type something...'),
+              backgroundColor: pStr(sticker.payload, 'backgroundColor', '#9b0202'),
+              textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
+            },
+          });
+          break;
+        case 'countdown':
+          layers.push({
+            ...baseFields,
+            type: 'countdown',
+            payload: {
+              label: pStr(sticker.payload, 'label', 'Countdown'),
+              endDateTime: pStr(sticker.payload, 'targetDate') || pStr(sticker.payload, 'endDateTime'),
+              color: pStr(sticker.payload, 'color', '#C9A46A'),
+              textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
+            },
+          });
+          break;
+        case 'poll':
+          layers.push({
+            ...baseFields,
+            type: 'emojiSlider',
+            payload: {
+              question: pStr(sticker.payload, 'question'),
+              emoji: pStr(sticker.payload, 'emoji', '😍'),
+              endLabel: pStr(sticker.payload, 'endLabel', ''),
+              sliderColor: pStr(sticker.payload, 'sliderColor', '#C9A46A'),
+            },
+          });
+          break;
       }
     }
 
@@ -282,7 +349,10 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
     version: 1,
     canvas: {
       aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
-      background: { type: 'color', value: '#1a1a1a' },
+      // Transparent when at least one page has media — the media IS the
+      // canvas surface. Falls back to the default dark color only for
+      // text-only posters.
+      background: { type: 'color', value: pages.some(p => p.layers.some(l => l.type === 'media')) ? 'transparent' : POSTER_DEFAULT_BACKGROUND },
     },
     pages,
     metadata: {
@@ -298,12 +368,21 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
   };
 }
 
-function mapTextStyle(old: string | undefined): 'headline' | 'editorial' | 'clean' | 'compact' | 'handwritten' {
+function mapTextStyle(old: string | undefined): 'headline' | 'editorial' | 'clean' | 'compact' | 'handwritten' | 'bubble' | 'deco' | 'poster' | 'squeeze' | 'signature' {
   switch (old) {
     case 'editorial': return 'editorial';
     case 'minimal': return 'clean';
     case 'label': return 'compact';
     case 'outline': return 'headline';
+    case 'bubble': return 'bubble';
+    case 'deco': return 'deco';
+    case 'poster': return 'poster';
+    case 'squeeze': return 'squeeze';
+    case 'signature': return 'signature';
+    case 'handwritten': return 'handwritten';
+    // Legacy styles that don't have a direct mapping
+    case 'neon': return 'poster';
+    case 'glow': return 'poster';
     default: return 'clean';
   }
 }

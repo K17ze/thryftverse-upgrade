@@ -150,9 +150,14 @@ const TextLayerPayloadSchema = z.object({
 
 const MediaLayerPayloadSchema = z.object({
   mediaUri: z.string(),
+  /** Durable upload evidence for the primary media object. */
+  mediaFinalizationId: z.string().optional(),
+  mediaAssetId: z.string().optional(),
   mediaType: z.enum(['image', 'video']).default('image'),
   contentFit: z.enum(['cover', 'contain', 'fill']).default('cover'),
   thumbnailUri: z.string().optional(),
+  thumbnailFinalizationId: z.string().optional(),
+  thumbnailMediaAssetId: z.string().optional(),
   videoDurationMs: z.number().nullable().optional(),
   filterId: z.string().optional(),
   trimStartMs: z.number().min(0).optional(),
@@ -188,6 +193,8 @@ const ProductLayerPayloadSchema = z.object({
   listingId: z.string().min(1),
   snapshotTitle: z.string().default(''),
   snapshotImageUrl: z.string().optional(),
+  snapshotMediaFinalizationId: z.string().optional(),
+  snapshotMediaAssetId: z.string().optional(),
   snapshotPriceGbp: z.number().optional(),
   availability: z.enum(['active', 'sold', 'deleted']).default('active'),
   hotspotLabel: z.string().optional(),
@@ -202,6 +209,8 @@ const LookLayerPayloadSchema = z.object({
   lookId: z.string().min(1),
   snapshotCaption: z.string().default(''),
   snapshotImageUrl: z.string().optional(),
+  snapshotMediaFinalizationId: z.string().optional(),
+  snapshotMediaAssetId: z.string().optional(),
 });
 
 const VoteLayerPayloadSchema = z.object({
@@ -502,7 +511,7 @@ export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;
 // ── Metadata schema ────────────────────────────────────────────────
 
 export const CreatorMetadataSchema = z.object({
-  caption: z.string().max(500).default(''),
+  caption: z.string().max(2200).default(''),
   title: z.string().max(120).default(''),
   visibility: z.enum(['public', 'closeFriends', 'private']).default('public'),
   allowReplies: z.boolean().default(true),
@@ -513,6 +522,7 @@ export const CreatorMetadataSchema = z.object({
   sourceDocumentId: z.string().optional(),
   sourceCreatorId: z.string().optional(),
   scheduledFor: z.string().datetime().optional(),
+  coverPageIndex: z.number().int().min(0).optional(),
 });
 
 export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;
@@ -700,7 +710,7 @@ export function migrateLookToDocument(params: {
     version: 1,
     canvas: {
       aspectRatio: LOOK_DEFAULT_ASPECT_RATIO,
-      background: { type: 'color', value: '#000000' },
+      background: { type: 'color', value: LOOK_DEFAULT_BACKGROUND },
     },
     pages: [{ id: 'page_1', layers }],
     metadata: {
@@ -892,7 +902,7 @@ export function migratePosterFramesToDocument(params: {
     version: 1,
     canvas: {
       aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
-      background: { type: 'color', value: '#1a1a1a' },
+      background: { type: 'color', value: POSTER_DEFAULT_BACKGROUND },
     },
     pages,
     metadata: {
@@ -942,11 +952,13 @@ export function computeLookLayout(layers: CreatorLayer[]): CreatorLayer[] {
       { ...mediaLayers[1], x: 0.73, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
     ];
   } else if (n === 3) {
-    // 3 → dominant + two supporting
+    // 3 → editorial (matches autoCompose.pickDefaultId for 3 assets):
+    // 60% hero on the left + two 28% images stacked in the right column.
+    // Coordinates are center-based (x,y = layer center in 0..1 space).
     arranged = [
-      { ...mediaLayers[0], x: 0.5, y: 0.42, width: 0.7, height: 0.7, scale: 1, rotation: 0 },
-      { ...mediaLayers[1], x: 0.22, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
-      { ...mediaLayers[2], x: 0.78, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+      { ...mediaLayers[0], x: 0.34, y: 0.5, width: 0.6, height: 0.92, scale: 1, rotation: 0 },
+      { ...mediaLayers[1], x: 0.82, y: 0.26, width: 0.28, height: 0.44, scale: 1, rotation: 0 },
+      { ...mediaLayers[2], x: 0.82, y: 0.74, width: 0.28, height: 0.44, scale: 1, rotation: 0 },
     ];
   } else {
     // 4+ → scattered collage with collision avoidance
@@ -983,6 +995,42 @@ export const LOOK_DEFAULT_ASPECT_RATIO = 4 / 5; // 0.8
 // Used by the migration path to detect and correct stale documents.
 export const LEGACY_POSTER_LANDSCAPE_RATIO = 16 / 9; // 1.777…
 
+// ── Default background colors ──────────────────────────────────────
+// Used to detect whether the canvas background is still the factory
+// default (no user customisation). When a full-bleed media layer is
+// present AND the background is still the default, the renderer skips
+// the background fill — the media IS the canvas surface, not a layer
+// on top of a card. This eliminates the "card between media and edits"
+// defect: edits land directly on the media, chrome floats over it.
+export const LOOK_DEFAULT_BACKGROUND = '#000000';
+export const POSTER_DEFAULT_BACKGROUND = '#1a1a1a';
+
+/**
+ * Returns true when a page contains a visible media layer that fills
+ * the entire canvas (width ≥ 1, height ≥ 1). In this case the media
+ * is the canvas surface — no background fill should be rendered.
+ */
+export function hasFullBleedMedia(page: CreatorPage | undefined): boolean {
+  if (!page) return false;
+  return page.layers.some(
+    (l) => l.type === 'media' && !l.hidden && l.width >= 1 && l.height >= 1,
+  );
+}
+
+/**
+ * Returns true when the canvas background is still the factory default
+ * (no user customisation). When combined with a full-bleed media layer,
+ * the background fill is skipped so the media IS the canvas.
+ */
+export function isDefaultBackground(
+  bg: CreatorBackground,
+  docType: 'look' | 'poster',
+): boolean {
+  if (bg.type !== 'color') return false;
+  const defaultValue = docType === 'look' ? LOOK_DEFAULT_BACKGROUND : POSTER_DEFAULT_BACKGROUND;
+  return bg.value === defaultValue;
+}
+
 // ── Document operations ────────────────────────────────────────────
 
 export function createEmptyDocument(type: 'look' | 'poster'): CreatorDocument {
@@ -992,7 +1040,7 @@ export function createEmptyDocument(type: 'look' | 'poster'): CreatorDocument {
     version: 1,
     canvas: {
       aspectRatio: type === 'look' ? LOOK_DEFAULT_ASPECT_RATIO : POSTER_DEFAULT_ASPECT_RATIO,
-      background: { type: 'color', value: type === 'look' ? '#000000' : '#1a1a1a' },
+      background: { type: 'color', value: type === 'look' ? LOOK_DEFAULT_BACKGROUND : POSTER_DEFAULT_BACKGROUND },
     },
     pages: [{ id: 'page_1', layers: [] }],
     metadata: {
@@ -1267,7 +1315,7 @@ export function goldenPosterFixture(): CreatorDocument {
     version: 1,
     canvas: {
       aspectRatio: POSTER_DEFAULT_ASPECT_RATIO, // 9:16 = 0.5625
-      background: { type: 'color', value: '#1a1a1a' },
+      background: { type: 'color', value: POSTER_DEFAULT_BACKGROUND },
     },
     pages: [{
       id: 'page_1',

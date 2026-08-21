@@ -318,6 +318,9 @@ function resolveTheme(themeId: string): MoodboardTheme {
  * Returns moodboards sorted by most recently updated.
  */
 export async function fetchMoodboards(): Promise<Moodboard[]> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(400);
   return [...demoMoodboards].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -329,6 +332,9 @@ export async function fetchMoodboards(): Promise<Moodboard[]> {
  * Returns null if the moodboard ID is not found.
  */
 export async function fetchMoodboardDetail(id: string): Promise<Moodboard | null> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(320);
   return demoMoodboards.find((mb) => mb.id === id) ?? null;
 }
@@ -339,6 +345,9 @@ export async function fetchMoodboardDetail(id: string): Promise<Moodboard | null
  * to a backend or shared publicly.
  */
 export async function createMoodboard(title: string, theme: string): Promise<Moodboard> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(280);
   const themeObj = resolveTheme(theme);
   const newMoodboard: Moodboard = {
@@ -368,6 +377,9 @@ export async function addItemToMoodboard(
   moodboardId: string,
   listingId: string,
 ): Promise<MoodboardItem | null> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(200);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
   if (!moodboard) return null;
@@ -400,6 +412,9 @@ export async function removeItemFromMoodboard(
   moodboardId: string,
   itemId: string,
 ): Promise<boolean> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(180);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
   if (!moodboard) return false;
@@ -421,6 +436,9 @@ export async function updateItemPosition(
   itemId: string,
   position: MoodboardItemPosition,
 ): Promise<boolean> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(120);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
   if (!moodboard) return false;
@@ -443,6 +461,9 @@ export async function reorderItem(
   itemId: string,
   direction: 'front' | 'back',
 ): Promise<boolean> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(120);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
   if (!moodboard) return false;
@@ -462,6 +483,9 @@ export async function reorderItem(
  * Fetch available moodboard themes for the canvas background.
  */
 export async function fetchMoodboardThemes(): Promise<MoodboardTheme[]> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(200);
   return [...MOCK_THEMES];
 }
@@ -471,6 +495,9 @@ export async function fetchMoodboardThemes(): Promise<MoodboardTheme[]> {
  * Returns public moodboards sorted by most recently updated.
  */
 export async function fetchPublicMoodboards(): Promise<Moodboard[]> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(420);
   return demoMoodboards
     .filter((mb) => mb.isPublic)
@@ -482,6 +509,9 @@ export async function fetchPublicMoodboards(): Promise<Moodboard[]> {
  * viewed, or search). In demo mode, returns a fixed set of mock listings.
  */
 export async function fetchPickerItems(): Promise<MoodboardItem[]> {
+  if (!MOODBOARD_DEMO_MODE) {
+    throw new Error('Moodboard API not configured for production');
+  }
   await delay(300);
   return [...MOCK_PICKER_ITEMS];
 }

@@ -9,10 +9,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
-import { Space, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { PressScale } from '../CreatorAnimations';
+import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ export const FrameTool = React.memo(function FrameTool({
     >
       <Ionicons
         name={icon}
-        size={22}
+        size={IconGrammar.standard}
         color={danger ? '#ff6b6b' : '#fff'}
       />
       <Text
@@ -82,7 +83,7 @@ export const RailTool = React.memo(function RailTool({
       accessibilityRole="button"
       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
     >
-      <Ionicons name={icon} size={24} color="#fff" />
+      <Ionicons name={icon} size={IconGrammar.hero} color="#fff" />
       <Text style={partStyles.railToolLabel} numberOfLines={1}>{label}</Text>
     </PressScale>
   );
@@ -90,14 +91,23 @@ export const RailTool = React.memo(function RailTool({
 
 // ── Overflow menu item ───────────────────────────────────────────────
 // White-on-dark row for the More menu (Layers, Preview, Safe Zone, etc).
+// Supports both Ionicons (icon) and CreatorGlyph (glyph) so creative
+// tools that use custom SVG glyphs in the rail also show their glyph
+// in the overflow menu — not a silently-dropped fallback.
 export const OverflowItem = React.memo(function OverflowItem({
   icon,
+  glyph,
   label,
   onPress,
+  danger = false,
+  selected = false,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
+  glyph?: CreatorGlyphName;
   label: string;
   onPress: () => void;
+  danger?: boolean;
+  selected?: boolean;
 }) {
   return (
     <PressScale
@@ -105,10 +115,16 @@ export const OverflowItem = React.memo(function OverflowItem({
       style={partStyles.overflowItem}
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={selected ? { selected: true } : undefined}
       hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
     >
-      <Ionicons name={icon} size={20} color="#fff" />
-      <Text style={partStyles.overflowItemText}>{label}</Text>
+      {glyph ? (
+        <CreatorGlyph name={glyph} size={IconGrammar.standard} color={danger ? '#ff6b6b' : '#fff'} />
+      ) : (
+        <Ionicons name={icon} size={IconGrammar.standard} color={danger ? '#ff6b6b' : '#fff'} />
+      )}
+      <Text style={[partStyles.overflowItemText, danger && partStyles.overflowItemDanger]}>{label}</Text>
+      {selected && <Ionicons name="checkmark" size={IconGrammar.standard} color="#fff" />}
     </PressScale>
   );
 });
@@ -160,7 +176,7 @@ export const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCo
 
   return (
     <View style={partStyles.opacityBar}>
-      <Ionicons name="contrast-outline" size={16} color="rgba(255,255,255,0.7)" />
+      <Ionicons name="contrast-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" />
       <GestureDetector gesture={panGesture}>
         <View style={partStyles.opacitySliderTrack} onLayout={handleLayout}>
           <View style={partStyles.opacitySliderTrackBg} />
@@ -204,13 +220,17 @@ const partStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
+    minHeight: 48,
     paddingHorizontal: Space.md,
   },
   overflowItemText: {
+    flex: 1,
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.body.size,
     color: '#fff',
+  },
+  overflowItemDanger: {
+    color: '#ff6b6b',
   },
   // ── Opacity bar ──
   opacityBar: {

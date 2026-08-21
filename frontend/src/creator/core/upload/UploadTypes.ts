@@ -99,6 +99,22 @@ export type UploadJob = {
   progress: number;
   /** Resolved remote URL once the upload has been finalised. */
   remoteUrl?: string;
+  /** Backend evidence that the object-store PUT was verified. Jobs created
+   *  by the older manager do not have these fields and must be re-queued. */
+  finalizationId?: string;
+  mediaAssetId?: string;
+  /** A successfully PUT object awaiting idempotent finalization. Persisting
+   *  this checkpoint prevents a dropped finalize response from creating a
+   *  second object on retry. */
+  uploadedObject?: {
+    uploadIntentId: string;
+    bucket: string;
+    key: string;
+    publicUrl: string;
+    contentType: string;
+    sizeBytes: number;
+    expiresAt: string;
+  };
   error?: string;
   retries: number;
   maxRetries: number;

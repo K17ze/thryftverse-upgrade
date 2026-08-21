@@ -37,11 +37,39 @@ export type ToolContext =
   | 'poster-text-selected'
   | 'poster-sticker-selected'
   | 'poster-product-selected'
+  | 'poster-quiz-selected'
+  | 'poster-question-selected'
+  | 'poster-countdown-selected'
+  | 'poster-emojiSlider-selected'
+  | 'poster-draw-selected'
+  | 'poster-gif-selected'
+  | 'poster-music-selected'
+  | 'poster-link-selected'
+  | 'poster-location-selected'
+  | 'poster-hashtag-selected'
+  | 'poster-vote-selected'
+  | 'poster-mention-selected'
+  | 'poster-decorative-selected'
+  | 'poster-look-selected'
   | 'look-default'
   | 'look-media-selected'
   | 'look-text-selected'
   | 'look-product-selected'
-  | 'look-multi-select';
+  | 'look-multi-select'
+  | 'look-quiz-selected'
+  | 'look-question-selected'
+  | 'look-countdown-selected'
+  | 'look-emojiSlider-selected'
+  | 'look-draw-selected'
+  | 'look-gif-selected'
+  | 'look-music-selected'
+  | 'look-link-selected'
+  | 'look-location-selected'
+  | 'look-hashtag-selected'
+  | 'look-vote-selected'
+  | 'look-mention-selected'
+  | 'look-decorative-selected'
+  | 'look-look-selected';
 
 // ── Tool definition ─────────────────────────────────────────────────
 // A single tool action rendered as an icon + label inside the rail.
@@ -174,6 +202,18 @@ export interface CompositionContext {
   flashOn?: boolean;
   /** The id of the currently active tool (if any tool is explicitly active). */
   activeToolId?: string;
+  // ── Interactive sticker presence flags ──
+  hasMusic?: boolean;
+  hasCountdown?: boolean;
+  hasQuiz?: boolean;
+  hasQuestion?: boolean;
+  hasEmojiSlider?: boolean;
+  hasLink?: boolean;
+  hasLocation?: boolean;
+  hasHashtag?: boolean;
+  hasVote?: boolean;
+  hasDraw?: boolean;
+  hasGif?: boolean;
 }
 
 /**
@@ -217,6 +257,28 @@ export function deriveToolActiveState(
     case 'flash':
     case 'torch':
       return ctx.flashOn === true;
+    case 'music':
+      return ctx.hasMusic === true;
+    case 'countdown':
+      return ctx.hasCountdown === true;
+    case 'quiz':
+      return ctx.hasQuiz === true;
+    case 'question':
+      return ctx.hasQuestion === true;
+    case 'emojiSlider':
+      return ctx.hasEmojiSlider === true;
+    case 'link':
+      return ctx.hasLink === true;
+    case 'location':
+      return ctx.hasLocation === true;
+    case 'hashtag':
+      return ctx.hasHashtag === true;
+    case 'vote':
+      return ctx.hasVote === true;
+    case 'draw':
+      return ctx.hasDraw === true;
+    case 'gif':
+      return ctx.hasGif === true;
     default:
       return false;
   }

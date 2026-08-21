@@ -503,7 +503,7 @@ export default function SellerHubScreen() {
             {sellerTrust?.rating != null && sellerTrust.rating > 0 && (
               <FlagshipMetricLine
                 label="Seller rating"
-                value={`${sellerTrust.rating.toFixed(1)}★`}
+                value={`${sellerTrust.rating.toFixed(1)}`}
                 subLabel={sellerTrust.reviewCount ? `${sellerTrust.reviewCount} review${sellerTrust.reviewCount === 1 ? '' : 's'}` : undefined}
                 separated
               />

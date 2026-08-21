@@ -48,6 +48,7 @@ import {
   Control,
   Stroke,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -338,7 +339,7 @@ export function VoiceoverRecorderSheet({
             accessibilityHint="Closes the voiceover recording sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -401,7 +402,7 @@ export function VoiceoverRecorderSheet({
                 <View style={styles.waveformPlaceholder}>
                   <Ionicons
                     name="mic-outline"
-                    size={32}
+                    size={IconGrammar.hero}
                     color={colors.textMuted}
                   />
                   <Text
@@ -697,7 +698,7 @@ function SecondaryButton({
       accessibilityLabel={label}
       accessibilityRole="button"
     >
-      <Ionicons name={icon} size={18} color={colors.textPrimary} />
+      <Ionicons name={icon} size={IconGrammar.metadata} color={colors.textPrimary} />
       <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>
         {label}
       </Text>

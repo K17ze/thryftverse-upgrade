@@ -66,7 +66,7 @@ export function SellerInfoCard({
   const stats: StatCell[] = [];
   if (seller.rating != null) {
     stats.push({
-      value: `${seller.rating.toFixed(1)}★${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
+      value: `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
     });
   }
   if (seller.completedSales != null) {

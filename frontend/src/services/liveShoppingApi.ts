@@ -312,6 +312,9 @@ function makeChatMessage(
 export async function fetchLiveSessions(
   opts: { cursor?: string | null; category?: string } = {},
 ): Promise<LiveSessionSummary> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(420); // simulate network latency for honest loading states
 
   let sessions = [...MOCK_SESSIONS];
@@ -344,6 +347,9 @@ export async function fetchLiveSessions(
  * Fetch a single live session with full detail (including chat seed).
  */
 export async function fetchLiveSession(id: string): Promise<LiveSession | null> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(360);
   const session = MOCK_SESSIONS.find((s) => s.id === id) ?? null;
   return session;
@@ -353,6 +359,9 @@ export async function fetchLiveSession(id: string): Promise<LiveSession | null> 
  * Fetch the initial chat messages for a session.
  */
 export async function fetchLiveChatMessages(sessionId: string): Promise<LiveChatMessage[]> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(200);
   // Both params acknowledged — sessionId selects the room in a real backend.
   void sessionId;
@@ -375,6 +384,9 @@ export function nextMockChatMessage(): LiveChatMessage | null {
  * In production this would negotiate an RTMP/WebRTC viewer token.
  */
 export async function joinLiveSession(id: string): Promise<LiveJoinToken> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(180);
   return {
     sessionId: id,
@@ -388,6 +400,9 @@ export async function joinLiveSession(id: string): Promise<LiveJoinToken> {
  * Mock: resolves immediately.
  */
 export async function leaveLiveSession(id: string): Promise<void> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   void id;
   await delay(80);
 }
@@ -400,6 +415,9 @@ export async function placeLiveBid(
   sessionId: string,
   amount: number,
 ): Promise<{ success: boolean; currentBid: number; bidCount: number; isHighBidder: boolean }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production — bids cannot be placed');
+  }
   await delay(520);
   const session = MOCK_SESSIONS.find((s) => s.id === sessionId);
   if (!session) {
@@ -741,6 +759,9 @@ const STREAM_CHAT_SEED: Omit<LiveStreamChatMessage, 'id' | 'timestamp'>[] = [
  * Fetch the initial seed chat messages for a stream (pre-realtime history).
  */
 export async function fetchStreamChatHistory(streamId: string): Promise<LiveStreamChatMessage[]> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(200);
   void streamId;
   return STREAM_CHAT_SEED.map((base) => makeStreamChatMessage(base));
@@ -750,6 +771,9 @@ export async function fetchStreamChatHistory(streamId: string): Promise<LiveStre
  * Fetch a full LiveStream object by ID (with lots and real-time state).
  */
 export async function fetchLiveStream(streamId: string): Promise<LiveStream | null> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(300);
   const stream = MOCK_STREAMS[streamId];
   if (!stream) return null;
@@ -770,6 +794,9 @@ export async function fetchLiveStream(streamId: string): Promise<LiveStream | nu
  * Returns the LiveStream snapshot at connection time.
  */
 export async function connectToStream(streamId: string): Promise<LiveStream | null> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(150);
   const stream = MOCK_STREAMS[streamId];
   if (!stream) return null;
@@ -943,6 +970,9 @@ export async function placeStreamBid(
   lotId: string,
   amount: number,
 ): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production — bids cannot be placed');
+  }
   await delay(400);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -993,6 +1023,9 @@ export async function sendStreamChatMessage(
   streamId: string,
   message: string,
 ): Promise<{ success: boolean; message: LiveStreamChatMessage | null }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(100);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1017,6 +1050,9 @@ export async function buyNowDuringStream(
   streamId: string,
   lotId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production — purchases cannot be made');
+  }
   await delay(350);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1071,6 +1107,9 @@ export async function buyNowDuringStream(
  * Like a live stream. Returns the new total like count.
  */
 export async function likeStream(streamId: string): Promise<{ success: boolean; totalLikes: number }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(80);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1089,6 +1128,9 @@ export async function likeStream(streamId: string): Promise<{ success: boolean; 
 export async function advanceToNextLot(
   streamId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(200);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1149,6 +1191,9 @@ export async function skipCurrentLot(
 export async function endCurrentLot(
   streamId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(200);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1188,6 +1233,9 @@ export async function endCurrentLot(
 export async function endLiveStream(
   streamId: string,
 ): Promise<{ success: boolean; summary: StreamEndEventPayload | null }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(300);
   const conn = connections.get(streamId);
   if (!conn) {
@@ -1224,6 +1272,9 @@ export async function createLiveStream(params: {
   lotListingIds: string[];
   scheduledStartAt?: string;
 }): Promise<{ success: boolean; stream: LiveStream | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    throw new Error('Live Shopping API not configured for production');
+  }
   await delay(500);
   if (!params.title.trim()) {
     return { success: false, stream: null, error: 'Title is required' };

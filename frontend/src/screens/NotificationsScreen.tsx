@@ -882,15 +882,24 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title, unreadCount, isAttention } }) => (
+        renderSectionHeader={({ section: { title, unreadCount, isAttention, data } }) => (
           <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
             {isAttention ? (
-              <Ionicons name="alert-circle" size={14} color={colors.danger} style={styles.sectionAttentionIcon} />
+              <View style={styles.sectionAttentionLeading}>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.sectionTitle, styles.sectionTitleAttention]}>{title}</Text>
+              </View>
+            ) : (
+              <Text style={styles.sectionTitle}>{title}</Text>
+            )}
+            {isAttention && data.length > 0 ? (
+              <Text style={styles.sectionAttentionHint}>
+                {data.length} {data.length === 1 ? 'item' : 'items'} need{data.length === 1 ? 's' : ''} your response
+              </Text>
             ) : null}
-            <Text style={[styles.sectionTitle, isAttention && styles.sectionTitleAttention]}>{title}</Text>
             {unreadCount > 0 ? (
               <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
-                <Text style={styles.sectionCountText}>{unreadCount}</Text>
+                <Text style={[styles.sectionCountText, isAttention && styles.sectionCountTextAttention]}>{unreadCount}</Text>
               </View>
             ) : null}
           </View>
@@ -937,10 +946,18 @@ export default function NotificationsScreen() {
           ) : (
             <EmptyState
               density="compact"
-              icon="checkmark-done-outline"
+              graphic={
+                <View style={styles.caughtUpGraphic}>
+                  <View style={styles.caughtUpRing} />
+                  <Ionicons name="checkmark" size={30} color={colors.brand} style={styles.caughtUpCheck} />
+                </View>
+              }
               title="You're all caught up"
-              subtitle="We'll let you know when there's something new."
-              iconColor={colors.textMuted}
+              subtitle="Nothing needs your attention right now."
+              hint="Explore new arrivals while you're here."
+              ctaLabel="Discover listings"
+              onCtaPress={() => navigation.navigate('MainTabs')}
+              iconColor={colors.brand}
             />
           )
         }
@@ -1166,37 +1183,81 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.sm,
   },
   sectionHeaderRowAttention: {
-    backgroundColor: `${colors.danger}0D`,
+    backgroundColor: colors.dangerSubtle,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    marginLeft: 0,
   },
-  sectionAttentionIcon: {
-    marginRight: -Space.xs / 2,
+  sectionAttentionLeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  sectionAttentionHint: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginLeft: Space.xs,
   },
   sectionTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
+    textTransform: 'uppercase',
   },
   sectionTitleAttention: {
     color: colors.danger,
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
+    textTransform: 'none',
+    fontFamily: Typography.family.bold,
   },
   sectionCountBadge: {
     minWidth: Space.md + 4,
     height: Space.md + 4,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    backgroundColor: colors.brand,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionCountBadgeAttention: {
     backgroundColor: colors.danger,
+    borderColor: 'transparent',
   },
   sectionCountText: {
     fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.bold,
-    color: colors.background,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  sectionCountTextAttention: {
+    color: colors.textInverse,
+  },
+
+  // Crafted "all caught up" graphic — a ring with a checkmark, authored
+  // rather than a generic outline icon in a grey circle.
+  caughtUpGraphic: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.sm,
+  },
+  caughtUpRing: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+    opacity: 0.5,
+  },
+  caughtUpCheck: {
+    marginTop: 2,
   },
 
   notificationSkeletonList: {

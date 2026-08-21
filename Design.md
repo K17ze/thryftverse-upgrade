@@ -1063,6 +1063,36 @@ Results may group:
 - Use masonry/natural aspect ratios and visual re-rooting.
 - Track zero-result recovery and result relevance.
 
+## Focused Text Search Architecture
+
+Focused search is a transient intent surface, not a miniature discovery dashboard. The field, keyboard and ranked intents own the hierarchy.
+
+### Focused-empty state
+
+- Show account-scoped recent searches as flat 44pt-or-larger rows; never expose one account's history to another account on the same device.
+- Put Clear history in the section header or as a flat 44pt row. It must remain reachable without becoming a filled button.
+- Saved searches may follow as flat rows when they exist.
+- Category shortcuts are restrained utility rows. Do not use a wall of equal rounded cards or nested icon circles.
+- Hydration uses row-shaped skeletons so the surface does not flash an incorrect empty prompt.
+
+### Typing state
+
+- At two characters, replace discovery modules with a single flat suggestion list directly below the field.
+- First row: the broad, truthful action `Search for “query”`.
+- Follow with at most five production-ranked suggestions. Identify entity type only when it disambiguates (Brand, Category, Item, Search).
+- Clear stale rows immediately when the query changes; debounce and ignore out-of-order responses.
+- Loading skeletons match the 52–58pt final row geometry.
+- Autocomplete failure never blocks keyboard Search. If on-device matches are shown, label that fallback honestly.
+- Suggestions are not a floating shadowed card. The search field is the only persistent contained surface in focused mode.
+
+### Results transition
+
+- Submitting text or choosing a text suggestion collapses focused entry into results on the same screen; do not change the search owner during the gesture.
+- Query, category intent, sort and filters retain one backend source of truth across deep links and navigation.
+- A category suggestion uses structural category navigation, not a free-text approximation.
+- People search begins only when People scope is selected.
+- Loading, populated, empty, offline/error and retry are distinct states; retry reruns the failed search request, not an unrelated feed refresh.
+
 ## Iconography & Optical Alignment
 
 - Use Ionicons/project mappings; never mix icon families casually.
@@ -1252,6 +1282,9 @@ Do not substitute ADB poking for design implementation.
 - Explore defaults to visual discovery; search becomes a committed mode.
 - Search bar includes visual-search camera action only when the route works.
 - Discovery uses true aspect ratios, low chrome and adaptive modules.
+- Masonry means shortest-column placement, not merely `numColumns={2}`. FlashList discovery feeds with variable media geometry must enable masonry mode.
+- Media geometry belongs to the exact cover asset being rendered. APIs, serializers and fixtures preserve that asset's width and height; clients do not fabricate variety from IDs or alternating constants.
+- Seed and fixture media use reachable URLs and truthful intrinsic geometry. A uniform 3:4 seed set is a data-quality defect because it makes a correct masonry renderer look like a prototype grid.
 - Boards/collections are identity/discovery objects, not private folders only.
 - "More like this" re-roots browsing rather than dead-ending.
 - The feed defines Visually Complete and avoids layout shift.
@@ -1281,16 +1314,38 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 - The canvas fills the entire screen. Media is the background layer. There is no padding, no card, no reserved space around the canvas.
 - All chrome floats on top of the media with gradient scrims or `LiquidGlassBackdrop`. The top bar is transparent with a dark gradient scrim (0.55 → 0). The bottom tool rail is a floating glass dock.
 - Entry is camera-first. The user opens the camera immediately, captures or selects from gallery, and the media becomes the canvas instantly. There is no "upload" step, no "start blank" button, no intermediate screen.
+- Camera permission is requested only after a user action. The initial surface explains the value and offers a distinct Settings recovery action after permanent denial; opening the camera must not trigger broad media-library permission merely to populate a recent thumbnail.
+- The shutter is disabled until the native camera emits readiness. Capture output is pinned in the viewfinder and transitions into the exact destination geometry of the editor over 220–240ms; reduced motion completes immediately. The transition never fades an empty layer.
+- One-shot capture is the default. Multi Snap is an explicit mode, and its count is announced once in the Done action rather than duplicated in decorative badges.
+- Native video capture controls remain absent until audio permission, recording lifecycle, interruption, duration, foreground/background and recovery contracts are all implemented. Gallery video import remains available when its upload pipeline is valid.
 - A small "Aa" text-mode button in the top-right of the camera view is the only path to a blank text poster (Instagram "Create" pattern). It is never a large "Blank canvas" button.
 - After capture/selection, the user is in edit mode immediately. There is no separate "preview" step before editing. The canvas IS the preview.
 - Multi-frame posters use floating page dots (Liquid Glass pill) below the top bar, not a frame strip at the bottom.
 
 **Tool layout (Instagram Stories pattern):**
 
-- Top bar (floating, transparent + scrim): Back · spacer · Preview · Publish. Minimal. Undo/Redo/Settings live in the overflow menu.
-- Bottom rail (floating glass dock): Primary tools (Text, Stickers, Draw, Music) are larger with labels. Secondary tools (Mention, Item, Look, Vote, Quiz, Question, Location, Hashtag, Link, Countdown, GIF) are icon-only. A divider separates primary from secondary.
-- Contextual tools (font selector, color picker, animation picker) appear as horizontal pill scrolls above the bottom rail only when a relevant layer is selected.
+- Top bar (floating, transparent + scrim): Close, truthful history controls and the forward action. Standard navigation glyphs remain transparent 48pt targets; only the forward action receives persistent containment.
+- `ContextToolRail` is the canonical Poster rail. It shows at most four context-relevant actions plus More, with 48pt targets and one 20–24pt optical icon band.
+- Text selection owns one control surface. Do not duplicate Font, Color, Align or More in simultaneous top and bottom toolbars.
+- More opens a grouped, safe-area-aware, vertically scrollable sheet. Keep only five or six 48dp rows visible at once; every advanced action remains reachable on a 360×640 viewport.
+- Selected modes use shape plus accent and expose `accessibilityState.selected`; selection never changes the glyph family's stroke weight.
 - Drawing mode retracts UI to the edges and makes the entire canvas drawable.
+
+**Publication truth:**
+
+- A presigned PUT is transport progress, not publication success. Every uploaded media layer carries its upload-finalization ID and authoritative media-asset ID into the versioned creator document.
+- Publish waits for finalization and processing, uses the backend canonical URL, and binds the receipt to the Poster in the same database transaction that creates the story and frames.
+- The stable creator-document ID is the publication idempotency key. Retrying an identical payload after a lost response returns the existing result; reusing the key with different content fails closed.
+- The complete versioned composition document is stored with the Poster story and is the WYSIWYG viewer source. Narrow frame/sticker rows support indexing and interaction but must not replace authored layer geometry.
+- Scheduled publishing is not shown until scheduling and publication are one atomic backend operation. A legacy draft containing schedule metadata is blocked with a clear action to remove it.
+- Temporary `file:`, content-provider and cache URIs never enter a published document. Process death requeues interrupted jobs; a completed PUT with an interrupted finalization reconciles the same object key instead of creating duplicates.
+
+### Looks Composer
+
+- Looks uses the same camera-to-editor continuity, authoritative upload receipts and versioned composition contract as Poster.
+- The published composition, not only its primary cover URL, owns collage geometry, crop, stacking, text, product tags and playback.
+- Edit and Remix are distinct operations: Edit retains the owned document ID; Remix creates a new document with source attribution and never PATCHes the source.
+- Audience labels map only to implemented backend privacy projections. Unsupported close-friends or scheduled-publication controls stay absent rather than silently widening access.
 
 **Visual quality:**
 
@@ -1299,7 +1354,7 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 - All chrome icons are white on the dark scrim, never `colors.textPrimary`.
 - The Publish button is a premium pill (`Radius.full`, brand color, white text).
 - Page dots use Liquid Glass with a gradient active dot.
-- The tool dock uses `LiquidGlassBackdrop` (intensity 50–60) with a hairline border and subtle shadow.
+- The rail may use one restrained media-contrast backdrop. Individual tools stay flat and transparent unless selected; no rings or filled circles on every action.
 
 **Entry point (HomeScreen):**
 
@@ -1310,7 +1365,8 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 
 **Legacy prohibition:**
 
-- The legacy `CreatePosterScreen` / `PosterFrameComposer` / `PosterFrameCanvas` (small 360px canvas, tools below, form-like layout) must not be used. The `CreatePoster` route redirects to `CreatorStudio` which uses the correct `CreatorStudioShell` + `CreatorCanvas` + `CreatorToolDock` + `CreatorEntryScreen` architecture.
+- The legacy `CreatePosterScreen` / `PosterFrameComposer` / `PosterFrameCanvas` (small 360px canvas, tools below, form-like layout) must not be used. The `CreatePoster` route redirects to `CreatorStudio`, whose Poster path uses `PosterComposerScreen` + `CreatorCanvas` + `ContextToolRail` + `CreatorEntryScreen`.
+- `CreatorToolDock` is not Poster's canonical chrome. Changes to it are not visible Poster work unless the navigator/import path changes explicitly.
 - Never restore the small-canvas, separate-toolbar, form-based composer pattern. It is architecturally incompatible with flagship Stories quality.
 
 ### Messaging

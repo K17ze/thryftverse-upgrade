@@ -81,7 +81,7 @@ export const SELLER_BADGES: Record<SellerBadgeType, SellerBadgeInfo> = {
   fastShipper: {
     type: 'fastShipper',
     label: 'Fast Shipper',
-    icon: 'rocket-outline',
+    icon: 'flash-outline',
     description: 'Dispatches within 1 day',
   },
   responsive: {

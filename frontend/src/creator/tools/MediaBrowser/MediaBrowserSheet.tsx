@@ -59,6 +59,7 @@ import {
   Control,
   FontFamily,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -270,7 +271,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={10} color="#fff" />
+            <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {formatDuration(asset.durationMs)}
@@ -346,7 +347,7 @@ function PermissionDeniedState({
 
   return (
     <Reanimated.View style={[styles.centerState, entranceStyle]}>
-      <StaticStateIcon name={icon} size={40} color={colors.textMuted} />
+      <StaticStateIcon name={icon} size={IconGrammar.hero} color={colors.textMuted} />
       <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{title}</Text>
       <Text style={[styles.stateMessage, { color: colors.textSecondary }]}>{message}</Text>
       <PressScale
@@ -378,7 +379,7 @@ function CameraTile({ onPress, colors, styles }: CameraTileProps) {
       accessibilityHint="Opens the camera to capture a new photo"
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
     >
-      <Ionicons name="camera-outline" size={32} color={colors.brand} />
+      <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.brand} />
     </PressScale>
   );
 }
@@ -405,7 +406,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
           />
           {asset.mediaType === 'video' && asset.durationMs != null && (
             <View style={previewStyles.durationBadge}>
-              <Ionicons name="play" size={14} color="#fff" />
+              <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
               <Text style={previewStyles.durationText}>
                 {formatDuration(asset.durationMs)}
               </Text>
@@ -413,7 +414,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
           )}
         </View>
         <Pressable style={previewStyles.closeBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
-          <Ionicons name="close" size={24} color="#fff" />
+          <Ionicons name="close" size={IconGrammar.hero} color="#fff" />
         </Pressable>
       </Pressable>
     </Modal>
@@ -510,7 +511,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
             recyclingKey={album.id}
           />
         ) : (
-          <Ionicons name="images-outline" size={20} color={colors.textMuted} />
+          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.textMuted} />
         )}
       </View>
       <View style={styles.albumRowTextCol}>
@@ -527,7 +528,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
           {album.assetCount} items
         </Text>
       </View>
-      {isActive && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+      {isActive && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
     </Pressable>
   );
 }
@@ -552,7 +553,7 @@ function AlbumListView({
   if (albums.length === 0) {
     return (
       <View style={styles.centerState}>
-        <StaticStateIcon name="folder-open-outline" size={40} color={colors.textMuted} />
+        <StaticStateIcon name="folder-open-outline" size={IconGrammar.hero} color={colors.textMuted} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No albums found
         </Text>
@@ -570,7 +571,7 @@ function AlbumListView({
         accessibilityState={{ selected: activeAlbumId === null }}
       >
         <View style={[styles.albumThumb, { backgroundColor: colors.brandSubtle }]}>
-          <Ionicons name="images-outline" size={20} color={colors.brand} />
+          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.brand} />
         </View>
         <View style={styles.albumRowTextCol}>
           <Text
@@ -585,7 +586,7 @@ function AlbumListView({
             Everything in your library
           </Text>
         </View>
-        {activeAlbumId === null && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+        {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
       </Pressable>
       {albums.slice(0, 30).map((album) => (
         <AlbumRow
@@ -848,22 +849,6 @@ export function MediaBrowserSheet({
   }, []);
 
   const selectedCount = selectedIds.length;
-  const maxLabel = maxSelections != null ? ` of ${maxSelections}` : '';
-
-  // ── Selection count badge with spring scale ──
-  const countBadgeScaleSV = useSharedValue(0);
-  useEffect(() => {
-    if (selectedCount > 0) {
-      countBadgeScaleSV.value = reduceMotion ? 1 : withSpring(1, spring.success);
-    } else {
-      countBadgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
-    }
-  }, [selectedCount, reduceMotion, spring, countBadgeScaleSV]);
-
-  const countBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: countBadgeScaleSV.value }],
-    opacity: countBadgeScaleSV.value,
-  }));
 
   // ── Tab indicator animated style ──
   const tabIndicatorStyle = useAnimatedStyle(() => ({
@@ -916,7 +901,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
         <View style={styles.centerState}>
@@ -937,7 +922,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
         <PermissionDeniedState
@@ -964,7 +949,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
         <PermissionDeniedState
@@ -988,31 +973,22 @@ export function MediaBrowserSheet({
         onClose={selectedCount > 0 ? () => setSelectedIds([]) : onClose}
         maxHeight={0.95}
       >
-        {/* Top bar: title, selection count, close */}
+        {/* Top bar: title + close. The selection count is shown in exactly
+            one place — the confirm button ("Next (N)") — to avoid the
+            label-everything AI-tell of restating the count in the title, a
+            badge, and the button (AGENTS.md §4). The title stays as the
+            static sheet title regardless of selection state. */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            {selectedCount > 0 ? `${selectedCount}${maxLabel} selected` : title}
-          </Text>
-          <View style={styles.headerRight}>
-            {selectedCount > 0 && (
-              <Reanimated.View style={countBadgeStyle}>
-                <View style={[styles.countBadge, { backgroundColor: colors.brand }]}>
-                  <Text style={[styles.countBadgeText, { color: colors.textInverse }]}>
-                    {selectedCount}
-                  </Text>
-                </View>
-              </Reanimated.View>
-            )}
-            <PressScale
-              onPress={onClose}
-              style={styles.closeBtn}
-              accessibilityLabel="Close"
-              accessibilityHint="Closes the media browser"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </PressScale>
-          </View>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          <PressScale
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityLabel="Close"
+            accessibilityHint="Closes the media browser"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         {/* Tab bar: Recents | Albums | Photos | Videos */}
@@ -1069,7 +1045,7 @@ export function MediaBrowserSheet({
           <MediaGridSkeleton />
         ) : filteredAssets.length === 0 ? (
           <View style={styles.centerState}>
-            <StaticStateIcon name="images-outline" size={40} color={colors.textMuted} />
+            <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               {activeTab === 'videos'
                 ? 'No videos available'
@@ -1107,11 +1083,11 @@ export function MediaBrowserSheet({
                 accessibilityLabel="Limited photo access — tap to select more photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
+                <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
                   Limited access — tap to add more photos
                 </Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={IconGrammar.badge} color={colors.textMuted} />
               </Pressable>
             )}
 
@@ -1148,8 +1124,8 @@ export function MediaBrowserSheet({
             ]}
             accessibilityLabel={
               selectedCount > 0
-                ? `Add ${selectedCount} selected ${selectedCount === 1 ? 'item' : 'items'}`
-                : 'Add button — select items first'
+                ? `Next, ${selectedCount} selected`
+                : 'Next button — select items first'
             }
             accessibilityRole="button"
             accessibilityState={{ disabled: selectedCount === 0 }}
@@ -1162,11 +1138,11 @@ export function MediaBrowserSheet({
                 },
               ]}
             >
-              {selectedCount > 0 ? `Add ${selectedCount}` : 'Add'}
+              {selectedCount > 0 ? `Next (${selectedCount})` : 'Next'}
             </Text>
             <Ionicons
               name="chevron-forward"
-              size={18}
+              size={IconGrammar.metadata}
               color={selectedCount > 0 ? colors.textInverse : colors.textMuted}
             />
           </PressScale>
@@ -1203,23 +1179,6 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.sm,
-    },
-    headerRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    countBadge: {
-      minWidth: 24,
-      height: 24,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.xs,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    countBadgeText: {
-      fontFamily: Typography.family.bold,
-      fontSize: Type.caption.size,
     },
 
     // ── Tab bar ──

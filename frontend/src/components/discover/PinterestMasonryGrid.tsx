@@ -73,6 +73,15 @@ interface Props {
    * production `DiscoveryListingSummary` carried by the `ListingFeedUnit`.
    */
   onItemPress?: (listing: DiscoveryListingSummary) => void;
+  /**
+   * Save-toggle callback for listing tiles. When provided, each listing tile
+   * renders a bookmark button over the media (Pinterest/Depop quick-save
+   * pattern). The parent owns the saved state and passes it back via
+   * `isItemSaved`.
+   */
+  onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  /** Returns whether a listing is currently saved. Drives the bookmark glyph. */
+  isItemSaved?: (listingId: string) => boolean;
   /** Kept for interface compatibility; the discovery tile has no seller row. */
   onPressSeller?: (item: Listing) => void;
   onMessageSeller?: (item: Listing) => void;
@@ -153,6 +162,8 @@ export function PinterestMasonryGrid({
   items,
   onPressItem,
   onItemPress,
+  onItemSaveToggle,
+  isItemSaved,
   onEndReached,
   isLoading = false,
   isLoadingMore = false,
@@ -227,6 +238,8 @@ export function PinterestMasonryGrid({
           colWidth,
           testIDPrefix,
           onListingPress: handleUnitPress,
+          onListingSaveToggle: onItemSaveToggle,
+          isListingSaved: isItemSaved,
         });
       }
       // Legacy listing path — unchanged single-column tile.
@@ -242,7 +255,7 @@ export function PinterestMasonryGrid({
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns],
+    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -348,6 +361,8 @@ interface UnitRenderContext {
   colWidth: number;
   testIDPrefix?: string;
   onListingPress: (listing: DiscoveryListingSummary) => void;
+  onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  isListingSaved?: (listingId: string) => boolean;
 }
 
 function renderUnit(
@@ -375,6 +390,8 @@ function renderUnit(
             // column units request the column width.
             downscaleWidth={isHero ? ctx.colWidth * ctx.numColumns + ctx.gap : ctx.colWidth}
             testID={ctx.testIDPrefix && index === 0 ? `${ctx.testIDPrefix}-first` : undefined}
+            isSaved={ctx.isListingSaved?.(u.listing.id)}
+            onSaveToggle={ctx.onListingSaveToggle ? () => ctx.onListingSaveToggle!(u.listing) : undefined}
           />
         </View>
       );

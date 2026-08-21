@@ -20,6 +20,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -184,7 +185,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           />
         ) : (
           <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.standard} color={colors.textMuted} />
           </View>
         )}
         <Text
@@ -420,7 +421,7 @@ export function LookSourceTray({
   const isEmpty = currentItems.length === 0 && !isSearching;
 
   const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'foryou', label: 'Discover', icon: 'sparkles-outline' },
+    { key: 'foryou', label: 'Discover', icon: 'compass-outline' },
     { key: 'closet', label: 'Closet', icon: 'heart-outline' },
     { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
     { key: 'search', label: 'Search', icon: 'search-outline' },
@@ -490,12 +491,12 @@ export function LookSourceTray({
           accessibilityHint="Toggles the source tray visibility"
           accessibilityRole="button"
         >
-          <Ionicons name="bag-outline" size={20} color={colors.textSecondary} />
+          <Ionicons name="bag-outline" size={IconGrammar.standard} color={colors.textSecondary} />
           <Text style={[styles.peekLabel, { color: colors.textPrimary }]}>
             Items
           </Text>
           <Reanimated.View style={chevronAnimStyle}>
-            <Ionicons name="chevron-up" size={20} color={colors.textSecondary} />
+            <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
           </Reanimated.View>
         </Pressable>
 
@@ -524,7 +525,7 @@ export function LookSourceTray({
                 >
                   <Ionicons
                     name={tab.icon}
-                    size={16}
+                    size={IconGrammar.metadata}
                     color={isActive ? colors.brand : colors.textSecondary}
                   />
                   <Text
@@ -547,7 +548,7 @@ export function LookSourceTray({
           {/* Search input (only on search tab) */}
           {activeTab === 'search' && (
             <View style={[styles.searchRow, { borderBottomColor: colors.border }]}>
-              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+              <Ionicons name="search-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <TextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
                 placeholder="Search products..."
@@ -565,7 +566,7 @@ export function LookSourceTray({
                   accessibilityLabel="Clear search"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  <Ionicons name="close-circle" size={IconGrammar.metadata} color={colors.textMuted} />
                 </Pressable>
               )}
             </View>
@@ -631,7 +632,7 @@ export function LookSourceTray({
           />
         ) : (
           <View style={[styles.previewImage, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
         <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={1}>

@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -404,7 +405,7 @@ export function CreatorCutoutSheet({
             accessibilityLabel="Close manual crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -492,7 +493,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="cut-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={tool === 'scissors' ? colors.brand : colors.textSecondary}
             />
             <Text style={[styles.toolSelectorLabel, { color: tool === 'scissors' ? colors.brand : colors.textSecondary }]}>
@@ -518,7 +519,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="brush-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={tool === 'eraser' ? colors.brand : colors.textSecondary}
             />
             <Text style={[styles.toolSelectorLabel, { color: tool === 'eraser' ? colors.brand : colors.textSecondary }]}>
@@ -543,7 +544,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="eye-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textPrimary)}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textSecondary) }]}>
@@ -560,7 +561,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="arrow-undo-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : colors.textPrimary}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : colors.textSecondary }]}>
@@ -576,7 +577,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="trash-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : colors.textPrimary}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : colors.textSecondary }]}>

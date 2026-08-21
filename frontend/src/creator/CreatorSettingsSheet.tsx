@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
@@ -71,7 +72,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings">
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -128,7 +129,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             <>
               <Text style={styles.sectionLabel}>Remix Attribution</Text>
               <View style={styles.attributionBox}>
-                <Ionicons name="git-branch-outline" size={16} color={colors.textSecondary} />
+                <Ionicons name="git-branch-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <View style={styles.attributionContent}>
                   <Text style={styles.attributionText}>
                     Remixed from another {document.type}
@@ -266,7 +267,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                     )}
                     {isActive && (
                       <View style={styles.bgCheckOverlay}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.surface} />
+                        <Ionicons name="checkmark-circle" size={IconGrammar.standard} color={colors.surface} />
                       </View>
                     )}
                   </View>
@@ -325,7 +326,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               accessibilityLabel="Save draft manually"
               accessibilityRole="button"
             >
-              <Ionicons name="save-outline" size={16} color={colors.surface} />
+              <Ionicons name="save-outline" size={IconGrammar.metadata} color={colors.surface} />
               <Text style={styles.saveBtnText}>Save Draft</Text>
             </Pressable>
           </View>

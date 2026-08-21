@@ -447,7 +447,7 @@ export default function FilterScreen() {
               accessibilityLabel="Open category tree"
               accessibilityHint="Shows the full category tree for this filter context"
             >
-              <Ionicons name="funnel-outline" size={14} color={colors.textPrimary} />
+              <Ionicons name="funnel-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
               <Text style={styles.contextText} numberOfLines={1}>
                 {title ?? categoryId}
               </Text>
@@ -490,7 +490,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Save preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="checkmark" size={18} color={colors.surface} />
+                    <Ionicons name="checkmark" size={18} color={colors.surface} aria-hidden={true} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.presetCancelBtn}
@@ -498,7 +498,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Cancel saving preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                    <Ionicons name="close" size={18} color={colors.textMuted} aria-hidden={true} />
                   </AnimatedPressable>
                 </View>
               ) : (
@@ -511,7 +511,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Apply filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="bookmark" size={12} color={colors.brand} />
+                        <Ionicons name="bookmark" size={12} color={colors.brand} aria-hidden={true} />
                         <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
                       </AnimatedPressable>
                       <AnimatedPressable
@@ -520,7 +520,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Remove filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                        <Ionicons name="close-circle" size={16} color={colors.textMuted} aria-hidden={true} />
                       </AnimatedPressable>
                     </View>
                   ))}
@@ -537,7 +537,7 @@ export default function FilterScreen() {
               accessibilityLabel="Save current filters as a preset"
               accessibilityRole="button"
             >
-              <Ionicons name="bookmark-outline" size={14} color={colors.brand} />
+              <Ionicons name="bookmark-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
             </AnimatedPressable>
           )}
@@ -567,7 +567,7 @@ export default function FilterScreen() {
                   accessibilityState={{ expanded: expandedSections.has('sort') }}
                 >
                   <Text style={styles.sectionHeading}>Sort By</Text>
-                  <Ionicons name={expandedSections.has('sort') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('sort') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('sort') && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
@@ -601,7 +601,7 @@ export default function FilterScreen() {
                       </View>
                     )}
                   </View>
-                  <Ionicons name={expandedSections.has('brand') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('brand') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('brand') && (
                   <>
@@ -660,7 +660,7 @@ export default function FilterScreen() {
                       </View>
                     )}
                   </View>
-                  <Ionicons name={expandedSections.has('size') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('size') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('size') && (
                   <>
@@ -710,7 +710,7 @@ export default function FilterScreen() {
                             >
                               <AppButton
                                 title={s}
-                                icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
+                                icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
                                 iconContainerStyle={styles.chipIconWrap}
                                 variant="secondary"
                                 size="sm"
@@ -732,7 +732,7 @@ export default function FilterScreen() {
                       <View style={styles.saveSizesRow}>
                         <AppButton
                           title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-                          icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={colors.brand} /> : undefined}
+                          icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={16} color={colors.brand} aria-hidden={true} /> : undefined}
                           iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
@@ -769,7 +769,7 @@ export default function FilterScreen() {
                       </View>
                     )}
                   </View>
-                  <Ionicons name={expandedSections.has('condition') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('condition') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('condition') && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
@@ -796,7 +796,7 @@ export default function FilterScreen() {
                   accessibilityState={{ expanded: expandedSections.has('sustainability') }}
                 >
                   <Text style={styles.sectionHeading}>Sustainability</Text>
-                  <Ionicons name={expandedSections.has('sustainability') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('sustainability') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('sustainability') && (
                   <Pressable
@@ -814,6 +814,7 @@ export default function FilterScreen() {
                         name="leaf"
                         size={16}
                         color={sustainableOnly ? colors.success : colors.textSecondary}
+                        aria-hidden={true}
                       />
                       <View style={styles.sustainableTextWrap}>
                         <Text style={[styles.sustainableTitle, { color: colors.textPrimary }]}>
@@ -866,7 +867,7 @@ export default function FilterScreen() {
                       </View>
                     )}
                   </View>
-                  <Ionicons name={expandedSections.has('price') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+                  <Ionicons name={expandedSections.has('price') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
                 {expandedSections.has('price') && (
                   <View style={styles.priceRangeRow}>

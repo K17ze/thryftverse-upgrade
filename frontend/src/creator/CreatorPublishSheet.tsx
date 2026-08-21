@@ -23,7 +23,7 @@ import Reanimated, {
   useReducedMotion,
   Easing,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Elevation, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
@@ -158,7 +158,13 @@ function scanDocumentForLocalUris(doc: CreatorDocument): LocalMediaRef[] {
   return refs;
 }
 
-function replaceUriInDoc(doc: CreatorDocument, layerId: string, field: string, newUri: string): CreatorDocument {
+function replaceUriInDoc(
+  doc: CreatorDocument,
+  layerId: string,
+  field: string,
+  newUri: string,
+  receipt?: Pick<UploadJob, 'finalizationId' | 'mediaAssetId'>,
+): CreatorDocument {
   return {
     ...doc,
     pages: doc.pages.map((page) => ({
@@ -166,13 +172,38 @@ function replaceUriInDoc(doc: CreatorDocument, layerId: string, field: string, n
       layers: page.layers.map((layer): CreatorLayer => {
         if (layer.id !== layerId) return layer;
         if (layer.type === 'media' && (field === 'mediaUri' || field === 'thumbnailUri')) {
-          return { ...layer, payload: { ...layer.payload, [field]: newUri } };
+          const evidence = field === 'mediaUri'
+            ? {
+                mediaFinalizationId: receipt?.finalizationId,
+                mediaAssetId: receipt?.mediaAssetId,
+              }
+            : {
+                thumbnailFinalizationId: receipt?.finalizationId,
+                thumbnailMediaAssetId: receipt?.mediaAssetId,
+              };
+          return { ...layer, payload: { ...layer.payload, [field]: newUri, ...evidence } };
         }
         if (layer.type === 'product' && field === 'snapshotImageUrl') {
-          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+          return {
+            ...layer,
+            payload: {
+              ...layer.payload,
+              snapshotImageUrl: newUri,
+              snapshotMediaFinalizationId: receipt?.finalizationId,
+              snapshotMediaAssetId: receipt?.mediaAssetId,
+            },
+          };
         }
         if (layer.type === 'look' && field === 'snapshotImageUrl') {
-          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+          return {
+            ...layer,
+            payload: {
+              ...layer.payload,
+              snapshotImageUrl: newUri,
+              snapshotMediaFinalizationId: receipt?.finalizationId,
+              snapshotMediaAssetId: receipt?.mediaAssetId,
+            },
+          };
         }
         return layer;
       }),
@@ -345,7 +376,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
           const projectId = document.id;
 
           for (const ref of localRefs) {
-            const assetId = `${ref.layerId}_${ref.field}`;
+            const assetId = `${ref.layerId}::${ref.field}`;
             // Detect the correct MIME type from the file extension +
             // asset-type hint. Never image/* for video.
             const mimeType = detectMimeType(ref.currentUri, ref.assetType);
@@ -377,10 +408,16 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
           for (const job of finalJobs) {
             if (job.status === 'completed' && job.remoteUrl) {
               // Parse layerId and field from assetId
-              const sepIdx = job.assetId.lastIndexOf('_');
+              const sepIdx = job.assetId.lastIndexOf('::');
               const layerId = job.assetId.substring(0, sepIdx);
-              const field = job.assetId.substring(sepIdx + 1);
-              workingDoc = replaceUriInDoc(workingDoc, layerId, field, job.remoteUrl);
+              const field = job.assetId.substring(sepIdx + 2);
+              workingDoc = replaceUriInDoc(
+                workingDoc,
+                layerId,
+                field,
+                job.remoteUrl,
+                job,
+              );
             }
           }
 
@@ -494,8 +531,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     setScheduleError('');
     progressWidth.value = 0;
     publishGuardRef.current.reset();
-    // Re-trigger publish
-    setTimeout(() => handlePublish(), 50);
+    handlePublish();
   }, [haptic, progressWidth, handlePublish]);
 
   // Retry only the scheduling step after a schedule failure. The content is
@@ -534,7 +570,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         <View style={styles.header}>
           <Text style={styles.title}>Publish</Text>
           <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish" accessibilityHint="Closes the publish sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
         </View>
 
@@ -678,7 +714,7 @@ function SharingStateView({
           accessibilityRole="button"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
+          <Ionicons name="close-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
           <Text style={localStyles.cancelUploadText}>Cancel</Text>
         </Pressable>
       )}
@@ -705,28 +741,24 @@ function ErrorStateView({
   onRetry,
 }: ErrorStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
-  const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (reduceMotion) {
-      scale.value = 1;
       opacity.value = 1;
     } else {
-      scale.value = withSpring(1, Motion.spring.lift);
       opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
-  }, [reduceMotion, springCfg, scale, opacity]);
+  }, [reduceMotion, springCfg, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
       <View style={localStyles.errorCircle}>
-        <Ionicons name="warning" size={36} color={colors.danger} />
+        <Ionicons name="warning" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
       </View>
       <Text style={localStyles.centerStateTitle}>Publishing failed</Text>
       <Text style={localStyles.centerStateText}>{errorMessage}</Text>
@@ -738,7 +770,7 @@ function ErrorStateView({
         scale={0.95}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Ionicons name="refresh-outline" size={16} color={colors.textInverse} style={{ marginRight: 6 }} />
+        <Ionicons name="refresh-outline" size={IconGrammar.metadata} color={colors.textInverse} style={{ marginRight: 6 }} aria-hidden={true} />
         <Text style={localStyles.retryBtnText}>Retry</Text>
       </PressScale>
     </Reanimated.View>
@@ -772,28 +804,24 @@ function ScheduleFailedView({
   onView,
 }: ScheduleFailedViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
-  const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (reduceMotion) {
-      scale.value = 1;
       opacity.value = 1;
     } else {
-      scale.value = withSpring(1, Motion.spring.lift);
       opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
-  }, [reduceMotion, springCfg, scale, opacity]);
+  }, [reduceMotion, springCfg, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
       <View style={localStyles.errorCircle}>
-        <Ionicons name="time-outline" size={36} color={colors.danger} />
+        <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
       </View>
       <Text style={localStyles.centerStateTitle}>Scheduling failed</Text>
       <Text style={localStyles.centerStateText}>
@@ -878,7 +906,7 @@ function QuietSuccessView({
 
   return (
     <Reanimated.View style={[styles.centerState, contentStyle]}>
-      <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+      <Ionicons name="checkmark-circle" size={IconGrammar.hero} color={colors.success} aria-hidden={true} />
       <Text style={styles.successTitle}>Shared</Text>
       <Text style={styles.centerStateText}>
         {documentType === 'look' ? 'Your look is live' : 'Your story is live'}
@@ -929,7 +957,6 @@ function PublishReview({
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
   const coverThumbWidth = 100;
   const coverThumbHeight = 125;
-  const [saveToCameraRoll, setSaveToCameraRoll] = useState(true);
   const [coverPageIndex, setCoverPageIndex] = useState(0);
   const [captionError, setCaptionError] = useState('');
   const [captionBlurred, setCaptionBlurred] = useState(false);
@@ -937,18 +964,17 @@ function PublishReview({
   // ── Audience selector segmented control ─────────────────────────
   const audienceOptions = [
     { key: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
-    { key: 'closeFriends' as const, label: 'Close friends', icon: 'people-outline' as const },
+    ...(document.type === 'look' ? [{
+      key: 'closeFriends' as const,
+      label: 'Followers',
+      icon: 'people-outline' as const,
+    }] : []),
     { key: 'private' as const, label: 'Private', icon: 'lock-closed-outline' as const },
   ];
-  const audienceDescriptions: Record<string, string> = {
-    public: 'Visible to everyone on Thryftverse.',
-    closeFriends: 'Visible only to your approved close friends.',
-    private: 'Visible only to you. Not shared with anyone.',
-  };
   const activeAudienceIndex = audienceOptions.findIndex((o) => o.key === document.metadata.visibility);
 
   // Segmented control spring slide indicator
-  const segmentTranslateX = useSharedValue(activeAudienceIndex * 0);
+  const segmentTranslateX = useSharedValue(activeAudienceIndex);
   const segmentWidth = useSharedValue(0);
 
   useEffect(() => {
@@ -1021,8 +1047,13 @@ function PublishReview({
       return;
     }
     setCaptionError('');
+    // Inject the selected cover page index into the document metadata
+    // so the publish pipeline and backend can use it as the poster cover.
+    if (coverPageIndex > 0 && document.pages.length > 1) {
+      document.metadata.coverPageIndex = coverPageIndex;
+    }
     onPublish();
-  }, [document.type, document.metadata.caption, onPublish, haptic]);
+  }, [document.type, document.metadata.caption, onPublish, haptic, coverPageIndex, document.pages.length, document.metadata]);
 
   // ── Save as draft with navigation ───────────────────────────────
   const handleSaveDraft = useCallback(async () => {
@@ -1034,64 +1065,66 @@ function PublishReview({
     <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
       {/* Preview — all pages */}
       {document.pages.length > 1 && (
-        <Text style={styles.sectionLabel}>Preview ({document.pages.length} pages)</Text>
+        <Text style={styles.sectionLabel}>Preview</Text>
       )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.previewScroll}
-        contentContainerStyle={styles.previewContainer}
-      >
-        {document.pages.map((page) => (
-          <View key={page.id} style={styles.previewPageWrapper}>
-            <CreatorCanvas
-              document={document}
-              page={page}
-              canvasWidth={canvasWidth}
-              canvasHeight={canvasHeight}
-              mode="preview"
-            />
-          </View>
-        ))}
-      </ScrollView>
+      {document.pages.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.previewScroll}
+          contentContainerStyle={styles.previewContainer}
+        >
+          {document.pages.map((page) => (
+            <View key={page.id} style={styles.previewPageWrapper}>
+              <CreatorCanvas
+                document={document}
+                page={page}
+                canvasWidth={canvasWidth}
+                canvasHeight={canvasHeight}
+                mode="preview"
+              />
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Cover selection — for multi-page stories */}
       {document.pages.length > 1 && (
-        <>
-          <Text style={styles.sectionLabel}>Cover</Text>
-          <Text style={styles.coverHint}>Tap a page to set it as the cover</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coverScroll} contentContainerStyle={styles.coverContainer}>
-            {document.pages.map((page, i) => (
-              <Pressable
-                key={page.id}
-                onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
-                style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
-                accessibilityLabel={`Set page ${i + 1} as cover`}
-                accessibilityHint="Sets this page as the story cover"
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <CreatorCanvas
-                  document={document}
-                  page={page}
-                  canvasWidth={coverThumbWidth}
-                  canvasHeight={coverThumbHeight}
-                  mode="preview"
-                />
-                {coverPageIndex === i && (
-                  <View style={styles.coverBadge}>
-                    <Ionicons name="checkmark" size={12} color={colors.textInverse} />
-                  </View>
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coverScroll} contentContainerStyle={styles.coverContainer}>
+          {document.pages.map((page, i) => (
+            <Pressable
+              key={page.id}
+              onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
+              style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
+              accessibilityLabel={`Set page ${i + 1} as cover`}
+              accessibilityHint="Sets this page as the story cover"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <CreatorCanvas
+                document={document}
+                page={page}
+                canvasWidth={coverThumbWidth}
+                canvasHeight={coverThumbHeight}
+                mode="preview"
+              />
+              {coverPageIndex === i && (
+                <View style={styles.coverBadge}>
+                  <Ionicons name="checkmark" size={IconGrammar.badge} color={colors.textInverse} aria-hidden={true} />
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {document.pages.length > 1 && (
+        <View style={styles.sectionSeparator} />
       )}
 
       {/* Caption with inline validation */}
       <Text style={styles.sectionLabel}>Caption</Text>
-      <View style={[styles.captionCard, captionError && styles.captionCardError]}>
+      <View style={[styles.captionField, captionError && styles.captionFieldError]}>
         <TextInput
           style={styles.captionInput}
           placeholder="Write a caption..."
@@ -1105,10 +1138,10 @@ function PublishReview({
           }}
           onBlur={handleCaptionBlur}
           multiline
-          maxLength={500}
+          maxLength={2200}
           accessibilityLabel="Caption"
         />
-        <Text style={styles.captionCount}>{document.metadata.caption.length}/500</Text>
+        <Text style={styles.captionCount}>{document.metadata.caption.length}/2,200</Text>
       </View>
       {/* Hashtag suggestions — surfaced when typing "#" */}
       {(() => {
@@ -1150,10 +1183,12 @@ function PublishReview({
       {/* Inline error message with spring appearance */}
       {captionError !== '' && (
         <Reanimated.View style={[styles.captionErrorWrap, errorStyle]}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.danger} aria-hidden={true} />
           <Text style={styles.captionErrorText}>{captionError}</Text>
         </Reanimated.View>
       )}
+
+      <View style={styles.sectionSeparator} />
 
       {/* Audience selector — segmented control with spring slide indicator */}
       <Text style={styles.sectionLabel}>Audience</Text>
@@ -1163,7 +1198,11 @@ function PublishReview({
       >
         {/* Spring slide indicator */}
         <Reanimated.View
-          style={[styles.audienceSegmentIndicator, segmentIndicatorStyle]}
+          style={[
+            styles.audienceSegmentIndicator,
+            { width: `${100 / audienceOptions.length}%` },
+            segmentIndicatorStyle,
+          ]}
           pointerEvents="none"
         />
         {audienceOptions.map((opt) => {
@@ -1178,30 +1217,11 @@ function PublishReview({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={opt.icon} size={16} color={isActive ? colors.textInverse : colors.textSecondary} />
+              <Ionicons name={opt.icon} size={IconGrammar.metadata} color={isActive ? colors.textInverse : colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.audienceSegmentText, isActive && styles.audienceSegmentTextActive]}>{opt.label}</Text>
             </Pressable>
           );
         })}
-      </View>
-      {/* Audience description — supports informed consent */}
-      <Text style={styles.audienceDescription}>
-        {audienceDescriptions[document.metadata.visibility] ?? audienceDescriptions.public}
-      </Text>
-
-      {/* Save to Camera Roll */}
-      <View style={styles.cameraRollRow}>
-        <View style={styles.toggleLabelWrap}>
-          <Ionicons name="download-outline" size={18} color={colors.textSecondary} />
-          <Text style={styles.toggleLabel}>Save to camera roll</Text>
-        </View>
-        <Switch
-          value={saveToCameraRoll}
-          onValueChange={(v) => { haptic.selection(); setSaveToCameraRoll(v); }}
-          trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-          thumbColor={saveToCameraRoll ? colors.textInverse : colors.textMuted}
-          accessibilityLabel="Save to camera roll"
-        />
       </View>
 
       {/* Poster-specific */}
@@ -1232,46 +1252,14 @@ function PublishReview({
         </>
       )}
 
-      {/* Scheduling — Instagram-style "Schedule for later" */}
-      <Text style={styles.sectionLabel}>Schedule</Text>
-      <View style={styles.scheduleRow}>
-        <Pressable
-          style={[styles.schedulePill, !document.metadata.scheduledFor && styles.schedulePillActive]}
-          onPress={() => { haptic.selection(); updateMetadata({ scheduledFor: undefined }); }}
-          accessibilityLabel="Publish now"
-          accessibilityHint="Publishes immediately"
-          accessibilityRole="button"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="speedometer-outline" size={16} color={!document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
-          <Text style={[styles.schedulePillText, !document.metadata.scheduledFor && { color: colors.brand }]}>Now</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.schedulePill, document.metadata.scheduledFor && styles.schedulePillActive]}
-          onPress={() => {
-            haptic.selection();
-            // Default: tomorrow at 12:00 local
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(12, 0, 0, 0);
-            updateMetadata({ scheduledFor: tomorrow.toISOString() });
-          }}
-          accessibilityLabel="Schedule for later"
-          accessibilityHint="Schedules the post for tomorrow at noon"
-          accessibilityRole="button"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="time-outline" size={16} color={document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
-          <Text style={[styles.schedulePillText, document.metadata.scheduledFor && { color: colors.brand }]}>Later</Text>
-        </Pressable>
-      </View>
+      {/* Scheduling remains fail-closed until publishing and scheduling are
+          one atomic server operation. Old drafts can clear stale metadata;
+          new drafts are not shown a control that publishes immediately. */}
       {document.metadata.scheduledFor && (
         <View style={styles.scheduleDateTime}>
-          <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+          <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.warning} aria-hidden={true} />
           <Text style={styles.scheduleDateTimeText}>
-            {new Date(document.metadata.scheduledFor).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-            {' at '}
-            {new Date(document.metadata.scheduledFor).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+            Scheduling is unavailable. Clear it to publish now.
           </Text>
           <Pressable
             onPress={() => { haptic.light(); updateMetadata({ scheduledFor: undefined }); }}
@@ -1280,7 +1268,7 @@ function PublishReview({
             accessibilityHint="Removes the scheduled date and switches to publish now"
             accessibilityRole="button"
           >
-            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.textMuted} aria-hidden={true} />
           </Pressable>
         </View>
       )}
@@ -1289,7 +1277,7 @@ function PublishReview({
           remains available because drafts are stored locally. */}
       {isOffline && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.warning} aria-hidden={true} />
           <Text style={styles.offlineBannerText}>
             You're offline. Save as draft and publish when you're back online.
           </Text>
@@ -1300,15 +1288,18 @@ function PublishReview({
       <View style={styles.actionRow}>
         <PressScale
           onPress={handlePublishWithValidation}
-          disabled={isOffline}
-          style={[styles.publishBtn, isOffline ? styles.publishBtnDisabled : {}]}
-          accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
-          accessibilityHint={document.metadata.scheduledFor ? 'Schedules the post for the selected date' : 'Publishes the content immediately'}
-          accessibilityState={{ disabled: isOffline }}
+          disabled={isOffline || !!document.metadata.scheduledFor}
+          style={[
+            styles.publishBtn,
+            (isOffline || !!document.metadata.scheduledFor) ? styles.publishBtnDisabled : {},
+          ]}
+          accessibilityLabel={document.metadata.scheduledFor ? 'Clear schedule to publish' : 'Publish now'}
+          accessibilityHint={document.metadata.scheduledFor ? 'Scheduling is unavailable in this build' : 'Publishes the content immediately'}
+          accessibilityState={{ disabled: isOffline || !!document.metadata.scheduledFor }}
           scale={0.97}
           hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
-          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Schedule' : 'Publish now'}</Text>
+          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Clear schedule first' : 'Publish now'}</Text>
         </PressScale>
         <PressScale
           onPress={handleSaveDraft}
@@ -1318,7 +1309,7 @@ function PublishReview({
           scale={0.96}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="save-outline" size={18} color={colors.textSecondary} />
+          <Ionicons name="save-outline" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
           <Text style={styles.draftBtnText}>Save draft</Text>
         </PressScale>
       </View>
@@ -1356,6 +1347,21 @@ function createStyles(colors: ThemeColorsType) {
       paddingBottom: Space.xl,
       gap: Space.sm,
     },
+    // ── Subtle section labels ──
+    // Small, muted, regular weight — NOT uppercase eyebrows. These help
+    // the user scan the sheet without adding visual noise.
+    sectionLabel: {
+      fontSize: 11,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginBottom: Space.xs,
+    },
+    // ── Hairline separator between sections ──
+    sectionSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: Space.md,
+    },
     previewContainer: {
       alignItems: 'center',
       paddingVertical: Space.sm,
@@ -1368,16 +1374,6 @@ function createStyles(colors: ThemeColorsType) {
       marginHorizontal: Space.md,
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-      ...Elevation.subtle,
-    },
-    sectionLabel: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
     },
     textInput: {
       borderWidth: 1,
@@ -1389,15 +1385,13 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textPrimary,
       minHeight: 60,
     },
-    captionCard: {
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.lg,
-      padding: Space.md,
-      backgroundColor: colors.background,
+    captionField: {
+      borderBottomWidth: Stroke.hairline,
+      borderBottomColor: colors.border,
+      paddingVertical: Space.sm,
     },
-    captionCardError: {
-      borderColor: colors.danger,
+    captionFieldError: {
+      borderBottomColor: colors.danger,
     },
     captionInput: {
       fontSize: Type.body.size,
@@ -1484,7 +1478,7 @@ function createStyles(colors: ThemeColorsType) {
       top: Space.xs,
       bottom: Space.xs,
       left: Space.xs,
-      width: '33.33%',
+      width: `${100 / 3}%`,
       backgroundColor: colors.brand,
       borderRadius: Radius.md,
     },
@@ -1506,21 +1500,7 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
     },
-    audienceDescription: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      color: colors.textMuted,
-      paddingHorizontal: Space.xs,
-      marginTop: -Space.xs,
-      marginBottom: Space.sm,
-    },
     // ── Cover selection ──
-    coverHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      color: colors.textMuted,
-      marginBottom: Space.xs,
-    },
     coverScroll: {
       marginHorizontal: -Space.md,
     },
@@ -1534,7 +1514,6 @@ function createStyles(colors: ThemeColorsType) {
       overflow: 'hidden',
       borderWidth: Stroke.emphasis,
       borderColor: 'transparent',
-      ...Elevation.subtle,
     },
     coverThumbActive: {
       borderColor: colors.brand,

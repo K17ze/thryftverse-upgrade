@@ -10,9 +10,6 @@
  *   - Smart Sell auto-accept messaging is only shown when the seller's
  *     config reports `enabled: true`. While `SMART_SELL_DEMO_MODE` is on,
  *     the indicator is honestly labelled "Demo mode".
- *   - The "Sweet Spot" band is a heuristic range (80–95% of asking) where
- *     marketplace offers are most likely accepted — labelled as a guide,
- *     never as a guarantee.
  *   - No fabricated success: the sheet calls the real offer API and only
  *     reports success when the server returns an offer entity.
  */
@@ -28,7 +25,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Elevation, Control } from '../../../theme/designTokens';
+import {
+  Space,
+  Radius,
+  Type,
+  Typography,
+  Stroke,
+  Elevation,
+  Control,
+} from '../../../theme/designTokens';
 import { BottomSheet } from '../../BottomSheet';
 import { AppButton } from '../../ui/AppButton';
 import { CachedImage } from '../../CachedImage';
@@ -78,19 +83,13 @@ export interface MakeOfferSheetProps {
 }
 
 // Quick-select offer percentages of the asking price.
-const QUICK_PERCENTAGES = [0.5, 0.7, 0.8, 0.9];
-// Discount-based quick offer buttons — pre-fill the offer at a stated
-// discount below the asking price. Per 2026 marketplace research, sellers
-// typically accept offers 10–20% below list price.
+// Discount presets express only their exact relationship to asking price;
+// they do not predict or imply the seller's acceptance behaviour.
 const DISCOUNT_QUICK = [
   { discount: 10, fraction: 0.9 },
   { discount: 15, fraction: 0.85 },
   { discount: 20, fraction: 0.8 },
 ];
-// Heuristic "sweet spot" band — offers in this range are most likely
-// accepted on resale marketplaces (Depop/Vinted/Poshmark 2026 research).
-const SWEET_SPOT_MIN = 0.8;
-const SWEET_SPOT_MAX = 0.95;
 const DEFAULT_EXPIRY_HOURS = 48;
 
 export function MakeOfferSheet({
@@ -125,7 +124,7 @@ export function MakeOfferSheet({
     const defaultGbp = askingPriceGbp * 0.8;
     const display = convertGbpToDisplayAmount(defaultGbp, currencyCode, goldRates);
     setOfferDisplay((Number.isFinite(display) ? display : defaultGbp).toFixed(2));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, listing?.id]);
 
   // Fetch Smart Sell config for the listing to surface the auto-accept
@@ -145,7 +144,9 @@ export function MakeOfferSheet({
         setSmartSellThreshold(null);
       }
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible, listing?.id]);
 
   const numericOfferDisplay = parseFloat(offerDisplay) || 0;
@@ -175,23 +176,6 @@ export function MakeOfferSheet({
     return Math.max(0, Math.min(1, (numericOfferDisplay - minDisplay) / (maxDisplay - minDisplay)));
   }, [numericOfferDisplay, minDisplay, maxDisplay]);
 
-  const sweetSpotMinDisplay = useMemo(
-    () => convertGbpToDisplayAmount(askingPriceGbp * SWEET_SPOT_MIN, currencyCode, goldRates) || maxDisplay * SWEET_SPOT_MIN,
-    [askingPriceGbp, currencyCode, goldRates, maxDisplay],
-  );
-  const sweetSpotMaxDisplay = useMemo(
-    () => convertGbpToDisplayAmount(askingPriceGbp * SWEET_SPOT_MAX, currencyCode, goldRates) || maxDisplay * SWEET_SPOT_MAX,
-    [askingPriceGbp, currencyCode, goldRates, maxDisplay],
-  );
-  const sweetSpotStartFraction = maxDisplay > minDisplay
-    ? Math.max(0, Math.min(1, (sweetSpotMinDisplay - minDisplay) / (maxDisplay - minDisplay)))
-    : 0;
-  const sweetSpotEndFraction = maxDisplay > minDisplay
-    ? Math.max(0, Math.min(1, (sweetSpotMaxDisplay - minDisplay) / (maxDisplay - minDisplay)))
-    : 0;
-
-  const inSweetSpot = sliderFraction >= sweetSpotStartFraction && sliderFraction <= sweetSpotEndFraction;
-
   // ── Slider drag handling ──
   const [trackWidth, setTrackWidth] = useState(0);
   const grantFractionRef = useRef(0);
@@ -201,12 +185,15 @@ export function MakeOfferSheet({
     setTrackWidth(e.nativeEvent.layout.width);
   }, []);
 
-  const setOfferFromFraction = useCallback((fraction: number) => {
-    const clamped = Math.max(0, Math.min(1, fraction));
-    const value = minDisplay + clamped * (maxDisplay - minDisplay);
-    setOfferDisplay(value.toFixed(2));
-    if (errorMsg) setErrorMsg('');
-  }, [minDisplay, maxDisplay, errorMsg]);
+  const setOfferFromFraction = useCallback(
+    (fraction: number) => {
+      const clamped = Math.max(0, Math.min(1, fraction));
+      const value = minDisplay + clamped * (maxDisplay - minDisplay);
+      setOfferDisplay(value.toFixed(2));
+      if (errorMsg) setErrorMsg('');
+    },
+    [minDisplay, maxDisplay, errorMsg],
+  );
 
   const panResponder = useRef(
     PanResponder.create({
@@ -228,18 +215,24 @@ export function MakeOfferSheet({
     }),
   ).current;
 
-  const applyQuickPercentage = useCallback((percentage: number) => {
-    const gbp = askingPriceGbp * percentage;
-    const display = convertGbpToDisplayAmount(gbp, currencyCode, goldRates);
-    setOfferDisplay((Number.isFinite(display) ? display : gbp).toFixed(2));
-    if (errorMsg) setErrorMsg('');
-    haptics.tap();
-  }, [askingPriceGbp, currencyCode, goldRates, errorMsg]);
+  const applyQuickPercentage = useCallback(
+    (percentage: number) => {
+      const gbp = askingPriceGbp * percentage;
+      const display = convertGbpToDisplayAmount(gbp, currencyCode, goldRates);
+      setOfferDisplay((Number.isFinite(display) ? display : gbp).toFixed(2));
+      if (errorMsg) setErrorMsg('');
+      haptics.tap();
+    },
+    [askingPriceGbp, currencyCode, goldRates, errorMsg],
+  );
 
-  const handleOfferTextChange = useCallback((value: string) => {
-    setOfferDisplay(sanitizeDecimalInput(value));
-    if (errorMsg) setErrorMsg('');
-  }, [errorMsg]);
+  const handleOfferTextChange = useCallback(
+    (value: string) => {
+      setOfferDisplay(sanitizeDecimalInput(value));
+      if (errorMsg) setErrorMsg('');
+    },
+    [errorMsg],
+  );
 
   const accessibilityIncrement = useCallback(() => {
     setOfferFromFraction(sliderFraction + 0.05);
@@ -298,15 +291,28 @@ export function MakeOfferSheet({
       });
       onDismiss();
     } catch (err) {
-      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const isNetworkError =
+        isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const message = isNetworkError
         ? 'You appear to be offline. Check your connection and try again.'
-        : err instanceof Error ? err.message : 'Could not submit offer.';
+        : err instanceof Error
+          ? err.message
+          : 'Could not submit offer.';
       setErrorMsg(message);
     } finally {
       setIsSubmitting(false);
     }
-  }, [listing, numericOfferDisplay, numericOfferGbp, askingPriceGbp, sellerId, formatFromFiat, onSent, onDismiss, isOffline]);
+  }, [
+    listing,
+    numericOfferDisplay,
+    numericOfferGbp,
+    askingPriceGbp,
+    sellerId,
+    formatFromFiat,
+    onSent,
+    onDismiss,
+    isOffline,
+  ]);
 
   if (!listing) return null;
 
@@ -317,12 +323,8 @@ export function MakeOfferSheet({
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.78}>
       <View style={styles.header}>
         <View style={styles.headerTextWrap}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Make an Offer
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            Asking {askingDisplay}
-          </Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Make an Offer</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>Asking {askingDisplay}</Text>
         </View>
         <Pressable
           onPress={onDismiss}
@@ -338,11 +340,7 @@ export function MakeOfferSheet({
       {/* Listing summary row */}
       <View style={[styles.listingRow, { borderBottomColor: colors.borderSubtle }]}>
         {listing.image ? (
-          <CachedImage
-            uri={listing.image}
-            style={styles.listingImage}
-            contentFit="cover"
-          />
+          <CachedImage uri={listing.image} style={styles.listingImage} contentFit="cover" />
         ) : (
           <View style={[styles.listingImage, { backgroundColor: colors.surfaceAlt }]} />
         )}
@@ -359,7 +357,7 @@ export function MakeOfferSheet({
       {/* Offer amount readout */}
       <View style={styles.amountWrap}>
         <Text
-          style={[styles.amountValue, { color: inSweetSpot ? colors.success : colors.textPrimary }]}
+          style={[styles.amountValue, { color: colors.textPrimary }]}
           accessibilityLabel={`Your offer ${offerDisplayFormatted}${discountPct ? `, ${discountPct} percent below asking` : ''}`}
         >
           {offerDisplayFormatted}
@@ -373,7 +371,7 @@ export function MakeOfferSheet({
         ) : null}
       </View>
 
-      {/* Slider with sweet-spot band */}
+      {/* Offer amount slider */}
       <View
         style={styles.sliderWrap}
         onLayout={handleTrackLayout}
@@ -385,32 +383,21 @@ export function MakeOfferSheet({
           now: numericOfferDisplay,
           text: offerDisplayFormatted,
         }}
-        accessibilityActions={[
-          { name: 'increment' },
-          { name: 'decrement' },
-        ]}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => {
           if (e.nativeEvent.actionName === 'increment') accessibilityIncrement();
           else if (e.nativeEvent.actionName === 'decrement') accessibilityDecrement();
         }}
       >
         <View style={[styles.track, { backgroundColor: colors.surfaceAlt }]}>
-          {/* Sweet spot band */}
-          <View
-            style={[
-              styles.sweetSpotBand,
-              {
-                left: `${sweetSpotStartFraction * 100}%`,
-                width: `${(sweetSpotEndFraction - sweetSpotStartFraction) * 100}%`,
-                backgroundColor: `${colors.success}24`,
-              },
-            ]}
-          />
           {/* Filled portion */}
           <View
             style={[
               styles.trackFill,
-              { width: `${sliderFraction * 100}%`, backgroundColor: inSweetSpot ? colors.success : colors.brand },
+              {
+                width: `${sliderFraction * 100}%`,
+                backgroundColor: colors.brand,
+              },
             ]}
           />
         </View>
@@ -421,28 +408,18 @@ export function MakeOfferSheet({
             styles.thumb,
             {
               left: `${sliderFraction * 100}%`,
-              backgroundColor: inSweetSpot ? colors.success : colors.brand,
+              backgroundColor: colors.brand,
               borderColor: colors.surface,
             },
           ]}
         />
       </View>
 
-      {/* Sweet spot caption */}
+      {/* Neutral control guidance; no fabricated acceptance signal. */}
       <View style={styles.sweetSpotCaption}>
-        <Ionicons name="checkmark-circle" size={13} color={inSweetSpot ? colors.success : colors.textMuted} />
-        <Text style={[styles.sweetSpotText, { color: inSweetSpot ? colors.success : colors.textMuted }]}>
-          {inSweetSpot
-            ? 'In the sweet spot — offers here are most likely accepted'
-            : `Sweet spot ${formatFromFiat(askingPriceGbp * SWEET_SPOT_MIN, 'GBP', { displayMode: 'fiat' })}–${formatFromFiat(askingPriceGbp * SWEET_SPOT_MAX, 'GBP', { displayMode: 'fiat' })}`}
-        </Text>
-      </View>
-
-      {/* Price suggestion guidance */}
-      <View style={styles.suggestionRow}>
-        <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
-        <Text style={[styles.suggestionText, { color: colors.textMuted }]}>
-          Seller typically accepts offers 10–20% below list price
+        <Ionicons name="options-outline" size={13} color={colors.textMuted} />
+        <Text style={[styles.sweetSpotText, { color: colors.textMuted }]}>
+          Adjust the slider or enter an exact amount
         </Text>
       </View>
 
@@ -480,42 +457,10 @@ export function MakeOfferSheet({
         })}
       </View>
 
-      {/* Quick-select chips */}
-      <View style={styles.chipsRow}>
-        {QUICK_PERCENTAGES.map((pct) => {
-          const isSelected = Math.abs(numericOfferGbp - askingPriceGbp * pct) < 0.01;
-          return (
-            <Pressable
-              key={pct}
-              onPress={() => applyQuickPercentage(pct)}
-              style={({ pressed }) => [
-                styles.chip,
-                {
-                  backgroundColor: isSelected ? colors.brand : colors.surfaceAlt,
-                  borderColor: isSelected ? colors.brand : colors.borderSubtle,
-                },
-                pressed && styles.chipPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Offer ${Math.round(pct * 100)} percent of asking price`}
-              accessibilityHint={`Sets your offer to ${formatFromFiat(askingPriceGbp * pct, 'GBP', { displayMode: 'fiat' })}`}
-              accessibilityState={{ selected: isSelected }}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: isSelected ? colors.textInverse : colors.textPrimary },
-                ]}
-              >
-                {Math.round(pct * 100)}%
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       {/* Manual entry */}
-      <View style={[styles.manualWrap, { borderColor: colors.border, backgroundColor: colors.input }]}>
+      <View
+        style={[styles.manualWrap, { borderColor: colors.border, backgroundColor: colors.input }]}
+      >
         <Text style={[styles.manualPrefix, { color: colors.textSecondary }]}>{currencySymbol}</Text>
         <TextInput
           style={[styles.manualInput, { color: colors.textPrimary }]}
@@ -532,11 +477,17 @@ export function MakeOfferSheet({
 
       {/* Smart Sell demo-mode indicator */}
       {smartSellEnabled && smartSellThreshold != null && smartSellThreshold > 0 ? (
-        <View style={[styles.smartSellBanner, { backgroundColor: `${colors.success}14`, borderColor: `${colors.success}30` }]}>
+        <View
+          style={[
+            styles.smartSellBanner,
+            { backgroundColor: `${colors.success}14`, borderColor: `${colors.success}30` },
+          ]}
+        >
           <Ionicons name="trending-up-outline" size={14} color={colors.success} />
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
             {SMART_SELL_DEMO_MODE ? 'Demo mode — ' : ''}
-            Seller has Smart Sell enabled — offers above {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
+            Seller has Smart Sell enabled — offers above{' '}
+            {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
           </Text>
         </View>
       ) : null}
@@ -670,11 +621,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  sweetSpotBand: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-  },
   trackFill: {
     position: 'absolute',
     top: 0,
@@ -704,26 +650,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     flex: 1,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
-  suggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    marginTop: Space.xs,
-  },
-  suggestionText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
   },
   discountChipsRow: {
     flexDirection: 'row',

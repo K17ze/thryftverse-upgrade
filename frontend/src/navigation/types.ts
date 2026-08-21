@@ -45,18 +45,18 @@ export type CreatorInitialMedia = {
   mimeType?: string;
   /**
    * Playback speed multiplier captured with the camera speed-mode selector.
-   * expo-camera 57 does not support native slow/fast-motion recording, so
-   * the video is always recorded at 1× and the speed is applied at playback
-   * time by the timeline/export engine. Values: 0.3 (slow), 1, 2, 3 (fast).
+   * Native speed control is supported via react-native-vision-camera's fps parameter.
+   * The speed is applied at playback time by the timeline/export engine.
+   * Values: 0.3 (slow), 1, 2, 3 (fast).
    * @default 1
    */
   speed?: number;
   /**
    * Green-screen metadata. When present, the clip was captured with a
-   * background-replacement intent. Real-time chroma keying is not feasible
-   * with expo-camera alone (no frame-processor API), so the effect is
-   * applied in post-production via Skia. The background image URI and key
-   * parameters are preserved so the timeline can re-render the composite.
+   * background-replacement intent. Real-time chroma keying is supported
+   * via vision-camera's Skia frame processors. The background image URI
+   * and key parameters are preserved so the timeline can re-render the
+   * composite.
    */
   greenScreen?: {
     backgroundUri: string;
@@ -68,9 +68,8 @@ export type CreatorInitialMedia = {
     feather: number;
   };
   /**
-   * Camera effect selected at capture time. expo-camera does not support
-   * real-time color matrix filters, so the effect is applied post-capture
-   * by the composer when seeding the media layer. Values match the
+   * Camera effect selected at capture time. Real-time color matrix filters
+   * are supported via vision-camera's Skia frame processors. Values match the
    * CameraEffectId type: 'vintage', 'noir', 'vivid', 'warm', 'cool',
    * 'fade'. Absent when 'none' (no effect).
    */
@@ -109,7 +108,17 @@ export type RootStackParamList = {
     title: string;
     searchQuery?: string;
   };
-  ItemDetail: { itemId: string };
+  ItemDetail: {
+    itemId: string;
+    /** Source feed section (e.g. 'for_you', 'following', 'browse', 'search'). */
+    sectionKey?: string;
+    /** Position of the item in the source feed (0-indexed). */
+    position?: number;
+    /** Algorithmic reason code for why the item was shown. */
+    reasonCode?: string;
+    /** Whether the item was personalised to the user. */
+    personalised?: boolean;
+  };
   Closet: undefined;
 
   // ── Creator Studio ──
@@ -297,6 +306,7 @@ export type RootStackParamList = {
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
+    sourceMode?: 'edit' | 'remix';
     /**
      * Backward-compatible single-asset entry point (camera capture, legacy
      * callers). Prefer `initialMedia` for multi-asset acquisition.

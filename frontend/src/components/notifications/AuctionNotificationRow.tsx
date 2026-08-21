@@ -39,6 +39,7 @@ export interface AuctionNotificationRowProps {
 interface AuctionVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'danger' | 'success' | 'warning';
+  accentSubtleKey: 'dangerSubtle' | 'successSubtle' | 'warningSubtle';
   urgencyLabel: string;
   actionLabel: string;
 }
@@ -46,13 +47,13 @@ interface AuctionVisual {
 function resolveAuctionVisual(eventType: NotificationEventV2['eventType']): AuctionVisual {
   switch (eventType) {
     case 'auction_outbid':
-      return { icon: 'trending-up-outline', accentKey: 'danger', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
+      return { icon: 'trending-up-outline', accentKey: 'danger', accentSubtleKey: 'dangerSubtle', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
     case 'auction_won':
-      return { icon: 'trophy-outline', accentKey: 'success', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
+      return { icon: 'trophy-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
     case 'auction_ending_soon':
-      return { icon: 'time-outline', accentKey: 'warning', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
+      return { icon: 'time-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
     default:
-      return { icon: 'flag-outline', accentKey: 'warning', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
+      return { icon: 'flag-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
   }
 }
 
@@ -69,6 +70,7 @@ export function AuctionNotificationRow({
 
   const visual = useMemo(() => resolveAuctionVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
+  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const objectLabel = event.objectRef?.label ?? 'this auction';
@@ -93,6 +95,7 @@ export function AuctionNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
+      accentSubtle={accentSubtle}
       colors={colors}
       size={44}
     />

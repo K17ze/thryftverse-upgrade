@@ -80,14 +80,15 @@ export interface BackgroundScene {
 // ---------------------------------------------------------------------------
 
 /**
- * The enhancement API is always a mock — there is no real backend wired.
- * Until a real Photoroom / AI image service is connected, this must stay
- * true so the UI truthfully labels the surface as demo and disables the
- * apply button (AGENTS.md §11). Setting this to false without a real
- * backend would cause the UI to present non-functional enhancements as
- * real, which is a truthfulness violation.
+ * The enhancement API is a mock until a real Photoroom / AI image service is
+ * connected. In dev (`__DEV__`), demo mode is ON so the UI can be built and
+ * validated with a truthful "Demo mode" banner. In production, demo mode is
+ * OFF and the functions throw so the UI shows an honest error instead of
+ * presenting non-functional enhancements as real (AGENTS.md §11 — fail-closed
+ * trust signals). Setting this to false without a real backend would cause
+ * the throw guards to fire, which is the correct behaviour.
  */
-export const AI_PHOTO_DEMO_MODE = true;
+export const AI_PHOTO_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -249,6 +250,9 @@ function generateId(prefix: string): string {
  * Fetch the available enhancement options for the options rail.
  */
 export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(280);
   return [...MOCK_ENHANCEMENT_OPTIONS];
 }
@@ -257,6 +261,9 @@ export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
  * Fetch the available background scenes for the background-replacement picker.
  */
 export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(240);
   return [...MOCK_BACKGROUND_SCENES];
 }
@@ -265,6 +272,9 @@ export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
  * Fetch curated enhancement presets.
  */
 export async function fetchEnhancementPresets(): Promise<EnhancementPreset[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(260);
   return [...MOCK_PRESETS];
 }
@@ -279,6 +289,9 @@ export async function applyEnhancement(
   imageUri: string,
   optionId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(900); // simulate processing time for honest loading states
   const option = MOCK_ENHANCEMENT_OPTIONS.find((o) => o.id === optionId);
   if (!option) {
@@ -305,6 +318,9 @@ export async function applyPreset(
   imageUri: string,
   presetId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(1200); // presets apply multiple options, so slightly longer
   const preset = MOCK_PRESETS.find((p) => p.id === presetId);
   if (!preset) {
@@ -332,6 +348,9 @@ export async function replaceBackground(
   imageUri: string,
   sceneId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(1000);
   const scene = MOCK_BACKGROUND_SCENES.find((s) => s.id === sceneId);
   if (!scene) {
@@ -357,6 +376,9 @@ export async function replaceBackground(
  * Returns the original URI so the UI can update the preview.
  */
 export async function revertEnhancement(resultId: string): Promise<{ originalUri: string; isDemo: boolean }> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    throw new Error('AI Photo Enhancement API not configured for production');
+  }
   await delay(300);
   return {
     originalUri: '',

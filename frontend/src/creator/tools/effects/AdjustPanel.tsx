@@ -29,6 +29,7 @@ import {
   Radius,
   Control,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -66,7 +67,7 @@ export function AdjustPanel({ values, onChange, onCommit, onReset }: AdjustPanel
         <View style={styles.headerLeft}>
           <CreatorGlyph
             name="adjust"
-            size={20}
+            size={IconGrammar.standard}
             color={colors.textPrimary}
             accessibilityLabel="Adjust"
           />

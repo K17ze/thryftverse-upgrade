@@ -165,6 +165,7 @@ export async function searchListingsFromApi(query: string, limit?: number): Prom
 }
 
 export async function fetchFilteredListings(options?: {
+  query?: string;
   category?: string;
   brand?: string;
   size?: string;
@@ -176,6 +177,7 @@ export async function fetchFilteredListings(options?: {
   cursor?: string;
 }): Promise<ListingsSyncResult> {
   const params = new URLSearchParams();
+  if (options?.query) params.set('q', options.query.trim());
   if (options?.category) params.set('category', options.category);
   if (options?.brand) params.set('brand', options.brand);
   if (options?.size) params.set('size', options.size);
@@ -194,7 +196,8 @@ export async function fetchFilteredListings(options?: {
     return {
       listings: mapBackendListings(rows),
       source: 'api',
-      error: rows.length === 0 ? 'No listings match your filters.' : undefined,
+      // A successful empty response is an empty state, not a transport error.
+      error: undefined,
       nextCursor: payload.nextCursor,
     };
   } catch (error) {

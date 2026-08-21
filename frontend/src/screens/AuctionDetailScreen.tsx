@@ -549,9 +549,24 @@ export default function AuctionDetailScreen() {
   void recsLoading;
   void railSections;
 
-  const handlePressRecommendation = React.useCallback((recItem: Listing) => {
-    navigation.push('ItemDetail', { itemId: recItem.id });
-  }, [navigation]);
+  const handlePressRecommendation = React.useCallback(
+    (
+      recItem: Listing,
+      sectionKey?: string,
+      position?: number,
+      reasonCode?: string,
+      personalised?: boolean,
+    ) => {
+      navigation.push('ItemDetail', {
+        itemId: recItem.id,
+        sectionKey,
+        position,
+        reasonCode,
+        personalised,
+      });
+    },
+    [navigation],
+  );
   const handlePressLook = React.useCallback((lookItem: RecommendationLook) => {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
   }, [navigation]);
@@ -1327,11 +1342,11 @@ export default function AuctionDetailScreen() {
             <RecommendationRail
               section={seenInLooksSection}
               listingId={auction.listingId}
-              onPressItem={(recItem) => {
+              onPressItem={(recItem, sectionKey, position, reasonCode, personalised) => {
                 if (isRecommendationLook(recItem)) {
                   handlePressLook(recItem);
                 } else {
-                  handlePressRecommendation(recItem as Listing);
+                  handlePressRecommendation(recItem as Listing, sectionKey, position, reasonCode, personalised);
                 }
               }}
             />

@@ -6,10 +6,9 @@ import {
   Animated,
   Text,
   Image,
-  ActivityIndicator,
   GestureResponderEvent,
 } from 'react-native';
-import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
+import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,22 +42,31 @@ export default function VisualSearchCamera({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const cameraRef = React.useRef<CameraView>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = React.useState<CameraType>('back');
+  const [facing, setFacing] = React.useState<'back' | 'front'>('back');
+  const device = useCameraDevice(facing);
+  const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced' });
+  const { hasPermission, requestPermission } = useCameraPermission();
   const [flash, setFlash] = React.useState<'off' | 'on'>('off');
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const [focusPoint, setFocusPoint] = React.useState<{ x: number; y: number } | null>(null);
   const focusAnim = React.useRef(new Animated.Value(0)).current;
   const [lastImageUri, setLastImageUri] = React.useState<string | null>(null);
+  // Deactivate the camera on unmount to release the native CameraSession
+  // promptly. Without this, the native session can linger until GC, causing
+  // "A resource failed to call release" warnings and blocking other camera
+  // consumers (e.g. CreatorCamera) from acquiring the device.
+  const [cameraActive, setCameraActive] = React.useState(true);
+  React.useEffect(() => {
+    return () => setCameraActive(false);
+  }, []);
 
   React.useEffect(() => {
-    if (!permission?.granted) {
+    if (!hasPermission) {
       requestPermission().catch(() => {
         show('Camera permission is required for visual search', 'error');
       });
     }
-  }, [permission, requestPermission, show]);
+  }, [hasPermission, requestPermission, show]);
 
   // Load the most recent gallery thumbnail for the bottom-left shortcut (Google Lens pattern).
   React.useEffect(() => {
@@ -94,16 +102,13 @@ export default function VisualSearchCamera({
   };
 
   const takePhoto = async () => {
-    if (!cameraRef.current) return;
+    if (!device) return;
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.92,
-        skipProcessing: false,
-      });
-      if (photo?.uri) {
-        haptic.medium();
-        onPhotoCapture(photo.uri);
-      }
+      const photo = await photoOutput.capturePhoto({ flashMode: flash }, {});
+      const filePath = await photo.saveToTemporaryFileAsync();
+      photo.dispose();
+      haptic.medium();
+      onPhotoCapture(`file://${filePath}`);
     } catch {
       show('Failed to capture photo', 'error');
     }
@@ -129,15 +134,7 @@ export default function VisualSearchCamera({
 
   const handleOpenSettings = () => Linking.openSettings();
 
-  if (!permission) {
-    return (
-      <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={styles.permissionOverlay}>
         <View style={styles.permissionContent}>
@@ -154,17 +151,30 @@ export default function VisualSearchCamera({
     );
   }
 
+  if (!device) {
+    return (
+      <View style={styles.permissionOverlay}>
+        <View style={styles.permissionContent}>
+          <Ionicons name="camera-outline" size={48} color="#fff" />
+          <Text style={styles.permissionTitle}>No camera available</Text>
+          <Text style={styles.permissionText}>
+            A camera could not be found on this device.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={StyleSheet.absoluteFill}>
       {/* Full-screen camera feed with tap-to-focus */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus} accessibilityRole="button" accessibilityLabel="Tap Focus">
-        <CameraView
-          ref={cameraRef}
+        <Camera
           style={StyleSheet.absoluteFill}
-          facing={facing}
-          flash={flash}
-          mode="picture"
-          enableTorch={flash === 'on'}
+          device={device}
+          outputs={[photoOutput]}
+          isActive={cameraActive}
+          torchMode={flash === 'on' ? 'on' : 'off'}
         />
       </Pressable>
 

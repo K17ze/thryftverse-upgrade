@@ -1,5 +1,5 @@
 import type { CreatorDocument, CreatorLayer } from './composition';
-import { uploadMedia } from '../services/mediaUpload';
+import { uploadMedia, type UploadedMedia } from '../services/mediaUpload';
 
 const LOCAL_URI_PREFIXES = [
   'file://',
@@ -48,7 +48,13 @@ function scanDocumentForLocalUris(doc: CreatorDocument): MediaLayerRef[] {
   return refs;
 }
 
-function replaceUriInDoc(doc: CreatorDocument, layerId: string, field: string, newUri: string): CreatorDocument {
+function replaceUriInDoc(
+  doc: CreatorDocument,
+  layerId: string,
+  field: string,
+  uploaded: UploadedMedia,
+): CreatorDocument {
+  const newUri = uploaded.publicUrl;
   return {
     ...doc,
     pages: doc.pages.map((page) => ({
@@ -56,13 +62,38 @@ function replaceUriInDoc(doc: CreatorDocument, layerId: string, field: string, n
       layers: page.layers.map((layer): CreatorLayer => {
         if (layer.id !== layerId) return layer;
         if (layer.type === 'media' && (field === 'mediaUri' || field === 'thumbnailUri')) {
-          return { ...layer, payload: { ...layer.payload, [field]: newUri } };
+          const evidence = field === 'mediaUri'
+            ? {
+                mediaFinalizationId: uploaded.finalizationId,
+                mediaAssetId: uploaded.mediaAssetId,
+              }
+            : {
+                thumbnailFinalizationId: uploaded.finalizationId,
+                thumbnailMediaAssetId: uploaded.mediaAssetId,
+              };
+          return { ...layer, payload: { ...layer.payload, [field]: newUri, ...evidence } };
         }
         if (layer.type === 'product' && field === 'snapshotImageUrl') {
-          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+          return {
+            ...layer,
+            payload: {
+              ...layer.payload,
+              snapshotImageUrl: newUri,
+              snapshotMediaFinalizationId: uploaded.finalizationId,
+              snapshotMediaAssetId: uploaded.mediaAssetId,
+            },
+          };
         }
         if (layer.type === 'look' && field === 'snapshotImageUrl') {
-          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+          return {
+            ...layer,
+            payload: {
+              ...layer.payload,
+              snapshotImageUrl: newUri,
+              snapshotMediaFinalizationId: uploaded.finalizationId,
+              snapshotMediaAssetId: uploaded.mediaAssetId,
+            },
+          };
         }
         return layer;
       }),
@@ -87,23 +118,22 @@ export async function uploadAllLocalMedia(
   if (refs.length === 0) return doc;
 
   let workingDoc = doc;
-  const cache = new Map<string, string>();
+  const cache = new Map<string, UploadedMedia>();
   const folder = doc.type === 'look' ? 'looks' : 'posters';
 
   for (let i = 0; i < refs.length; i++) {
     const ref = refs[i];
     onProgress?.({ completed: i, total: refs.length, currentLayerId: ref.layerId });
 
-    let remoteUri: string;
+    let uploaded: UploadedMedia;
     if (cache.has(ref.currentUri)) {
-      remoteUri = cache.get(ref.currentUri)!;
+      uploaded = cache.get(ref.currentUri)!;
     } else {
       let lastError: Error | null = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const uploaded = await uploadMedia(ref.currentUri, folder);
-          remoteUri = uploaded.publicUrl;
-          cache.set(ref.currentUri, remoteUri);
+          uploaded = await uploadMedia(ref.currentUri, folder);
+          cache.set(ref.currentUri, uploaded);
           lastError = null;
           break;
         } catch (err: unknown) {
@@ -116,10 +146,10 @@ export async function uploadAllLocalMedia(
       if (lastError) {
         throw new Error(`Failed to upload media for layer ${ref.layerId} after ${MAX_RETRIES + 1} attempts: ${lastError.message}`);
       }
-      remoteUri = cache.get(ref.currentUri)!;
+      uploaded = cache.get(ref.currentUri)!;
     }
 
-    workingDoc = replaceUriInDoc(workingDoc, ref.layerId, ref.field, remoteUri);
+    workingDoc = replaceUriInDoc(workingDoc, ref.layerId, ref.field, uploaded);
   }
 
   onProgress?.({ completed: refs.length, total: refs.length, currentLayerId: '' });

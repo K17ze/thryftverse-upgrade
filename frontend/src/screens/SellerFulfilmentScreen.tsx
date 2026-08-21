@@ -404,7 +404,7 @@ export default function SellerFulfilmentScreen() {
               <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
             ) : (
               <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-                <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+                <Ionicons name="image-outline" size={22} color={colors.textMuted} aria-hidden={true} />
               </View>
             )}
             <View style={styles.itemInfo}>
@@ -421,19 +421,19 @@ export default function SellerFulfilmentScreen() {
               <View style={styles.serviceMetaRow}>
                 {etaWindow && (
                   <View style={styles.serviceMetaItem}>
-                    <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="time-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                     <Text style={styles.serviceMetaText}>ETA {etaWindow}</Text>
                   </View>
                 )}
                 {snapshot?.trackingIncluded && (
                   <View style={styles.serviceMetaItem}>
-                    <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="location-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                     <Text style={styles.serviceMetaText}>Tracked</Text>
                   </View>
                 )}
                 {isIntegrated && (
                   <View style={styles.serviceMetaItem}>
-                    <Ionicons name="qr-code-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="qr-code-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                     <Text style={styles.serviceMetaText}>Label included</Text>
                   </View>
                 )}
@@ -459,7 +459,7 @@ export default function SellerFulfilmentScreen() {
               : null;
             return (
               <View style={styles.escrowBanner}>
-                <Ionicons name="lock-closed" size={14} color={colors.success} />
+                <Ionicons name="lock-closed" size={16} color={colors.success} aria-hidden={true} />
                 <View style={styles.escrowTextWrap}>
                   <Text style={styles.escrowTitle}>Funds held in escrow</Text>
                   <Text style={styles.escrowSub}>
@@ -487,9 +487,13 @@ export default function SellerFulfilmentScreen() {
             {/* Step 1: Get label */}
             <View style={styles.stepRow}>
               <View style={[styles.stepNumber, generatedLabelUrl && styles.stepNumberDone]}>
-                <Text style={[styles.stepNumberText, generatedLabelUrl && styles.stepNumberTextDone]}>
-                  {generatedLabelUrl ? '✓' : '1'}
-                </Text>
+                {generatedLabelUrl ? (
+                  <Ionicons name="checkmark" size={12} color={colors.success} aria-hidden={true} />
+                ) : (
+                  <Text style={[styles.stepNumberText, generatedLabelUrl && styles.stepNumberTextDone]}>
+                    {'1'}
+                  </Text>
+                )}
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>
@@ -515,7 +519,7 @@ export default function SellerFulfilmentScreen() {
                   <ActivityIndicator size="small" color={colors.brand} />
                 ) : (
                   <>
-                    <Ionicons name="document-text-outline" size={18} color={colors.brand} />
+                    <Ionicons name="document-text-outline" size={22} color={colors.brand} aria-hidden={true} />
                     <Text style={styles.primaryStepBtnText}>Get shipping label</Text>
                   </>
                 )}
@@ -524,7 +528,7 @@ export default function SellerFulfilmentScreen() {
 
             {labelError && !generatedLabelUrl && (
               <View style={styles.labelErrorBanner}>
-                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+                <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
                 <Text style={styles.labelErrorText}>{labelError}</Text>
               </View>
             )}
@@ -551,7 +555,7 @@ export default function SellerFulfilmentScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Show drop-off QR code"
                   >
-                    <Ionicons name="qr-code-outline" size={18} color={colors.brand} />
+                    <Ionicons name="qr-code-outline" size={22} color={colors.brand} aria-hidden={true} />
                     <Text style={styles.secondaryBtnText}>Show QR code</Text>
                   </Pressable>
 
@@ -561,7 +565,7 @@ export default function SellerFulfilmentScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Print shipping label"
                   >
-                    <Ionicons name="print-outline" size={18} color={colors.textPrimary} />
+                    <Ionicons name="print-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
                     <Text style={styles.secondaryBtnTextDark}>Print label</Text>
                   </Pressable>
 
@@ -571,7 +575,7 @@ export default function SellerFulfilmentScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Find nearest drop-off point"
                   >
-                    <Ionicons name="location-outline" size={18} color={colors.textPrimary} />
+                    <Ionicons name="location-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
                     <Text style={styles.secondaryBtnTextDark}>Find drop-off</Text>
                   </Pressable>
 
@@ -581,7 +585,7 @@ export default function SellerFulfilmentScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Message the buyer"
                   >
-                    <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
+                    <Ionicons name="chatbubble-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
                     <Text style={styles.secondaryBtnTextDark}>Message buyer</Text>
                   </Pressable>
                 </View>
@@ -613,7 +617,7 @@ export default function SellerFulfilmentScreen() {
               <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
                 {shippingProvider || 'Select carrier'}
               </Text>
-              <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+              <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
 
             {showCarrierDropdown && (
@@ -637,7 +641,7 @@ export default function SellerFulfilmentScreen() {
                       {carrier}
                     </Text>
                     {shippingProvider === carrier && (
-                      <Ionicons name="checkmark" size={16} color={colors.brand} />
+                      <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} />
                     )}
                   </Pressable>
                 ))}
@@ -665,7 +669,7 @@ export default function SellerFulfilmentScreen() {
         {/* ─── 7. Cannot dispatch ─── */}
         {!canDispatch && (
           <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
             <Text style={styles.warningText}>
               This order cannot be dispatched from its current status ({statusLabel}).
             </Text>
@@ -729,7 +733,7 @@ export default function SellerFulfilmentScreen() {
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <>
-                <Ionicons name="help-circle-outline" size={16} color={colors.textSecondary} />
+                <Ionicons name="help-circle-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
                 <Text style={styles.recoveryBtnText}>I dropped it off but tracking hasn't updated</Text>
               </>
             )}

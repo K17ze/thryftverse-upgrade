@@ -445,7 +445,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
       {SMART_SELL_DEMO_MODE && (
         <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
-          <Ionicons name="flask-outline" size={16} color={colors.warning} />
+          <Ionicons name="flask-outline" size={16} color={colors.warning} aria-hidden={true} />
           <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
             Demo Mode — AI suggestions are illustrative and not sent to a backend.
           </Text>
@@ -522,7 +522,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             <View>
               {/* AI confidence banner — truthful labelling (§11) */}
               <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
-                <Ionicons name="document-text-outline" size={16} color={colors.brand} />
+                <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <View style={styles.confidenceTextWrap}>
                   <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
                     Suggestions — review before publishing
@@ -598,7 +598,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {category || 'Select category'}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 </AIBadgeField>
 
@@ -643,7 +643,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {condition || 'Select condition'}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 </AIBadgeField>
 
@@ -735,7 +735,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={`Remove tag ${tag}`}
                       >
-                        <Ionicons name="close" size={14} color={colors.textMuted} />
+                        <Ionicons name="close" size={14} color={colors.textMuted} aria-hidden={true} />
                       </Pressable>
                     </View>
                   ))}
@@ -757,7 +757,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel="Add tag"
                       >
-                        <Ionicons name="add-circle" size={18} color={colors.brand} />
+                        <Ionicons name="add-circle" size={18} color={colors.brand} aria-hidden={true} />
                       </Pressable>
                     )}
                   </View>
@@ -808,7 +808,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             variant="primary"
             size="lg"
             accessibilityLabel="Publish AI-assisted listing"
-            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
+            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} aria-hidden={true} />}
           />
         </View>
       )}
@@ -877,7 +877,7 @@ function PhotoCaptureSection({
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
               >
-                <Ionicons name="close-circle" size={22} color={colors.textInverse} />
+                <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
               </Pressable>
               {/* Enhance affordance — entry point to AI Photo Enhancement */}
               <Pressable
@@ -887,7 +887,7 @@ function PhotoCaptureSection({
                 accessibilityLabel="Enhance photo"
                 accessibilityHint="Opens AI photo enhancement to improve this listing image"
               >
-                <Ionicons name="color-filter-outline" size={13} color={colors.brand} />
+                <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
               </Pressable>
             </View>
@@ -903,7 +903,7 @@ function PhotoCaptureSection({
           accessibilityRole="button"
           accessibilityLabel="Take a photo with the camera"
         >
-          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Camera</Text>
         </Pressable>
         <Pressable
@@ -912,7 +912,7 @@ function PhotoCaptureSection({
           accessibilityRole="button"
           accessibilityLabel="Pick photos from gallery"
         >
-          <Ionicons name="images-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Gallery</Text>
         </Pressable>
       </View>
@@ -973,7 +973,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
     >
       <View style={styles.analyzingHeader}>
-        <Ionicons name="analytics-outline" size={18} color={colors.brand} />
+        <Ionicons name="analytics-outline" size={18} color={colors.brand} aria-hidden={true} />
         <Text style={[styles.analyzingTitle, { color: colors.textPrimary }]}>Analyzing photos…</Text>
       </View>
 
@@ -1104,7 +1104,7 @@ function EmptyState({
       style={styles.emptyState}
     >
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
+        <Ionicons name="camera-outline" size={28} color={colors.textMuted} aria-hidden={true} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Snap to list
@@ -1133,7 +1133,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
   return (
     <View style={[styles.errorBanner, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
       <View style={styles.errorHeader}>
-        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} aria-hidden={true} />
         <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
           {message}
         </Text>
@@ -1144,7 +1144,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
           accessibilityRole="button"
           accessibilityLabel="Dismiss error"
         >
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
       </View>
       <Pressable
@@ -1182,7 +1182,7 @@ function AIBadgeField({ label, isAISuggested, colors, styles, style, children }:
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
         {isAISuggested && (
           <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-            <Ionicons name="bulb-outline" size={10} color={colors.brand} />
+            <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
             <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
           </View>
         )}
@@ -1246,7 +1246,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 >
                   {opt}
                 </Text>
-                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} aria-hidden={true} />}
               </Pressable>
             );
           })}

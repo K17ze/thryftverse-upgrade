@@ -136,7 +136,7 @@ export function CommerceDetailIdentity({
         {title}
       </Text>
 
-      {(showPrimaryValue || showOriginalValue || showDiscountBadge || secondaryLine || interestSignal) && (
+      {(showPrimaryValue || showOriginalValue || showDiscountBadge) && (
         <View style={styles.valueRow}>
           {showPrimaryValue ? (
             <Text
@@ -168,20 +168,25 @@ export function CommerceDetailIdentity({
               </Text>
             </View>
           ) : null}
-          {secondaryLine ? (
-            <Text
-              style={[
-                styles.secondaryLine,
-                isMedia && styles.secondaryLineMedia,
-                { color: isMedia ? colors.scrimTextSecondary : colors.textSecondary },
-              ]}
-              numberOfLines={1}
-            >
-              {secondaryLine}
-            </Text>
-          ) : null}
         </View>
       )}
+
+      {/* Secondary truth line — sits on its own line below the price
+          row so the price dominates without competition. Per 2026 PDP
+          research: "Price first, CTA immediately after." The secondary
+          line is a quiet truth partner, not a co-equal on the baseline. */}
+      {secondaryLine ? (
+        <Text
+          style={[
+            styles.secondaryLine,
+            isMedia && styles.secondaryLineMedia,
+            { color: isMedia ? colors.scrimTextSecondary : colors.textSecondary },
+          ]}
+          numberOfLines={1}
+        >
+          {secondaryLine}
+        </Text>
+      ) : null}
 
       {interestSignal ? (
         <Text
@@ -328,11 +333,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
+  // Secondary truth line — now on its own line below the price row.
+  // marginTop Space.xs keeps it close to the price so it reads as a
+  // truth partner, not a disconnected metadata fragment.
   secondaryLine: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
+    marginTop: Space.xs,
   },
   secondaryLineMedia: {
     fontFamily: Typography.family.medium,

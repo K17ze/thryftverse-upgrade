@@ -50,7 +50,6 @@ import { ImageEmptyGraphic } from '../components/ImageEmptyGraphic';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
-import { SellerTrustBadge } from '../components/seller/SellerTrustBadge';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { ProductCardV2 } from '../components/ProductCardV2';
 import type { Listing as CatalogListing } from '../domain';
@@ -242,7 +241,7 @@ export default function ItemDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { isSyncing, lastError, refreshListings, listings: backendListings } = useBackendData();
 
-  const { itemId } = route.params || {};
+  const { itemId, sectionKey, position, reasonCode, personalised } = route.params || {};
 
   const {
     data: queryData,
@@ -301,9 +300,9 @@ export default function ItemDetailScreen() {
 
   useEffect(() => {
     if (item) {
-      ProductAnalytics.itemView(item.id);
+      ProductAnalytics.itemView(item.id, sectionKey, position, reasonCode, personalised);
     }
-  }, [item?.id]);
+  }, [item?.id, sectionKey, position, reasonCode, personalised]);
 
   const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
@@ -633,8 +632,20 @@ export default function ItemDetailScreen() {
       )
     : [];
 
-  const handlePressRecommendation = (recItem: Listing) => {
-    navigation.push('ItemDetail', { itemId: recItem.id });
+  const handlePressRecommendation = (
+    recItem: Listing,
+    recSectionKey?: string,
+    recPosition?: number,
+    recReasonCode?: string,
+    recPersonalised?: boolean,
+  ) => {
+    navigation.push('ItemDetail', {
+      itemId: recItem.id,
+      sectionKey: recSectionKey,
+      position: recPosition,
+      reasonCode: recReasonCode,
+      personalised: recPersonalised,
+    });
   };
 
   const interestSignal = (() => {
@@ -901,21 +912,15 @@ export default function ItemDetailScreen() {
             interestSignal={interestSignal}
           />
 
-          {/* ── Social proof line (truthful) ──
-              Subtle muted line below the price showing real engagement
-              signals (active offers, views). Only rendered when the
-              backend provides positive counts — never fabricated. */}
-          {socialProofLine ? (
-            <Text
-              style={[styles.socialProofLine, { color: colors.textMuted }]}
-              numberOfLines={1}
-              accessibilityRole="text"
-            >
-              {socialProofLine}
-            </Text>
-          ) : null}
-
-          {attributeLine ? (
+          {/* ── Consolidated attribute row ──
+              Condition chip, size/category, social proof, and izeText
+              in one composed row — replaces the former 3 separate thin
+              metadata lines (socialProofLine, attributeRow, izeText)
+              that created label-everything disease. Per AGENTS.md §4:
+              "Real apps show less: the object is the label." Per 2026
+              PDP research: "The first viewport normally uses no more
+              than three type sizes and one eyebrow." */}
+          {(attributeLine || socialProofLine || priceIzeText) ? (
             <View style={styles.attributeRow}>
               <View style={styles.attributeLeftCluster}>
                 {/* Condition chip — condition gets a distinct visual
@@ -955,6 +960,15 @@ export default function ItemDetailScreen() {
                     </Text>
                   ) : null;
                 })()}
+                {/* Social proof — truthful engagement signals (active
+                    offers, views) rendered as a quiet trailing element
+                    in the same row. Only included when the backend
+                    provides positive counts — never fabricated. */}
+                {socialProofLine ? (
+                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1}>
+                    · {socialProofLine}
+                  </Text>
+                ) : null}
               </View>
               {item.size && (
                 <Pressable
@@ -972,6 +986,9 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
+          {/* izeText — quiet gold-equivalent value on its own line
+              below the attribute row. Kept separate because it is a
+              price-adjacent fact, not an attribute. */}
           {priceIzeText ? (
             <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
               {priceIzeText}
@@ -993,8 +1010,8 @@ export default function ItemDetailScreen() {
           // 1. Seller rating — social proof (review count/score summary)
           if (seller?.rating != null && seller.rating > 0) {
             const ratingText = seller.reviewCount != null && seller.reviewCount > 0
-              ? `★ ${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-              : `★ ${seller.rating.toFixed(1)}`;
+              ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
+              : `${seller.rating.toFixed(1)}`;
             trustRows.push({
               icon: 'star-outline',
               label: ratingText,
@@ -1286,9 +1303,6 @@ export default function ItemDetailScreen() {
                 openProfile(navigation, seller.id, currentUser?.id);
               }}
             />
-            <View style={styles.sellerVerificationRow}>
-              <SellerTrustBadge seller={seller} limit={2} />
-            </View>
           </View>
         )}
 
@@ -1312,7 +1326,7 @@ export default function ItemDetailScreen() {
                 <View key={railItem.id} style={styles.railCardWrap}>
                   <ProductCardV2
                     item={railItem as unknown as CatalogListing}
-                    onPress={() => handlePressRecommendation(railItem)}
+                    onPress={() => handlePressRecommendation(railItem, 'more_from_seller')}
                     showSaveButton={false}
                     enableEntranceAnimation={false}
                     visualOnly
@@ -1454,7 +1468,7 @@ export default function ItemDetailScreen() {
                     <Pressable
                       key={simItem.id}
                       style={({ pressed }) => [styles.moreLikeThisCard, pressed && styles.pressed]}
-                      onPress={() => handlePressRecommendation(simItem)}
+                      onPress={() => handlePressRecommendation(simItem, 'similar_items')}
                       hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                       accessibilityRole="button"
                       accessibilityLabel={`View ${simItem.title}${simPriceFormatted ? `, ${simPriceFormatted}` : ''}${simItem.brand ? `, ${simItem.brand}` : ''}`}
@@ -1688,6 +1702,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               value={formattedPrice}
+              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
               thumbnailUri={item.images?.[0]}
               shippingHint={
                 commerce.shippingPayer === 'seller'
@@ -1708,6 +1723,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               value={formattedPrice}
+              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
               thumbnailUri={item.images?.[0]}
               shippingHint={
                 commerce.shippingPayer === 'seller'
@@ -1730,6 +1746,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               value={formattedPrice}
+              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
               thumbnailUri={item.images?.[0]}
               shippingHint={
                 commerce.shippingPayer === 'seller'
@@ -1750,6 +1767,7 @@ export default function ItemDetailScreen() {
         return (
           <CommerceDetailStateDock
             value={formattedPrice}
+            originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
             thumbnailUri={item.images?.[0]}
             shippingHint={
               commerce.shippingPayer === 'seller'
@@ -2122,17 +2140,16 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
-  // ── Social proof line ──
-  // Subtle muted text below the price showing real engagement signals
-  // (active offers, views). 12sp, single line, muted color — quiet
-  // social proof that doesn't compete with the price hierarchy.
-  socialProofLine: {
+  // ── Social proof inline ──
+  // Quiet trailing element inside the attribute row's left cluster.
+  // Muted, single line, prefixed with "·" so it reads as a continuation
+  // of the attribute line rather than a separate metadata fragment.
+  socialProofInline: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
     letterSpacing: TypographyV2.meta.letterSpacing,
+    flexShrink: 1,
   },
   // ── Trust facts (flat rows with hairline separators) ──
   // Flat rows, no chips, no cards. Each row is one fact with icon +
@@ -2174,14 +2191,6 @@ const styles = StyleSheet.create({
   sellerTrustSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
-  },
-  sellerVerificationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
   },
   // ── More from this seller rail ──
   // Bottom hairline closes the seller section before the purchase
@@ -2240,8 +2249,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // ── Description ──
+  // Tighter gap (Space.xs) so the "Read more" toggle reads as part of
+  // the description block, not a disconnected separate element.
   descriptionWrap: {
-    gap: Space.sm,
+    gap: Space.xs,
     paddingBottom: Space.sm,
   },
   // Gradient fade overlay at the bottom of collapsed description text.
@@ -2254,15 +2265,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: Space.lg + Space.xs,
   },
+  // Description text — 14px body with 26px line height (body + sm)
+  // for generous scannability. Per 2026 PDP research: description copy
+  // should be readable, not cramped. The extra 2px over the former
+  // 24px line height gives each line breathing room without making
+  // the block feel airy.
   descriptionText: {
     fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight + Space.xs,
+    lineHeight: TypographyV2.body.lineHeight + Space.sm,
     fontFamily: FontFamily.regular,
   },
   descriptionToggle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
     alignSelf: 'flex-start',
+    paddingTop: Space.xs,
   },
   postedDate: {
     fontSize: TypographyV2.meta.size,

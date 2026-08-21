@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -73,14 +73,17 @@ export interface CreatorAssetPickerProps {
   onClose: () => void;
   onAddLayer: (layer: CreatorLayer) => void;
   editingLayer?: CreatorLayer | null;
+  /** Media URI to render as the drawing background (draw-on-media pattern).
+   *  Only used by the 'draw' mode. */
+  backgroundUri?: string;
 }
 
-export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editingLayer }: CreatorAssetPickerProps) {
+export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editingLayer, backgroundUri }: CreatorAssetPickerProps) {
   const haptic = useHaptic();
   if (!visible) return null;
 
   return (
-    <AssetPickerContent mode={mode} onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />
+    <AssetPickerContent mode={mode} onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} backgroundUri={backgroundUri} />
   );
 }
 
@@ -201,7 +204,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
 }
 
 /** Adapter for DrawingWorkspace — converts drawing commit → draw layer. */
-function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer, backgroundUri }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null; backgroundUri?: string }) {
   const isEditing = editingLayer?.type === 'draw';
   const existingStrokes = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
 
@@ -241,6 +244,7 @@ function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer }: { onClos
       onCommit={handleCommit}
       canvasWidth={320}
       canvasHeight={400}
+      backgroundUri={backgroundUri}
     />
   );
 }
@@ -280,7 +284,7 @@ function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onA
   );
 }
 
-function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer, backgroundUri }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null; backgroundUri?: string }) {
   switch (mode) {
     case 'media':
       return <MediaPicker onClose={onClose} onAddLayer={onAddLayer} />;
@@ -297,7 +301,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
     case 'vote':
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'draw':
-      return <DrawingWorkspaceAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+      return <DrawingWorkspaceAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} backgroundUri={backgroundUri} />;
     case 'gif':
       return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'music':
@@ -327,17 +331,17 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
   }
 }
 
-function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function PickerShell({ title, onClose, children, compact }: { title: string; onClose: () => void; children: React.ReactNode; compact?: boolean }) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   return (
-    <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
+    <SheetContainer visible={true} onClose={onClose} compact={compact}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
         </View>
         {children}
@@ -474,7 +478,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={14} color="#fff" />
+            <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {Math.floor(asset.durationMs / 1000)}s
@@ -499,7 +503,7 @@ function MediaGridItem({
 // states use a static icon with a restrained one-shot entrance fade instead.
 function StaticStateIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
   return (
-    <Ionicons name={name} size={size} color={color} />
+    <Ionicons name={name} size={size} color={color} aria-hidden={true} />
   );
 }
 
@@ -538,7 +542,7 @@ function PermissionDeniedState({
 
   return (
     <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
-      <StaticStateIcon name={icon} size={40} color={colors.textMuted} />
+      <StaticStateIcon name={icon} size={IconGrammar.hero} color={colors.textMuted} />
       <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
         {title}
       </Text>
@@ -824,21 +828,6 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const selectedCount = selectedIds.length;
 
-  // ── Selection count badge with spring scale ──────────────────────
-  const countBadgeScaleSV = useSharedValue(0);
-  useEffect(() => {
-    if (selectedCount > 0) {
-      countBadgeScaleSV.value = reduceMotion ? 1 : withSpring(1, spring.success);
-    } else {
-      countBadgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
-    }
-  }, [selectedCount, reduceMotion, spring, countBadgeScaleSV]);
-
-  const countBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: countBadgeScaleSV.value }],
-    opacity: countBadgeScaleSV.value,
-  }));
-
   // ── Tab indicator animated style ─────────────────────────────────
   const tabIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorXSV.value }],
@@ -855,7 +844,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityLabel="Take photo with camera"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
+          <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
         </PressScale>
       );
     }
@@ -867,7 +856,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityLabel="Pick video from gallery"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
+          <Ionicons name="videocam-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
         </PressScale>
       );
     }
@@ -938,24 +927,29 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   return (
     <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds([]); } : onClose} maxHeight={0.9}>
       <View style={styles.header}>
+        {/* The title stays as the static sheet title regardless of selection
+            state. The selection count is shown in exactly one place — the
+            Add (N) button — to avoid the label-everything AI-tell of
+            restating the count in the title, a badge, and the button
+            (AGENTS.md §4). This matches the MediaBrowserSheet pattern. */}
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {selectedCount > 0 ? `${selectedCount} selected` : 'Add Media'}
+          Add Media
         </Text>
         <View style={styles.headerRight}>
           {selectedCount > 0 && (
-            <Reanimated.View style={countBadgeStyle}>
-              <PressScale
-                onPress={handleAddSelected}
-                style={[styles.addBtn, { backgroundColor: colors.brand }]}
-                accessibilityLabel="Add selected media"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
-              </PressScale>
-            </Reanimated.View>
+            <PressScale
+              onPress={handleAddSelected}
+              style={[styles.addBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel={`Add ${selectedCount} selected media`}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>
+                Add ({selectedCount})
+              </Text>
+            </PressScale>
           )}
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
         </View>
       </View>
@@ -972,11 +966,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityState={{ expanded: showAlbumPicker }}
           hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
         >
-          <Ionicons name="folder-open-outline" size={14} color={colors.textSecondary} />
+          <Ionicons name="folder-open-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
           <Text style={[styles.albumDisclosureText, { color: colors.textPrimary }]} numberOfLines={1}>
             {albumLabel}
           </Text>
-          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={IconGrammar.badge} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
       )}
 
@@ -994,11 +988,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             accessibilityRole="button"
             accessibilityState={{ selected: activeAlbumId === null }}
           >
-            <Ionicons name="images-outline" size={16} color={activeAlbumId === null ? colors.brand : colors.textSecondary} />
+            <Ionicons name="images-outline" size={IconGrammar.metadata} color={activeAlbumId === null ? colors.brand : colors.textSecondary} aria-hidden={true} />
             <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]}>
               All Photos
             </Text>
-            {activeAlbumId === null && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+            {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
           </Pressable>
           {albums.slice(0, 12).map((album) => (
             <Pressable
@@ -1013,11 +1007,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               accessibilityRole="button"
               accessibilityState={{ selected: activeAlbumId === album.id }}
             >
-              <Ionicons name="folder-outline" size={16} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} />
+              <Ionicons name="folder-outline" size={IconGrammar.metadata} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.albumPickerItemText, { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
                 {album.title}
               </Text>
-              {activeAlbumId === album.id && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+              {activeAlbumId === album.id && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
             </Pressable>
           ))}
         </View>
@@ -1051,8 +1045,9 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             >
               <Ionicons
                 name={cat.icon}
-                size={16}
+                size={IconGrammar.metadata}
                 color={active ? colors.textInverse : colors.textSecondary}
+                aria-hidden={true}
               />
               <Text style={[
                 styles.categoryTabLabel,
@@ -1072,7 +1067,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       ) : filteredAssets.length === 0 ? (
         // Empty state
         <View style={styles.mediaEmptyState}>
-          <StaticStateIcon name="images-outline" size={40} color={colors.textMuted} />
+          <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
           <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
             {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'square' ? 'No square photos found' : 'No photos found'}
           </Text>
@@ -1102,11 +1097,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               accessibilityLabel="Limited photo access — tap to select more photos"
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+              <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
                 Limited access — tap to add more photos
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           )}
 
@@ -1142,7 +1137,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                           accessibilityLabel={`Move ${asset.mediaType} ${index + 1} earlier in selection`}
                           accessibilityRole="button"
                         >
-                          <Ionicons name="chevron-back-circle" size={18} color="#fff" />
+                          <Ionicons name="chevron-back-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
                         </Pressable>
                       )}
                       {/* Reorder right — move this item later in the sequence */}
@@ -1154,7 +1149,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                           accessibilityLabel={`Move ${asset.mediaType} ${index + 1} later in selection`}
                           accessibilityRole="button"
                         >
-                          <Ionicons name="chevron-forward-circle" size={18} color="#fff" />
+                          <Ionicons name="chevron-forward-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
                         </Pressable>
                       )}
                       <Pressable
@@ -1164,7 +1159,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                         accessibilityLabel={`Remove ${asset.mediaType} ${index + 1} from selection`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={18} color="#fff" />
+                        <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
                       </Pressable>
                     </View>
                   );
@@ -1500,7 +1495,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   ];
 
   return (
-    <PickerShell title="Add Item" onClose={onClose}>
+    <PickerShell title="Add Item" onClose={onClose} compact>
       {/* ── Source tabs ─────────────────────────────────────────────── */}
       <View style={styles.productTabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productTabBarContent}>
@@ -1515,7 +1510,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
-                <Ionicons name={tab.icon} size={16} color={isActive ? colors.brand : colors.textSecondary} />
+                <Ionicons name={tab.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} aria-hidden={true} />
                 <Text style={[styles.productTabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>{tab.label}</Text>
               </Pressable>
             );
@@ -1526,7 +1521,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {/* ── Search input (only visible on Search tab) ───────────────── */}
       {activeTab === 'search' && (
         <View style={styles.searchRow}>
-          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+          <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} aria-hidden={true} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search listings..."
@@ -1561,7 +1556,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultThumb}>
-                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
+                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />}
               </View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
@@ -1663,9 +1658,9 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   }, [onAddLayer, onClose]);
 
   return (
-    <PickerShell title="Add Mention" onClose={onClose}>
+    <PickerShell title="Add Mention" onClose={onClose} compact>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} aria-hidden={true} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by username..."
@@ -1773,9 +1768,9 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   }, [onAddLayer, onClose]);
 
   return (
-    <PickerShell title="Add Look" onClose={onClose}>
+    <PickerShell title="Add Look" onClose={onClose} compact>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} aria-hidden={true} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search looks..."
@@ -1802,7 +1797,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
+              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
               </View>
@@ -2037,7 +2032,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
             <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+              <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
             </PressScale>
           </View>
         )}
@@ -2055,7 +2050,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityState={{ selected: alignment === a.key }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
+              <Ionicons name={a.icon} size={IconGrammar.standard} color={alignment === a.key ? colors.brand : colors.textSecondary} aria-hidden={true} />
             </Pressable>
           ))}
         </View>
@@ -2124,7 +2119,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
+                <Ionicons name={animIcon[a.key]} size={IconGrammar.standard} color={isActive ? colors.brand : colors.textSecondary} aria-hidden={true} />
                 <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
               </Pressable>
             );
@@ -2150,7 +2145,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {c === 'transparent' && (
-                <Ionicons name="close" size={16} color={colors.textSecondary} />
+                <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
               )}
             </Pressable>
           ))}
@@ -2421,7 +2416,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
+                <Ionicons name={t.icon} size={IconGrammar.standard} color={isActive ? colors.textInverse : colors.textSecondary} aria-hidden={true} />
               </Pressable>
             );
           })}
@@ -2468,7 +2463,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
                 <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                  <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+                  <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
                 </PressScale>
               </View>
             )}
@@ -2517,15 +2512,15 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         {/* Actions */}
         <View style={styles.drawActions}>
           <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
+            <Ionicons name="arrow-undo-outline" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
             <Text style={styles.drawActionLabel}>Undo</Text>
           </PressScale>
           <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+            <Ionicons name="refresh-outline" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
             <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
           <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Ionicons name="trash-outline" size={IconGrammar.standard} color={colors.danger} aria-hidden={true} />
             <Text style={[styles.drawActionLabel, { color: colors.danger }]}>Clear</Text>
           </PressScale>
           <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
@@ -2653,7 +2648,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
   }, [onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title="GIF" onClose={onClose}>
+    <PickerShell title="GIF" onClose={onClose} compact>
       {/* Category chips — premium style matching sticker tray */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gifCategoryScroll} contentContainerStyle={styles.gifCategoryContent}>
         {GIF_CATEGORIES.map((cat) => {
@@ -2680,7 +2675,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
         })}
       </ScrollView>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} aria-hidden={true} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search GIFs..."
@@ -2837,7 +2832,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
             </View>
             <View style={styles.musicPreviewPlayBtn}>
-              <Ionicons name="play" size={16} color="#fff" />
+              <Ionicons name="play" size={IconGrammar.metadata} color={colors.textInverse} aria-hidden={true} />
             </View>
           </>
         ) : (
@@ -2848,13 +2843,13 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               <Text style={styles.musicPreviewArtistName}>Search to preview</Text>
             </View>
             <View style={[styles.musicPreviewPlayBtn, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="play" size={16} color={colors.textMuted} />
+              <Ionicons name="play" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
             </View>
           </>
         )}
       </View>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} aria-hidden={true} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search songs, artists..."
@@ -2899,7 +2894,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
               </View>
               <View style={styles.musicAddBtn}>
-                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} aria-hidden={true} />
               </View>
             </Pressable>
           )}
@@ -2971,7 +2966,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         {/* Live preview — mini quiz sticker */}
         <View style={styles.quizPreviewWrap}>
@@ -2985,7 +2980,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             <View key={i} style={[styles.quizPreviewOption, correctIdx === i && styles.quizPreviewOptionCorrect]}>
               <Text style={styles.quizPreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
               {correctIdx === i && (
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                <Ionicons name="checkmark-circle" size={IconGrammar.metadata} color={colors.success} aria-hidden={true} />
               )}
             </View>
           ))}
@@ -3015,7 +3010,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              {correctIdx === i && <Ionicons name="checkmark" size={14} color="#fff" />}
+              {correctIdx === i && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />}
             </Pressable>
             <TextInput
               style={[styles.textInput, { flex: 1, minHeight: 44 }]}
@@ -3038,7 +3033,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityRole="button"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
+                <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.danger} aria-hidden={true} />
               </Pressable>
             )}
           </View>
@@ -3051,7 +3046,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+            <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.brand} aria-hidden={true} />
             <Text style={styles.quizAddOptionText}>Add Option</Text>
           </Pressable>
         )}
@@ -3154,11 +3149,11 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={[styles.questionPreviewWrap, { backgroundColor: bgColor }]}>
           <View style={styles.questionPreviewIconRow}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="chatbubble-ellipses" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" aria-hidden={true} />
           </View>
           <Text style={styles.questionPreviewPrompt}>
             {prompt.trim() || 'Ask me a question'}
@@ -3263,7 +3258,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
   }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.sliderPreviewWrap}>
           <Text style={styles.sliderPreviewQuestion}>
@@ -3397,7 +3392,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
   };
 
   return (
-    <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={[styles.textPreview, { backgroundColor: color }]}>
           <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size }}>
@@ -3433,9 +3428,9 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           accessibilityRole="button"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="calendar-outline" size={20} color={colors.brand} />
+          <Ionicons name="calendar-outline" size={IconGrammar.standard} color={colors.brand} aria-hidden={true} />
           <Text style={styles.countdownDateText}>{formatDate(endDate)}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
         <Text style={styles.pickerSectionLabel}>Color</Text>
         <View style={styles.colorRow}>
@@ -3513,16 +3508,16 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           </View>
         );
       case 'star':
-        return <Ionicons name="star" size={32} color={activeColor} />;
+        return <Ionicons name="star" size={IconGrammar.hero} color={activeColor} aria-hidden={true} />;
       case 'heart':
-        return <Ionicons name="heart" size={32} color={activeColor} />;
+        return <Ionicons name="heart" size={IconGrammar.hero} color={activeColor} aria-hidden={true} />;
       default:
         return null;
     }
   };
 
   return (
-    <PickerShell title="Add Shape" onClose={onClose}>
+    <PickerShell title="Add Shape" onClose={onClose} compact>
       <View style={styles.shapeGrid}>
         {SHAPES.map((s) => (
           <Pressable
@@ -3619,7 +3614,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   }, [question, options, timerMs, canSave, onAddLayer, onClose]);
 
   return (
-    <PickerShell title="Add Style Vote" onClose={onClose}>
+    <PickerShell title="Add Style Vote" onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         {/* Live preview — mini vote sticker */}
         <View style={styles.votePreviewWrap}>
@@ -3648,7 +3643,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           </View>
           {timerMs && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'center' }}>
-              <Ionicons name="timer-outline" size={12} color={colors.textSecondary} />
+              <Ionicons name="timer-outline" size={IconGrammar.badge} color={colors.textSecondary} aria-hidden={true} />
               <Text style={{ fontFamily: Typography.family.medium, fontSize: 10, color: colors.textSecondary }}>
                 {timerMs >= 86400000 ? `${Math.floor(timerMs / 86400000)}d` : timerMs >= 3600000 ? `${Math.floor(timerMs / 3600000)}h` : `${Math.floor(timerMs / 60000)}m`}
               </Text>
@@ -3672,7 +3667,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
               <Text style={styles.sectionLabel}>Option {i + 1}</Text>
               {options.length > 2 && (
                 <Pressable onPress={() => removeOption(i)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
-                  <Ionicons name="close-circle" size={18} color={colors.danger} />
+                  <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.danger} aria-hidden={true} />
                 </Pressable>
               )}
             </View>
@@ -3695,7 +3690,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
+            <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.brand} aria-hidden={true} />
             <Text style={styles.addOptionBtnText}>Add Option ({options.length}/4)</Text>
           </Pressable>
         )}
@@ -3846,13 +3841,13 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Stickers</Text>
         <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" accessibilityHint="Closes the sticker tray" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
         </PressScale>
       </View>
 
       {/* Search bar */}
       <View style={styles.stickerSearchWrap}>
-        <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+        <Ionicons name="search-outline" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
         <TextInput
           style={styles.stickerSearchInput}
           placeholder="Search stickers..."
@@ -3863,7 +3858,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         />
         {search.length > 0 && (
           <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.textMuted} aria-hidden={true} />
           </PressScale>
         )}
       </View>
@@ -3896,7 +3891,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       <ScrollView style={styles.stickerGridScroll} contentContainerStyle={styles.stickerGridContent}>
         {filteredCategories.length === 0 ? (
           <View style={styles.stickerEmptyState}>
-            <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+            <Ionicons name="search-outline" size={IconGrammar.hero} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.stickerEmptyText}>No stickers found</Text>
           </View>
         ) : (
@@ -3916,7 +3911,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <View style={styles.stickerCellIcon}>
-                      <Ionicons name={sticker.icon} size={28} color={colors.brand} />
+                      <Ionicons name={sticker.icon} size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
                     </View>
                     <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
                   </Pressable>
@@ -3970,10 +3965,10 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   }, [url, ctaText, bgColor, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Link' : 'Add Link'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Link' : 'Add Link'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="link-outline" size={18} color="#fff" />
+          <Ionicons name="link-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>{ctaText || 'Link'}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>URL</Text>
@@ -4055,10 +4050,10 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   }, [placeName, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Location' : 'Add Location'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Location' : 'Add Location'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="location-outline" size={18} color="#fff" />
+          <Ionicons name="location-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>{placeName || 'Location'}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>Place Name</Text>
@@ -4117,10 +4112,10 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
   }, [tag, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="pricetag-outline" size={18} color="#fff" />
+          <Ionicons name="pricetag-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>#{tag.replace(/^#/, '') || 'hashtag'}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>Hashtag</Text>
@@ -4183,10 +4178,10 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   }, [format, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Time' : 'Add Time'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Time' : 'Add Time'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="time-outline" size={18} color="#fff" />
+          <Ionicons name="time-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>{previewStr}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>Format</Text>
@@ -4205,7 +4200,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityState={{ selected: format === f.key }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
+              <Ionicons name={f.icon} size={IconGrammar.standard} color={format === f.key ? colors.brand : colors.textSecondary} aria-hidden={true} />
             </Pressable>
           ))}
         </View>
@@ -4267,7 +4262,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
   }, [temperature, condition, emoji, locationName, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
-    <PickerShell title={isEditing ? 'Edit Weather' : 'Add Weather'} onClose={onClose}>
+    <PickerShell title={isEditing ? 'Edit Weather' : 'Add Weather'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         {/* Premium weather preview pill */}
         <View style={styles.weatherPreviewPill}>
@@ -4278,7 +4273,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
           </View>
           {locationName.trim().length > 0 && (
             <View style={styles.weatherPreviewLocation}>
-              <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="location-outline" size={IconGrammar.badge} color="rgba(255,255,255,0.7)" aria-hidden={true} />
               <Text style={styles.weatherPreviewLocationText} numberOfLines={1}>{locationName.trim()}</Text>
             </View>
           )}
@@ -4322,7 +4317,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
         </View>
         <Text style={styles.inputCardLabel}>Location</Text>
         <View style={styles.inputCard}>
-          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="location-outline" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
           <TextInput
             style={styles.inputCardText}
             placeholder="London, UK"

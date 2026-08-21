@@ -3,6 +3,8 @@ import {
   CreatorDocument,
   CreatorLayer,
   safeValidateDocument,
+  hasFullBleedMedia,
+  isDefaultBackground,
 } from './composition';
 import type { LookCreateBody, LookCreateTag } from '../services/looksApi';
 import type { PosterStoryCreateBody, PosterStickerType } from '../services/postersApi';
@@ -139,6 +141,30 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
   };
 }
 
+/**
+ * Returns a copy of the document with the canvas background set to
+ * 'transparent' when a full-bleed media layer exists and the background
+ * is still the factory default. This ensures the viewer renders the
+ * media as the canvas surface (no card frame around it), matching the
+ * editor's "media IS the canvas" architecture.
+ *
+ * User-customised backgrounds (gradient, image, non-default colors) are
+ * preserved — the user chose them.
+ */
+function withMediaAsCanvasBackground(doc: CreatorDocument): CreatorDocument {
+  const hasMedia = doc.pages.some((p) => hasFullBleedMedia(p));
+  if (!hasMedia || !isDefaultBackground(doc.canvas.background, doc.type)) {
+    return doc;
+  }
+  return {
+    ...doc,
+    canvas: {
+      ...doc.canvas,
+      background: { ...doc.canvas.background, value: 'transparent' },
+    },
+  };
+}
+
 // ── Serialisation: CreatorDocument → Look API payload ─────────────
 export function serialiseToLookPayload(doc: CreatorDocument): {
   payload: LookCreateBody;
@@ -187,10 +213,15 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       title: doc.metadata.title || 'Untitled Look',
       caption: doc.metadata.caption,
       mediaUrl: mediaLayer.type === 'media' ? mediaLayer.payload.mediaUri : '',
-      visibility: doc.metadata.visibility,
+      mediaType: mediaLayer.type === 'media' && mediaLayer.payload.mediaType === 'video'
+        ? 'video'
+        : 'image',
+      visibility: doc.metadata.visibility === 'closeFriends'
+        ? 'followers'
+        : doc.metadata.visibility,
       tags,
       status: 'published',
-      ...(hasComposableLayers ? { compositionDocument: doc } : {}),
+      ...(hasComposableLayers ? { compositionDocument: withMediaAsCanvasBackground(doc) } : {}),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,
@@ -222,6 +253,12 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       mediaUrl: mediaLayer?.type === 'media'
         ? mediaLayer.payload.mediaUri
         : undefined,
+      mediaFinalizationId: mediaLayer?.type === 'media'
+        ? mediaLayer.payload.mediaFinalizationId
+        : undefined,
+      mediaAssetId: mediaLayer?.type === 'media'
+        ? mediaLayer.payload.mediaAssetId
+        : undefined,
       caption: textLayer?.type === 'text'
         ? textLayer.payload.text
         : '',
@@ -245,7 +282,12 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
   return {
     payload: {
       id: doc.id,
-      audience: doc.metadata.visibility,
+      // The Poster API currently has no close-friends graph projection. Old
+      // drafts using that value fail closed to private rather than widening
+      // their audience or sending a contract-invalid value.
+      audience: doc.metadata.visibility === 'closeFriends'
+        ? 'private'
+        : doc.metadata.visibility,
       allowReplies: doc.metadata.allowReplies,
       allowReactions: doc.metadata.allowReactions,
       expiresInHours: doc.metadata.expiresInHours ?? 24,
@@ -254,7 +296,7 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       // Persist the full versioned composition document so the viewer can
       // render the exact authored result (WYSIWYG) instead of reconstructing
       // from the narrowed frame/sticker contract.
-      compositionDocument: doc,
+      compositionDocument: withMediaAsCanvasBackground(doc),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,

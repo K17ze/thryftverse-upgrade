@@ -21,13 +21,12 @@
  * Per AGENTS.md §11: truthful UI — every toggle reflects real state.
  * Per AGENTS.md §13: 44pt touch targets, selected state uses shape.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -36,12 +35,11 @@ import {
   Type,
   FontFamily,
   Control,
-  Stroke,
 } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { CreatorSegmentControl } from '../controls/CreatorSegmentControl';
-import { CameraEffectBar, type CameraEffectId } from './CameraEffectBar';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -66,9 +64,6 @@ export interface CaptureToolsSheetProps {
   // ── Green screen ──
   greenScreenActive: boolean;
   onOpenGreenScreen: () => void;
-  // ── Camera effects ──
-  cameraEffect: CameraEffectId;
-  onSelectEffect: (effect: CameraEffectId) => void;
   // ── Multi-capture ──
   multiCaptureMode: boolean;
   onToggleMultiCapture: () => void;
@@ -78,6 +73,8 @@ export interface CaptureToolsSheetProps {
   isVisualSearch: boolean;
   // ── Recording state (disables some tools while recording) ──
   isRecording: boolean;
+  /** Hide video-only tools until native video capture is fully contracted. */
+  videoCaptureEnabled?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -91,6 +88,7 @@ const TIMER_OPTIONS: Array<{ label: string; value: TimerOption }> = [
 
 const SPEED_MODES = [
   { label: '0.3×', value: '0.3' },
+  { label: '0.5×', value: '0.5' },
   { label: '1×', value: '1' },
   { label: '2×', value: '2' },
   { label: '3×', value: '3' },
@@ -115,21 +113,17 @@ export function CaptureToolsSheet({
   onSpeedChange,
   greenScreenActive,
   onOpenGreenScreen,
-  cameraEffect,
-  onSelectEffect,
   multiCaptureMode,
   onToggleMultiCapture,
   multiCaptureCount,
   hasCapturedUri,
   isVisualSearch,
   isRecording,
+  videoCaptureEnabled = true,
 }: CaptureToolsSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useSheetStyles(colors);
-
-  // Effects section expand/collapse state
-  const [effectsExpanded, setEffectsExpanded] = useState(false);
 
   const handleClose = useCallback(() => {
     haptic.light();
@@ -167,11 +161,6 @@ export function CaptureToolsSheet({
     onOpenGreenScreen();
   }, [haptic, onOpenGreenScreen]);
 
-  const handleEffectsToggle = useCallback(() => {
-    haptic.selection();
-    setEffectsExpanded((p) => !p);
-  }, [haptic]);
-
   const handleMultiCaptureToggle = useCallback(() => {
     haptic.selection();
     onToggleMultiCapture();
@@ -179,10 +168,9 @@ export function CaptureToolsSheet({
 
   // Tools that are not applicable in visual-search mode
   const showMultiCapture = !isVisualSearch;
-  const showHandsFree = !isVisualSearch;
-  const showGreenScreen = !isVisualSearch;
-  const showEffects = !isVisualSearch;
-  const showSpeed = !isVisualSearch;
+  const showHandsFree = !isVisualSearch && videoCaptureEnabled;
+  const showGreenScreen = !isVisualSearch && videoCaptureEnabled;
+  const showSpeed = !isVisualSearch && videoCaptureEnabled;
 
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
@@ -201,7 +189,7 @@ export function CaptureToolsSheet({
             accessibilityHint="Closes the camera tools sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -218,7 +206,13 @@ export function CaptureToolsSheet({
                 <PressScale
                   key={opt.value}
                   onPress={() => handleTimerSelect(opt.value)}
-                  style={styles.chip}
+                  style={[
+                    styles.chip,
+                    ...(isActive ? [{
+                      backgroundColor: colors.brandSubtle,
+                      borderRadius: Radius.full,
+                    }] : []),
+                  ]}
                   accessibilityLabel={`Timer ${opt.label}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
@@ -228,7 +222,6 @@ export function CaptureToolsSheet({
                       styles.chipText,
                       {
                         color: isActive ? colors.brand : colors.textSecondary,
-                        textDecorationLine: isActive ? 'underline' : 'none',
                       },
                     ]}
                   >
@@ -295,50 +288,6 @@ export function CaptureToolsSheet({
             styles={styles}
             disabled={isRecording}
           />
-        )}
-
-        {/* ── Camera effects ──────────────────────────────────────── */}
-        {showEffects && (
-          <View style={styles.section}>
-            <PressScale
-              onPress={handleEffectsToggle}
-              style={styles.navRowInner}
-              accessibilityLabel="Camera effects"
-              accessibilityHint="Expands to show camera effect options"
-              accessibilityRole="button"
-              disabled={isRecording}
-            >
-              <View style={styles.rowLabelWrap}>
-                <Ionicons
-                  name="color-palette-outline"
-                  size={ROW_ICON_SIZE}
-                  color={cameraEffect !== 'none' ? colors.brand : colors.textSecondary}
-                />
-                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>
-                  Effects
-                </Text>
-              </View>
-              <View style={styles.navRight}>
-                <Text style={[styles.navValue, { color: colors.textSecondary }]}>
-                  {cameraEffect === 'none' ? 'None' : cameraEffect.charAt(0).toUpperCase() + cameraEffect.slice(1)}
-                </Text>
-                <Ionicons
-                  name={effectsExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.textMuted}
-                />
-              </View>
-            </PressScale>
-            {effectsExpanded && (
-              <View style={styles.effectsExpand}>
-                <CameraEffectBar
-                  activeEffect={cameraEffect}
-                  onSelectEffect={onSelectEffect}
-                  disabled={isRecording}
-                />
-              </View>
-            )}
-          </View>
         )}
 
         {/* ── Multi-capture ───────────────────────────────────────── */}
@@ -473,7 +422,7 @@ function NavRow({
         <Text style={[styles.navValue, { color: colors.textSecondary }]} numberOfLines={1}>
           {value}
         </Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
       </View>
     </PressScale>
   );
@@ -525,13 +474,6 @@ function useSheetStyles(colors: ThemeColors) {
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingVertical: Space.sm,
-        },
-        navRowInner: {
-          minHeight: ROW_HEIGHT,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingVertical: Space.xs,
         },
         rowLabelWrap: {
           flexDirection: 'row',
@@ -597,11 +539,6 @@ function useSheetStyles(colors: ThemeColors) {
         // ── Speed segment ──
         segmentWrap: {
           marginTop: Space.sm,
-        },
-        // ── Effects expansion ──
-        effectsExpand: {
-          marginTop: Space.sm,
-          paddingLeft: Space.md + Space.sm,
         },
         // ── Divider ──
         divider: {

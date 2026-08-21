@@ -101,7 +101,7 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
  *   cover (edge-to-edge, gradient fades only)
  *   seam row: avatar (left, overlapping cover) + 3 primary stats (right, vertically centred)
  *   identity: full-width, left-aligned — name, @handle, bio, context, website
- *   trust line: 4.9 ★ · 47 sold · Joined June 2026
+ *   trust line: 4.9 star · 47 sold · Joined June 2026
  *   actions: flat 11pt radius, restrained
  */
 export function ProfileHero({
@@ -149,10 +149,10 @@ export function ProfileHero({
   const isVerified = sellerTrust?.verified === true || emailVerified === true;
   const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
 
-  // Trust line: "4.9 ★ · 47 sold · Joined June 2026"
+  // Trust line: "4.9 · 47 sold · Joined June 2026"
   const trustParts: string[] = [];
   if (hasRating && ratingValue !== null && ratingValue !== undefined) {
-    trustParts.push(`${ratingValue.toFixed(1)} ★`);
+    trustParts.push(`${ratingValue.toFixed(1)}`);
   }
   if (soldCount > 0) trustParts.push(`${soldCount} sold`);
   if (memberSince) trustParts.push(`Joined ${memberSince}`);
@@ -303,9 +303,10 @@ export function ProfileHero({
                   onPress={() => onTabSelect('Reviews')}
                   accessibilityRole="button"
                   accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)} ★</Text>
+                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)}</Text>
+                  <Ionicons name="star" size={12} color={colors.warning} aria-hidden={true} />
                 </Pressable>
               ) : null}
               {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
@@ -599,6 +600,11 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+  },
+  trustRatingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   trustStatic: {
     fontSize: Type.caption.size,

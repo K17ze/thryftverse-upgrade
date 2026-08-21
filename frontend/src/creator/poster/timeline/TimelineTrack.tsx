@@ -3,6 +3,7 @@ import { View, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
 import { Space } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -157,7 +158,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               >
                 <Ionicons
                   name={hasTransition ? 'swap-horizontal' : 'add'}
-                  size={14}
+                  size={IconGrammar.badge}
                   color={hasTransition ? colors.textInverse : colors.textSecondary}
                 />
               </Pressable>

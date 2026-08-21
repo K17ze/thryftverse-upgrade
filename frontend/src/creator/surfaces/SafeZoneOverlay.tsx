@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontFamily } from '../../theme/designTokens';
+import { FontFamily, IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -46,7 +46,7 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
       {topHeight > 0 && (
         <View style={[styles.topBand, { top: 0, height: topHeight }]}>
           <View style={styles.label}>
-            <Ionicons name="shield-outline" size={10} color={RED_TINT_LABEL} />
+            <Ionicons name="scan-outline" size={IconGrammar.badge} color={RED_TINT_LABEL} />
             <Text style={styles.labelText}>Top chrome</Text>
           </View>
         </View>
@@ -54,7 +54,7 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
       {bottomHeight > 0 && (
         <View style={[styles.bottomBand, { bottom: 0, height: bottomHeight }]}>
           <View style={styles.label}>
-            <Ionicons name="shield-outline" size={10} color={RED_TINT_LABEL} />
+            <Ionicons name="scan-outline" size={IconGrammar.badge} color={RED_TINT_LABEL} />
             <Text style={styles.labelText}>Tool dock</Text>
           </View>
         </View>

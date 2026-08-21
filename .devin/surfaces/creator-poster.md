@@ -8,7 +8,7 @@
 
 **Name:** Creator / Poster (camera → media picker → editor → publish → viewer)
 **Route:** Create tab → `CreateCamera` → `CreatorStudio` (type: 'poster') → `PosterComposerScreen` + `CreatorEntryScreen` → `PosterViewer`
-**Files:** `frontend/src/creator/poster/PosterComposerScreen.tsx`, `frontend/src/creator/CreatorEntryScreen.tsx`, `frontend/src/creator/tools/MediaBrowser/MediaBrowserSheet.tsx`, `frontend/src/creator/ContextToolRail.tsx`, `frontend/src/screens/PosterViewerScreen.tsx`
+**Files:** `frontend/src/creator/poster/PosterComposerScreen.tsx`, `frontend/src/creator/CreatorEntryScreen.tsx`, `frontend/src/creator/tools/MediaBrowser/MediaBrowserSheet.tsx`, `frontend/src/creator/surfaces/ContextToolRail.tsx`, `frontend/src/screens/PosterViewerScreen.tsx`
 
 ## User goal
 
@@ -19,6 +19,14 @@ A creator opens the camera to **just make something** — capture or pick media,
 The editor exposes **30+ tools** across 6 selection contexts. A single photo's default tool group shows Text, Stickers, Music, Effects, Draw, Timeline (6 primary); its overflow contains Product, Add Frame, Transitions, Layers, Preview, Safe Zone, Templates, Drafts, Settings. Selecting media exposes Replace, Crop, Auto, Adjust, Effects + Cutout, Animation, Speed Curve, Reverse, Freeze Frame, Audio Fade, z-ordering, duplicate/delete. That is technologically impressive but reads as "prove every feature exists" rather than "what does the user need at this precise creative moment?"
 
 Additionally, `MediaBrowserSheet` calculates thumbnail geometry from module-level `Dimensions.get('window')` — a frozen-dimension defect that breaks rotation/adaptive layout.
+
+## Implementation status — 20 August 2026
+
+- The live Poster path renders `ContextToolRail`; `CreatorToolDock` is not a production Poster dependency.
+- The rail is capped at four primary actions plus More.
+- More is a grouped, bounded, vertically scrollable bottom sheet with 48dp rows and modal accessibility containment.
+- Text selection uses the bottom context rail only; the duplicate inline styling toolbar was removed from Poster.
+- MediaBrowser geometry is responsive. Native capture of the final More-sheet state remains required before this surface can be marked complete.
 
 ## Before→after visual delta
 
@@ -45,6 +53,9 @@ Target:  ≤4 immediately relevant actions before More (Meta Edits / Instagram /
 - The media picker grid responds to rotation (dimensions not frozen).
 - The camera entry feels native (prefetched lenses/effects, no waiting on tap).
 - No more than 5-6 immediate actions on the camera surface (shutter, flip, flash, gallery, effects).
+- Text selection renders exactly one styling surface; Font, Color, Align and More are never duplicated.
+- More is grouped and vertically scrollable, keeps no more than 5-6 rows visible, and remains contained above the safe-area inset on small Android phones.
+- Every More row is at least 48dp and the outside backdrop dismisses from anywhere beyond the sheet.
 
 ## Interaction hierarchy
 
@@ -60,6 +71,19 @@ Tertiary layer:  grouped overflow (Accessibility, Advanced editing, Project)
 - picker empty / loading / populated / permission-denied / limited-access
 - editor empty (blank start) / single-photo / multi-frame / video / publishing / failure
 - viewer loading / playing / paused / ended / error
+
+## Upload-department observable outcomes (per `.devin/workflows/upload-department-convergence-loop.md` §5)
+
+These outcomes govern the camera → gallery → editor-seeding flow specifically:
+
+- **Continuity:** the captured/selected media's position does not jump between camera and editor. The same pixels stay in place while chrome fades in (220–280ms ease-in-out). No black/white flash, no spinner. Reduced motion: instant swap, same landing position.
+- **Camera chrome restraint:** the gallery thumbnail has no text label (the thumbnail IS the label). The gallery placeholder is a transparent 44pt hit target + 22–24pt glyph, not a bordered box. ≤6 immediate actions on the camera surface at idle.
+- **Multi-snap staging:** while multi-capture is active, a persistent tray of captured thumbnails is visible on the camera surface; each is tappable to retake/drop. The tray is multi-snap only.
+- **Single-capture direct-to-edit:** in poster/look mode a single capture goes direct-to-editor (no quick-review overlay). Retake/undo lives in the editor. Visual search retains a confirm step.
+- **Gallery picker:** selection count shown in exactly one place (confirm button "Next (3)"). Tabs: Recents + Albums only from the camera. Camera tile is the first grid cell. Numbered order badges on selected thumbnails.
+- **Look assembly:** open-look-creator → first composed look with 3 images is ≤4 taps / ≤2 screens.
+- **Poster seeding:** `addPosterFrames` produces no flash of unstyled content; the first frame renders before editor chrome is interactive.
+- **States:** camera (permission-denied, limited, capturing, recording, idle), picker (skeleton, empty, error, denied, limited, populated), seeding (loading, failure+retry, offline) — all art-directed.
 
 ## Out of scope (this iteration)
 

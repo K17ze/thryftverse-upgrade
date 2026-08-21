@@ -84,7 +84,7 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
   // ── Experience (appearance, language, currency, accessibility, recommendations) ──
-  { key: 'Personalisation', label: 'Content preferences', searchTerms: 'theme currency language feed personalisation appearance', section: 'Experience', showSection: true },
+  { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
   { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Experience' },
@@ -313,6 +313,7 @@ export default function SettingsScreen({ navigation }: Props) {
   // that filters settings in-place. No separate overlay screen needed.
 
   return (
+    <View style={{ flex: 1 }}>
     <FlagshipScreen
       header={
         <FlagshipHeader
@@ -776,7 +777,12 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
           </>
       )}
+    </FlagshipScreen>
 
+      {/* BottomSheetPickers MUST be rendered OUTSIDE FlagshipScreen's
+          ScrollView. When inside the ScrollView, absoluteFill fills the
+          scrollable content container — not the screen viewport — so the
+          sheet renders below the fold and is invisible to the user. */}
       <BottomSheetPicker
         visible={currencyPickerVisible}
         onClose={() => setCurrencyPickerVisible(false)}
@@ -804,7 +810,7 @@ export default function SettingsScreen({ navigation }: Props) {
         selectedValue={selectedThemeOption}
         onSelect={handleThemeSelect}
       />
-    </FlagshipScreen>
+    </View>
   );
 }
 

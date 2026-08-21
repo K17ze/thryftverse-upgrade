@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAppTheme } from '../theme/ThemeContext';
@@ -133,12 +133,12 @@ export default function SellScreen() {
     photoGuideTitle: { color: colors.textSecondary },
     photoGuideMin: { color: colors.textMuted },
     photoGuideTip: { color: colors.textMuted },
-    autofillCard: { backgroundColor: colors.surface, borderColor: colors.border },
+    autofillCard: { backgroundColor: `${colors.brand}08` },
     autofillTitle: { color: colors.textPrimary },
     autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     autofillChipLabel: { color: colors.textMuted },
     autofillChipValue: { color: colors.textPrimary },
-    autofillApplyBtn: { borderColor: colors.border, backgroundColor: colors.background },
+    autofillApplyBtn: { borderColor: `${colors.brand}30`, backgroundColor: `${colors.brand}08` },
   }), [colors]);
 
   const sellDraft = useStore((s) => s.sellDraft);
@@ -1025,7 +1025,7 @@ export default function SellScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close and go back"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
           <Text style={[styles.navTitle, t.navTitle]}>Sell</Text>
           {/* Transient "Saved" indicator — per audit 04: "visible 'Saved'
@@ -1034,7 +1034,7 @@ export default function SellScreen() {
           <View style={styles.navDraftStatus}>
             {draftSavedVisible ? (
               <View style={styles.navDraftSavedRow}>
-                <Ionicons name="checkmark" size={12} color={colors.success} />
+                <Ionicons name="checkmark" size={12} color={colors.success} aria-hidden={true} />
                 <Text style={[styles.navDraftText, { color: colors.success }]}>Saved</Text>
               </View>
             ) : null}
@@ -1054,7 +1054,7 @@ export default function SellScreen() {
               intrusive. Auto-hides once the user starts editing. */}
           {hasDraftContent && !title.trim() && mediaDraftItems.length > 0 && (
             <View style={styles.draftHintRow}>
-              <Ionicons name="document-text-outline" size={14} color={colors.brand} />
+              <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={[styles.draftHintText, { color: colors.textSecondary }]}>
                 Draft restored — pick up where you left off
               </Text>
@@ -1075,7 +1075,7 @@ export default function SellScreen() {
                 accessibilityLabel="Bulk listing — list multiple items at once"
                 accessibilityHint="Opens the bulk listing tool"
               >
-                <Ionicons name="layers-outline" size={20} color={colors.brand} />
+                <Ionicons name="layers-outline" size={22} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Bulk list</Text>
               </Pressable>
               <Pressable
@@ -1085,7 +1085,7 @@ export default function SellScreen() {
                 accessibilityLabel="Inventory dashboard"
                 accessibilityHint="Opens the inventory management screen"
               >
-                <Ionicons name="grid-outline" size={20} color={colors.brand} />
+                <Ionicons name="grid-outline" size={22} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Inventory</Text>
               </Pressable>
               <Pressable
@@ -1095,7 +1095,7 @@ export default function SellScreen() {
                 accessibilityLabel="Seller hub"
                 accessibilityHint="Opens the seller hub dashboard"
               >
-                <Ionicons name="storefront-outline" size={20} color={colors.brand} />
+                <Ionicons name="storefront-outline" size={22} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Hub</Text>
               </Pressable>
             </View>
@@ -1108,7 +1108,7 @@ export default function SellScreen() {
           {isNewSeller && !sellerTipsDismissed && !hasDraftContent && (
             <View style={styles.sellerTipsSection}>
               <View style={styles.sellerTipsHeader}>
-                <Ionicons name="bulb-outline" size={15} color={colors.brand} />
+                <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.sellerTipsTitle, { color: colors.textPrimary }]}>
                   Selling tips
                 </Text>
@@ -1119,24 +1119,24 @@ export default function SellScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Dismiss selling tips"
                 >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                  <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
               </View>
               <View style={styles.sellerTipsBody}>
                 <View style={styles.sellerTipRow}>
-                  <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="camera-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
                     Use natural light and capture all angles
                   </Text>
                 </View>
                 <View style={styles.sellerTipRow}>
-                  <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
                     Price using recent sold comparables
                   </Text>
                 </View>
                 <View style={styles.sellerTipRow}>
-                  <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
+                  <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
                     Respond quickly to buyer questions
                   </Text>
@@ -1163,7 +1163,7 @@ export default function SellScreen() {
               media it relates to. Resolves when the user adds enough photos. */}
           {mediaDraftItems.length < 3 && (
             <View style={styles.contextualHintRow}>
-              <Ionicons name="camera-outline" size={14} color={colors.brand} />
+              <Ionicons name="camera-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                 {mediaDraftItems.length === 0
                   ? 'Add at least 1 photo to publish'
@@ -1179,23 +1179,23 @@ export default function SellScreen() {
             accessibilityRole="button"
             accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
           >
-            <Ionicons name="camera-outline" size={15} color={colors.textSecondary} />
+            <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
             <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
             <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
-            <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={14} color={colors.textMuted} />
+            <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
           </Pressable>
           {!photoGuideCollapsed && (
             <View style={styles.photoGuideTips}>
               <View style={styles.photoGuideTipRow}>
-                <Ionicons name="sunny-outline" size={13} color={colors.textMuted} />
+                <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                 <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
               </View>
               <View style={styles.photoGuideTipRow}>
-                <Ionicons name="cube-outline" size={13} color={colors.textMuted} />
+                <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                 <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
               </View>
               <View style={styles.photoGuideTipRow}>
-                <Ionicons name="leaf-outline" size={13} color={colors.textMuted} />
+                <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                 <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
               </View>
             </View>
@@ -1248,7 +1248,7 @@ export default function SellScreen() {
               <View style={styles.contextualPrompts}>
                 {visible.map((prompt, i) => (
                   <View key={i} style={styles.contextualPromptRow}>
-                    <Ionicons name={prompt.icon} size={14} color={colors.brand} />
+                    <Ionicons name={prompt.icon} size={16} color={colors.brand} aria-hidden={true} />
                     <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
                       {prompt.text}
                     </Text>
@@ -1267,7 +1267,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
                 {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                 )}
@@ -1289,10 +1289,12 @@ export default function SellScreen() {
           </View>
 
           {/* -- 2d. SUGGESTED DETAILS (neutral, from photo filename) -- */}
+          {/* Inline suggestion — subtle tint, no heavy card chrome (§4 surface budget).
+              Reads as a helpful nudge, not a separate panel. */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, t.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <Ionicons name="image-outline" size={16} color={colors.textSecondary} />
+                <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.autofillTitle, t.autofillTitle]}>Suggested details</Text>
                 <Pressable
                   hitSlop={8}
@@ -1301,12 +1303,9 @@ export default function SellScreen() {
                   accessibilityLabel="Dismiss suggestions"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                  <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
                 </Pressable>
               </View>
-              <Text style={[styles.autofillDesc, t.autofillDesc]}>
-                Suggested from file name.
-              </Text>
               {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
               {autofillSuggestion.title && (
                 <View style={styles.autofillRow}>
@@ -1332,7 +1331,7 @@ export default function SellScreen() {
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
-                <Ionicons name="checkmark" size={16} color={colors.textPrimary} />
+                <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.autofillApplyText, t.autofillApplyText]}>Apply to empty fields</Text>
               </Pressable>
             </View>
@@ -1349,7 +1348,7 @@ export default function SellScreen() {
             />
           </View>
 
-          {/* -- 4. PRODUCT DETAILS -- */}
+          {/* -- 4. PRODUCT DETAILS (classification — what the item is) -- */}
           <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
@@ -1363,7 +1362,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
                   {category ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -1372,7 +1371,7 @@ export default function SellScreen() {
                   {category || 'Select category'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {errors.category ? <Text style={[styles.fieldError, t.fieldError]}>{errors.category}</Text> : null}
             <View style={[styles.hairline, t.hairline]} />
@@ -1387,7 +1386,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
                   {brand ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : completeness.policy.brandlessValid ? (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
@@ -1398,7 +1397,7 @@ export default function SellScreen() {
                   {brand || 'Select brand'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {!brand && (
               <Text style={[styles.fieldHelper, t.fieldHelper]}>
@@ -1419,7 +1418,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
                   {size ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : completeness.policy.sizelessValid ? (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
@@ -1430,10 +1429,18 @@ export default function SellScreen() {
                   {size || 'Select size'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {errors.size ? <Text style={[styles.fieldError, t.fieldError]}>{errors.size}</Text> : null}
             <View style={[styles.hairline, t.hairline]} />
+          </View>
+
+          {/* -- 5. PRICE & CONDITION (deal terms — the two fields buyers decide on) -- */}
+          {/* Per 2026 research: pair price + condition as "deal terms" so the
+              user sets their commercial position in one grouped section, rather
+              than burying condition among classification details. */}
+          <View style={styles.sectionGroup}>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Price & condition</Text>
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1445,7 +1452,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
                   {condition ? (
-                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -1454,15 +1461,10 @@ export default function SellScreen() {
                   {condition || 'Select condition'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {errors.condition ? <Text style={[styles.fieldError, t.fieldError]}>{errors.condition}</Text> : null}
             <View style={[styles.hairline, t.hairline]} />
-          </View>
-
-          {/* -- 5. MODE-SPECIFIC PRICING -- */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             {listingMode === 'sell_now' && (
               <>
@@ -1486,7 +1488,7 @@ export default function SellScreen() {
                   {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                     <View style={styles.priceSuggestionBlock}>
                       <View style={styles.soldCompsHint}>
-                        <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                        <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                         <Text style={[styles.soldCompsText, t.soldCompsText]}>
                           Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
                           {' '}({soldComps.sampleSize} sold)
@@ -1504,7 +1506,7 @@ export default function SellScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
                         >
-                          <Ionicons name="bulb-outline" size={13} color={colors.brand} />
+                          <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
                           <Text style={[styles.soldCompsText, t.priceSuggestion]}>
                             Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
                           </Text>
@@ -1515,7 +1517,7 @@ export default function SellScreen() {
                       )}
                       {priceVsMarket === 'above' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="trending-up-outline" size={13} color={colors.warning} />
+                          <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
                           <Text style={[styles.soldCompsText, t.priceMarketHigh]}>
                             Priced above recent sold range
                           </Text>
@@ -1523,7 +1525,7 @@ export default function SellScreen() {
                       )}
                       {priceVsMarket === 'below' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="trending-down-outline" size={13} color={colors.textMuted} />
+                          <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                           <Text style={[styles.soldCompsText, t.priceMarketLow]}>
                             Priced below recent sold range
                           </Text>
@@ -1531,7 +1533,7 @@ export default function SellScreen() {
                       )}
                       {priceVsMarket === 'in_range' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
+                          <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                           <Text style={[styles.soldCompsText, t.priceMarketGood]}>
                             Within recent sold range
                           </Text>
@@ -1540,7 +1542,7 @@ export default function SellScreen() {
                     </View>
                   ) : (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                      <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                       <Text style={[styles.soldCompsText, t.priceNoCompsHint]}>
                         Price competitively for faster sales
                       </Text>
@@ -1557,7 +1559,7 @@ export default function SellScreen() {
                   {hasValidPrice && numericPrice > 0 && (
                     <View style={styles.proceedsRow}>
                       <View style={styles.proceedsLeft}>
-                        <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                        <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
                         <Text style={[styles.proceedsLabel, t.fieldHelper]}>
                           You receive
                         </Text>
@@ -1622,7 +1624,7 @@ export default function SellScreen() {
                   {hasValidStartingBid && numericStartingBid > 0 && (
                     <View style={styles.proceedsRow}>
                       <View style={styles.proceedsLeft}>
-                        <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                        <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
                         <Text style={[styles.proceedsLabel, t.fieldHelper]}>
                           You receive (from starting bid)
                         </Text>
@@ -1775,7 +1777,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, t.fieldLabel]}>Description</Text>
                 {desc.trim().length >= 10 ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                 )}
@@ -1802,7 +1804,7 @@ export default function SellScreen() {
                 <View key={tag} style={[styles.tagChip, t.tagChip]}>
                   <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
                   <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
-                    <Ionicons name="close" size={12} color={colors.textMuted} />
+                    <Ionicons name="close" size={12} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 </View>
               ))}
@@ -1828,7 +1830,7 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
             {!shippingMethod && (
               <View style={styles.contextualHintRow}>
-                <Ionicons name="cube-outline" size={14} color={colors.brand} />
+                <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   Set a shipping method so buyers know how it'll arrive
                 </Text>
@@ -1836,7 +1838,7 @@ export default function SellScreen() {
             )}
             {shippingMethod && !shippingPayer && (
               <View style={styles.contextualHintRow}>
-                <Ionicons name="card-outline" size={14} color={colors.brand} />
+                <Ionicons name="card-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   Specify who pays for shipping
                 </Text>
@@ -1858,7 +1860,7 @@ export default function SellScreen() {
                     : 'Choose shipping & payment'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
           </View>
 
@@ -1886,7 +1888,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Close delivery options"
                     >
-                      <Ionicons name="close" size={20} color={colors.textMuted} />
+                      <Ionicons name="close" size={22} color={colors.textMuted} aria-hidden={true} />
                     </Pressable>
                   </View>
                 </View>
@@ -1904,7 +1906,7 @@ export default function SellScreen() {
                       accessibilityLabel={`Set shipping method to ${m}`}
                       accessibilityState={{ selected: active }}
                     >
-                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={20} color={colors.textPrimary} style={{ marginRight: Space.md }} />
+                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'flash-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
                       <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
                         {m === 'standard' ? 'Standard' : 'Express'}
                       </Text>
@@ -1928,7 +1930,7 @@ export default function SellScreen() {
                       accessibilityLabel={`Set shipping payer to ${p}`}
                       accessibilityState={{ selected: active }}
                     >
-                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={20} color={colors.textPrimary} style={{ marginRight: Space.md }} />
+                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
                       <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
                         {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
                       </Text>
@@ -1962,7 +1964,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Remove authentication photo"
                     >
-                      <Ionicons name="close-circle" size={18} color={colors.textPrimary} />
+                      <Ionicons name="close-circle" size={22} color={colors.textPrimary} aria-hidden={true} />
                     </Pressable>
                   </View>
                 ))}
@@ -1973,7 +1975,7 @@ export default function SellScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
-                    <Ionicons name="add" size={20} color={colors.textMuted} />
+                    <Ionicons name="add" size={22} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 )}
               </View>
@@ -1983,7 +1985,7 @@ export default function SellScreen() {
           {/* -- error message (inline, above footer) -- */}
           {errorMsg && publicationStage === 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={14} color={colors.danger} />
+              <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
               <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1998,7 +2000,7 @@ export default function SellScreen() {
           <View style={styles.completenessRow}>
             <Ionicons
               name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={15}
+              size={16}
               color={completeness.canActivate ? colors.success : colors.warning}
             />
             <View style={styles.completenessTextWrap}>
@@ -2025,7 +2027,7 @@ export default function SellScreen() {
             <View style={styles.reviewSummaryRow}>
               <Ionicons
                 name={listingMode === 'auction' ? 'hammer-outline' : 'people-outline'}
-                size={15}
+                size={16}
                 color={colors.textSecondary}
               />
               <Text style={[styles.reviewSummaryText, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -2120,7 +2122,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     padding: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: Stroke.standard,
+    borderWidth: 0,
   },
   autofillHeader: {
     flexDirection: 'row',
@@ -2186,8 +2188,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: Stroke.standard,
+    borderWidth: 0,
     alignSelf: 'flex-start',
+    marginTop: Space.xs,
   },
   autofillApplyText: {
     fontSize: TypographyV2.meta.size,
@@ -2280,17 +2283,19 @@ const styles = StyleSheet.create({
   },
 
   /* -- price input -- */
+  /* The price field is the financial center of the listing — larger
+     currency symbol matches the input size for visual cohesion. */
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
     minHeight: Control.hit + Space.sm,
   },
   currencySymbol: {
-    fontSize: TypographyV2.priceList.size,
-    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-    marginRight: Space.xs,
+    marginRight: Space.xs + 2,
   },
   priceInput: {
     fontSize: TypographyV2.priceHero.size,
@@ -2520,12 +2525,13 @@ const styles = StyleSheet.create({
 
   /* -- seller proceeds estimate -- */
   /* Per audit 04 P1: seller-proceeds preview beside price.
-     Flat inline row — no card chrome (§4 surface budget). */
+     Flat inline row — no card chrome (§4 surface budget).
+     The amount uses priceList weight to read as a financial figure. */
   proceedsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
     marginTop: Space.xs,
   },
   proceedsLeft: {
@@ -2534,8 +2540,8 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
   },
   proceedsLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.medium,
     marginTop: 0,
   },
@@ -2545,8 +2551,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   proceedsAmount: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
