@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
+import type { AuthenticatedUser } from '../lib/auth.js';
 import { config } from '../config.js';
 import {
   databasePoolSnapshot,
-  type PoolSnapshot,
+  type DatabasePoolSnapshot,
 } from '../db/pool.js';
 import {
   metricsContentType,
@@ -24,7 +25,7 @@ type HealthRouteDependencies = {
   redis: Redis;
   docsAuthHook: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   ensureSecurityAdminAccess: (
-    request: { headers: Record<string, string | string[] | undefined>; authUser?: { userId: string; role?: string } },
+    request: { headers: Record<string, string | string[] | undefined>; authUser?: AuthenticatedUser },
     reply: { code: (statusCode: number) => unknown },
   ) => { ok: false; error: string } | null;
 };

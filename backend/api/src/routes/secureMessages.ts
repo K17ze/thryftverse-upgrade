@@ -19,7 +19,7 @@ type SecureMessagesRouteDependencies = {
   app: FastifyInstance;
   db: Pool;
   ensureUserExists: (userId: string) => Promise<void>;
-  queueUserNotification: (input: QueueUserNotificationInput) => Promise<void>;
+  queueUserNotification: (input: QueueUserNotificationInput) => Promise<string | null>;
 };
 
 export const registerSecureMessagesRoutes = ({

@@ -60,6 +60,13 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      - name: SSL pin validation (production — fail on placeholder hashes)
+        working-directory: frontend
+        run: node scripts/validate-ssl-pins.mjs
+        env:
+          EXPO_PUBLIC_ENVIRONMENT: production
+          EXPO_PUBLIC_SSL_PINNING_ENABLED: 'true'
+
       - name: Setup Expo
         uses: expo/expo-github-action@v8
         with:

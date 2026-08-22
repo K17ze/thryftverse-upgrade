@@ -45,6 +45,10 @@ jobs:
         run: npx expo-doctor
         working-directory: frontend
 
+      - name: SSL pin validation
+        run: node scripts/validate-ssl-pins.mjs
+        working-directory: frontend
+
   build-and-deploy:
     name: EAS Build + Update (preview channel)
     needs: pre-build-gates

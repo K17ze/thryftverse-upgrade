@@ -174,7 +174,7 @@ type WebhookRouteDependencies = {
       rawProviderAmount?: string;
       providerAmountUnit?: ProviderAmountUnit;
       conversionTrace?: MoneyConversionTrace;
-      amount?: string;
+      amount?: number;
       currency?: string;
       reason?: string;
       metadata: Record<string, unknown>;
@@ -191,7 +191,7 @@ type WebhookRouteDependencies = {
       rawProviderAmount?: string;
       providerAmountUnit?: ProviderAmountUnit;
       conversionTrace?: MoneyConversionTrace;
-      amount?: string;
+      amount?: number;
       currency?: string;
       reason?: string;
       metadata: Record<string, unknown>;
@@ -558,7 +558,7 @@ export const registerWebhookRoutes = ({
           }
 
           if (mintTransition.enqueueReserveAllocation && mintTransition.mintOperation?.id) {
-            mintReserveEnqueueOperationId = mintTransition.mintOperation.id;
+            mintReserveEnqueueOperationId = String(mintTransition.mintOperation.id);
           }
         }
       }

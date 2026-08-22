@@ -45,6 +45,17 @@ const COMMERCE_ORDER_STATUSES = [
 ] as const;
 type CommerceOrderStatus = (typeof COMMERCE_ORDER_STATUSES)[number];
 
+const PARCEL_EVENT_TYPES = [
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'collection_confirmed',
+  'delivery_failed',
+  'returned',
+] as const;
+type ParcelEventType = (typeof PARCEL_EVENT_TYPES)[number];
+
 // ── Dependency injection ──
 
 type OrderRouteDependencies = {
@@ -60,6 +71,128 @@ type OrderRouteDependencies = {
     reply: { code: (statusCode: number) => unknown }
   ) => { ok: false; error: string } | null;
   orderParcelEventsTableAvailable: (client: DbQueryable) => Promise<boolean>;
+  ledgerTablesAvailable: (client: DbQueryable) => Promise<boolean>;
+  postCommerceOrderLedgerEntries: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      buyerId: string;
+      sellerId: string;
+      subtotalGbp: number;
+      platformChargeGbp: number;
+      postageFeeGbp?: number;
+      totalGbp: number;
+    }
+  ) => Promise<void>;
+  provisionOrderShipmentIfMissing: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      buyerId: string;
+      sellerId: string;
+      addressId: number | null;
+      listingId: string;
+      preferredCarrierId?: string | null;
+      postageFeeGbp?: number;
+    }
+  ) => Promise<
+    | {
+      provisioned: true;
+      shippingProvider: string;
+      trackingNumber: string;
+      shippingLabelUrl: string | null;
+      quoteGbp: number;
+    }
+    | {
+      provisioned: false;
+      reason: string;
+      shippingProvider?: string | null;
+      trackingNumber?: string | null;
+      shippingLabelUrl?: string | null;
+      quoteGbp?: number | null;
+    }
+  >;
+  applyOrderParcelEvent: (
+    client: PoolClient,
+    input: {
+      orderId: string;
+      provider: string;
+      eventType: ParcelEventType;
+      providerEventId?: string;
+      trackingId?: string;
+      occurredAt?: string;
+      payload?: Record<string, unknown>;
+      source: 'admin' | 'shipping_webhook';
+    }
+  ) => Promise<{
+    idempotent: boolean;
+    parcelEvent: {
+      provider: string;
+      eventType: ParcelEventType;
+      providerEventId: string | null;
+      trackingId: string | null;
+      occurredAt: string | null;
+      recorded: boolean;
+      duplicate: boolean;
+    };
+    order: {
+      id: string;
+      buyerId: string;
+      sellerId: string;
+      listingId: string;
+      subtotalGbp: number;
+      buyerProtectionFeeGbp: number;
+      platformChargeGbp: number;
+      postageFeeGbp: number;
+      totalGbp: number;
+      status: string;
+      addressId: number | null;
+      paymentMethodId: number | null;
+      shippingCarrierId: string | null;
+      shippingProvider: string | null;
+      trackingNumber: string | null;
+      shippingLabelUrl: string | null;
+      shippingQuoteGbp: number | null;
+      shippedAt: string | null;
+      deliveredAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+    settlement: {
+      releasePolicy: 'parcel_delivery_confirmation' | 'buyer_protection_hold';
+      sellerEscrowHeldGbp: number;
+      sellerPayableReleasedGbp: number;
+      sellerCashoutEligible: boolean;
+      alreadyReleased: boolean;
+      escrowReleaseScheduledAt: string | null;
+    };
+  }>;
+  releaseCommerceOrderEscrowToSeller: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      sellerId: string;
+      subtotalGbp: number;
+      parcelProvider: string;
+      parcelEventType: ParcelEventType;
+      trackingId?: string;
+      providerEventId?: string;
+    }
+  ) => Promise<{ released: boolean; alreadyReleased: boolean }>;
+  queueCommercePaymentNotifications: (input: {
+    orderId: string;
+    source: string;
+  }) => Promise<void>;
+  queueCommerceParcelSettlementNotifications: (input: {
+    orderId: string;
+    buyerId: string;
+    sellerId: string;
+    orderStatus: string;
+    sellerPayableReleasedGbp: number;
+    source: string;
+    provider: string;
+    eventType: string;
+  }) => Promise<void>;
   sendCommerceOrderSmsNotifications: (input: {
     orderId: string;
     orderStatus: string;
@@ -85,6 +218,13 @@ export const registerOrderRoutes = ({
   calculateCommercePlatformChargeGbp,
   ensureSecurityAdminAccess,
   orderParcelEventsTableAvailable,
+  ledgerTablesAvailable,
+  postCommerceOrderLedgerEntries,
+  provisionOrderShipmentIfMissing,
+  applyOrderParcelEvent,
+  releaseCommerceOrderEscrowToSeller,
+  queueCommercePaymentNotifications,
+  queueCommerceParcelSettlementNotifications,
   sendCommerceOrderSmsNotifications,
   postCommerceOrderRefundLedgerReversal,
 }: OrderRouteDependencies) => {

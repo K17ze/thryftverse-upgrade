@@ -1,19 +1,22 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { AuthenticatedUser } from '../lib/auth.js';
 import { z } from 'zod';
+
+type KeyName = 'profile' | 'message' | 'wallet';
 
 type SecurityRouteDependencies = {
   app: FastifyInstance;
   ensureSecurityAdminAccess: (
     request: {
       headers: Record<string, string | string[] | undefined>;
-      authUser?: { role?: string };
+      authUser?: AuthenticatedUser;
     },
     reply: { code: (statusCode: number) => unknown },
   ) => { ok: false; error: string } | null;
-  rotateKeyVersion: (keyName: string) => Promise<{ keyVersion: string }>;
+  rotateKeyVersion: (keyName: KeyName) => Promise<{ keyName: string; keyVersion: number }>;
   rewrapDomainRows: (
-    keyName: string,
-    keyVersion: string,
+    keyName: KeyName,
+    keyVersion: number,
     maxRows: number,
   ) => Promise<{ rowsScanned: number; rowsRewrapped: number }>;
 };

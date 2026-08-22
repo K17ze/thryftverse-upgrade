@@ -12,7 +12,6 @@ import {
 import {
   listCountryPricingQuotes,
   getOnezeAnchorConfig,
-  pricingTablesAvailable as onezePricingTablesAvailable,
 } from '../lib/pricingEngine.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
 
@@ -195,7 +194,17 @@ type AuctionRouteDependencies = {
     payload: Record<string, unknown>;
     route: Record<string, unknown>;
     idempotencyKey: string;
+    metadata?: Record<string, unknown>;
   }) => Promise<string | null>;
+  onezeTablesAvailable: (client: Pool | PoolClient) => Promise<boolean>;
+  onezePricingTablesAvailable: (client: Pool | PoolClient) => Promise<boolean>;
+  appendComplianceAuditSafe: (
+    request: { authUser?: { userId: string }; ip?: string; headers?: Record<string, string | string[] | undefined> },
+    event: { eventType: string; subjectUserId?: string; payload: Record<string, unknown> },
+  ) => Promise<void>;
+  ATTENTION_LEADING_THRESHOLD_MS: number;
+  ATTENTION_WATCHING_THRESHOLD_MS: number;
+  CLOSING_SOON_THRESHOLD_MS: number;
 };
 
 export const registerAuctionRoutes = ({
@@ -203,6 +212,12 @@ export const registerAuctionRoutes = ({
   db,
   optionalAuthenticate,
   queueUserNotification,
+  onezeTablesAvailable,
+  onezePricingTablesAvailable,
+  appendComplianceAuditSafe,
+  ATTENTION_LEADING_THRESHOLD_MS,
+  ATTENTION_WATCHING_THRESHOLD_MS,
+  CLOSING_SOON_THRESHOLD_MS,
 }: AuctionRouteDependencies) => {
 
 app.get('/auctions/1ze-rates', async (request, reply) => {
@@ -1479,6 +1494,7 @@ app.post('/auctions/:auctionId/bids', {
         userId: auction.seller_id,
         title: 'New auction bid',
         body: `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
+        eventType: 'auction_bid',
         payload: {
           auctionId,
           bidderId,
@@ -1486,6 +1502,7 @@ app.post('/auctions/:auctionId/bids', {
           event: 'auction_bid',
         },
         route: { screen: 'AuctionDetail', params: { auctionId } },
+        idempotencyKey: `auction-bid-${auctionId}-${nextBidCount}`,
         metadata: {
           source: 'auction_bid_route',
         },
@@ -1501,12 +1518,14 @@ app.post('/auctions/:auctionId/bids', {
           userId: previousTopBidderId,
           title: 'You\'ve been outbid',
           body: `Someone outbid you with ${amountGbp.toFixed(2)} GBP. Place a new bid to reclaim the top spot.`,
+          eventType: 'auction_outbid',
           payload: {
             auctionId,
             event: 'auction_outbid',
             newBidAmountGbp: amountGbp,
           },
           route: { screen: 'AuctionDetail', params: { auctionId } },
+          idempotencyKey: `auction-outbid-${auctionId}-${nextBidCount}`,
           metadata: {
             source: 'auction_outbid_route',
           },
@@ -1939,6 +1958,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         userId: auction.seller_id,
         title: 'Auction won via Buy Now',
         body: `Your auction was won via Buy Now for ${transactionAmountGbp.toFixed(2)} GBP.`,
+        eventType: 'auction_buy_now',
         payload: {
           auctionId,
           buyerId,
@@ -1946,6 +1966,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
           event: 'auction_buy_now',
         },
         route: { screen: 'AuctionDetail', params: { auctionId } },
+        idempotencyKey: `auction-buy-now-${auctionId}`,
         metadata: {
           source: 'auction_buy_now_route',
         },

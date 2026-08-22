@@ -2467,3 +2467,75 @@ All P3 enhancement gaps have been closed via 5 parallel subagents. These are for
 - **Release train**: Multi-channel release pipeline with approval gates.
 - **Compliance suite**: COPPA age gate, EU AI Act transparency, SDK privacy manifest.
 - **RUM + PostHog-Sentry correlation**: Real user monitoring with error correlation.
+
+---
+
+## 38. BUILD & VERIFICATION COMMANDS
+
+### Backend API (`backend/api/`)
+
+```bash
+# Typecheck (PowerShell — npx is blocked by execution policy)
+node node_modules/typescript/bin/tsc --noEmit
+
+# Run tests
+node node_modules/vitest/vitest.mjs run --dir src
+```
+
+### Frontend (`frontend/`)
+
+```bash
+# Typecheck
+node node_modules/typescript/bin/tsc --noEmit
+
+# Run tests
+npm test
+
+# CI gate checks
+npm run check:ssl-pins          # SSL pin validation (placeholder hash guard)
+npm run check:residue           # Production residue check
+npm run check:bundle-size       # Bundle size budget
+npm run check:visual-gates      # Visual release gates
+npm run check:animated-scroll   # Animated scroll usage
+npm run lint:design-tokens      # Design token lint
+
+# Full phase verification
+npm run verify:phase
+```
+
+### SSL Pin Validation
+
+```bash
+# Non-production (warnings only, exit 0)
+node scripts/validate-ssl-pins.mjs
+
+# Production mode (fails on placeholder hashes, exit 1)
+EXPO_PUBLIC_ENVIRONMENT=production EXPO_PUBLIC_SSL_PINNING_ENABLED=true node scripts/validate-ssl-pins.mjs
+```
+
+### Fastify Plugin Decomposition Pattern
+
+Route files in `backend/api/src/routes/` follow this pattern:
+
+```typescript
+// routes/example.ts
+type ExampleRouteDependencies = {
+  app: FastifyInstance;
+  db: Pool;
+  // ... other dependencies
+};
+
+export const registerExampleRoutes = ({
+  app,
+  db,
+}: ExampleRouteDependencies) => {
+  app.get('/example', async (request, reply) => { ... });
+};
+```
+
+In `index.ts`, import and register:
+```typescript
+import { registerExampleRoutes } from './routes/example.js';
+// ...
+registerExampleRoutes({ app, db });
+```

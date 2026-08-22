@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   isCarrierLiveConfigured,
@@ -18,9 +18,9 @@ type ShippingRouteDependencies = {
   normalizePostcode: (value: string) => string;
   ensureUserExists: (userId: string) => Promise<void>;
   resolveUserPrimaryPostcode: (client: Pool, userId: string) => Promise<string | null>;
-  onezeP2pTablesAvailable: (client: Pool) => Promise<boolean>;
+  onezeP2pTablesAvailable: (client: Pool | PoolClient) => Promise<boolean>;
   applyOrderParcelEvent: (
-    client: Pool,
+    client: Pool | PoolClient,
     input: {
       orderId: string;
       provider: string;
