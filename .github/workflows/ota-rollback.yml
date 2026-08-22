@@ -9,8 +9,9 @@ on:
         default: 'production'
         type: choice
         options:
+          - staging
+          - canary
           - production
-          - preview
       method:
         description: 'Rollback method'
         required: true
@@ -20,11 +21,14 @@ on:
           - rollback
           - republish
 
+permissions:
+  contents: read
+
 jobs:
   rollback:
     name: OTA Rollback (${{ inputs.method }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.channel == 'production' && 'production' || 'preview' }}
+    environment: ${{ inputs.channel == 'production' && 'production' || (inputs.channel == 'canary' && 'canary' || 'staging') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

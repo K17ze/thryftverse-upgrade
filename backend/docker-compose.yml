@@ -29,6 +29,37 @@ services:
       timeout: 3s
       retries: 20
 
+  # ── PgBouncer — connection pooling (dev) ─────────────────────────────
+  # Sits between the API and PostgreSQL, pooling connections in transaction
+  # mode for BullMQ compatibility. The API connects to pgbouncer:6432 when
+  # PGBOUNCER_ENABLED=true (src/db/pool.ts rewrites the port automatically).
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23.1-pgbouncer
+    container_name: thryftverse-pgbouncer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: thryftverse
+      DB_PASSWORD: thryftverse
+      DB_NAME: thryftverse
+      AUTH_TYPE: trust
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      RESERVE_POOL_SIZE: 5
+      MAX_DB_CONNECTIONS: 100
+    ports:
+      - "6432:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build:
       context: ./api
@@ -39,15 +70,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
     environment:
       NODE_ENV: development
       PORT: 4000
       APP_URL: http://localhost:4000
-      DATABASE_URL: postgresql://thryftverse:thryftverse@postgres:5432/thryftverse
+      # PgBouncer — pool.ts rewrites the port to 6432 when enabled.
+      # DATABASE_URL points at the pgbouncer container; PGBOUNCER_ENABLED
+      # also caps the client-side pool_max to 10 (see src/db/pool.ts).
+      DATABASE_URL: postgresql://thryftverse:thryftverse@pgbouncer:6432/thryftverse
+      PGBOUNCER_ENABLED: "true"
+      PGBOUNCER_PORT: "6432"
       REDIS_URL: redis://redis:6379
       KEY_SERVICE_URL: http://localhost:4100
       KEY_SERVICE_CLIENT_TOKEN: local-key-client-token
       KEY_SERVICE_ADMIN_TOKEN: local-key-admin-token
+      # Meilisearch — full-text search
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: local-meilisearch-api-key
+      MEILISEARCH_INDEX_PREFIX: thryftverse_
       S3_ENDPOINT: http://localhost:9000
       S3_PUBLIC_ENDPOINT: http://localhost:9000
       S3_REGION: us-east-1
@@ -74,5 +118,25 @@ services:
       - "4000:4000"
     restart: unless-stopped
 
+  # ── Meilisearch — full-text search engine (dev) ─────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: thryftverse-meilisearch
+    environment:
+      MEILI_MASTER_KEY: local-meilisearch-master-key
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - thryftverse_meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   thryftverse_pg_data:
+  thryftverse_meili_data:

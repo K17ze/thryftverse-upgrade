@@ -4,33 +4,40 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: 'EAS Update channel (production/preview)'
+        description: 'EAS Update channel (staging/canary/production)'
         required: true
         default: 'production'
         type: choice
         options:
+          - staging
+          - canary
           - production
-          - preview
       message:
         description: 'Update message'
         required: true
       rollout_percentage:
-        description: 'Rollout percentage (1, 10, 25, 50, 100)'
+        description: 'Rollout percentage (1, 10, 50, 100)'
         required: true
         default: '1'
         type: choice
         options:
           - '1'
           - '10'
-          - '25'
           - '50'
           - '100'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ota-staged-rollout-${{ inputs.channel }}
+  cancel-in-progress: false
 
 jobs:
   publish-update:
     name: Publish EAS Update (${{ inputs.rollout_percentage }}%)
     runs-on: ubuntu-latest
-    environment: ${{ inputs.channel == 'production' && 'production' || 'preview' }}
+    environment: ${{ inputs.channel == 'production' && 'production' || (inputs.channel == 'canary' && 'canary' || 'staging') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

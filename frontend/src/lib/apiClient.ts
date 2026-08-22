@@ -447,6 +447,115 @@ async function fetchWithRetry(
   throw lastError ?? new Error(`Request failed after ${maxRetries + 1} attempts for ${url}`);
 }
 
+// ---------------------------------------------------------------------------
+// Request identity & deduplication layer
+// ---------------------------------------------------------------------------
+//
+// Every outgoing request is tagged with an `X-Request-Id` (UUID v4) so that
+// client-side errors can be correlated with backend logs. When the backend
+// echoes its own `X-Request-Id` in the response, that value is preferred for
+// log correlation and exposed via `getRequestId()` for support tickets.
+//
+// Concurrent identical GET requests are deduplicated against a single in-flight
+// network call so that fan-out from multiple hooks/components does not multiply
+// load on the API. Write methods (POST/PUT/PATCH/DELETE) are never deduplicated.
+
+/**
+ * Generates a RFC 4122 §4.4 UUID v4 using the platform CSPRNG when available
+ * (Web Crypto / React Native `crypto.getRandomValues`), falling back to
+ * `Math.random` on runtimes without a crypto implementation. The fallback is
+ * only used in legacy environments — modern React Native ships crypto.
+ */
+function generateRequestId(): string {
+  const bytes = new Uint8Array(16);
+
+  const globalCrypto = (globalThis as unknown as {
+    crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
+  }).crypto;
+
+  if (typeof globalCrypto?.getRandomValues === 'function') {
+    globalCrypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  // Set version (4) and variant (RFC 4122) bits.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex: string[] = [];
+  for (let i = 0; i < 16; i++) {
+    hex.push(bytes[i].toString(16).padStart(2, '0'));
+  }
+
+  return (
+    `${hex[0]}${hex[1]}${hex[2]}${hex[3]}` +
+    `-${hex[4]}${hex[5]}` +
+    `-${hex[6]}${hex[7]}` +
+    `-${hex[8]}${hex[9]}` +
+    `-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`
+  );
+}
+
+/**
+ * The request ID of the most recently completed request. Updated on every
+ * `fetchJson` call to the client-generated UUID, then overridden with the
+ * backend's `X-Request-Id` response header when present. Exposed for support
+ * ticket correlation via `getRequestId()`.
+ */
+let lastRequestId: string | null = null;
+
+/**
+ * Returns the `X-Request-Id` of the most recently completed request. When the
+ * backend echoes its own request ID in the response, that value is returned;
+ * otherwise the client-generated UUID is used. Returns `null` before any
+ * request has been made. Useful for surfacing in support tickets and error
+ * dialogs so issues can be correlated with backend logs.
+ */
+export function getRequestId(): string | null {
+  return lastRequestId;
+}
+
+/**
+ * In-flight GET requests keyed by `${method}:${url}` (where `url` includes
+ * query params). When a second GET arrives for a key already present, the
+ * existing promise is reused so only one network call is made. Entries are
+ * removed on settlement (success or failure) so subsequent identical requests
+ * hit the network again. Write methods are never stored here.
+ */
+const inflightGetRequests = new Map<string, Promise<Response>>();
+
+/**
+ * Deduplicates a GET request against any in-flight request for the same key.
+ * Each consumer receives an independent `Response` clone so that body
+ * consumption (`.json()` / `.text()`) by one caller does not disturb the
+ * other. The cache entry is cleared once the underlying network promise
+ * settles, regardless of outcome.
+ *
+ * @param key   Dedup key in the form `${method}:${url}`.
+ * @param run   Factory that performs the actual network request.
+ * @returns A `Response` (cloned) for the deduplicated request.
+ */
+function dedupedGet(key: string, run: () => Promise<Response>): Promise<Response> {
+  const existing = inflightGetRequests.get(key);
+  if (existing) {
+    // Clone so each caller can independently consume the body stream.
+    return existing.then((response) => response.clone());
+  }
+
+  const promise = run().finally(() => {
+    inflightGetRequests.delete(key);
+  });
+  inflightGetRequests.set(key, promise);
+
+  // The originating caller also receives a clone; the canonical Response is
+  // retained only by the stored promise so it remains cloneable for any
+  // subsequent callers that arrive before settlement.
+  return promise.then((response) => response.clone());
+}
+
 /**
  * Per-request options accepted by `fetchJson` in addition to the standard
  * `RequestInit`. These are intentionally optional and backward-compatible —
@@ -457,6 +566,23 @@ export interface FetchJsonOptions {
   timeoutMs?: number;
   /** Max retry attempts for transient failures (default 3). Set to 0 to disable retry. */
   maxRetries?: number;
+  /**
+   * When `true`, bypasses GET request deduplication for this call. Use when a
+   * caller needs a fresh network round-trip even if an identical GET is
+   * already in flight (e.g. explicit cache-busting refresh). Only affects GET
+   * requests; writes are never deduplicated.
+   */
+  skipDedup?: boolean;
+  /**
+   * Optional `AbortSignal` forwarded to the underlying `fetch()` call. When
+   * React Query cancels a query (e.g. component unmount or query becomes
+   * inactive), it passes its own signal here so the in-flight request is
+   * aborted immediately rather than completing wastefully.
+   *
+   * If a `signal` is also present in `init.signal`, the caller-provided
+   * `init.signal` takes precedence — both are composed by `fetchWithTimeout`.
+   */
+  signal?: AbortSignal;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -699,6 +825,31 @@ export async function fetchJson<T>(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
 
+  // Merge the caller-provided AbortSignal (e.g. from React Query) into the
+  // RequestInit so it is composed with the internal timeout controller inside
+  // `fetchWithTimeout`. If `init` already carries a signal, the init signal
+  // wins — both are composed by the timeout layer.
+  const mergedInit: RequestInit = options?.signal
+    ? { ...init, signal: init?.signal ?? options.signal }
+    : init ?? {};
+
+  // Assign a client-generated request ID for log correlation. The backend may
+  // echo its own `X-Request-Id` in the response; when present, that value is
+  // preferred and overwrites `lastRequestId` after the response arrives.
+  const requestId = generateRequestId();
+  lastRequestId = requestId;
+
+  const method = mergedInit.method?.toUpperCase();
+  // Record the outgoing request as a Sentry breadcrumb so client-side errors
+  // can be correlated with backend logs via the shared request ID. The Sentry
+  // proxy no-ops until initialised, so this is safe during app bootstrap.
+  Sentry.addBreadcrumb!({
+    category: 'api',
+    message: `${method ?? 'GET'} ${path}`,
+    level: 'info',
+    data: { requestId, url },
+  });
+
   // Proactively check if the refresh token has expired
   if (
     authSessionState?.refreshTokenExpiresAt &&
@@ -724,7 +875,9 @@ export async function fetchJson<T>(
     }
   }
 
-  const isWriteMethod = init && init.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(init.method.toUpperCase());
+  const isWriteMethod =
+    mergedInit.method !== undefined &&
+    ['POST', 'PUT', 'DELETE', 'PATCH'].includes(mergedInit.method.toUpperCase());
 
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
@@ -733,7 +886,7 @@ export async function fetchJson<T>(
       // mutation for later replay via the offline queue (WS33) so the user's
       // intent is preserved across connectivity gaps.
       try {
-        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(init));
+        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
       } catch {
         // Queue persistence is best-effort — never block the offline signal.
       }
@@ -746,79 +899,108 @@ export async function fetchJson<T>(
   }
 
   const execute = async (overrideAccessToken?: string): Promise<Response> => {
-    const headers = new Headers(init?.headers ?? {});
+    const headers = new Headers(mergedInit.headers ?? {});
     const token = overrideAccessToken ?? authSessionState?.accessToken;
 
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
 
+    // Tag every outgoing request with an X-Request-Id for client/backend log
+    // correlation. Callers may pre-set the header to override the generated ID.
+    if (!headers.has('X-Request-Id')) {
+      headers.set('X-Request-Id', requestId);
+    }
+
     return fetchWithRetry(
       url,
-      { ...init, headers },
+      { ...mergedInit, headers },
       maxRetries,
       timeoutMs
     );
   };
 
-  let response: Response;
-  try {
-    const networkState = await Network.getNetworkStateAsync();
-    if (networkState.isInternetReachable === false && !isWriteMethod) {
-      throw new ApiRequestError(`Internet connection is offline`);
+  // Acquire the response (network call + 401 auth-refresh retry). For GET
+  // requests this is deduplicated against any in-flight request for the same
+  // URL+params so concurrent callers share a single network round-trip; each
+  // caller receives an independent `Response` clone. Write methods bypass
+  // dedup entirely.
+  const acquireResponse = async (): Promise<Response> => {
+    let response: Response;
+    try {
+      const networkState = await Network.getNetworkStateAsync();
+      if (networkState.isInternetReachable === false && !isWriteMethod) {
+        throw new ApiRequestError(`Internet connection is offline`);
+      }
+
+      response = await execute();
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        throw error;
+      }
+      if (isWriteMethod) {
+        // The connection dropped mid-flight before the server confirmed the
+        // result. Enqueue the mutation for replay so the user does not lose
+        // the action — the offline queue (WS33) will retry with its own
+        // exponential backoff once connectivity returns.
+        try {
+          useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
+        } catch {
+          // Queue persistence is best-effort.
+        }
+        throw new ApiRequestError(
+          'The connection dropped before the server result was confirmed. Your action was saved offline and will be retried automatically.',
+          undefined,
+          { code: OFFLINE_WRITE_QUEUED_CODE }
+        );
+      }
+      const errorType = classifyNetworkError(error);
+      const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+      throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
     }
 
-    response = await execute();
-  } catch (error) {
-    if (error instanceof ApiRequestError) {
-      throw error;
-    }
-    if (isWriteMethod) {
-      // The connection dropped mid-flight before the server confirmed the
-      // result. Enqueue the mutation for replay so the user does not lose
-      // the action — the offline queue (WS33) will retry with its own
-      // exponential backoff once connectivity returns.
-      try {
-        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(init!));
-      } catch {
-        // Queue persistence is best-effort.
+    if (
+      response.status === 401 &&
+      !shouldSkipTokenRefresh(path) &&
+      authSessionState?.refreshToken
+    ) {
+      const refreshedAccessToken = await refreshAccessToken(baseUrl);
+      if (refreshedAccessToken) {
+        try {
+          response = await execute(refreshedAccessToken);
+        } catch (error) {
+          const errorType = classifyNetworkError(error);
+          const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+          throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
+        }
+      } else {
+        // Token refresh failed — session is no longer valid. Trigger a
+        // lazy logout so the navigator remounts to AuthLanding instead of
+        // leaving the user on a screen with stale auth state.
+        try {
+          const { useStore } = await import('../store/useStore');
+          useStore.getState().logout();
+        } catch {
+          // Store not available (e.g. during app bootstrap) — safe to ignore.
+        }
       }
-      throw new ApiRequestError(
-        'The connection dropped before the server result was confirmed. Your action was saved offline and will be retried automatically.',
-        undefined,
-        { code: OFFLINE_WRITE_QUEUED_CODE }
-      );
     }
-    const errorType = classifyNetworkError(error);
-    const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
-    throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
-  }
 
-  if (
-    response.status === 401 &&
-    !shouldSkipTokenRefresh(path) &&
-    authSessionState?.refreshToken
-  ) {
-    const refreshedAccessToken = await refreshAccessToken(baseUrl);
-    if (refreshedAccessToken) {
-      try {
-        response = await execute(refreshedAccessToken);
-      } catch (error) {
-        const errorType = classifyNetworkError(error);
-        const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
-        throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
-      }
-    } else {
-      // Token refresh failed — session is no longer valid. Trigger a
-      // lazy logout so the navigator remounts to AuthLanding instead of
-      // leaving the user on a screen with stale auth state.
-      try {
-        const { useStore } = await import('../store/useStore');
-        useStore.getState().logout();
-      } catch {
-        // Store not available (e.g. during app bootstrap) — safe to ignore.
-      }
-    }
+    return response;
+  };
+
+  const isGetRequest = method === undefined || method === 'GET';
+  const shouldDedup = isGetRequest && options?.skipDedup !== true;
+  const response = shouldDedup
+    ? await dedupedGet(`GET:${url}`, acquireResponse)
+    : await acquireResponse();
+
+  // Prefer the backend's X-Request-Id (when echoed in the response) for log
+  // correlation so support tickets reference the server-side trace, not the
+  // client-generated UUID.
+  const backendRequestId = response.headers.get('X-Request-Id');
+  if (backendRequestId) {
+    lastRequestId = backendRequestId;
   }
 
   const payload = await parsePayload(response);

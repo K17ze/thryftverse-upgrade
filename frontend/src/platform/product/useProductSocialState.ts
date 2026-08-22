@@ -6,11 +6,16 @@
  * rollback semantics. Auction watchlist is intentionally NOT handled here —
  * it remains an auction-specific action because it controls participation /
  * notifications, not social saving.
+ *
+ * The wishlist is now backed by React Query (see `useWishlist.ts`) with
+ * optimistic mutation + rollback. The Zustand wishlist state is kept in
+ * sync as a mirror so legacy consumers continue to work during migration.
  */
 import { useCallback, useState } from 'react';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useIsWishlisted, useToggleWishlist } from '../../hooks/useWishlist';
 import type { ProductDetailViewModel } from './productDetailViewModel';
 
 export interface ProductSocialState {
@@ -38,33 +43,34 @@ export function useProductSocialState(
     onShareAnalytics?: () => void;
   }
 ): ProductSocialState {
-  const isWishlisted = useStore((s) => s.isWishlisted);
-  const toggleWishlist = useStore((s) => s.toggleWishlist);
   const isItemSavedAnywhere = useStore((s) => s.isItemSavedAnywhere);
   const { show } = useToast();
   const haptic = useHaptic();
 
+  const objectId = vm?.objectId ?? '';
+  const isLiked = useIsWishlisted(objectId);
+  const toggleWishlistMutation = useToggleWishlist(objectId);
+
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
 
-  const objectId = vm?.objectId ?? '';
-  const isLiked = vm ? isWishlisted(objectId) : false;
   const isSavedToCollection = vm ? isItemSavedAnywhere(objectId) : false;
 
   const toggleLike = useCallback(() => {
     if (!vm || !objectId) return;
-    const wasLiked = isWishlisted(objectId);
-    // Optimistic update via store; store is the source of truth so rollback
-    // is simply re-toggling on failure — here the store action is synchronous
-    // and local-persisted, so no network failure path exists for wishlist.
-    // The wishlist is local-only (no server sync), so the toast is 'info'
-    // not 'success' — per AGENTS.md §11, the UI must not claim an operation
-    // succeeded when only local temporary state changed.
-    toggleWishlist(objectId);
+    const wasLiked = isLiked;
+    toggleWishlistMutation.mutate(undefined, {
+      onSuccess: () => {
+        options?.onLikeAnalytics?.();
+      },
+      onError: () => {
+        haptic.error();
+        show('Could not update wishlist. Please try again.', 'error');
+      },
+    });
     haptic.medium();
-    options?.onLikeAnalytics?.();
-    show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'info');
-  }, [vm, objectId, isWishlisted, toggleWishlist, haptic, show, options]);
+    show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'success');
+  }, [vm, objectId, isLiked, toggleWishlistMutation, haptic, show, options]);
 
   const openCollectionPicker = useCallback(() => {
     if (!vm || !objectId) return;

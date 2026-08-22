@@ -40,15 +40,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Install API dependencies
-        run: npm ci
-        working-directory: backend/api
-
       - name: Run postgres-backup.mjs
         id: backup
-        working-directory: backend/api
+        working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
         run: node scripts/postgres-backup.mjs
 
       - name: Configure AWS credentials for S3 upload

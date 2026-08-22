@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../domain';
@@ -8,6 +7,7 @@ import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
+import { appStorage } from '../storage/mmkv';
 import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
@@ -1923,7 +1923,18 @@ export const useStore = create<StoreState>()(
 }),
     {
       name: 'thryftverse-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => ({
+        getItem: (name: string): string | null => {
+          const raw = appStorage.getString(name);
+          return raw === undefined ? null : raw;
+        },
+        setItem: (name: string, value: string): void => {
+          appStorage.set(name, value);
+        },
+        removeItem: (name: string): void => {
+          appStorage.remove(name);
+        },
+      })),
       version: 4,
       migrate: (persistedState, version) => {
         let state = { ...(persistedState as Partial<StoreState>) };

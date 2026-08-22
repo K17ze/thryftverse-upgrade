@@ -120,6 +120,8 @@ export const config = {
     360_000
   ),
   redisUrl: required('REDIS_URL', 'redis://localhost:6379'),
+  pgbouncerEnabled: asBoolean(process.env.PGBOUNCER_ENABLED, false),
+  pgbouncerPort: asIntegerInRange('PGBOUNCER_PORT', process.env.PGBOUNCER_PORT, 6432, 1, 65_535),
   keyServiceUrl: required('KEY_SERVICE_URL', 'http://localhost:4100'),
   keyServiceClientToken: requiredSecret('KEY_SERVICE_CLIENT_TOKEN', 'local-key-client-token'),
   keyServiceAdminToken: requiredSecret('KEY_SERVICE_ADMIN_TOKEN', 'local-key-admin-token'),
@@ -202,6 +204,15 @@ export const config = {
   ),
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
+  /**
+   * JWT signing algorithm. Defaults to HS256 for backward compatibility.
+   * Set to 'EdDSA' in production to use Ed25519 asymmetric keys.
+   * Generate a key pair with:
+   *   node -e "const { generateKeyPairSync } = require('crypto'); const { privateKey, publicKey } = generateKeyPairSync('ed25519'); console.log(privateKey.export({ type: 'pkcs8', format: 'pem' })); console.log(publicKey.export({ type: 'spki', format: 'pem' }));"
+   */
+  jwtAlgorithm: (process.env.JWT_ALGORITHM?.trim() || 'HS256') as 'HS256' | 'EdDSA',
+  jwtEd25519PrivateKey: process.env.JWT_ED25519_PRIVATE_KEY?.trim() || '',
+  jwtEd25519PublicKey: process.env.JWT_ED25519_PUBLIC_KEY?.trim() || '',
   authAccessTokenTtlSeconds: asNumber(process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS, 15 * 60),
   authRefreshTokenTtlSeconds: asNumber(process.env.AUTH_REFRESH_TOKEN_TTL_SECONDS, 30 * 24 * 60 * 60),
   authPasswordHashCost: asNumber(process.env.AUTH_PASSWORD_HASH_COST, 12),
@@ -462,6 +473,27 @@ export const config = {
     'ONEZE_ATTESTATION_SIGNING_SECRET',
     'dev-only-oneze-attestation-signing-secret'
   ),
+  // ── Meilisearch — full-text search ─────────────────────────────────
+  meilisearchUrl: process.env.MEILISEARCH_URL?.trim() || 'http://localhost:7700',
+  meilisearchApiKey: process.env.MEILISEARCH_API_KEY?.trim() || '',
+  meilisearchIndexPrefix: process.env.MEILISEARCH_INDEX_PREFIX?.trim() || 'thryftverse_',
+  // ── Content moderation ─────────────────────────────────────────────
+  moderationProvider: process.env.MODERATION_PROVIDER?.trim() || 'mock',
+  moderationThreshold: parseFloat(process.env.MODERATION_THRESHOLD || '0.8'),
+  moderationReviewThreshold: parseFloat(process.env.MODERATION_REVIEW_THRESHOLD || '0.5'),
+  // ── SMS (Twilio) ───────────────────────────────────────────────────
+  smsProvider: process.env.SMS_PROVIDER?.trim() || 'log',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || '',
+  twilioFromNumber: process.env.TWILIO_FROM_NUMBER?.trim() || '',
+  twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID?.trim() || '',
+  // ── Live streaming (LiveKit) ───────────────────────────────────────
+  liveStreamProvider: process.env.LIVE_STREAM_PROVIDER?.trim() || 'mock',
+  livekitUrl: process.env.LIVEKIT_URL?.trim() || '',
+  livekitApiKey: process.env.LIVEKIT_API_KEY?.trim() || '',
+  livekitApiSecret: process.env.LIVEKIT_API_SECRET?.trim() || '',
+  presenceHeartbeatIntervalMs: asNumber(process.env.PRESENCE_HEARTBEAT_INTERVAL_MS, 15_000),
+  presenceTtlSeconds: asNumber(process.env.PRESENCE_TTL_SECONDS, 30),
 };
 
 // ── Startup validation for critical secrets ──────────────

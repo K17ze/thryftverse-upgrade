@@ -1,0 +1,339 @@
+# =============================================================================
+# ThryftVerse — EAS Workflows CI/CD Pipeline
+# =============================================================================
+#
+# This workflow orchestrates the full build, submit, and OTA-update lifecycle
+# for the ThryftVerse React Native app across three trigger contexts:
+#
+#   1. Push to `main`    → production build → store submission → OTA update
+#   2. Push to `develop` → preview build → OTA update (staging)
+#   3. Pull request      → typecheck → tests → development client build
+#
+# Build profiles referenced below are defined in `eas.json`:
+#   - development : dev client, internal distribution, APK + iOS simulator
+#   - preview      : internal distribution, APK, staging environment
+#   - production   : app-bundle (Android) + IPA (iOS), production environment
+#
+# Secrets expected to be configured in the EAS project settings:
+#   - SENTRY_DSN           — Sentry DSN for production crash reporting
+#   - SENTRY_AUTH_TOKEN    — Sentry auth token for source map upload
+#   - SENTRY_ORG           — Sentry organisation slug
+#   - SENTRY_PROJECT       — Sentry project slug
+#   - EXPO_PUBLIC_API_KEY  — public API key consumed by the app at runtime
+#   - GOOGLE_PLAY_SERVICE_ACCOUNT_KEY — base64-encoded Google Play service account JSON
+#   - APPLE_APP_SPECIFIC_PASSWORD      — App Store Connect app-specific password
+#
+# Environment variables (non-secret) are passed via `env_vars` on each job.
+# =============================================================================
+
+name: build-and-deploy
+
+# -----------------------------------------------------------------------------
+# Trigger definitions
+# -----------------------------------------------------------------------------
+# EAS Workflows evaluates the `on` block to determine which jobs to run for
+# a given event.  Branch filters narrow the trigger to the relevant branch.
+on:
+  push:
+    branches:
+      main:
+        # Production pipeline — build, submit to stores, and publish OTA update.
+        - typecheck_production
+        - build_android_production
+        - build_ios_production
+        - submit_android_production
+        - submit_ios_production
+        - update_production
+      develop:
+        # Staging pipeline — build preview artifacts and publish OTA update.
+        - typecheck_staging
+        - build_android_preview
+        - build_ios_preview
+        - update_preview
+  pull_request:
+    # PR pipeline — typecheck, test, and build a development client for QA.
+    - typecheck_pr
+    - test_pr
+    - build_dev_client
+
+# -----------------------------------------------------------------------------
+# Shared environment variables
+# -----------------------------------------------------------------------------
+# These are non-secret values that are injected into every job.  Secret values
+# are referenced individually per-job via the `secrets` key.
+env_vars:
+  EXPO_PUBLIC_ENVIRONMENT: ${{ vars.EXPO_PUBLIC_ENVIRONMENT }}
+  EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+  EAS_PROJECT_ID: e94afae8-2794-4230-a184-785eb8d7ad36
+
+# =============================================================================
+# PRODUCTION PIPELINE — push to `main`
+# =============================================================================
+# Flow: typecheck → build (Android + iOS in parallel) → submit → OTA update
+# =============================================================================
+
+# --- Step 1: TypeScript typecheck (production) -------------------------------
+# Fail fast: if the codebase does not type-check, abort before consuming
+# any build minutes.
+typecheck_production:
+  name: "Typecheck (production)"
+  type: run
+  params:
+    command: npx tsc --noEmit
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: production
+    EXPO_PUBLIC_API_BASE_URL: https://api.thryftverse.com
+  timeout: 600
+
+# --- Step 2a: Build production Android app-bundle ----------------------------
+# Produces an .aab suitable for Google Play submission.  Uses the
+# `production` build profile from eas.json (app-bundle, autoIncrement).
+build_android_production:
+  name: "Build Android (production AAB)"
+  type: build
+  needs:
+    - typecheck_production
+  params:
+    platform: android
+    profile: production
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: production
+    EXPO_PUBLIC_API_BASE_URL: https://api.thryftverse.com
+  secrets:
+    - SENTRY_DSN
+    - SENTRY_AUTH_TOKEN
+    - SENTRY_ORG
+    - SENTRY_PROJECT
+    - EXPO_PUBLIC_API_KEY
+  timeout: 3600
+
+# --- Step 2b: Build production iOS app ---------------------------------------
+# Produces an .ipa for App Store submission.  Uses the `production` build
+# profile (m-medium resource class).  Runs in parallel with the Android build.
+build_ios_production:
+  name: "Build iOS (production IPA)"
+  type: build
+  needs:
+    - typecheck_production
+  params:
+    platform: ios
+    profile: production
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: production
+    EXPO_PUBLIC_API_BASE_URL: https://api.thryftverse.com
+  secrets:
+    - SENTRY_DSN
+    - SENTRY_AUTH_TOKEN
+    - SENTRY_ORG
+    - SENTRY_PROJECT
+    - EXPO_PUBLIC_API_KEY
+  timeout: 3600
+
+# --- Step 3a: Submit Android to Google Play (production track) ---------------
+# Submits the AAB produced in step 2a to the Google Play Console on the
+# `production` track.  Uses the `production` submit profile which references
+# the service account key at ./keys/google-play-service-account.json.
+submit_android_production:
+  name: "Submit Android to Google Play (production)"
+  type: submit
+  needs:
+    - build_android_production
+  params:
+    platform: android
+    profile: production
+    track: production
+  secrets:
+    - GOOGLE_PLAY_SERVICE_ACCOUNT_KEY
+  timeout: 1800
+
+# --- Step 3b: Submit iOS to App Store ----------------------------------------
+# Submits the IPA produced in step 2b to App Store Connect.  Uses the
+# `production` submit profile (appleId, ascAppId, appleTeamId).
+submit_ios_production:
+  name: "Submit iOS to App Store (production)"
+  type: submit
+  needs:
+    - build_ios_production
+  params:
+    platform: ios
+    profile: production
+  secrets:
+    - APPLE_APP_SPECIFIC_PASSWORD
+  timeout: 1800
+
+# --- Step 4: Publish OTA update to production channel ------------------------
+# Publishes a JavaScript bundle + asset update to the `production` channel.
+# Existing production clients with expo-updates will fetch this update on
+# next app launch (checkAutomatically: ON_LOAD per app.json).
+update_production:
+  name: "Publish OTA update (production channel)"
+  type: update
+  needs:
+    - submit_android_production
+    - submit_ios_production
+  params:
+    platform: both
+    channel: production
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: production
+    EXPO_PUBLIC_API_BASE_URL: https://api.thryftverse.com
+  secrets:
+    - SENTRY_DSN
+    - SENTRY_AUTH_TOKEN
+    - SENTRY_ORG
+    - SENTRY_PROJECT
+    - EXPO_PUBLIC_API_KEY
+  timeout: 1200
+
+# =============================================================================
+# STAGING PIPELINE — push to `develop`
+# =============================================================================
+# Flow: typecheck → build preview (Android + iOS) → OTA update to preview
+# No store submission — preview builds are distributed internally.
+# =============================================================================
+
+# --- Step 1: TypeScript typecheck (staging) ----------------------------------
+typecheck_staging:
+  name: "Typecheck (staging)"
+  type: run
+  params:
+    command: npx tsc --noEmit
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: staging
+    EXPO_PUBLIC_API_BASE_URL: https://api-staging.thryftverse.com
+  timeout: 600
+
+# --- Step 2a: Build preview Android APK --------------------------------------
+# Produces a standalone APK for internal QA distribution.  Uses the `preview`
+# build profile (APK, staging environment).
+build_android_preview:
+  name: "Build Android (preview APK)"
+  type: build
+  needs:
+    - typecheck_staging
+  params:
+    platform: android
+    profile: preview
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: staging
+    EXPO_PUBLIC_API_BASE_URL: https://api-staging.thryftverse.com
+  secrets:
+    - EXPO_PUBLIC_API_KEY
+  timeout: 3000
+
+# --- Step 2b: Build preview iOS (simulator) ----------------------------------
+# Produces an iOS simulator build for internal QA.  Uses the `preview`
+# build profile with iOS simulator target.
+build_ios_preview:
+  name: "Build iOS (preview simulator)"
+  type: build
+  needs:
+    - typecheck_staging
+  params:
+    platform: ios
+    profile: preview
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: staging
+    EXPO_PUBLIC_API_BASE_URL: https://api-staging.thryftverse.com
+  secrets:
+    - EXPO_PUBLIC_API_KEY
+  timeout: 3000
+
+# --- Step 3: Publish OTA update to preview channel ---------------------------
+# Publishes a JS update to the `preview` channel for staging QA testers.
+update_preview:
+  name: "Publish OTA update (preview channel)"
+  type: update
+  needs:
+    - build_android_preview
+    - build_ios_preview
+  params:
+    platform: both
+    channel: preview
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: staging
+    EXPO_PUBLIC_API_BASE_URL: https://api-staging.thryftverse.com
+  secrets:
+    - EXPO_PUBLIC_API_KEY
+  timeout: 1200
+
+# =============================================================================
+# PULL REQUEST PIPELINE
+# =============================================================================
+# Flow: typecheck → run tests → build development client APK
+# Provides fast feedback on PRs without consuming store-submission minutes.
+# =============================================================================
+
+# --- Step 1: TypeScript typecheck (PR) ---------------------------------------
+typecheck_pr:
+  name: "Typecheck (PR)"
+  type: run
+  params:
+    command: npx tsc --noEmit
+  timeout: 600
+
+# --- Step 2: Run unit/integration tests --------------------------------------
+# Runs the Vitest suite (`vitest run --dir src` per package.json).
+# Non-blocking on coverage — only asserts that existing tests pass.
+test_pr:
+  name: "Run tests (PR)"
+  type: run
+  needs:
+    - typecheck_pr
+  params:
+    command: npx vitest run --dir src
+  timeout: 900
+
+# --- Step 3: Build development client APK ------------------------------------
+# Produces a development client APK for QA testing on physical devices.
+# Uses the `development` build profile (dev client, APK, development env).
+build_dev_client:
+  name: "Build development client (APK)"
+  type: build
+  needs:
+    - test_pr
+  params:
+    platform: android
+    profile: development
+  env_vars:
+    EXPO_PUBLIC_ENVIRONMENT: development
+    EXPO_PUBLIC_API_BASE_URL: https://api-dev.thryftverse.com
+  timeout: 3000
+
+# =============================================================================
+# COMPLETION HOOK — success/failure notification
+# =============================================================================
+# The `on_complete` hook fires after every job in the workflow finishes
+# (whether it succeeded or failed).  This is the canonical place to send
+# notifications to Slack, email, or webhooks.
+# =============================================================================
+on_complete:
+  name: "Notify pipeline result"
+  type: run
+  params:
+    # The EAS Workflows runner exposes the workflow outcome via environment
+    # variables.  We post a structured payload to the configured Slack
+    # incoming webhook so the team is alerted on both success and failure.
+    command: |
+      echo "Workflow completed with status: ${EAS_WORKFLOW_STATUS}"
+      if [ "${EAS_WORKFLOW_STATUS}" = "success" ]; then
+        echo "✅ ThryftVerse pipeline succeeded for branch: ${EAS_WORKFLOW_BRANCH}"
+        echo "   Commit: ${EAS_WORKFLOW_COMMIT_MESSAGE}"
+        if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ ThryftVerse build-and-deploy pipeline succeeded on \`${EAS_WORKFLOW_BRANCH}\`\nCommit: ${EAS_WORKFLOW_COMMIT_MESSAGE}\"}" \
+            "${SLACK_WEBHOOK_URL}"
+        fi
+      else
+        echo "❌ ThryftVerse pipeline failed for branch: ${EAS_WORKFLOW_BRANCH}"
+        echo "   Commit: ${EAS_WORKFLOW_COMMIT_MESSAGE}"
+        if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ ThryftVerse build-and-deploy pipeline FAILED on \`${EAS_WORKFLOW_BRANCH}\`\nCommit: ${EAS_WORKFLOW_COMMIT_MESSAGE}\nCheck EAS Workflows dashboard for details.\"}" \
+            "${SLACK_WEBHOOK_URL}"
+        fi
+        exit 1
+      fi
+  secrets:
+    - SLACK_WEBHOOK_URL
+  timeout: 120

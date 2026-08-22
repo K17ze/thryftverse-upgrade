@@ -1,0 +1,227 @@
+name: Release Train
+
+on:
+  push:
+    branches:
+      - develop
+      - "release/*"
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      rollback_update_id:
+        description: "EAS Update ID to re-publish (rollback mode, leave empty for normal release)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-train-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  determine-channel:
+    name: Determine release channel
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.set-channel.outputs.channel }}
+      profile: ${{ steps.set-channel.outputs.profile }}
+      is_rollback: ${{ steps.set-channel.outputs.is_rollback }}
+    steps:
+      - id: set-channel
+        run: |
+          if [ -n "${{ inputs.rollback_update_id }}" ]; then
+            echo "is_rollback=true" >> "$GITHUB_OUTPUT"
+            echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            echo "profile=production" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.channel }}" != "" ]; then
+            echo "is_rollback=false" >> "$GITHUB_OUTPUT"
+            echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            if [ "${{ inputs.channel }}" = "production" ]; then
+              echo "profile=production" >> "$GITHUB_OUTPUT"
+            elif [ "${{ inputs.channel }}" = "staging" ]; then
+              echo "profile=preview" >> "$GITHUB_OUTPUT"
+            else
+              echo "profile=development" >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "is_rollback=false" >> "$GITHUB_OUTPUT"
+            echo "channel=development" >> "$GITHUB_OUTPUT"
+            echo "profile=development" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            echo "is_rollback=false" >> "$GITHUB_OUTPUT"
+            echo "channel=staging" >> "$GITHUB_OUTPUT"
+            echo "profile=preview" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "is_rollback=false" >> "$GITHUB_OUTPUT"
+            echo "channel=production" >> "$GITHUB_OUTPUT"
+            echo "profile=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_rollback=false" >> "$GITHUB_OUTPUT"
+            echo "channel=development" >> "$GITHUB_OUTPUT"
+            echo "profile=development" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-ios:
+    name: EAS Build iOS
+    needs: determine-channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ needs.determine-channel.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build iOS
+        working-directory: frontend
+        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform ios --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+  build-android:
+    name: EAS Build Android
+    needs: determine-channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ needs.determine-channel.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build Android
+        working-directory: frontend
+        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform android --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+  publish-update:
+    name: Publish EAS Update
+    needs: [determine-channel, build-ios, build-android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ needs.determine-channel.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Rollback — re-publish previous update
+        if: needs.determine-channel.outputs.is_rollback == 'true'
+        working-directory: frontend
+        run: |
+          eas update:republish \
+            --update-id ${{ inputs.rollback_update_id }} \
+            --channel ${{ needs.determine-channel.outputs.channel }} \
+            --message "rollback: re-publishing update ${{ inputs.rollback_update_id }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+      - name: Publish new update
+        if: needs.determine-channel.outputs.is_rollback != 'true'
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel ${{ needs.determine-channel.outputs.channel }} \
+            --message "${{ needs.determine-channel.outputs.channel }}: ${{ github.ref_name }} (${{ github.sha }})"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+  tag-release:
+    name: Tag semantic version
+    needs: [determine-channel, publish-update]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Release ${{ github.ref_name }}
+
+            **Channel:** ${{ needs.determine-channel.outputs.channel }}
+            **Commit:** ${{ github.sha }}
+
+            ### EAS Build
+            - iOS profile: ${{ needs.determine-channel.outputs.profile }}
+            - Android profile: ${{ needs.determine-channel.outputs.profile }}
+
+            ### EAS Update
+            Published to the `${{ needs.determine-channel.outputs.channel }}` channel.
+
+            ### Xcode pinning
+            iOS builds use the pinned Xcode image specified in `eas.json` build profiles.
+            For production, pin `image: latest-xcode26` in the `production` build profile
+            to ensure reproducible iOS builds across EAS build runners.
+          draft: false
+          prerelease: ${{ needs.determine-channel.outputs.channel != 'production' }}
+
+  production-approval-gate:
+    name: Production approval gate
+    needs: determine-channel
+    runs-on: ubuntu-latest
+    if: needs.determine-channel.outputs.channel == 'production' && needs.determine-channel.outputs.is_rollback != 'true'
+    environment: production-approval
+    steps:
+      - name: Await manual approval
+        run: |
+          echo "::notice::Production release requires manual approval."
+          echo "Approve this deployment in the GitHub Actions environment 'production-approval'."
+          echo "Once approved, the build and publish jobs will proceed."

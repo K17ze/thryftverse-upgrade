@@ -1,4 +1,4 @@
-const EN_TRANSLATIONS = {
+export const EN_TRANSLATIONS = {
   'tradeHub.header.title': 'Trade Hub',
   'tradeHub.ledger.label': 'Ledger',
   'tradeHub.snapshot.auctions': 'Auctions',
@@ -243,7 +243,7 @@ export type TranslationKey = keyof typeof EN_TRANSLATIONS;
 
 type TranslationParams = Record<string, string | number>;
 
-const ES_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
+export const ES_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
   'tradeHub.header.title': 'Centro de Intercambio',
   'tradeHub.ledger.label': 'Libro mayor',
   'tradeHub.snapshot.auctions': 'Subastas',
@@ -412,7 +412,7 @@ const ES_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
   'checkout.a11y.hint.addAddressPayment': 'Anade direccion y metodo de pago primero',
 };
 
-const FR_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
+export const FR_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
   'tradeHub.header.title': 'Centre d\'Echange',
   'tradeHub.ledger.label': 'Grand livre',
   'tradeHub.snapshot.auctions': 'Encheres',
@@ -581,7 +581,7 @@ const FR_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
   'checkout.a11y.hint.addAddressPayment': 'Ajoutez adresse et methode de paiement d\'abord',
 };
 
-const DE_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
+export const DE_TRANSLATION_PATCH: Partial<Record<TranslationKey, string>> = {
   'tradeHub.header.title': 'Handelszentrum',
   'tradeHub.ledger.label': 'Hauptbuch',
   'tradeHub.snapshot.auctions': 'Auktionen',
@@ -790,3 +790,24 @@ export function t(key: TranslationKey, params?: TranslationParams): string {
     return value === undefined ? '' : String(value);
   });
 }
+
+// ── i18next-backed exports ─────────────────────────────────────────
+// The following re-exports provide the i18next-backed implementation
+// alongside the legacy functions above. Consumers that import `t` from
+// '../i18n' will get the legacy function for now; new code should import
+// from '../i18n/i18n' to use the i18next-backed version with ICU plurals,
+// device locale detection, and RTL support.
+//
+// The legacy `t` function is kept for backward compatibility — it's used
+// by 8 files that haven't been migrated yet. Once all consumers are
+// updated to import from './i18n', the legacy function and the
+// LOCALE_TRANSLATIONS/activeLocale state above can be removed.
+export {
+  initI18n,
+  detectDeviceLocale,
+  isRTL,
+  setI18nLocale as setI18nLocaleV2,
+  getI18nLocale as getI18nLocaleV2,
+  useTranslation,
+  mapLocaleToLanguageOption,
+} from './i18n';

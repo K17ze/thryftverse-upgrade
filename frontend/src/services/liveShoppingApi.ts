@@ -15,6 +15,7 @@
 
 import { formatFiatAmount } from '../utils/currency';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { fetchJson } from '../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -305,6 +306,97 @@ function makeChatMessage(
 // Public API
 // ---------------------------------------------------------------------------
 
+interface BackendStreamRoom {
+  roomId: string;
+  title: string;
+  hostUserId: string;
+  status: 'created' | 'live' | 'ended' | 'failed';
+  roomUrl: string;
+  viewerCount: number;
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+}
+
+interface BackendStreamSessionsResponse {
+  ok: boolean;
+  sessions: BackendStreamRoom[];
+}
+
+interface BackendStreamTokenResponse {
+  ok: boolean;
+  token: {
+    token: string;
+    wsUrl: string;
+    roomId: string;
+    identity: string;
+  };
+  error?: string;
+}
+
+const mapBackendSessionToLiveSession = (room: BackendStreamRoom): LiveSession => ({
+  id: room.roomId,
+  sellerId: room.hostUserId,
+  sellerName: '',
+  sellerAvatar: '',
+  sellerVerified: false,
+  title: room.title,
+  thumbnail: '',
+  category: 'All',
+  viewerCount: room.viewerCount,
+  likeCount: 0,
+  status: room.status === 'live' ? 'live' : room.status === 'ended' ? 'ended' : 'upcoming',
+  startedAt: room.startedAt,
+  endedAt: room.endedAt,
+  watchers: room.viewerCount,
+  isFollowing: false,
+  isDemo: false,
+});
+
+/**
+ * Fetch live sessions from the real backend streaming API.
+ */
+async function fetchLiveSessionsFromBackend(
+  opts: { cursor?: string | null; category?: string } = {},
+): Promise<LiveSessionSummary> {
+  void opts.cursor;
+  void opts.category;
+  try {
+    const response = await fetchJson<BackendStreamSessionsResponse>('/streaming/sessions');
+    const sessions = (response.sessions ?? []).map(mapBackendSessionToLiveSession);
+    const featured = sessions.find((s) => s.status === 'live') ?? null;
+    return { sessions, featured, cursor: null };
+  } catch {
+    return { sessions: [], featured: null, cursor: null };
+  }
+}
+
+/**
+ * Join a live session by requesting a connection token from the backend.
+ */
+async function joinLiveSessionFromBackend(id: string): Promise<LiveJoinToken> {
+  try {
+    const response = await fetchJson<BackendStreamTokenResponse>(
+      `/streaming/sessions/${encodeURIComponent(id)}/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'viewer' }),
+      },
+    );
+    if (!response.ok || !response.token) {
+      return { sessionId: id, token: '', isDemo: false };
+    }
+    return {
+      sessionId: id,
+      token: response.token.token,
+      isDemo: false,
+    };
+  } catch {
+    return { sessionId: id, token: '', isDemo: false };
+  }
+}
+
 /**
  * Fetch live + upcoming sessions for the discovery surface.
  * Supports optional cursor pagination and category filtering.
@@ -313,7 +405,7 @@ export async function fetchLiveSessions(
   opts: { cursor?: string | null; category?: string } = {},
 ): Promise<LiveSessionSummary> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    return fetchLiveSessionsFromBackend(opts);
   }
   await delay(420); // simulate network latency for honest loading states
 
@@ -385,7 +477,7 @@ export function nextMockChatMessage(): LiveChatMessage | null {
  */
 export async function joinLiveSession(id: string): Promise<LiveJoinToken> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    return joinLiveSessionFromBackend(id);
   }
   await delay(180);
   return {

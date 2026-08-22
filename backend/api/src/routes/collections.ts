@@ -1,11 +1,14 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Kysely } from "kysely";
+import { sql } from "kysely";
 import { z } from "zod";
+import type { Database } from "../lib/database-types.js";
 
 type CollectionRouteDependencies = {
   app: FastifyInstance;
-  db: Pool;
+  /** Kysely instance — type-safe query builder over the existing pg.Pool. */
+  db: Kysely<Database>;
   createApiError: (code: string, message: string) => Error;
 };
 
@@ -41,25 +44,22 @@ const updateCollectionSchema = z
     { message: "At least one collection field is required" },
   );
 
-type CollectionRow = {
-  id: string;
-  name: string;
-  description: string | null;
-  is_private: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
+/**
+ * Check that a collection exists and is owned by the given user.
+ * Uses Kysely's type-safe selectFrom — no hand-maintained row types.
+ */
 const findOwnedCollection = async (
-  db: Pool,
+  db: Kysely<Database>,
   collectionId: string,
   userId: string,
 ) => {
-  const result = await db.query<{ id: string }>(
-    "SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1",
-    [collectionId, userId],
-  );
-  return result.rows[0] ?? null;
+  return db
+    .selectFrom("collections")
+    .select("id")
+    .where("id", "=", collectionId)
+    .where("user_id", "=", userId)
+    .limit(1)
+    .executeTakeFirst();
 };
 
 export const registerCollectionRoutes = ({
@@ -77,21 +77,24 @@ export const registerCollectionRoutes = ({
     }
 
     const collectionId = `collection_${crypto.randomUUID()}`;
-    const result = await db.query<CollectionRow>(
-      `
-        INSERT INTO collections (id, user_id, name, description, is_private)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, name, description, is_private, created_at, updated_at
-      `,
-      [
-        collectionId,
-        userId,
-        payload.name,
-        payload.description ?? null,
-        payload.isPrivate,
-      ],
-    );
-    const row = result.rows[0];
+    const row = await db
+      .insertInto("collections")
+      .values({
+        id: collectionId,
+        user_id: userId,
+        name: payload.name,
+        description: payload.description ?? null,
+        is_private: payload.isPrivate,
+      })
+      .returning([
+        "id",
+        "name",
+        "description",
+        "is_private",
+        "created_at",
+        "updated_at",
+      ])
+      .executeTakeFirstOrThrow();
 
     reply.code(201);
     return {
@@ -114,39 +117,45 @@ export const registerCollectionRoutes = ({
       throw createApiError("UNAUTHORIZED", "Unauthorized");
     }
 
-    const result = await db.query<CollectionRow>(
-      `
-        SELECT id, name, description, is_private, created_at, updated_at
-        FROM collections
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-      `,
-      [userId],
-    );
+    const collections = await db
+      .selectFrom("collections")
+      .select([
+        "id",
+        "name",
+        "description",
+        "is_private",
+        "created_at",
+        "updated_at",
+      ])
+      .where("user_id", "=", userId)
+      .orderBy("created_at", "desc")
+      .execute();
 
-    const collectionIds = result.rows.map((row) => row.id);
-    const itemsResult = collectionIds.length
-      ? await db.query<{ collection_id: string; listing_id: string }>(
-          `
-            SELECT collection_id, listing_id
-            FROM collection_items
-            WHERE collection_id = ANY($1::text[])
-            ORDER BY added_at DESC
-          `,
-          [collectionIds],
-        )
-      : { rows: [] };
-
+    const collectionIds = collections.map((row) => row.id);
     const itemsByCollection = new Map<string, string[]>();
-    for (const item of itemsResult.rows) {
-      const itemIds = itemsByCollection.get(item.collection_id) ?? [];
-      itemIds.push(item.listing_id);
-      itemsByCollection.set(item.collection_id, itemIds);
+
+    if (collectionIds.length > 0) {
+      // Raw SQL escape hatch for ANY(array) — Kysely's sql tag parameterizes
+      // the array value automatically. This is the idiomatic pattern for
+      // array-column comparisons that the query builder doesn't express
+      // directly.
+      const itemsResult = await sql<{
+        collection_id: string;
+        listing_id: string;
+      }>`SELECT collection_id, listing_id FROM collection_items WHERE collection_id = ANY(${collectionIds}::text[]) ORDER BY added_at DESC`.execute(
+        db,
+      );
+
+      for (const item of itemsResult.rows) {
+        const itemIds = itemsByCollection.get(item.collection_id) ?? [];
+        itemIds.push(item.listing_id);
+        itemsByCollection.set(item.collection_id, itemIds);
+      }
     }
 
     return {
       ok: true,
-      collections: result.rows.map((row) => ({
+      collections: collections.map((row) => ({
         id: row.id,
         name: row.name,
         description: row.description,
@@ -167,31 +176,32 @@ export const registerCollectionRoutes = ({
       return { ok: false, error: "Unauthorized" };
     }
 
-    const result = await db.query<CollectionRow>(
-      `
-        SELECT id, name, description, is_private, created_at, updated_at
-        FROM collections
-        WHERE id = $1 AND user_id = $2
-        LIMIT 1
-      `,
-      [collectionId, userId],
-    );
+    const row = await db
+      .selectFrom("collections")
+      .select([
+        "id",
+        "name",
+        "description",
+        "is_private",
+        "created_at",
+        "updated_at",
+      ])
+      .where("id", "=", collectionId)
+      .where("user_id", "=", userId)
+      .limit(1)
+      .executeTakeFirst();
 
-    if (!result.rowCount) {
+    if (!row) {
       reply.code(404);
       return { ok: false, error: "Collection not found" };
     }
 
-    const itemsResult = await db.query<{ listing_id: string }>(
-      `
-        SELECT listing_id
-        FROM collection_items
-        WHERE collection_id = $1
-        ORDER BY added_at DESC
-      `,
-      [collectionId],
-    );
-    const row = result.rows[0];
+    const items = await db
+      .selectFrom("collection_items")
+      .select("listing_id")
+      .where("collection_id", "=", collectionId)
+      .orderBy("added_at", "desc")
+      .execute();
 
     return {
       ok: true,
@@ -200,7 +210,7 @@ export const registerCollectionRoutes = ({
         name: row.name,
         description: row.description,
         isPrivate: row.is_private,
-        itemIds: itemsResult.rows.map((item) => item.listing_id),
+        itemIds: items.map((item) => item.listing_id),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -222,23 +232,28 @@ export const registerCollectionRoutes = ({
       return { ok: false, error: "Collection not found or not owned" };
     }
 
-    const listing = await db.query<{ id: string }>(
-      `SELECT id FROM listings WHERE id = $1 AND status = 'active' LIMIT 1`,
-      [listingId],
-    );
-    if (!listing.rowCount) {
+    const listing = await db
+      .selectFrom("listings")
+      .select("id")
+      .where("id", "=", listingId)
+      .where("status", "=", "active")
+      .limit(1)
+      .executeTakeFirst();
+    if (!listing) {
       reply.code(404);
       return { ok: false, error: "Active listing not found" };
     }
 
-    await db.query(
-      `
-        INSERT INTO collection_items (collection_id, listing_id, added_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (collection_id, listing_id) DO NOTHING
-      `,
-      [collectionId, listingId],
-    );
+    await db
+      .insertInto("collection_items")
+      .values({
+        collection_id: collectionId,
+        listing_id: listingId,
+      })
+      .onConflict((conflict) =>
+        conflict.columns(["collection_id", "listing_id"]).doNothing(),
+      )
+      .execute();
 
     return { ok: true };
   });
@@ -261,10 +276,11 @@ export const registerCollectionRoutes = ({
         return { ok: false, error: "Collection not found or not owned" };
       }
 
-      await db.query(
-        "DELETE FROM collection_items WHERE collection_id = $1 AND listing_id = $2",
-        [collectionId, listingId],
-      );
+      await db
+        .deleteFrom("collection_items")
+        .where("collection_id", "=", collectionId)
+        .where("listing_id", "=", listingId)
+        .execute();
 
       return { ok: true };
     },
@@ -285,30 +301,21 @@ export const registerCollectionRoutes = ({
       return { ok: false, error: "Collection not found or not owned" };
     }
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    if (body.name !== undefined) {
-      values.push(body.name);
-      updates.push(`name = $${values.length}`);
-    }
-    if (body.description !== undefined) {
-      values.push(body.description);
-      updates.push(`description = $${values.length}`);
-    }
-    if (body.isPrivate !== undefined) {
-      values.push(body.isPrivate);
-      updates.push(`is_private = $${values.length}`);
-    }
-
-    values.push(collectionId, userId);
-    await db.query(
-      `
-        UPDATE collections
-        SET ${updates.join(", ")}, updated_at = NOW()
-        WHERE id = $${values.length - 1} AND user_id = $${values.length}
-      `,
-      values,
-    );
+    // Kysely's updateTable with dynamic set — type-safe column names,
+    // no hand-built SQL string interpolation.
+    await db
+      .updateTable("collections")
+      .set({
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description }
+          : {}),
+        ...(body.isPrivate !== undefined ? { is_private: body.isPrivate } : {}),
+        updated_at: new Date(),
+      })
+      .where("id", "=", collectionId)
+      .where("user_id", "=", userId)
+      .execute();
 
     return { ok: true, collectionId };
   });
@@ -322,12 +329,14 @@ export const registerCollectionRoutes = ({
       return { ok: false, error: "Unauthorized" };
     }
 
-    const result = await db.query(
-      "DELETE FROM collections WHERE id = $1 AND user_id = $2 RETURNING id",
-      [collectionId, userId],
-    );
+    const result = await db
+      .deleteFrom("collections")
+      .where("id", "=", collectionId)
+      .where("user_id", "=", userId)
+      .returning("id")
+      .executeTakeFirst();
 
-    if (!result.rowCount) {
+    if (!result) {
       reply.code(403);
       return { ok: false, error: "Collection not found or not owned" };
     }

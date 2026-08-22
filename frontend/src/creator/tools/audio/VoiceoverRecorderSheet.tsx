@@ -14,10 +14,11 @@
  *   - Microphone permission handling (request on open, show denied state)
  *
  * Per AGENTS.md §11 (truthful UI): VoiceoverRecorder.isAvailable() returns
- * false when expo-audio is not installed. The sheet shows an honest
- * "unavailable" state rather than pretending recording works. When the
- * native dependency is added, the recorder's real implementation activates
- * and this UI works end-to-end without changes.
+ * false when the expo-audio native module is not linked (e.g., Expo Go
+ * without a development build). The sheet shows an honest "unavailable"
+ * state rather than pretending recording works. With a development build
+ * that includes expo-audio, the recorder's real implementation activates
+ * and this UI works end-to-end.
  *
  * Per AGENTS.md §13: 44pt touch targets for all interactive controls.
  * Per AGENTS.md §17: Reanimated for animations (no PanResponder).
@@ -169,6 +170,14 @@ export function VoiceoverRecorderSheet({
     cancelAnimation(ringOpacitySV);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // ── Release native recorder on unmount ────────────────────────────
+  useEffect(() => {
+    const recorder = recorderRef.current;
+    return () => {
+      recorder?.dispose();
+    };
+  }, []);
 
   // ── Timer management ──────────────────────────────────────────────
   const stopTimer = useCallback(() => {
@@ -706,7 +715,7 @@ function SecondaryButton({
   );
 }
 
-// ── Unavailable state (truthful — dependency not installed) ───────────
+// ── Unavailable state (truthful — native module not linked) ──────────
 
 function UnavailableState({
   colors,
@@ -722,7 +731,8 @@ function UnavailableState({
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
         This feature requires the expo-audio native module, which is not
-        installed yet. It will be available in a future app update.
+        linked in this build. Use a development build to enable voiceover
+        recording.
       </Text>
     </View>
   );

@@ -135,7 +135,7 @@ export class CaptionService {
    *
    * When a STT module is added, implement the transcription here:
    *   1. Read the audio from `mediaUri` (extract audio track from video
-   *      if needed via expo-video or expo-av).
+   *      if needed via expo-video or expo-audio).
    *   2. Send to the STT engine (on-device or backend API).
    *   3. Parse the result into CaptionSegments with start/end timing.
    *   4. If word-level timestamps are available, populate `words`.

@@ -47,6 +47,11 @@ import {
   verifyAccessToken,
   verifyPassword,
 } from './lib/auth.js';
+import {
+  detectTokenReuse,
+  trackRefreshTokenUse,
+  invalidateAllUserSessions as invalidateAllTrackedRefreshTokens,
+} from './lib/tokenRefresh.js';
 import { sendAuthEmail } from './lib/authEmail.js';
 import {
   assertOnezeOperatorToken,
@@ -205,12 +210,17 @@ import {
   verifyKycProviderWebhook,
 } from './lib/kycProvider.js';
 import { registerCollectionRoutes } from './routes/collections.js';
+import { registerSearchRoutes } from './routes/search.js';
+import { createKysely } from './lib/kysely.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerSmsRoutes } from './routes/sms.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerSupportReviewRoutes } from './routes/supportReviews.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
+import { registerModerationRoutes } from './routes/moderation.js';
+import { moderateListingText } from './lib/moderation/moderationService.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
@@ -220,7 +230,14 @@ import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
+import { registerComplianceRoutes } from './routes/compliance.js';
+import { registerStreamingRoutes } from './routes/streaming.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
+import {
+  notifyOrderShipped,
+  notifyOrderDelivered,
+  notifyOrderException,
+} from './lib/sms/notificationService.js';
 import {
   PRODUCT_RECOMMENDATION_POLICY_VERSION,
   scoreProductRecommendation,
@@ -262,6 +279,11 @@ import {
 } from './lib/searchIndex.js';
 import { logger } from './lib/logger.js';
 import { validateListingActivation } from './lib/listingCategoryPolicy.js';
+import {
+  configureSearchIndex,
+  removeListingFromIndex,
+  syncSingleListing,
+} from './lib/searchSync.js';
 
 const app = Fastify({
   logger: {
@@ -419,6 +441,25 @@ void app.register(rateLimit, {
   timeWindow: config.apiRateLimitWindow,
   redis,
   nameSpace: 'thryftverse:rate-limit',
+  addHeaders: {
+    'x-ratelimit-limit': true,
+    'x-ratelimit-remaining': true,
+    'x-ratelimit-reset': true,
+    'retry-after': true,
+  },
+  addHeadersOnExceeding: {
+    'x-ratelimit-limit': true,
+    'x-ratelimit-remaining': true,
+    'x-ratelimit-reset': true,
+  },
+  errorResponseBuilder: (_request, context) => {
+    return {
+      statusCode: context.ban ? 403 : 429,
+      error: context.ban ? 'Forbidden' : 'Too Many Requests',
+      message: `Rate limit exceeded, retry in ${context.after}`,
+      retryAfterSeconds: Math.ceil(context.ttl / 1000),
+    };
+  },
   // IPv6-safe key generator — fixes GHSA-grpc-p53c-r64v where IPv6 address
   // rotation bypasses rate limits. We bucket by the /64 prefix (first 4
   // groups) so rotated addresses from the same /64 are counted together.
@@ -1124,6 +1165,9 @@ function isPublicRoute(method: string, path: string) {
     'GET /metrics',
     'GET /listings',
     'GET /search/listings',
+    'GET /search',
+    'GET /search/autocomplete',
+    'GET /search/health',
     'GET /feed/looks',
     'GET /oracle/gold/latest',
     'POST /auth/signup',
@@ -1139,6 +1183,8 @@ function isPublicRoute(method: string, path: string) {
     'POST /auth/password-reset/confirm',
     'POST /compliance/kyc/webhook',
     'POST /compliance/kyc/webhooks/stripe',
+    'GET /compliance/privacy-policy',
+    'GET /compliance/data-categories',
     // Authenticated by the dedicated service-token check in the route module.
     'POST /offers/sweep-expired',
   ]);
@@ -1260,6 +1306,14 @@ function isPublicRoute(method: string, path: string) {
 
   // T04: Policy documents are publicly viewable (published versions only).
   if (method === 'GET' && /^\/policies\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/streaming/sessions') {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/streaming\/sessions\/[^/]+$/.test(path)) {
     return true;
   }
 
@@ -8612,6 +8666,50 @@ async function queueCommerceParcelSettlementNotifications(input: {
   }
 }
 
+async function sendCommerceOrderSmsNotifications(input: {
+  orderId: string;
+  orderStatus: string;
+  trackingNumber?: string | null;
+  shippingProvider?: string | null;
+  reason?: string;
+}): Promise<void> {
+  let phoneNumber: string | null = null;
+  try {
+    const result = await db.query<{ phone: string | null }>(
+      `SELECT u.phone
+       FROM orders o
+       JOIN users u ON u.id = o.buyer_id
+       WHERE o.id = $1
+       LIMIT 1`,
+      [input.orderId],
+    );
+    phoneNumber = result.rows[0]?.phone ?? null;
+  } catch (error) {
+    app.log.error({ err: error, orderId: input.orderId }, 'Failed to fetch buyer phone for SMS notification');
+    return;
+  }
+
+  if (!phoneNumber) {
+    return;
+  }
+
+  if (input.orderStatus === 'shipped') {
+    notifyOrderShipped(input.orderId, phoneNumber, {
+      orderNumber: input.orderId,
+      trackingNumber: input.trackingNumber ?? undefined,
+      carrier: input.shippingProvider ?? undefined,
+    }).catch(() => {});
+  } else if (input.orderStatus === 'delivered') {
+    notifyOrderDelivered(input.orderId, phoneNumber).catch(() => {});
+  } else if (input.orderStatus === 'cancelled' || input.orderStatus === 'exception') {
+    notifyOrderException(
+      input.orderId,
+      phoneNumber,
+      input.reason ?? `Order status changed to ${input.orderStatus}`,
+    ).catch(() => {});
+  }
+}
+
 async function queuePayoutProcessedNotification(input: {
   payoutRequest: ReturnType<typeof toPayoutRequestPayload>;
   source: string;
@@ -13636,6 +13734,23 @@ app.post('/auth/refresh', async (request, reply) => {
       userAgent: request.headers['user-agent'],
       ipAddress: request.ip,
     });
+
+    const reused = await detectTokenReuse(authSession.userId, payload.refreshToken);
+    if (reused) {
+      await revokeAllUserSessions(authSession.userId);
+      await invalidateAllTrackedRefreshTokens(authSession.userId);
+      reply.code(401);
+      return {
+        ok: false,
+        error: 'Refresh token reuse detected — all sessions invalidated',
+      };
+    }
+
+    await trackRefreshTokenUse(
+      authSession.userId,
+      payload.refreshToken,
+      config.authRefreshTokenTtlSeconds
+    );
 
     const userResult = await db.query<AuthUserRow>(
       `
@@ -20755,6 +20870,12 @@ app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
 
 // ── Listings API ───────────────────────────────────────────────────
 app.post('/listings', {
+  config: {
+    rateLimit: {
+      max: 20,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation (URL format, etc.).
@@ -20838,6 +20959,24 @@ app.post('/listings', {
         missingRequired: validation.missingRequired,
       };
     }
+  }
+
+  const listingText = `${payload.title}\n${payload.description}`;
+  const textModerationResult = await moderateListingText(payload.id, listingText);
+  if (textModerationResult.status === 'rejected') {
+    reply.code(422);
+    return {
+      ok: false,
+      error: 'Listing text was rejected by content moderation',
+      code: 'MODERATION_REJECTED',
+      labels: textModerationResult.labels,
+    };
+  }
+  if (textModerationResult.status === 'review') {
+    request.log.warn(
+      { listingId: payload.id, labels: textModerationResult.labels },
+      'Listing text flagged for human review',
+    );
   }
 
   let resolvedCoverImageUrl = payload.imageUrl ?? null;
@@ -21094,6 +21233,9 @@ app.post('/listings', {
     void invalidateSearchCache(redis).catch((cacheError) => {
       app.log.error({ err: cacheError, listingId: payload.id }, 'Failed to invalidate search cache after listing upsert');
     });
+
+    // Sync the new/updated listing into the search index (fire-and-forget)
+    void syncSingleListing(db, payload.id).catch(() => {});
 
     return { ok: true, listingId: payload.id };
   } catch (error) {
@@ -22537,6 +22679,9 @@ app.patch('/listings/:listingId', async (request, reply) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing update');
   });
 
+  // Sync the updated listing into the search index (fire-and-forget)
+  void syncSingleListing(db, listingId).catch(() => {});
+
   return { ok: true, listingId, alertEvaluation };
 });
 
@@ -22574,6 +22719,9 @@ app.delete('/listings/:listingId', async (request, reply) => {
   void invalidateSearchCache(redis).catch((cacheError) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing delete');
   });
+
+  // Remove the deleted listing from the search index (fire-and-forget)
+  void removeListingFromIndex(listingId).catch(() => {});
 
   return { ok: true };
 });
@@ -23225,6 +23373,8 @@ registerNotificationRoutes({
   queueUserNotification,
   toJsonString,
 });
+
+registerSmsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 registerFraudDetectionRoutes({ app, redis });
 
@@ -23998,6 +24148,12 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
 });
 
 app.post('/chat/conversations/:conversationId/messages', {
+  config: {
+    rateLimit: {
+      max: 60,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation as a second layer.
@@ -30424,6 +30580,7 @@ registerMediaAssetRoutes({
   resolveAuthenticatedUserId,
   authorizeInternalServiceRequest,
 });
+registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
   db,
@@ -33993,6 +34150,14 @@ app.post('/admin/orders/:orderId/force-status', async (request, reply) => {
 
     await client.query('COMMIT');
 
+    if (previousStatus !== updated.rows[0].status) {
+      sendCommerceOrderSmsNotifications({
+        orderId: updated.rows[0].id,
+        orderStatus: updated.rows[0].status,
+        reason: payload.note,
+      }).catch(() => {});
+    }
+
     return {
       ok: true,
       id: updated.rows[0].id,
@@ -37302,6 +37467,13 @@ const handleShippingWebhook = async (request: FastifyRequest, reply: FastifyRepl
       }
     }
 
+    sendCommerceOrderSmsNotifications({
+      orderId: applied.order.id,
+      orderStatus: applied.order.status,
+      trackingNumber: applied.order.trackingNumber,
+      shippingProvider: applied.order.shippingProvider,
+    }).catch(() => {});
+
     return {
       ok: true,
       accepted: true,
@@ -38341,6 +38513,13 @@ app.post('/orders/:orderId/parcel/events', async (request, reply) => {
       }
     }
 
+    sendCommerceOrderSmsNotifications({
+      orderId: applied.order.id,
+      orderStatus: applied.order.status,
+      trackingNumber: applied.order.trackingNumber,
+      shippingProvider: applied.order.shippingProvider,
+    }).catch(() => {});
+
     return {
       ok: true,
       idempotent: applied.idempotent,
@@ -38995,7 +39174,14 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 });
 
 // POST /orders/:orderId/protection/claim — initiate a buyer protection claim
-app.post('/orders/:orderId/protection/claim', async (request, reply) => {
+app.post('/orders/:orderId/protection/claim', {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 minute',
+    },
+  },
+}, async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
     return { ok: false, error: 'Unauthorized' };
@@ -40403,6 +40589,12 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
 });
 
 app.post('/auctions/:auctionId/bids', {
+  config: {
+    rateLimit: {
+      max: 30,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation as a second layer.
@@ -44407,7 +44599,14 @@ app.get('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
   };
 });
 
-app.post('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
+app.post('/co-own/assets/:assetId/buyout-offers', {
+  config: {
+    rateLimit: {
+      max: 20,
+      timeWindow: '1 minute',
+    },
+  },
+}, async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
   const bodySchema = z.object({
     bidderUserId: z.string().min(2),
@@ -47235,32 +47434,38 @@ const start = async () => {
   try {
     await startRealtimeBridge(redis);
 
-    startBackgroundWorkers({
-      handlePushJob: processPushQueueJob,
-      handleAuctionSweepJob: async ({ reason }) => {
-        await sweepExpiredAuctions(reason);
-      },
-      handleReconciliationJob: async ({ reason, runDate }) => {
-        await runPlatformReconciliation(reason, runDate);
-      },
-      handleOutboxDrainJob: async () => {
-        await processDomainOutboxBatch();
-      },
-      handleOnezeMintReserveJob: async ({ mintOperationId, initiatedBy, reason }) => {
-        await processQueuedOnezeMintReserveAllocation({
-          mintOperationId,
-          initiatedBy,
-          reason,
-        });
-      },
-      handleOnezeWithdrawalExecuteJob: async ({ withdrawalId, initiatedBy, reason }) => {
-        await processQueuedOnezeWithdrawalExecution({
-          withdrawalId,
-          initiatedBy,
-          reason,
-        });
-      },
-    });
+    // In production, workers run in a separate container (docker-compose.prod.yml worker service).
+    // Set RUN_BACKGROUND_WORKERS=false on the API service to avoid duplicate workers.
+    if (process.env.RUN_BACKGROUND_WORKERS !== 'false') {
+      startBackgroundWorkers({
+        handlePushJob: processPushQueueJob,
+        handleAuctionSweepJob: async ({ reason }) => {
+          await sweepExpiredAuctions(reason);
+        },
+        handleReconciliationJob: async ({ reason, runDate }) => {
+          await runPlatformReconciliation(reason, runDate);
+        },
+        handleOutboxDrainJob: async () => {
+          await processDomainOutboxBatch();
+        },
+        handleOnezeMintReserveJob: async ({ mintOperationId, initiatedBy, reason }) => {
+          await processQueuedOnezeMintReserveAllocation({
+            mintOperationId,
+            initiatedBy,
+            reason,
+          });
+        },
+        handleOnezeWithdrawalExecuteJob: async ({ withdrawalId, initiatedBy, reason }) => {
+          await processQueuedOnezeWithdrawalExecution({
+            withdrawalId,
+            initiatedBy,
+            reason,
+          });
+        },
+      });
+    } else {
+      app.log.info('[api] background workers disabled — running in separate container');
+    }
 
     startAuctionSweepScheduler();
     startDomainOutboxScheduler();
@@ -47271,6 +47476,11 @@ const start = async () => {
     startOnezeDailyAttestationScheduler();
     startOnezeFxSyncScheduler();
     startOnezeAutoAdjustScheduler();
+
+    // Configure the search index settings on startup (fire-and-forget).
+    // Errors are swallowed inside configureSearchIndex so a misconfigured
+    // search backend never blocks the API from serving traffic.
+    void configureSearchIndex().catch(() => {});
 
     // P0-9: AI/ML deploy-time validation. Log blocking errors and warnings
     // before serving traffic so ops can see whether the deployment may
@@ -47338,7 +47548,9 @@ const start = async () => {
 
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 
-registerCollectionRoutes({ app, db, createApiError });
+registerCollectionRoutes({ app, db: createKysely(db), createApiError });
+
+registerSearchRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 type PosterStoryAccessRow = {
   id: string;
@@ -49047,10 +49259,14 @@ registerListingOfferRoutes({
 
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
 
+registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
 registerAiTruthRoutes({
   app,
   authorizeAdminRequest: authorizeSecurityAdminRequest,
 });
+
+registerComplianceRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 // POST /creator/documents — create or replace a draft document
 

@@ -33,10 +33,14 @@ import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
 import { ToastContainer, PushSoftAskOverlay } from './src/components/Toast';
+import { UpdateManager } from './src/platform/updates';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
+import { RealtimeProvider } from './src/platform/realtime';
+import { PostHogProvider } from './src/analytics/PostHogProvider';
+import { SupportProvider } from './src/platform/support';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -497,8 +501,11 @@ export default function App() {
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
+          <PostHogProvider>
+          <SupportProvider>
           <KeyboardProvider>
           <ServerStateProvider>
+            <RealtimeProvider>
             <ToastProvider>
               <BackendDataProvider>
                 <CurrencyProvider>
@@ -542,9 +549,13 @@ export default function App() {
               </BackendDataProvider>
               <ToastContainer />
               <PushSoftAskOverlay />
+              <UpdateManager />
             </ToastProvider>
+            </RealtimeProvider>
           </ServerStateProvider>
           </KeyboardProvider>
+          </SupportProvider>
+          </PostHogProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </AppErrorBoundary>

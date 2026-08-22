@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
@@ -12,20 +12,15 @@ import { Space, Radius, Typography, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
-import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
+import { useTabScroll } from '../context/TabScrollContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-
-import HomeScreen from '../screens/HomeScreen';
-import SearchScreen from '../screens/SearchScreen';
-import InboxScreen from '../screens/InboxScreen';
-import MyProfileScreen from '../screens/MyProfileScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -171,6 +166,41 @@ const CreateTabButton = ({
   );
 };
 
+/**
+ * Scroll-aware tab bar wrapper. Reads the `tabBarVisible` SharedValue from
+ * TabScrollContext (written by HomeScreen on scroll) and animates the tab
+ * bar's `translateY` with a bounce-free spring. When the value is `false`
+ * the bar slides down by its full height; when `true` it returns to 0.
+ *
+ * The inner `BottomTabBar` retains all existing styling, badges, and the
+ * Liquid Glass backdrop — this wrapper only adds the scroll-driven
+ * hide/show transform on an absolutely-positioned container.
+ */
+function AnimatedTabBar(props: BottomTabBarProps) {
+  const { tabBarVisible } = useTabScroll();
+  const { spring } = useMotionConfig();
+  const insets = useSafeAreaInsets();
+  const hideOffset = NAV_HEIGHT + insets.bottom;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const targetY = tabBarVisible.value ? 0 : hideOffset;
+    return {
+      transform: [{ translateY: withSpring(targetY, spring.glide) }],
+    };
+  });
+
+  return (
+    <Reanimated.View
+      style={[
+        { position: 'absolute', bottom: 0, left: 0, right: 0 },
+        animatedStyle,
+      ]}
+    >
+      <BottomTabBar {...props} />
+    </Reanimated.View>
+  );
+}
+
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
@@ -215,6 +245,7 @@ export default function TabNavigator() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Tab.Navigator
+        tabBar={(props) => <AnimatedTabBar {...props} />}
         screenOptions={{
           headerShown: false,
           // Labels visible — recognition over recall (research doc §2, §4.1).
@@ -235,7 +266,6 @@ export default function TabNavigator() {
           // devices (BlurView fallback elsewhere). No floating pill, no
           // solid background — the glass IS the background.
           tabBarStyle: {
-            position: 'absolute',
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: colors.border,
             backgroundColor: 'transparent',
@@ -275,9 +305,10 @@ export default function TabNavigator() {
       >
         <Tab.Screen
           name="Home"
-          component={HomeScreen}
+          getComponent={() => require('./tabStacks/HomeStack').HomeStack}
           options={{
             tabBarLabel: 'Home',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
             ),
@@ -286,9 +317,10 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Explore"
-          component={SearchScreen}
+          getComponent={() => require('./tabStacks/ExploreStack').ExploreStack}
           options={{
             tabBarLabel: 'Explore',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
             ),
@@ -297,7 +329,7 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Create"
-          component={View}
+          getComponent={() => View}
           options={{
             tabBarButton: (props: BottomTabBarButtonProps) => (
               <CreateTabButton
@@ -321,9 +353,10 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Inbox"
-          component={InboxScreen}
+          getComponent={() => require('./tabStacks/InboxStack').InboxStack}
           options={{
             tabBarLabel: 'Inbox',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 name={focused ? 'paper-plane' : 'paper-plane-outline'}
@@ -339,9 +372,10 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Profile"
-          component={MyProfileScreen}
+          getComponent={() => require('./tabStacks/ProfileStack').ProfileStack}
           options={{
             tabBarLabel: 'Profile',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <ProfileTabIcon color={color} focused={focused} />
             ),

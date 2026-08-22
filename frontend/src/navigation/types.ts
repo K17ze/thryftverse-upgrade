@@ -506,11 +506,84 @@ export type RootStackParamList = {
   AgentActivity: undefined;
 };
 
+// ── Per-tab stack param lists ──
+// Each tab wraps a native-stack navigator so tab switches preserve per-tab
+// navigation history. Screens that are shared across tabs (ItemDetail, Chat,
+// Checkout, etc.) remain in the root stack for cross-tab navigation.
+
+export type HomeTabParamList = {
+  Home: undefined;
+  PulseFeed: undefined;
+  ExploreCollection: RootStackParamList['ExploreCollection'];
+  LookDetail: RootStackParamList['LookDetail'];
+  Galleria: undefined;
+  GalleriaCollectionDetail: RootStackParamList['GalleriaCollectionDetail'];
+  MoodboardHome: undefined;
+  YourAlgorithm: undefined;
+  StyleQuiz: undefined;
+  ConversationalSearch: undefined;
+};
+
+export type ExploreTabParamList = {
+  Explore: undefined;
+  GlobalSearch: undefined;
+  CategoryDetail: RootStackParamList['CategoryDetail'];
+  CategoryTree: RootStackParamList['CategoryTree'];
+  Browse: RootStackParamList['Browse'];
+  Filter: RootStackParamList['Filter'];
+  SavedSearches: undefined;
+  CollectionDetail: RootStackParamList['CollectionDetail'];
+};
+
+export type InboxTabParamList = {
+  Inbox: undefined;
+};
+
+export type ProfileTabParamList = {
+  Profile: undefined;
+  EditProfile: RootStackParamList['EditProfile'];
+  Settings: undefined;
+  AccountSettings: undefined;
+  AccountControl: undefined;
+  DeleteAccount: undefined;
+  DataExport: undefined;
+  Personalisation: undefined;
+  SavedAddresses: undefined;
+  Payments: undefined;
+  NotificationsList: undefined;
+  PushNotifications: undefined;
+  ChangePassword: undefined;
+  TwoFactorSetup: undefined;
+  HelpSupport: undefined;
+  ConnectedAccounts: undefined;
+  EmailNotifications: undefined;
+  AccessibilitySettings: undefined;
+  AIPreferences: undefined;
+  SustainabilityPreferences: undefined;
+  DataPrivacy: undefined;
+  NotificationPreferences: undefined;
+  AIAgentIntegration: undefined;
+  AgentActivity: undefined;
+  ChatSettings: undefined;
+  ActiveSessions: undefined;
+  BlockedUsers: undefined;
+  PrivacySettings: undefined;
+  About: undefined;
+  MutedConversations: undefined;
+  ArchivedConversations: undefined;
+  ManageQuickReplies: RootStackParamList['ManageQuickReplies'];
+  Closet: undefined;
+  Verification: undefined;
+  VerificationStatus: undefined;
+  SellerVerification: undefined;
+  KYCVerification: undefined;
+};
+
 // ── Main Tabs ──
 export type TabParamList = {
-  Home: undefined;
-  Explore: undefined;
+  Home: NavigatorScreenParams<HomeTabParamList> | undefined;
+  Explore: NavigatorScreenParams<ExploreTabParamList> | undefined;
   Create: undefined;
-  Inbox: undefined;
-  Profile: undefined;
+  Inbox: NavigatorScreenParams<InboxTabParamList> | undefined;
+  Profile: NavigatorScreenParams<ProfileTabParamList> | undefined;
 };

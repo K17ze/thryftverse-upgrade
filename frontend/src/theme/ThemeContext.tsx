@@ -7,6 +7,10 @@ import {
   type ThemePreference,
 } from './themePreference';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
+import {
+  DARK_COLORS as RAW_DARK_COLORS,
+  LIGHT_COLORS as RAW_LIGHT_COLORS,
+} from '../constants/colors';
 
 export type ThemeMode = 'dark' | 'light';
 
@@ -85,115 +89,9 @@ export interface ThemeColors {
   glassBorder: string;
 }
 
-const DARK_COLORS: ThemeColors = {
-  background: '#0A0A0A',
-  surface: '#141414',
-  surfaceAlt: '#1C1C1C',
-  surfaceRaised: '#1F1F1F',
-  surfaceElevated: '#242424',
-  brand: '#F4F0E8',
-  brandPressed: '#D8D0C3',
-  brandSubtle: 'rgba(244,240,232,0.08)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A3A3A3',
-  textMuted: '#7A7A7A', // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
-  textInverse: '#000000',
-  border: '#262626',
-  borderSubtle: '#1E1E1E',
-  danger: '#9b0202',
-  dangerSubtle: 'rgba(155,2,2,0.10)',
-  success: '#215634',
-  successSubtle: 'rgba(33,86,52,0.10)',
-  warning: '#D49454', // Distinct from antiqueGold — warm amber, not gold
-  warningSubtle: 'rgba(212,148,84,0.12)',
-  brandBorder: 'rgba(244,240,232,0.20)',
-  warningBorder: 'rgba(212,148,84,0.25)',
-  dangerBorder: 'rgba(155,2,2,0.20)',
-  successBorder: 'rgba(33,86,52,0.20)',
-  coownUpBorder: 'rgba(28,86,49,0.20)',
-  coownDownBorder: 'rgba(95,22,22,0.20)',
-  commerceTrustBorder: 'rgba(74,122,196,0.20)',
-  coownUp: '#1C5631',
-  coownDown: '#5F1616',
-  coownUpSubtle: 'rgba(28,86,49,0.12)',
-  coownDownSubtle: 'rgba(95,22,22,0.12)',
-  social: '#9A6B7A',
-  discovery: '#B85566',
-  commerceTrust: '#4A7AC4',
-  commerceTrustSubtle: 'rgba(74,122,196,0.10)',
-  discoverySubtle: 'rgba(184,85,102,0.12)',
-  bronzeSubtle: 'rgba(138,106,63,0.12)',
-  antiqueGold: '#C9A46A',
-  bronze: '#8A6A3F',
-  scrimTextPrimary: '#FFFFFF',
-  scrimTextSecondary: 'rgba(255,255,255,0.88)',
-  scrimTextTertiary: 'rgba(255,255,255,0.40)',
-  overlay: 'rgba(0,0,0,0.6)',
-  input: '#1A1A1A',
-  inputText: '#FFFFFF',
-  row: '#141414',
-  rowPressed: '#1A1A1A',
-  tabBar: '#0A0A0A',
-  header: '#0A0A0A',
-  shadow: '#000000',
-  glassBg: 'rgba(255,255,255,0.04)',
-  glassBorder: 'rgba(255,255,255,0.08)',
-};
+const DARK_COLORS: ThemeColors = RAW_DARK_COLORS as ThemeColors;
 
-const LIGHT_COLORS: ThemeColors = {
-  background: '#FFFFFF',
-  surface: '#F5F5F5',
-  surfaceAlt: '#EFEFEF',
-  surfaceRaised: '#F8F8F8', // Monotonic: surface(245) < surfaceRaised(248) < surfaceElevated(255)
-  surfaceElevated: '#FFFFFF',
-  brand: '#111111',
-  brandPressed: '#333333',
-  brandSubtle: 'rgba(17,17,17,0.06)',
-  textPrimary: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#767676', // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
-  textInverse: '#FFFFFF',
-  border: '#E5E5E5',
-  borderSubtle: '#F0F0F0',
-  danger: '#9b0202',
-  dangerSubtle: 'rgba(155,2,2,0.08)',
-  success: '#215634',
-  successSubtle: 'rgba(33,86,52,0.08)',
-  warning: '#B8742E', // Distinct from antiqueGold — warm amber, not gold
-  warningSubtle: 'rgba(184,116,46,0.10)',
-  brandBorder: 'rgba(17,17,17,0.16)',
-  warningBorder: 'rgba(184,116,46,0.20)',
-  dangerBorder: 'rgba(155,2,2,0.16)',
-  successBorder: 'rgba(33,86,52,0.16)',
-  coownUpBorder: 'rgba(28,86,49,0.16)',
-  coownDownBorder: 'rgba(95,22,22,0.16)',
-  commerceTrustBorder: 'rgba(6,72,154,0.16)',
-  coownUp: '#1C5631',
-  coownDown: '#5F1616',
-  coownUpSubtle: 'rgba(28,86,49,0.10)',
-  coownDownSubtle: 'rgba(95,22,22,0.10)',
-  social: '#6B3245',
-  discovery: '#7B0E1E',
-  commerceTrust: '#06489A',
-  commerceTrustSubtle: 'rgba(6,72,154,0.08)',
-  discoverySubtle: 'rgba(123,14,30,0.10)',
-  bronzeSubtle: 'rgba(138,106,63,0.10)',
-  antiqueGold: '#C9A46A',
-  bronze: '#8A6A3F',
-  scrimTextPrimary: '#FFFFFF',
-  scrimTextSecondary: 'rgba(255,255,255,0.88)',
-  scrimTextTertiary: 'rgba(255,255,255,0.40)',
-  overlay: 'rgba(0,0,0,0.4)',
-  input: '#FFFFFF',
-  inputText: '#000000',
-  row: '#F5F5F5',
-  rowPressed: '#EBEBEB',
-  tabBar: '#FFFFFF',
-  header: '#FFFFFF',
-  shadow: '#000000',
-  glassBg: 'rgba(0,0,0,0.04)',
-  glassBorder: 'rgba(0,0,0,0.08)',
-};
+const LIGHT_COLORS: ThemeColors = RAW_LIGHT_COLORS as ThemeColors;
 
 interface ThemeContextValue {
   themePreference: ThemePreference;

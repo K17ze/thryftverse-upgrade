@@ -1,16 +1,12 @@
 /**
- * Video — drop-in compatibility shim for `expo-av`'s `Video` component.
+ * Video — drop-in compatibility shim for the legacy `expo-av` `Video` component.
  *
  * Why this exists:
- *   `expo-av` was removed from Expo Go in SDK 54. Importing `Video` from
- *   `expo-av` triggers `requireNativeModule('ExponentAV')` at module-load time,
- *   which throws synchronously when the native module is missing — crashing
- *   the JS bundle right after the splash screen in Expo Go.
- *
- *   This wrapper exposes the same surface (`Video` + `ResizeMode`) that the
- *   rest of the codebase already consumes, but is internally implemented on
- *   top of `expo-video` (the SDK 54 replacement), so existing call sites stay
- *   unchanged.
+ *   `expo-av` was fully removed in Expo SDK 55. The video playback
+ *   functionality was replaced by `expo-video` (SDK 54+). This wrapper
+ *   exposes the same surface (`Video` + `ResizeMode`) that the rest of the
+ *   codebase already consumes, but is internally implemented on top of
+ *   `expo-video`, so existing call sites stay unchanged.
  */
 import React, { useEffect, useMemo } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle, ImageStyle } from 'react-native';
@@ -41,7 +37,7 @@ export interface VideoProps {
   onLoad?: () => void;
   onReadyForDisplay?: () => void;
   onError?: (error: unknown) => void;
-  /** Legacy `expo-av` prop — toggles native playback controls on/off. */
+  /** Legacy `expo-av`-style prop — toggles native playback controls on/off. */
   useNativeControls?: boolean;
   /** Accessibility role for screen readers (e.g. 'image'). */
   accessibilityRole?: 'image' | 'button' | 'link' | 'none';

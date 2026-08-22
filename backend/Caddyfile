@@ -1,0 +1,48 @@
+{
+	email admin@thryftverse.com
+}
+
+# ── API reverse proxy with automatic HTTPS ────────────────────────────
+{$API_DOMAIN:api.thryftverse.com} {
+	encode gzip zstd
+
+	header {
+		# HSTS — enforce HTTPS for 1 year with preload
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+		# Cross-origin isolation headers
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+
+		# Content security headers
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+		# Remove server version disclosure
+		-Server
+	}
+
+	reverse_proxy api:4000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# ── CDN / media proxy ─────────────────────────────────────────────────
+{$CDN_DOMAIN:cdn.thryftverse.com} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		Cross-Origin-Resource-Policy "cross-origin"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy api:4000
+}

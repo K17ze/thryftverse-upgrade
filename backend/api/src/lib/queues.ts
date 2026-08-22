@@ -103,6 +103,14 @@ workerConnection.on('error', (err) => {
 
 const PUSH_QUEUE_NAME = 'push_notifications';
 const INFRA_QUEUE_NAME = 'infra_ops';
+const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}:dlq`;
+const INFRA_DLQ_NAME = `${INFRA_QUEUE_NAME}:dlq`;
+const DLQ_RETENTION_SECONDS = 7 * 24 * 60 * 60;
+
+export const QUEUE_DLQ_MAP: Record<string, string> = {
+  [PUSH_QUEUE_NAME]: PUSH_DLQ_NAME,
+  [INFRA_QUEUE_NAME]: INFRA_DLQ_NAME,
+};
 
 const pushQueue = new Queue<PushJobData>(PUSH_QUEUE_NAME, {
   connection: queueConnection,
@@ -111,6 +119,58 @@ const pushQueue = new Queue<PushJobData>(PUSH_QUEUE_NAME, {
 const infraQueue = new Queue<InfraJobData>(INFRA_QUEUE_NAME, {
   connection: queueConnection,
 });
+
+const pushDlq = new Queue<PushJobData>(PUSH_DLQ_NAME, {
+  connection: queueConnection,
+});
+
+const infraDlq = new Queue<InfraJobData>(INFRA_DLQ_NAME, {
+  connection: queueConnection,
+});
+
+export const dlqQueues: Record<string, Queue> = {
+  [PUSH_DLQ_NAME]: pushDlq,
+  [INFRA_DLQ_NAME]: infraDlq,
+};
+
+export const mainQueues: Record<string, Queue> = {
+  [PUSH_QUEUE_NAME]: pushQueue,
+  [INFRA_QUEUE_NAME]: infraQueue,
+};
+
+function moveToDlq(
+  dlq: Queue,
+  queueName: string,
+  job: { id?: string; name: string; data: unknown; opts?: { attempts?: number } },
+  err: unknown,
+): void {
+  const maxAttempts = job.opts?.attempts ?? 1;
+  const attemptsMade = (job as { attemptsMade?: number }).attemptsMade ?? maxAttempts;
+  if (attemptsMade < maxAttempts) {
+    return;
+  }
+
+  void dlq
+    .add(job.name, job.data as Record<string, unknown>, {
+      jobId: job.id,
+      removeOnFail: { age: DLQ_RETENTION_SECONDS, count: 10_000 },
+      removeOnComplete: true,
+    })
+    .then(() => {
+      logJobEvent(
+        'error',
+        { queue: queueName, dlq: dlq.name, job: job.name, jobId: job.id, err },
+        'job_moved_to_dlq',
+      );
+    })
+    .catch((dlqErr) => {
+      logJobEvent(
+        'error',
+        { queue: queueName, job: job.name, jobId: job.id, err: dlqErr },
+        'failed_to_move_job_to_dlq',
+      );
+    });
+}
 
 let pushWorker: Worker<PushJobData> | null = null;
 let infraWorker: Worker<InfraJobData> | null = null;
@@ -166,6 +226,11 @@ export function startBackgroundWorkers(
     );
     pushWorker.on('error', (err) => {
       logJobEvent('warn', { err: err.message }, 'pushWorker error');
+    });
+    pushWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(pushDlq, PUSH_QUEUE_NAME, job, err);
+      }
     });
   }
 
@@ -223,6 +288,11 @@ export function startBackgroundWorkers(
     );
     infraWorker.on('error', (err) => {
       logJobEvent('warn', { err: err.message }, 'infraWorker error');
+    });
+    infraWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(infraDlq, INFRA_QUEUE_NAME, job, err);
+      }
     });
   }
 }
@@ -338,6 +408,8 @@ export async function closeBackgroundQueues(): Promise<void> {
 
   await pushQueue.close();
   await infraQueue.close();
+  await pushDlq.close();
+  await infraDlq.close();
   await workerConnection.quit();
   await queueConnection.quit();
 }

@@ -1,0 +1,10 @@
+{
+  "platform": {
+    "ios": {
+      "classes": ["ThryftNativeModule"]
+    },
+    "android": {
+      "classes": ["expo.modules.thryftnative.ThryftNativeModule"]
+    }
+  }
+}

@@ -9,6 +9,8 @@ import {
   createUploadUrl,
 } from '../lib/s3.js';
 import { mediaKindForContentType } from '../lib/mediaLifecycle.js';
+import { createModerationProvider } from '../lib/moderation/index.js';
+import { moderateImageAsset } from '../lib/moderation/moderationService.js';
 
 type UploadRouteDependencies = {
   app: FastifyInstance;
@@ -450,6 +452,34 @@ export const registerUploadRoutes = ({
       }
 
       await client.query('COMMIT');
+
+      if (mediaAsset && mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
+        void moderateImageAsset(mediaAsset.id, row.public_url)
+          .then((outcome) => {
+            if (outcome.status === 'integrity_verified' || outcome.status === 'processing') {
+              return;
+            }
+            db.query(
+              `UPDATE media_assets
+               SET moderation_status = $2,
+                   status = CASE WHEN $3 IN ('publishable', 'quarantined', 'processing_failed') THEN $3 ELSE status END
+               WHERE id = $1
+                 AND status IN ('integrity_verified', 'processing', 'moderation_pending')`,
+              [mediaAsset.id, outcome.moderationStatus, outcome.status],
+            ).catch((dbError) => {
+              app.log.error(
+                { err: dbError, assetId: mediaAsset.id },
+                'Failed to persist background moderation outcome',
+              );
+            });
+          })
+          .catch((moderationError) => {
+            app.log.error(
+              { err: moderationError, assetId: mediaAsset.id },
+              'Background image moderation failed',
+            );
+          });
+      }
 
       if (status === 'failed') {
         reply.code(422);

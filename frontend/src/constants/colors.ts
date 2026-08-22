@@ -16,7 +16,7 @@ const THEME_OVERRIDE_GLOBAL_KEY = '__THRYFTVERSE_THEME_OVERRIDE__';
 // Values mirror theme/ThemeContext.tsx DARK_COLORS exactly.
 // ============================================================================
 
-const DARK_COLORS = {
+export const DARK_COLORS = {
   // 1. BACKGROUND - Deep neutral
   background: '#0A0A0A',
 
@@ -100,7 +100,7 @@ const DARK_COLORS = {
   glassBorder: 'rgba(255,255,255,0.08)',
 } as const;
 
-const LIGHT_COLORS = {
+export const LIGHT_COLORS = {
   // 1. BACKGROUND - Clean white
   background: '#FFFFFF',
 
