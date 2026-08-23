@@ -29,6 +29,7 @@
  */
 import { useCallback, useState } from 'react';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   useTextRecognition,
   isFeatureAvailable,
@@ -127,6 +128,7 @@ export function useTextRecognizer(
 ): UseTextRecognizerResult {
   const { enabled, language = 'LATIN' } = options;
 
+  const reducedMotion = useReducedMotion();
   const available = isTextRecognitionAvailable();
   const [textBlocks, setTextBlocks] = useState<TextBlock[]>([]);
 
@@ -160,7 +162,7 @@ export function useTextRecognizer(
       }
       frame.dispose();
     },
-    [enabled, available, textRecognition, lastSignature, updateTextBlocks],
+    [enabled, available, textRecognition, lastSignature, updateTextBlocks, reducedMotion],
   );
 
   return { frameProcessor, textBlocks };

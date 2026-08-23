@@ -22,7 +22,6 @@ const TRACK_RADIUS = 16;
 const THUMB_SIZE = 28;
 const THUMB_INSET = 2;
 const THUMB_TRAVEL = TRACK_WIDTH - THUMB_SIZE - THUMB_INSET * 2;
-const THUMB_COLOR = '#FFFFFF';
 
 export interface AppSwitchProps {
   value: boolean;
@@ -141,7 +140,7 @@ function createStyles(colors: ThemeColors) {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
       borderRadius: THUMB_SIZE / 2,
-      backgroundColor: THUMB_COLOR,
+      backgroundColor: colors.scrimTextPrimary,
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.2,

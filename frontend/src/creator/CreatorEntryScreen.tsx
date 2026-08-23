@@ -516,10 +516,10 @@ const styles = StyleSheet.create({
   },
   modeSwitcher: {
     flexDirection: 'row',
-    gap: 16,
+    gap: Space.md,
     backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: Radius.full,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 6,
   },
   modeSwitcherItem: {

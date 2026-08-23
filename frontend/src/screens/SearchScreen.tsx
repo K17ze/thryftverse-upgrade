@@ -242,6 +242,8 @@ export default function SearchScreen() {
         <Pressable
           style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}
           onPress={() => searchInputRef.current?.focus()}
+          accessibilityRole="button"
+          accessibilityLabel="Search"
         >
           <Ionicons name="search" size={19} color={colors.textMuted} />
           <TextInput

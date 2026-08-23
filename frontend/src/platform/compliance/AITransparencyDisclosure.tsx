@@ -30,6 +30,7 @@ import {
 } from 'react-native';
 import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Space } from '../../theme/designTokens';
 
 const DISMISSED_KEY = '@thryftverse/ai_disclosure_dismissed';
 const DISMISSED_TIMESTAMP_KEY = '@thryftverse/ai_disclosure_dismissed_at';
@@ -176,7 +177,7 @@ export function AITransparencyDisclosure({
   const styles = StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       justifyContent: 'flex-end',
     },
     sheet: {
@@ -187,8 +188,8 @@ export function AITransparencyDisclosure({
       paddingBottom: 34,
     },
     header: {
-      paddingHorizontal: 24,
-      paddingTop: 24,
+      paddingHorizontal: Space.lg,
+      paddingTop: Space.lg,
       paddingBottom: 12,
     },
     handle: {
@@ -197,7 +198,7 @@ export function AITransparencyDisclosure({
       borderRadius: 2,
       backgroundColor: colors.border,
       alignSelf: 'center',
-      marginBottom: 16,
+      marginBottom: Space.md,
     },
     title: {
       fontSize: 24,
@@ -216,13 +217,13 @@ export function AITransparencyDisclosure({
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      paddingHorizontal: 24,
+      paddingHorizontal: Space.lg,
       paddingTop: 20,
       paddingBottom: 8,
     },
     featureRow: {
-      paddingHorizontal: 24,
-      paddingVertical: 16,
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle,
     },
@@ -262,7 +263,7 @@ export function AITransparencyDisclosure({
       color: colors.textSecondary,
     },
     controlsSection: {
-      paddingHorizontal: 24,
+      paddingHorizontal: Space.lg,
       paddingTop: 20,
     },
     controlItem: {
@@ -282,7 +283,7 @@ export function AITransparencyDisclosure({
       color: colors.textMuted,
     },
     contactSection: {
-      paddingHorizontal: 24,
+      paddingHorizontal: Space.lg,
       paddingTop: 20,
       paddingBottom: 8,
     },
@@ -293,14 +294,14 @@ export function AITransparencyDisclosure({
     },
     buttonRow: {
       flexDirection: 'row',
-      paddingHorizontal: 24,
-      paddingTop: 24,
+      paddingHorizontal: Space.lg,
+      paddingTop: Space.lg,
       gap: 12,
     },
     primaryButton: {
       flex: 1,
       backgroundColor: colors.brand,
-      paddingVertical: 16,
+      paddingVertical: Space.md,
       borderRadius: 14,
       alignItems: 'center',
     },
@@ -313,8 +314,8 @@ export function AITransparencyDisclosure({
 
   return (
     <Modal visible={visible} transparent animationType="slide" accessible accessibilityRole={summaryRole}>
-      <Pressable style={styles.overlay} onPress={handleDismiss}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <Pressable style={styles.overlay} onPress={handleDismiss} accessibilityRole="button" accessibilityLabel="Close disclosure">
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
           <View style={styles.handle} />
 
           <View style={styles.header}>

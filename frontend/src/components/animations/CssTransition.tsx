@@ -35,6 +35,7 @@ import {
   createCSSAnimatedComponent,
   type CSSStyle,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const CSSAnimatedView = createCSSAnimatedComponent(View);
 
@@ -65,9 +66,13 @@ export function CssTransition({
   animatedStyle,
   children,
 }: CssTransitionProps): React.ReactElement {
+  const reducedMotion = useReducedMotion();
   const mergedStyle = useMemo(
-    () => [style, animatedStyle] as ViewStyle[],
-    [style, animatedStyle],
+    () => [
+      style,
+      reducedMotion ? { ...animatedStyle, transitionDuration: '0ms' } : animatedStyle,
+    ] as ViewStyle[],
+    [style, animatedStyle, reducedMotion],
   );
 
   return <CSSAnimatedView style={mergedStyle}>{children}</CSSAnimatedView>;

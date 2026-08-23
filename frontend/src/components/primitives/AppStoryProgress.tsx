@@ -7,6 +7,7 @@ import Reanimated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Radius, Space } from '../../theme/designTokens';
 
 const ReanimatedView = Reanimated.View;
@@ -45,6 +46,7 @@ export function AppStoryProgress({
   height = 2,
 }: AppStoryProgressProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const fillColor = color ?? colors.scrimTextPrimary;
   const styles = React.useMemo(() => createStyles(colors, height), [colors, height]);
 
@@ -52,11 +54,13 @@ export function AppStoryProgress({
   const lastSegment = React.useRef(currentSegment);
 
   React.useEffect(() => {
-    progressSV.value = withTiming(progress, {
-      duration: 120,
-      easing: ReanimatedEasing.linear,
-    });
-  }, [progress, progressSV]);
+    progressSV.value = reducedMotion
+      ? progress
+      : withTiming(progress, {
+          duration: 120,
+          easing: ReanimatedEasing.linear,
+        });
+  }, [progress, progressSV, reducedMotion]);
 
   React.useEffect(() => {
     if (currentSegment !== lastSegment.current) {

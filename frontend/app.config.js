@@ -281,17 +281,15 @@ module.exports = function ({ config }) {
     plugins,
     android: {
       ...config.android,
-      // Network security config — enforces HTTPS, pins production certs,
-      // and blocks cleartext traffic except in debug-overrides.
+      // networkSecurityConfig, fullBackupContent, and dataExtractionRules
+      // are injected directly into AndroidManifest.xml by the
+      // withAndroidSecurityXml config plugin (registered above in the
+      // plugins array). They are NOT valid Expo config schema fields, so
+      // they must not be set here — expo-doctor rejects them as unknown
+      // android properties. The plugin handles them at prebuild time.
       // See frontend/android/app/src/main/res/xml/network_security_config.xml
-      networkSecurityConfig: '@xml/network_security_config',
-      // Backup rules — excludes auth tokens, wallet keys, payment data,
-      // MMKV storage, and SQLite databases from auto-backup.
       // See frontend/android/app/src/main/res/xml/backup_rules.xml
-      fullBackupContent: '@xml/backup_rules',
-      // Data extraction rules (Android 12+) — cloud backup + device transfer.
       // See frontend/android/app/src/main/res/xml/data_extraction_rules.xml
-      dataExtractionRules: '@xml/data_extraction_rules',
     },
     updates: {
       ...config.updates,

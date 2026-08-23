@@ -75,7 +75,7 @@ export function AppTooltip({
   duration = 0,
   style,
 }: AppTooltipProps) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { spring } = useMotionConfig();
   const reducedMotion = useReducedMotion();
   const anchorRef = React.useRef<View>(null);
@@ -86,7 +86,7 @@ export function AppTooltip({
   const scale = useSharedValue(reducedMotion ? 1 : 0.9);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const styles = React.useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const clearAutoDismiss = React.useCallback(() => {
     if (timeoutRef.current) {
@@ -213,7 +213,8 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, isDark: boolean) {
+  const tooltipBg = isDark ? colors.surfaceElevated : colors.shadow;
   const arrowBase = {
     position: 'absolute' as const,
     width: 0,
@@ -228,7 +229,7 @@ function createStyles(colors: ThemeColors) {
       zIndex: ZIndex.dropdown,
     } as ViewStyle,
     tooltip: {
-      backgroundColor: colors.textInverse === '#FFFFFF' ? '#1A1A1A' : colors.surfaceElevated,
+      backgroundColor: tooltipBg,
       paddingHorizontal: TOOLTIP_PADDING_H,
       paddingVertical: TOOLTIP_PADDING_V,
       borderRadius: Radius.sm,
@@ -237,7 +238,7 @@ function createStyles(colors: ThemeColors) {
     text: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      color: '#FFFFFF',
+      color: colors.scrimTextPrimary,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
     } as ViewStyle,
@@ -251,7 +252,7 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: ARROW_SIZE,
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
-      borderTopColor: colors.textInverse === '#FFFFFF' ? '#1A1A1A' : colors.surfaceElevated,
+      borderTopColor: tooltipBg,
     } as ViewStyle,
     arrow_bottom: {
       top: -ARROW_SIZE,
@@ -262,7 +263,7 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: ARROW_SIZE,
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
-      borderBottomColor: colors.textInverse === '#FFFFFF' ? '#1A1A1A' : colors.surfaceElevated,
+      borderBottomColor: tooltipBg,
     } as ViewStyle,
     arrow_left: {
       right: -ARROW_SIZE,
@@ -273,7 +274,7 @@ function createStyles(colors: ThemeColors) {
       borderLeftWidth: ARROW_SIZE,
       borderTopColor: 'transparent',
       borderBottomColor: 'transparent',
-      borderLeftColor: colors.textInverse === '#FFFFFF' ? '#1A1A1A' : colors.surfaceElevated,
+      borderLeftColor: tooltipBg,
     } as ViewStyle,
     arrow_right: {
       left: -ARROW_SIZE,
@@ -284,7 +285,7 @@ function createStyles(colors: ThemeColors) {
       borderRightWidth: ARROW_SIZE,
       borderTopColor: 'transparent',
       borderBottomColor: 'transparent',
-      borderRightColor: colors.textInverse === '#FFFFFF' ? '#1A1A1A' : colors.surfaceElevated,
+      borderRightColor: tooltipBg,
     } as ViewStyle,
   });
 }

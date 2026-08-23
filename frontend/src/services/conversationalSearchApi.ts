@@ -358,7 +358,7 @@ export async function startConversation(query: string): Promise<SearchConversati
   } catch {
     await delay(520);
     filters = extractFilters(query);
-    isDemo = true;
+    isDemo = __DEV__;
   }
 
   const assistantMessage: ChatMessage = {
@@ -425,7 +425,7 @@ export async function continueConversation(
   } catch {
     await delay(520);
     newFilters = extractFilters(query);
-    isDemo = true;
+    isDemo = __DEV__;
   }
 
   const merged: SearchFilters = { isDemo };

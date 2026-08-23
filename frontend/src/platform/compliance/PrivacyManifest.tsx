@@ -27,6 +27,7 @@ import {
   Linking,
 } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius } from '../../theme/designTokens';
 
 export interface SDKPrivacyEntry {
   /** npm package name. */
@@ -472,9 +473,9 @@ export function PrivacyManifest({
       flex: 1,
     },
     summary: {
-      paddingHorizontal: 24,
+      paddingHorizontal: Space.lg,
       paddingTop: 20,
-      paddingBottom: 16,
+      paddingBottom: Space.md,
     },
     summaryText: {
       fontSize: 15,
@@ -487,8 +488,8 @@ export function PrivacyManifest({
     },
     warningBanner: {
       backgroundColor: colors.warningSubtle,
-      marginHorizontal: 24,
-      borderRadius: 12,
+      marginHorizontal: Space.lg,
+      borderRadius: Radius.lg,
       padding: 14,
       marginBottom: 8,
     },
@@ -497,8 +498,8 @@ export function PrivacyManifest({
       color: colors.warning,
     },
     sdkCard: {
-      paddingHorizontal: 24,
-      paddingVertical: 16,
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle,
     },

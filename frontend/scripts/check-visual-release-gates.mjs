@@ -116,6 +116,7 @@ const CAMERA_SURFACE_PATTERNS = [
   /ChatMediaPreview/,
   /VisualSearchCamera/,
   /VisualSearchScreen/,
+  /ListingCameraSheet/,
   /HeroCarousel/,
   /ImageEmptyGraphic/,
   /BoardEmptyGraphic/,
@@ -138,6 +139,10 @@ const CAMERA_SURFACE_PATTERNS = [
   /services[\\/]moodboardApi/,
   /services[\\/]postersApi/,
   /orderCapabilities/,
+  // Share-image composition surfaces — colors ARE the content in exported
+  // social media story/sticker images (Skia canvas rendering). These are
+  // not UI surfaces and cannot be themed.
+  /platform[\\/]share/,
 ];
 
 // Hardcoded color patterns

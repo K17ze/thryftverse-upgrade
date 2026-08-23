@@ -132,14 +132,14 @@ export function AppDatePicker({
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setModalVisible(false)}>
+        <Pressable style={styles.overlay} onPress={() => setModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close date picker">
           <Pressable
             style={styles.sheet}
             onPress={(e) => e.stopPropagation()}
             accessibilityRole="adjustable"
           >
             <View style={styles.sheetHeader}>
-              <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
+              <Pressable onPress={() => setModalVisible(false)} hitSlop={8} accessibilityRole="button">
                 <Text style={styles.sheetAction}>Done</Text>
               </Pressable>
             </View>
@@ -327,6 +327,8 @@ function WheelColumn({
               key={item}
               style={styles.wheelItem}
               onPress={() => onSelect(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}: ${renderLabel(item)}`}
             >
               <Text
                 style={[

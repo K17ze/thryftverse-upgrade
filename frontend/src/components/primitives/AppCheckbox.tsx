@@ -20,7 +20,6 @@ const ReanimatedView = Reanimated.View;
 const BOX_SIZE = 24;
 const BOX_RADIUS = 6;
 const BORDER_WIDTH = 1.5;
-const CHECK_COLOR = '#FFFFFF';
 const CHECK_PATH = 'M5 12.5 L10 17.5 L19 7';
 
 export interface AppCheckboxProps {
@@ -105,7 +104,7 @@ export function AppCheckbox({
           <Svg width={BOX_SIZE} height={BOX_SIZE} viewBox="0 0 24 24">
             <Path
               d={CHECK_PATH}
-              stroke={CHECK_COLOR}
+              stroke={colors.textInverse}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"

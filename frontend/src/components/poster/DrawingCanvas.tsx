@@ -986,7 +986,7 @@ function createStyles(colors: any) {
     alignSelf: 'center',
     backgroundColor: colors.textPrimary,
     borderRadius: Radius.lg,
-    paddingHorizontal: 32,
+    paddingHorizontal: Space.xl,
     paddingVertical: 10,
     marginTop: 4,
   },

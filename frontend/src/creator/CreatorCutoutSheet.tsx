@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   toolRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
+    gap: Space.md,
     paddingVertical: Space.md,
   },
   toolBtn: {

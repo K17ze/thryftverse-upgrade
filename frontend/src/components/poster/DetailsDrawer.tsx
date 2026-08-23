@@ -372,7 +372,7 @@ function createStyles(colors: any) {
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    gap: 16,
+    gap: Space.md,
   },
   section: {
     gap: 8,

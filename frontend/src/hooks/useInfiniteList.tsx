@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Space } from '../theme/designTokens';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -435,8 +436,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
+    paddingVertical: Space.xxl,
+    paddingHorizontal: Space.lg,
   },
   emptyText: {
     fontSize: 15,
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   footerContainer: {
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     alignItems: 'center',
     justifyContent: 'center',
   },

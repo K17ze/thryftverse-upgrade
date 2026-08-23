@@ -84,7 +84,7 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
   const { colors } = useAppTheme();
   const enabled = useFeatureFlag(flagKey);
   return (
-    <View style={flagStyles.row}>
+    <View style={[flagStyles.row, { borderBottomColor: colors.borderSubtle }]}>
       <Text style={[flagStyles.flagName, { color: colors.textSecondary }]}>
         {flagKey}
       </Text>
@@ -131,7 +131,6 @@ const flagStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128,128,128,0.15)',
   },
   flagName: {
     fontSize: TypographyV2.body.size,

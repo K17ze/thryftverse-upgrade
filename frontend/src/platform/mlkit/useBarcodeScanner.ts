@@ -33,6 +33,7 @@
  */
 import { useCallback, useState } from 'react';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   useBarcodeScanning,
   isFeatureAvailable,
@@ -110,6 +111,7 @@ function barcodeSignature(raw: BarcodeData[]): string {
 export function useBarcodeScanner(options: UseBarcodeScannerOptions): UseBarcodeScannerResult {
   const { enabled, formats } = options;
 
+  const reducedMotion = useReducedMotion();
   const available = isBarcodeScanningAvailable();
   const [barcodes, setBarcodes] = useState<Barcode[]>([]);
 
@@ -150,7 +152,7 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions): UseBarcode
       }
       frame.dispose();
     },
-    [enabled, available, barcodeScanning, lastSignature, updateBarcodes],
+    [enabled, available, barcodeScanning, lastSignature, updateBarcodes, reducedMotion],
   );
 
   return { frameProcessor, barcodes };

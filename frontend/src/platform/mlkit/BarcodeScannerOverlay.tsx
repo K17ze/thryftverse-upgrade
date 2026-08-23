@@ -22,6 +22,7 @@ import { StyleSheet } from 'react-native';
 import { Canvas, Rect, Text as SkiaText, useFont, Group } from '@shopify/react-native-skia';
 import { useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Stroke } from '../../theme/designTokens';
 import type { Barcode, Point } from './types';
 
@@ -77,6 +78,7 @@ export function BarcodeScannerOverlay({
   cameraViewSize,
 }: BarcodeScannerOverlayProps): React.JSX.Element {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const font = useFont(null, 11);
 
   // Reanimated SharedValue for opacity — drives the Skia render thread
@@ -84,11 +86,14 @@ export function BarcodeScannerOverlay({
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withTiming(barcodes.length > 0 ? 1 : 0, {
-      duration: 250,
-      easing: Easing.out(Easing.ease),
-    });
-  }, [barcodes.length, opacity]);
+    const target = barcodes.length > 0 ? 1 : 0;
+    opacity.value = reducedMotion
+      ? target
+      : withTiming(target, {
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+        });
+  }, [barcodes.length, opacity, reducedMotion]);
 
   const bounds = useMemo(
     () => computeBounds(barcodes, cameraViewSize.width, cameraViewSize.height),

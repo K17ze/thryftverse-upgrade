@@ -1974,7 +1974,7 @@ const styles = StyleSheet.create({
 
   // Loading
   loadingStateWrap: {
-    paddingTop: 16,
+    paddingTop: Space.md,
     paddingHorizontal: 20,
   },
   loadingSection: {
@@ -2104,7 +2104,7 @@ const styles = StyleSheet.create({
 
   // Focus state — trending pills (horizontal scroll with category icons)
   trendingFocusScroll: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     gap: 10,
   },
   trendingFocusPill: {
@@ -2395,7 +2395,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 4,
-    gap: 24,
+    gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   scopeTab: {

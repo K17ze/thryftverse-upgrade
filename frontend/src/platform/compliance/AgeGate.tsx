@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius } from '../../theme/designTokens';
 
 const STORAGE_KEY = '@thryftverse/age_gate_verified';
 const STORAGE_TIMESTAMP_KEY = '@thryftverse/age_gate_verified_at';
@@ -187,10 +188,10 @@ export function AgeGate({
   const styles = StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
-      padding: 24,
+      padding: Space.lg,
     },
     container: {
       backgroundColor: colors.surface,
@@ -210,19 +211,19 @@ export function AgeGate({
       fontSize: 15,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginBottom: 24,
+      marginBottom: Space.lg,
       lineHeight: 21,
     },
     yearScroll: {
       maxHeight: 180,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       marginBottom: 20,
     },
     yearItem: {
       paddingVertical: 14,
-      paddingHorizontal: 16,
+      paddingHorizontal: Space.md,
       alignItems: 'center',
     },
     yearItemSelected: {
@@ -262,7 +263,7 @@ export function AgeGate({
     },
     button: {
       backgroundColor: colors.brand,
-      paddingVertical: 16,
+      paddingVertical: Space.md,
       borderRadius: 14,
       alignItems: 'center',
     },
@@ -276,9 +277,9 @@ export function AgeGate({
     },
     warning: {
       backgroundColor: colors.warningSubtle,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
+      borderRadius: Radius.lg,
+      padding: Space.md,
+      marginBottom: Space.md,
     },
     warningText: {
       fontSize: 14,

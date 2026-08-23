@@ -598,7 +598,7 @@ function createEyedropperStyles(colors: ThemeColors) {
       gap: 8,
       backgroundColor: colors.overlay,
       borderRadius: Radius.full,
-      paddingHorizontal: 16,
+      paddingHorizontal: Space.md,
       paddingVertical: 10,
     },
     instructionText: {

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -231,6 +231,13 @@ export default function PulseFeedScreen() {
     );
   }
 
+  const renderEventCard = useCallback(
+    ({ item, index }: { item: FeedEvent; index: number }) => (
+      <EventCard event={item} index={index} />
+    ),
+    [],
+  );
+
   return (
     <FlagshipScreen
       scrollEnabled={false}
@@ -238,7 +245,7 @@ export default function PulseFeedScreen() {
     >
       <FlashList
         data={events}
-        renderItem={({ item, index }) => <EventCard event={item} index={index} />}
+        renderItem={renderEventCard}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
