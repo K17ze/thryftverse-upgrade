@@ -40,6 +40,11 @@ export interface OutboxDrainJobData {
   reason: 'scheduled' | 'after_commit' | 'manual';
 }
 
+export interface MediaIngestJobData {
+  assetId: string;
+  reason: string;
+}
+
 type InfraJobData =
   | AuctionSweepJobData
   | OnezeWithdrawalExecuteJobData

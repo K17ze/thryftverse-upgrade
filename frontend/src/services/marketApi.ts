@@ -445,6 +445,8 @@ export interface MarketHistoryItem {
   orderType: 'market' | 'limit' | null;
   note: string | null;
   timestamp: string;
+  /** Backend-provided numeric order ID for cancel/amend operations. */
+  orderId?: number | null;
 }
 
 export interface MarketHistoryCursor {

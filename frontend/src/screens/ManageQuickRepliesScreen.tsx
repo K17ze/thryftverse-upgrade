@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useStore, type QuickReply } from '../store/useStore';
+import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
@@ -35,9 +35,14 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
 
   const replies = useStore((s) => (role === 'seller' ? s.sellerQuickReplies : s.buyerQuickReplies));
-  const addReply = useStore((s) => (role === 'seller' ? s.addSellerQuickReply : s.addBuyerQuickReply));
-  const updateReply = useStore((s) => (role === 'seller' ? s.updateSellerQuickReply : s.updateBuyerQuickReply));
-  const removeReply = useStore((s) => (role === 'seller' ? s.removeSellerQuickReply : s.removeBuyerQuickReply));
+  const addReplyOnApi = useStore((s) => s.addQuickReplyOnApi);
+  const updateReplyOnApi = useStore((s) => s.updateQuickReplyOnApi);
+  const removeReplyOnApi = useStore((s) => s.removeQuickReplyOnApi);
+  const loadQuickRepliesFromApi = useStore((s) => s.loadQuickRepliesFromApi);
+
+  useEffect(() => {
+    void loadQuickRepliesFromApi();
+  }, [loadQuickRepliesFromApi]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -83,29 +88,24 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
       ? `Keep the message under ${MAX_MSG_LEN} characters.`
       : null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (validationError) {
       haptic.light();
       return;
     }
     setSubmitting(true);
     try {
-      const reply: QuickReply = {
-        id: editingIndex !== null ? (replies[editingIndex]?.id ?? `qr-${Date.now()}`) : `qr-${Date.now()}`,
-        title: trimmedTitle,
-        message: trimmedMessage,
-      };
       if (editingIndex !== null) {
-        updateReply(editingIndex, reply);
+        await updateReplyOnApi(role, editingIndex, trimmedTitle, trimmedMessage);
         show('Quick reply updated', 'success');
       } else {
-        addReply(reply);
+        await addReplyOnApi(role, trimmedTitle, trimmedMessage);
         show('Quick reply added', 'success');
       }
       haptic.medium();
       closeModal();
     } catch {
-      show('Could not save this reply. Try again.', 'error');
+      show('Could not save this reply. Check your connection and try again.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -120,10 +120,14 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            removeReply(index);
-            haptic.medium();
-            show('Quick reply deleted', 'info');
+          onPress: async () => {
+            try {
+              await removeReplyOnApi(role, index);
+              haptic.medium();
+              show('Quick reply deleted', 'info');
+            } catch {
+              show('Could not delete this reply. Check your connection and try again.', 'error');
+            }
           },
         },
       ]

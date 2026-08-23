@@ -59,6 +59,7 @@ const formSheetScreenOptions = {
 
 export default function AppNavigator() {
   const isAuthenticated = useStore((state) => state.isAuthenticated);
+  const biometricLoginPending = useStore((state) => state.biometricLoginPending);
   const storeOnboardingComplete = useStore((state) => state.hasCompletedOnboarding);
   // Onboarding is a first-run gate that sits ahead of auth. The persisted
   // store flag lets returning users skip the AsyncStorage round-trip; for
@@ -100,12 +101,16 @@ export default function AppNavigator() {
 
   // First-launch users see the age gate, then onboarding, before auth.
   // Returning users go straight to the auth/main entry point.
+  // When biometric login is enabled and a session was restored from
+  // SecureStore, the user must pass Face ID / Touch ID before MainTabs.
   const initialRoute = needsAgeVerification
     ? 'AgeVerification'
     : needsOnboarding
       ? 'Onboarding'
       : isAuthenticated
-        ? 'MainTabs'
+        ? biometricLoginPending
+          ? 'BiometricLogin'
+          : 'MainTabs'
         : 'AuthLanding';
 
   const navigationContainerRef = React.useContext(NavigationContainerRefContext);
@@ -189,7 +194,9 @@ export default function AppNavigator() {
       <Stack.Screen name="AuthLanding" component={AuthLandingScreen} />
       <Stack.Screen name="Login" getComponent={() => require('../screens/LoginScreen').default} />
       <Stack.Screen name="SignUp" getComponent={() => require('../screens/SignUpScreen').default} />
+      <Stack.Screen name="BiometricLogin" getComponent={() => require('../screens/BiometricLoginScreen').default} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="ForgotPassword" getComponent={() => require('../screens/ForgotPasswordScreen').default} />
+      <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} options={{ headerShown: false }} />
 
       {/* ── Main Tabs ── */}
       <Stack.Screen name="MainTabs" component={TabNavigator} />

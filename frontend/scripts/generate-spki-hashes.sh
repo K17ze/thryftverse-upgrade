@@ -24,19 +24,42 @@
 #   2. Backup: a different intermediate in the chain, or a pre-generated
 #      backup key pair (see network_security_config.xml header comment).
 #
+# Usage:
+#   ./generate-spki-hashes.sh <domain> [port] [--all]
+#
+#   --all  Also print the SPKI hash of every certificate in the chain so
+#          you can pick a backup pin (typically an intermediate CA).
+#
+# Examples:
+#   ./generate-spki-hashes.sh api.thryftverse.com
+#   ./generate-spki-hashes.sh cdn.thryftverse.com 443 --all
+#
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-  echo "Usage: $0 <domain>"
+ALL_CHAIN=0
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --all) ALL_CHAIN=1 ;;
+    -h|--help)
+      grep '^#' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+
+if [ ${#ARGS[@]} -lt 1 ]; then
+  echo "Usage: $0 <domain> [port] [--all]"
   echo ""
   echo "Examples:"
   echo "  $0 api.thryftverse.com"
-  echo "  $0 cdn.thryftverse.com"
+  echo "  $0 cdn.thryftverse.com 443 --all"
   exit 1
 fi
 
-DOMAIN="$1"
-PORT="${2:-443}"
+DOMAIN="${ARGS[0]}"
+PORT="${ARGS[1]:-443}"
 
 if ! command -v openssl &>/dev/null; then
   echo "Error: openssl is not installed or not in PATH." >&2
@@ -70,6 +93,40 @@ echo "" >&2
 echo "Paste this into:" >&2
 echo "  - frontend/android/app/src/main/res/xml/network_security_config.xml" >&2
 echo "  - frontend/plugins/withTrustKit.js (TSKPublicKeyHashes)" >&2
+echo "  - frontend/src/utils/sslPinning.ts (SSL_PINNING_CONFIG.domains)" >&2
 echo "" >&2
-echo "Remember to also generate a BACKUP pin (different intermediate or" >&2
-echo "pre-generated backup key) for rotation safety." >&2
+
+if [ "${ALL_CHAIN}" -eq 1 ]; then
+  echo "Full certificate chain SPKI hashes (for backup pin selection):" >&2
+  echo "" >&2
+  # Save the full chain to a temp PEM, then split into individual certs.
+  TMP_PEM="$(mktemp)"
+  trap 'rm -f "${TMP_PEM}"' EXIT
+  openssl s_client -connect "${DOMAIN}:${PORT}" -servername "${DOMAIN}" -showcerts 2>/dev/null \
+    | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' > "${TMP_PEM}"
+
+  # Use awk to split the PEM bundle into individual certificates and compute
+  # the SPKI hash of each one.
+  idx=0
+  awk 'BEGIN{c=0} /-----BEGIN CERTIFICATE-----/{c++} {print > "/tmp/_thryft_cert_" c ".pem"} /-----END CERTIFICATE-----/{}' "${TMP_PEM}"
+  for f in /tmp/_thryft_cert_*.pem; do
+    [ -f "$f" ] || continue
+    ch=$(openssl x509 -in "$f" -pubkey -noout 2>/dev/null \
+      | openssl pkey -pubin -outform der 2>/dev/null \
+      | openssl dgst -sha256 -binary 2>/dev/null \
+      | openssl enc -base64)
+    [ -n "$ch" ] && echo "  [${idx}] ${ch}" >&2
+    idx=$((idx + 1))
+    rm -f "$f"
+  done
+
+  echo "" >&2
+  echo "Pick a DIFFERENT entry (typically [1], the intermediate) as the" >&2
+  echo "backup pin, or pre-generate a separate backup key pair." >&2
+  echo "" >&2
+else
+  echo "Remember to also generate a BACKUP pin (different intermediate or" >&2
+  echo "pre-generated backup key) for rotation safety. Use --all to see" >&2
+  echo "every SPKI hash in the certificate chain." >&2
+  echo "" >&2
+fi

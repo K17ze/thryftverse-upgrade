@@ -30,6 +30,7 @@ interface SettingsPreferencesContextValue {
   analyticsOptOut: boolean;
   developerMode: boolean;
   biometricEnabled: boolean;
+  biometricLoginEnabled: boolean;
   personalizedAds: boolean;
   recommendationPersonalization: boolean;
   thirdPartySharing: boolean;
@@ -49,6 +50,7 @@ interface SettingsPreferencesContextValue {
   setDeveloperMode: (enabled: boolean) => void;
   toggleDeveloperMode: () => void;
   setBiometricEnabled: (enabled: boolean) => void;
+  setBiometricLoginEnabled: (enabled: boolean) => void;
   setPersonalizedAds: (enabled: boolean) => void;
   setRecommendationPersonalization: (enabled: boolean) => void;
   setThirdPartySharing: (enabled: boolean) => void;
@@ -73,6 +75,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   const [analyticsOptOut, setAnalyticsOptOutState] = React.useState(false);
   const [developerMode, setDeveloperModeState] = React.useState(false);
   const [biometricEnabled, setBiometricEnabledState] = React.useState(true);
+  const [biometricLoginEnabled, setBiometricLoginEnabledState] = React.useState(false);
   const [personalizedAds, setPersonalizedAdsState] = React.useState(false);
   const [recommendationPersonalization, setRecommendationPersonalizationState] = React.useState(true);
   const [thirdPartySharing, setThirdPartySharingState] = React.useState(false);
@@ -99,6 +102,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setAnalyticsOptOutState(settingsPreferences.analyticsOptOut);
         setDeveloperModeState(settingsPreferences.developerMode);
         setBiometricEnabledState(settingsPreferences.biometricEnabled);
+        setBiometricLoginEnabledState(settingsPreferences.biometricLoginEnabled);
         setPersonalizedAdsState(settingsPreferences.personalizedAds);
         setRecommendationPersonalizationState(settingsPreferences.recommendationPersonalization);
         setThirdPartySharingState(settingsPreferences.thirdPartySharing);
@@ -138,13 +142,14 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       analyticsOptOut,
       developerMode,
       biometricEnabled,
+      biometricLoginEnabled,
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, personalizedAds, recommendationPersonalization, thirdPartySharing, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, biometricLoginEnabled, personalizedAds, recommendationPersonalization, thirdPartySharing, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -251,6 +256,10 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setBiometricEnabledState(enabled);
   }, []);
 
+  const setBiometricLoginEnabled = React.useCallback((enabled: boolean) => {
+    setBiometricLoginEnabledState(enabled);
+  }, []);
+
   const setPersonalizedAds = React.useCallback((enabled: boolean) => {
     setPersonalizedAdsState(enabled);
   }, []);
@@ -282,6 +291,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       analyticsOptOut,
       developerMode,
       biometricEnabled,
+      biometricLoginEnabled,
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
@@ -300,6 +310,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setDeveloperMode,
       toggleDeveloperMode,
       setBiometricEnabled,
+      setBiometricLoginEnabled,
       setPersonalizedAds,
       setRecommendationPersonalization,
       setThirdPartySharing,
@@ -308,6 +319,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       analyticsOptOut,
       developerMode,
       biometricEnabled,
+      biometricLoginEnabled,
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
@@ -325,6 +337,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setAnalyticsOptOutPref,
       setDeveloperMode,
       setBiometricEnabled,
+      setBiometricLoginEnabled,
       setPersonalizedAds,
       setRecommendationPersonalization,
       setThirdPartySharing,

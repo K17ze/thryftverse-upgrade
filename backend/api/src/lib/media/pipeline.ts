@@ -383,11 +383,12 @@ async function processVideoAsset(
     let posterUrl: string | null = null;
     try {
       const posterData = await readFile(posterPath);
-      posterUrl = await putBinaryObject(
+      const url = await putBinaryObject(
         `derivatives/${asset.id}/poster.jpg`,
         posterData,
         'image/jpeg',
       );
+      posterUrl = url;
       derivatives.push({
         variant: 'poster',
         mediaKind: 'image',
@@ -396,7 +397,7 @@ async function processVideoAsset(
         contentType: 'image/jpeg',
         sizeBytes: posterData.length,
         checksumSha256: sha256(posterData),
-        canonicalUrl: posterUrl,
+        canonicalUrl: url,
       });
       manifestDerivatives.push({
         variant: 'poster',
@@ -406,7 +407,7 @@ async function processVideoAsset(
         height: null,
         contentType: 'image/jpeg',
         sizeBytes: posterData.length,
-        canonicalUrl: posterUrl,
+        canonicalUrl: url,
         objectKey: `derivatives/${asset.id}/poster.jpg`,
       });
     } catch {

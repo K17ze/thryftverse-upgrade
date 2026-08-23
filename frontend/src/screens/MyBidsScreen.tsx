@@ -21,6 +21,7 @@ import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction }
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { haptics } from '../utils/haptics';
+import { useBucketedServerClock } from '../hooks/useServerClock';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -99,9 +100,9 @@ function getStateInfo(state: ActivityItem['bidState'], colors: ThemeColors): { l
   return { label: 'Active', color: colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
 }
 
-function formatActivityTime(endsAt: string, lifecycle: string): string {
+function formatActivityTime(endsAt: string, lifecycle: string, nowMs: number): string {
   const end = new Date(endsAt);
-  const now = new Date();
+  const now = new Date(nowMs);
   const diff = end.getTime() - now.getTime();
 
   if (lifecycle === 'ended' || lifecycle === 'settled') return 'Ended';
@@ -123,6 +124,7 @@ export default function MyBidsScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates, displayMode } = useCurrencyContext();
   const { isOffline } = useConnectivity();
+  const { minuteClock } = useBucketedServerClock(null);
 
   const [filter, setFilter] = React.useState<BidFilter>('active');
   const [endingSoonest, setEndingSoonest] = React.useState(false);
@@ -275,7 +277,7 @@ export default function MyBidsScreen() {
           <View style={styles.activityMetaRow}>
             <View style={styles.activityMetaCol}>
               <Meta style={styles.activityMetaLabel}>Time</Meta>
-              <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
+              <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle, minuteClock)}</Text>
             </View>
             {(item.bidState === 'won' || item.bidState === 'lost') && (
               <View style={styles.activityMetaCol}>

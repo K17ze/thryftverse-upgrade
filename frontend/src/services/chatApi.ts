@@ -599,3 +599,128 @@ export async function leaveGroupOnApi(
     { method: 'DELETE' }
   );
 }
+
+// ---------------------------------------------------------------------------
+// P0 #1 / P2 #56: Typing indicator publisher.
+// Ephemeral realtime signal — the backend fans this out to other participants
+// via the conversation's realtime topic. Callers should debounce "started
+// typing" (~1s) and send `false` on 3s inactivity or on message send.
+// ---------------------------------------------------------------------------
+
+export async function setTypingStatus(
+  conversationId: string,
+  isTyping: boolean
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/typing`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isTyping }),
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// P1 #25: Per-user conversation state — mute, archive, message-request status.
+// These mutations persist server-side so state survives across devices.
+// ---------------------------------------------------------------------------
+
+export async function muteConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/mute`,
+    { method: 'POST' }
+  );
+}
+
+export async function unmuteConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/mute`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function archiveConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/archive`,
+    { method: 'POST' }
+  );
+}
+
+export async function unarchiveConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/archive`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function acceptMessageRequestOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/accept`,
+    { method: 'POST' }
+  );
+}
+
+export async function declineMessageRequestOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/decline`,
+    { method: 'POST' }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// P1 #25: Quick replies — persisted per user with buyer/seller role.
+// ---------------------------------------------------------------------------
+
+export interface ApiQuickReply {
+  id: string;
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+  sortOrder: number;
+}
+
+export async function fetchQuickRepliesFromApi(role?: 'buyer' | 'seller'): Promise<ApiQuickReply[]> {
+  const query = role ? `?role=${role}` : '';
+  const payload = await fetchJson<{ ok: true; items: ApiQuickReply[] }>(
+    `/chat/quick-replies${query}`
+  );
+  return payload.items;
+}
+
+export async function createQuickReplyOnApi(input: {
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+}): Promise<ApiQuickReply> {
+  const payload = await fetchJson<{ ok: true; quickReply: ApiQuickReply }>(
+    '/chat/quick-replies',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.quickReply;
+}
+
+export async function updateQuickReplyOnApi(
+  replyId: string,
+  updates: { title?: string; body?: string }
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function deleteQuickReplyOnApi(replyId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
+    { method: 'DELETE' }
+  );
+}

@@ -33,6 +33,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
@@ -78,6 +79,7 @@ export default function InboxScreen() {
   const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
   const toggleArchivedConversation = useStore((state) => state.toggleArchivedConversation);
   const archivedIds = useStore((state) => state.archivedConversationIds);
+  useVisuallyComplete('Inbox');
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);

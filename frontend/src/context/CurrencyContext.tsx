@@ -22,6 +22,7 @@ interface CurrencyContextValue {
   setCurrencyCode: (code: SupportedCurrencyCode) => void;
   setDisplayMode: (mode: CurrencyDisplayMode) => void;
   cycleDisplayMode: () => void;
+  refreshRates: () => Promise<void>;
 }
 
 const CurrencyContext = React.createContext<CurrencyContextValue | undefined>(undefined);
@@ -125,8 +126,9 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       setCurrencyCode,
       setDisplayMode,
       cycleDisplayMode,
+      refreshRates,
     }),
-    [currencyCode, displayMode, goldRates, rateUpdatedAt, rateSource, settlementCurrencies, cycleDisplayMode]
+    [currencyCode, displayMode, goldRates, rateUpdatedAt, rateSource, settlementCurrencies, cycleDisplayMode, refreshRates]
   );
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

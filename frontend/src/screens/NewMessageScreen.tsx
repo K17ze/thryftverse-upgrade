@@ -489,7 +489,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           <EmptyState
             icon="people-outline"
             title="No recent contacts yet"
-            subtitle="Start a group chat, or message a seller from one of their listings to build your contact list."
+            subtitle="Start a chat or message a seller."
             ctaLabel="Start group chat"
             onCtaPress={() => navigation.navigate('CreateGroupChat')}
           />

@@ -36,18 +36,17 @@ let nativeModuleLoadError: string | null = null;
 let noopStub: ThryftPerformanceModule | null = null;
 
 /**
- * Lazily load the native performance module. Returns `null` when the native
- * code is absent so the caller can fall back to the no-op stub.
+ * Lazily load the native performance module via `requireNativeModule`. Returns
+ * `null` when the native code is absent so the caller can fall back to the
+ * no-op stub.
  */
 function loadNativeModule(): ThryftPerformanceNativeModule | null {
   if (nativeModule !== null || nativeModuleLoadError !== null) {
     return nativeModule;
   }
   try {
-    const mod = require('thryft-native') as {
-      ThryftPerformance: ThryftPerformanceNativeModule;
-    };
-    nativeModule = mod.ThryftPerformance;
+    const mod = requireNativeModule<ThryftPerformanceNativeModule>('ThryftNative');
+    nativeModule = mod;
   } catch (error) {
     nativeModuleLoadError =
       error instanceof Error ? error.message : String(error);

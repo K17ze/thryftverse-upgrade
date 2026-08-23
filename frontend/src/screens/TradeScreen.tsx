@@ -140,8 +140,22 @@ export default function TradeScreen() {
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
 
+  // Poll the order book every 10s so traders see fresh depth without
+  // manual refresh. Stops when the asset id changes or the screen unmounts.
+  React.useEffect(() => {
+    if (!tradeAssetId) return;
+    let cancelled = false;
+    const intervalId = setInterval(() => {
+      if (cancelled) return;
+      fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
+        .then((book) => { if (!cancelled) setOrderBook(book); })
+        .catch(() => undefined);
+    }, 10_000);
+    return () => { cancelled = true; clearInterval(intervalId); };
+  }, [tradeAssetId]);
+
   const marketPrice = asset ? asset.unitPriceGbp : 0;
-  const orderMode = 'limit' as const;
+  const orderMode: 'market' | 'limit' = ticketOrderType === 'protected_instant' ? 'market' : 'limit';
   const bestBid = orderBook?.bids[0]?.unitPriceGbp ?? 0;
   const bestAsk = orderBook?.asks[0]?.unitPriceGbp ?? 0;
   const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;

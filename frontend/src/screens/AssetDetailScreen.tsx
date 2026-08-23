@@ -217,6 +217,20 @@ export default function AssetDetailScreen() {
     return () => { cancelled = true; };
   }, [assetId]);
 
+  // Poll the order book every 15s so the depth chart and best bid/ask
+  // stay fresh without manual refresh.
+  React.useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    const intervalId = setInterval(() => {
+      if (cancelled) return;
+      fetchCoOwnOrderBook(assetId, { limit: 40 })
+        .then((book) => { if (!cancelled) setOrderBook(book); })
+        .catch(() => undefined);
+    }, 15_000);
+    return () => { cancelled = true; clearInterval(intervalId); };
+  }, [assetId]);
+
   // ── Last distribution fetch — most recent settled distribution for this asset ──
   React.useEffect(() => {
     if (!assetId) return;

@@ -1,9 +1,12 @@
 {
   "name": "thryft-native",
   "version": "1.0.0",
-  "description": "Local Expo module — proof-of-concept native scaffold exposing device info and build info via the Expo Modules API.",
+  "description": "Local Expo module bridging App Attest / Play Integrity and os_signpost / MetricKit / Trace via the Expo Modules API.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "sideEffects": false,
-  "private": true
+  "private": true,
+  "peerDependencies": {
+    "expo": "*"
+  }
 }

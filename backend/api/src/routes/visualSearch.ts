@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import {
+  extractImageFeatures,
+  extractRemoteImageFeatures,
+  computeSimilarity,
+  mapWithConcurrency,
+  type ImageFeatures,
+} from '../lib/visualSimilarity.js';
 
 type VisualSearchRouteDependencies = {
   app: FastifyInstance;
@@ -19,20 +26,66 @@ const visualSearchBodySchema = z.object({
   condition: z.string().optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
   maxPrice: z.coerce.number().nonnegative().optional(),
-  sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+  sort: z.enum(['newest', 'price_asc', 'price_desc', 'similarity']).optional().default('similarity'),
   limit: z.coerce.number().int().min(1).max(100).optional().default(48),
 });
 
+/** How many candidate listings to score before ranking. */
+const CANDIDATE_CAP = 150;
+/** Concurrent image downloads during scoring. */
+const SCORING_CONCURRENCY = 8;
+
+/**
+ * Decode the query image from the request payload into a Buffer.
+ * Accepts raw base64 (with or without a data-URI prefix) or a remote URL.
+ * Returns null when no image was supplied.
+ */
+async function decodeQueryImage(
+  payload: z.infer<typeof visualSearchBodySchema>,
+): Promise<Buffer | null> {
+  if (payload.imageBase64 && payload.imageBase64.trim().length > 0) {
+    const stripped = payload.imageBase64.replace(/^data:[^;]+;base64,/, '');
+    try {
+      return Buffer.from(stripped, 'base64');
+    } catch {
+      return null;
+    }
+  }
+  if (payload.imageUrl && payload.imageUrl.trim().length > 0) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(payload.imageUrl, {
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      clearTimeout(timer);
+      if (!response.ok) return null;
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * Register the visual-search route on the Fastify instance:
- *   POST /visual-search — image-based product search (hybrid filter implementation)
+ *   POST /visual-search — image-based product search
  *
- * Visual Search — honest hybrid implementation.
- * Image-similarity ML is not deployed. Instead we run a real filtered query
- * (category + brand + price + description text) over active listings, reusing
- * the same row shape as GET /listings. The response carries visualMatching=false
- * so the frontend can label results truthfully ("Similar by category, brand &
- * description") rather than claiming AI image matching.
+ * Visual Search — honest heuristic implementation.
+ *
+ * When an image is supplied, the backend extracts a real colour-and-layout
+ * feature vector from it (via sharp) and scores candidate listings by visual
+ * similarity against their primary image. Results are ranked by similarity
+ * and labelled with `similarityMethod: 'heuristic_color_features'` so the
+ * frontend can describe the method truthfully. This is NOT an AI/ML model —
+ * it is a deterministic colour-and-layout heuristic.
+ *
+ * When no image is supplied (or it cannot be decoded), the route falls back
+ * to a filtered SQL query and labels results `similarityMethod: 'filter_only'`
+ * with `visualMatching: false`.
  */
 export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRouteDependencies): void => {
   app.post('/visual-search', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -50,6 +103,7 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
       }
     }
 
+    // ── Build the filtered candidate set ────────────────────────────────
     const conditions: string[] = ["l.status = 'active'"];
     const args: unknown[] = [];
 
@@ -78,16 +132,15 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
       args.push(payload.maxPrice);
     }
     if (payload.query) {
-      conditions.push(`(l.title ILIKE $${args.length + 1} OR l.description ILIKE $${args.length + 1} OR l.brand ILIKE $${args.length + 1})`);
+      conditions.push(
+        `(l.title ILIKE $${args.length + 1} OR l.description ILIKE $${args.length + 1} OR l.brand ILIKE $${args.length + 1})`,
+      );
       args.push(`%${payload.query}%`);
     }
 
-    const orderBy =
-      payload.sort === 'price_asc'
-        ? 'l.price_gbp ASC, l.id ASC'
-        : payload.sort === 'price_desc'
-          ? 'l.price_gbp DESC, l.id DESC'
-          : 'l.created_at DESC, l.id DESC';
+    // Candidate cap: fetch a bounded superset so similarity ranking has room
+    // to reorder before trimming to the requested limit.
+    const candidateCap = Math.min(CANDIDATE_CAP, Math.max(payload.limit * 3, 60));
 
     const result = await readDb.query<{
       id: string;
@@ -113,35 +166,148 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
         FROM listings l
         LEFT JOIN users u ON u.id = l.seller_id
         WHERE ${conditions.join(' AND ')}
-        ORDER BY ${orderBy}
+        ORDER BY l.created_at DESC, l.id DESC
         LIMIT $${args.length + 1}
       `,
-      [...args, payload.limit]
+      [...args, candidateCap],
     );
 
-    const listingIds = result.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
+    const candidateRows = result.rows;
+
+    // Resolve the primary image URL for each candidate (first listing_images
+    // row, falling back to the legacy l.image_url column).
+    const candidateIds = candidateRows.map((r) => r.id);
+    const imagesResult = candidateIds.length
       ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
           `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
+          [candidateIds],
+        )
+      : { rows: [] };
+
+    const primaryImageByListing = new Map<string, string>();
+    for (const img of imagesResult.rows) {
+      if (!primaryImageByListing.has(img.listing_id)) {
+        primaryImageByListing.set(img.listing_id, img.image_url);
+      }
+    }
+    for (const row of candidateRows) {
+      if (!primaryImageByListing.has(row.id) && row.image_url) {
+        primaryImageByListing.set(row.id, row.image_url);
+      }
+    }
+
+    // ── Attempt real visual similarity scoring ───────────────────────────
+    const queryBuffer = await decodeQueryImage(payload);
+    let queryFeatures: ImageFeatures | null = null;
+    if (queryBuffer) {
+      try {
+        queryFeatures = await extractImageFeatures(queryBuffer);
+      } catch {
+        queryFeatures = null;
+      }
+    }
+
+    const hasImageScoring = queryFeatures !== null;
+
+    type ScoredRow = (typeof candidateRows)[number] & {
+      similarityScore: number | null;
+    };
+
+    let scoredRows: ScoredRow[];
+
+    if (hasImageScoring && queryFeatures) {
+      const features = queryFeatures;
+      // Only score candidates that have a usable primary image.
+      const scoreableIndices: number[] = [];
+      for (let i = 0; i < candidateRows.length; i++) {
+        const url = primaryImageByListing.get(candidateRows[i].id);
+        if (url) scoreableIndices.push(i);
+      }
+
+      const candidateFeatures = await mapWithConcurrency(
+        scoreableIndices,
+        SCORING_CONCURRENCY,
+        async (idx) => {
+          const url = primaryImageByListing.get(candidateRows[idx].id)!;
+          return { idx, features: await extractRemoteImageFeatures(url) };
+        },
+      );
+
+      scoredRows = candidateRows.map((row) => ({ ...row, similarityScore: null as number | null }));
+      for (const entry of candidateFeatures) {
+        if (entry.features) {
+          scoredRows[entry.idx].similarityScore = computeSimilarity(features, entry.features);
+        }
+      }
+
+      // Rank: scored candidates first (by similarity desc), unscored after.
+      scoredRows.sort((a, b) => {
+        const aScore = a.similarityScore ?? -1;
+        const bScore = b.similarityScore ?? -1;
+        if (bScore !== aScore) return bScore - aScore;
+        // Tie-break by recency.
+        return b.created_at.localeCompare(a.created_at);
+      });
+    } else {
+      // No usable query image — fall back to filter-only ordering.
+      const orderBy =
+        payload.sort === 'price_asc'
+          ? 'price_gbp ASC, id ASC'
+          : payload.sort === 'price_desc'
+            ? 'price_gbp DESC, id DESC'
+            : 'created_at DESC, id DESC';
+      // Re-query with the requested sort when no image scoring is possible.
+      const fallback = await readDb.query<
+        (typeof candidateRows)[number]
+      >(
+        `
+          SELECT
+            l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+            l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+            u.username AS seller_username
+          FROM listings l
+          LEFT JOIN users u ON u.id = l.seller_id
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY ${orderBy}
+          LIMIT $${args.length + 1}
+        `,
+        [...args, payload.limit],
+      );
+      scoredRows = fallback.rows.map((row) => ({ ...row, similarityScore: null }));
+    }
+
+    // Trim to the requested limit.
+    const trimmed = scoredRows.slice(0, payload.limit);
+    const trimmedIds = trimmed.map((r) => r.id);
+
+    const imagesResult2 = trimmedIds.length
+      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+          [trimmedIds],
         )
       : { rows: [] };
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
+    for (const img of imagesResult2.rows) {
       const arr = imagesByListing.get(img.listing_id) ?? [];
       arr.push(img.image_url);
       imagesByListing.set(img.listing_id, arr);
     }
 
+    const similarityMethod = hasImageScoring ? 'heuristic_color_features' : 'filter_only';
+    const visualMatching = hasImageScoring;
+
     reply.code(200);
     return {
       ok: true,
       runtimeAvailable: true,
-      // Truthful flag: results are filter-based, not ML image-similarity.
-      visualMatching: false,
-      note: 'Results are matched by category, brand, and description.',
-      items: result.rows.map((row) => ({
+      // Truthful flag: true only when real visual feature scoring ran.
+      visualMatching,
+      similarityMethod,
+      note: hasImageScoring
+        ? 'Results ranked by colour & layout similarity (heuristic, not AI).'
+        : 'No usable image supplied — results are matched by category, brand, and description.',
+      items: trimmed.map((row) => ({
         id: row.id,
         sellerId: row.seller_id,
         title: row.title,
@@ -156,6 +322,7 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
         condition: row.condition,
         originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
         createdAt: row.created_at,
+        similarityScore: row.similarityScore,
         seller: row.seller_username
           ? {
               id: row.seller_id,

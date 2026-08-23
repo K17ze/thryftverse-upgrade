@@ -138,6 +138,9 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   auction_outbid: 'auction',
   auction_won: 'auction',
   auction_ending_soon: 'auction',
+  new_follower: 'generic',
+  price_drop: 'price',
+  new_listing_from_followed_seller: 'new_item',
   generic: 'generic', // resolved further by objectRef below
 };
 

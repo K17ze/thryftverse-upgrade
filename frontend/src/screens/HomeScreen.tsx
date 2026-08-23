@@ -70,6 +70,7 @@ import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { markInteractive } from '../platform/monitoring';
 import { useFeatureFlag } from '../analytics';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 
 // Lazy-load the monitoring module at call time to avoid circular import
 // issues where the static binding may be undefined during initial module
@@ -223,6 +224,7 @@ export default function HomeScreen() {
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
   const { isOffline } = useConnectivity();
+  useVisuallyComplete('Home');
 
   // Feature flags — additive enhancements gated by PostHog. Both default to
   // false (current behaviour) when PostHog is not configured.
@@ -1064,26 +1066,6 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {/* Search prompt — compact tappable field that communicates
-                marketplace discoverability in the first viewport. Grailed's
-                #1 discovery finding: users didn't know how to search. A
-                prominent search affordance is the single highest-impact
-                first-viewport signal for a commerce app. Hairline-bordered
-                (not filled) so it reads as the one functional panel, not
-                decorative chrome. */}
-            <Pressable
-              style={styles.searchPrompt}
-              onPress={() => navigation.navigate('GlobalSearch')}
-              accessibilityRole="search"
-              accessibilityLabel="Search drops, brands, sellers"
-              accessibilityHint="Opens global search"
-            >
-              <Ionicons name="search" size={18} color={colors.textMuted} />
-              <Text style={styles.searchPromptText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                Search drops, brands, sellers
-              </Text>
-            </Pressable>
-
             {hasPosters ? renderPosters() : null}
 
             {renderNewListingsBanner()}
@@ -1432,30 +1414,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.textPrimary,
-  },
-  // Search prompt: compact hairline-bordered field. One functional panel
-  // above the fold (AGENTS.md §4 surface budget). 44pt touch target,
-  // hairline border (not filled) so it defers to media below.
-  searchPrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    height: 44,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  searchPromptText: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    color: colors.textMuted,
-    letterSpacing: TypographyV2.body.letterSpacing,
   },
   newListingsBannerWrap: {
     marginTop: Space.xs,

@@ -188,6 +188,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
             style={[styles.image, { width: tileWidth, height: tileHeight }]}
             contentFit="cover"
             transition={300}
+            sharedTransitionTag={`image-${item.id}-0`}
             onError={() => setImageFailed(true)}
           />
         )}

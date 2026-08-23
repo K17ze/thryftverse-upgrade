@@ -104,6 +104,7 @@ describe('settings preference persistence', () => {
       analyticsOptOut: true,
       developerMode: false,
       biometricEnabled: true,
+      biometricLoginEnabled: false,
       personalizedAds: false,
       recommendationPersonalization: true,
       thirdPartySharing: false,

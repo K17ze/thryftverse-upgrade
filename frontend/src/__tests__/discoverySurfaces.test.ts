@@ -204,30 +204,42 @@ describe('Discovery surfaces — backend data truth', () => {
   describe('feedApi — home feed', () => {
     it('fetchHomeFeed maps listings, posters, and looks from /feed/home', async () => {
       mockedFetchJson.mockResolvedValueOnce({
-        listings: [
+        items: [
           {
-            id: 'fl1',
-            sellerId: 'fs1',
-            title: 'Feed listing',
-            description: 'Feed desc',
-            priceGbp: 30,
-            imageUrl: 'feed-img.jpg',
-            images: [],
-            status: 'active',
-            category: 'women',
-            brand: 'Zara',
-            size: 'S',
-            condition: 'Very good',
-            originalPriceGbp: null,
-            createdAt: '2025-03-01T00:00:00Z',
+            id: 'listing:fl1',
+            type: 'listing',
+            rank: 1,
+            data: {
+              id: 'fl1',
+              sellerId: 'fs1',
+              title: 'Feed listing',
+              description: 'Feed desc',
+              priceGbp: 30,
+              imageUrl: 'feed-img.jpg',
+              images: [],
+              status: 'active',
+              category: 'women',
+              brand: 'Zara',
+              size: 'S',
+              condition: 'Very good',
+              originalPriceGbp: null,
+              createdAt: '2025-03-01T00:00:00Z',
+            },
+          },
+          {
+            id: 'poster:p1',
+            type: 'poster',
+            rank: 2,
+            data: { id: 'p1', creatorId: 'c1', mediaUrl: 'poster.jpg', caption: 'New drop', createdAt: '2025-03-01T00:00:00Z' },
+          },
+          {
+            id: 'look:look1',
+            type: 'look',
+            rank: 3,
+            data: { id: 'look1', creatorId: 'c2', title: 'Summer look', mediaUrl: 'look.jpg', createdAt: '2025-03-01T00:00:00Z' },
           },
         ],
-        posters: [
-          { id: 'p1', creatorId: 'c1', mediaUrl: 'poster.jpg', caption: 'New drop', createdAt: '2025-03-01T00:00:00Z' },
-        ],
-        looks: [
-          { id: 'look1', creatorId: 'c2', title: 'Summer look', mediaUrl: 'look.jpg', createdAt: '2025-03-01T00:00:00Z' },
-        ],
+        nextCursor: null,
       });
 
       const result = await fetchHomeFeed();
@@ -242,9 +254,8 @@ describe('Discovery surfaces — backend data truth', () => {
 
     it('fetchHomeFeed returns error when zero listings returned', async () => {
       mockedFetchJson.mockResolvedValueOnce({
-        listings: [],
-        posters: [],
-        looks: [],
+        items: [],
+        nextCursor: null,
       });
 
       const result = await fetchHomeFeed();

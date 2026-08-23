@@ -5,7 +5,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Share
+  Share,
+  FlatList
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,16 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
+
+interface ReferralHistoryItem {
+  id: string;
+  inviteeName: string | null;
+  inviteeHandle: string | null;
+  invitedAt: string;
+  joinedAt: string | null;
+  status: 'invited' | 'joined' | 'completed' | 'rewarded';
+  rewardAmount: number | null;
+}
 
 /**
  * Generate a deterministic referral code from a user ID.
@@ -61,6 +72,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   });
   const [statsUnavailable, setStatsUnavailable] = React.useState(false);
 
+  const [referralHistory, setReferralHistory] = React.useState<ReferralHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyUnavailable, setHistoryUnavailable] = React.useState(false);
+
   React.useEffect(() => {
     if (!currentUser?.id) return;
     let mounted = true;
@@ -81,6 +96,31 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       })
       .catch(() => {
         if (mounted) setStatsUnavailable(true);
+      });
+    return () => { mounted = false; };
+  }, [currentUser?.id]);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let mounted = true;
+    setHistoryLoading(true);
+    setHistoryUnavailable(false);
+    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referrals`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        setHistoryLoading(false);
+        if (!data || !Array.isArray(data.items)) {
+          setHistoryUnavailable(true);
+          return;
+        }
+        setReferralHistory(data.items.slice(0, 20));
+      })
+      .catch(() => {
+        if (mounted) {
+          setHistoryLoading(false);
+          setHistoryUnavailable(true);
+        }
       });
     return () => { mounted = false; };
   }, [currentUser?.id]);
@@ -228,6 +268,65 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           Earn Thryftverse credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
         </Text>
       </View>
+
+      {/* Referral History */}
+      {historyUnavailable ? (
+        <View style={styles.flatSection}>
+          <View style={styles.rewardsHeader}>
+            <Ionicons name="time-outline" size={18} color={ACCENT} />
+            <Text style={styles.rewardsTitle}>Referral history</Text>
+          </View>
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              History unavailable right now. Try again later.
+            </Text>
+          </View>
+        </View>
+      ) : referralHistory.length > 0 ? (
+        <View style={styles.flatSection}>
+          <View style={styles.rewardsHeader}>
+            <Ionicons name="time-outline" size={18} color={ACCENT} />
+            <Text style={styles.rewardsTitle}>Referral history</Text>
+          </View>
+          <FlatList
+            data={referralHistory}
+            scrollEnabled={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => {
+              const name = item.inviteeName || item.inviteeHandle || 'Anonymous';
+              const dateLabel = new Date(item.invitedAt).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+              });
+              const badgeStyle =
+                item.status === 'invited' ? styles.badgeMuted :
+                item.status === 'joined' ? styles.badgeBrand :
+                styles.badgeSuccess;
+              const badgeText =
+                item.status === 'invited' ? styles.badgeMutedText :
+                item.status === 'joined' ? styles.badgeBrandText :
+                styles.badgeSuccessText;
+              const label =
+                item.status === 'invited' ? 'Invited' :
+                item.status === 'joined' ? 'Joined' :
+                item.status === 'completed' ? 'Completed' :
+                'Rewarded';
+              return (
+                <View style={[styles.historyRow, index < referralHistory.length - 1 && styles.historyRowBordered]}>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyName} numberOfLines={1}>{name}</Text>
+                    <Text style={styles.historyDate}>{dateLabel}</Text>
+                  </View>
+                  <View style={[styles.badge, badgeStyle]}>
+                    <Text style={[styles.badgeText, badgeText]}>{label}</Text>
+                  </View>
+                </View>
+              );
+            }}
+          />
+        </View>
+      ) : null}
 
       {/* Loyalty Tier — tier is derived from referral activity only.
           Per AGENTS.md §11, the tier badge is only shown when actually earned.
@@ -510,6 +609,62 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.body.lineHeight,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
+    },
+    historyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.md,
+    },
+    historyRowBordered: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    historyInfo: {
+      flex: 1,
+      gap: Space.xs / 2,
+      marginRight: Space.sm,
+    },
+    historyName: {
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    historyDate: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    badge: {
+      paddingVertical: Space.xs / 2,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.sm,
+    },
+    badgeText: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      letterSpacing: Type.meta.letterSpacing,
+      fontFamily: Typography.family.semibold,
+    },
+    badgeMuted: {
+      backgroundColor: `${colors.textMuted}15`,
+    },
+    badgeMutedText: {
+      color: colors.textMuted,
+    },
+    badgeBrand: {
+      backgroundColor: `${colors.brand}15`,
+    },
+    badgeBrandText: {
+      color: colors.brand,
+    },
+    badgeSuccess: {
+      backgroundColor: `${colors.success}15`,
+    },
+    badgeSuccessText: {
+      color: colors.success,
     },
   });
 }

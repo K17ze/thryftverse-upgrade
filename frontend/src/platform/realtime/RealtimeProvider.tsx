@@ -33,6 +33,19 @@ interface RealtimeContextValue {
 
 const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 
+// ── Module-level singleton accessor ─────────────────────────────────
+// Allows non-hook modules (e.g. service-layer subscription functions)
+// to reach the realtime client without React context. Set by the
+// provider on mount; null before the provider has initialised.
+
+let singletonClient: RealtimeClient | null = null;
+
+/** Access the realtime client outside of React hooks. Returns null if
+ *  the RealtimeProvider has not mounted yet. */
+export function getRealtimeClient(): RealtimeClient | null {
+  return singletonClient;
+}
+
 // ── Sequence persistence via MMKV ──────────────────────────────────
 
 const SEQ_KEY_PREFIX = 'rt_seq:';
@@ -85,6 +98,7 @@ export function RealtimeProvider({ children, initialTopics }: RealtimeProviderPr
       sequenceStorage: createSequenceStorage(storage),
     });
     clientRef.current = client;
+    singletonClient = client;
   }
 
   const client = clientRef.current;

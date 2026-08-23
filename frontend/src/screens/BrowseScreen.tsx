@@ -5,7 +5,7 @@ import { View,
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   RefreshControl,
   Pressable,
@@ -46,10 +46,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 
 import { Space, Radius, Elevation, Type, Typography, AspectRatio, Control } from '../theme/designTokens';
-const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
-// 2 column grid with margins
-const ITEM_WIDTH = (width - 40 - GRID_SPACING) / 2;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
 const BROWSE_GRID_DENSITY_PREF_KEY = 'thryftverse:browse-grid-density:v1';
@@ -110,6 +107,8 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 export default function BrowseScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const { width: windowWidth } = useWindowDimensions();
+  const itemWidth = (windowWidth - 40 - GRID_SPACING) / 2;
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -291,7 +290,7 @@ export default function BrowseScreen() {
       rowGap: Space.xl,
     },
     loadingCard: {
-      width: ITEM_WIDTH,
+      width: itemWidth,
     },
     loadingCardOffset: {
       marginTop: Space.lg,
@@ -301,9 +300,9 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.xs,
     },
 
-    gridItem: { width: ITEM_WIDTH },
+    gridItem: { width: itemWidth },
     imageWrap: {
-      width: ITEM_WIDTH,
+      width: itemWidth,
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
@@ -385,7 +384,7 @@ export default function BrowseScreen() {
       alignItems: 'center',
       justifyContent: 'center',
     },
-  }), [colors]);
+  }), [colors, itemWidth]);
 
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();

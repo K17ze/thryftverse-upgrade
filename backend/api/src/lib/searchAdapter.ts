@@ -15,6 +15,7 @@ import {
   searchIndex,
   type IndexedListing,
   type SearchResult as InMemorySearchResult,
+  type AutocompleteEntry,
 } from './searchIndex.js';
 
 // ── Public Types ─────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export interface SearchAdapter {
   index(listing: ListingDocument): Promise<void>;
   remove(id: string): Promise<void>;
   search(query: SearchQuery): Promise<SearchResult[]>;
-  autocomplete(prefix: string, limit?: number): Promise<string[]>;
+  autocomplete(prefix: string, limit?: number): Promise<AutocompleteEntry[]>;
   health(): Promise<boolean>;
 }
 
@@ -142,9 +143,8 @@ export class InMemorySearchAdapter implements SearchAdapter {
     return results.map(fromInMemoryResult);
   }
 
-  async autocomplete(prefix: string, limit: number = 8): Promise<string[]> {
-    const entries = searchIndex.autocomplete(prefix, limit);
-    return entries.map((entry) => entry.text);
+  async autocomplete(prefix: string, limit: number = 8): Promise<AutocompleteEntry[]> {
+    return searchIndex.autocomplete(prefix, limit);
   }
 
   async health(): Promise<boolean> {
@@ -253,18 +253,24 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     }));
   }
 
-  async autocomplete(prefix: string, limit: number = 8): Promise<string[]> {
+  async autocomplete(prefix: string, limit: number = 8): Promise<AutocompleteEntry[]> {
     const handle = await this.ensureClient();
     if (!handle) {
       return this.fallback.autocomplete(prefix, limit);
     }
     const response = (await handle.index.search(prefix, {
       limit,
-      attributesToRetrieve: ['title'],
-    })) as { hits?: Array<{ title?: string }> };
+      attributesToRetrieve: ['title', 'brand', 'category'],
+    })) as { hits?: Array<{ title?: string; brand?: string; category?: string; _rankingScore?: number }> };
     return (response.hits ?? [])
-      .map((hit) => hit.title)
-      .filter((title): title is string => typeof title === 'string')
+      .map((hit): AutocompleteEntry | null => {
+        const text = (hit.title ?? '').trim();
+        if (!text) return null;
+        const type: AutocompleteEntry['type'] = hit.brand ? 'brand' : hit.category ? 'category' : 'item';
+        const score = typeof hit._rankingScore === 'number' ? hit._rankingScore * 100 : 1;
+        return { text, type, score };
+      })
+      .filter((entry): entry is AutocompleteEntry => entry !== null)
       .slice(0, limit);
   }
 
@@ -305,7 +311,7 @@ export class ElasticsearchSearchAdapter implements SearchAdapter {
     return this.fallback.search(query);
   }
 
-  async autocomplete(prefix: string, limit?: number): Promise<string[]> {
+  async autocomplete(prefix: string, limit?: number): Promise<AutocompleteEntry[]> {
     return this.fallback.autocomplete(prefix, limit);
   }
 

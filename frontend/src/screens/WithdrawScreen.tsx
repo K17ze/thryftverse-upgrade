@@ -76,7 +76,7 @@ export default function WithdrawScreen() {
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [successData, setSuccessData] = useState<WithdrawSuccessData | null>(null);
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
@@ -669,6 +669,14 @@ export default function WithdrawScreen() {
                 Withdrawals are processed from completed sale proceeds. This action cannot be undone.
               </Text>
             </View>
+            {rateUpdatedAt && currencyCode !== 'GBP' && (
+              <View style={styles.rateTimestampRow}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
+                  Reference rate as of {new Date(rateUpdatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       </FlagshipScreen>
@@ -989,6 +997,17 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  rateTimestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.sm,
+  },
+  rateTimestampText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
   },
   });
 }

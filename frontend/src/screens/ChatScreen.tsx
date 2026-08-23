@@ -124,6 +124,8 @@ import { t } from "../i18n";
 
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 
+import { useVisuallyComplete } from "../performance/visuallyComplete";
+
 import {
   useConversationMessages,
   useConversationComposer,
@@ -133,6 +135,7 @@ import {
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
 } from "../hooks/chat";
+import { useTypingIndicator } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 // ─── Composer-stack contextual resolver ───────────────────────────────
@@ -220,6 +223,7 @@ const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
+  useVisuallyComplete('Chat');
 
   const styles = useMemo(() => StyleSheet.create({
     screenRoot: {
@@ -648,7 +652,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     new Set(),
   );
 
-  const [isTyping, setIsTyping] = useState(false);
+  const isTyping = useTypingIndicator(conversationId);
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -740,6 +744,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const {
     input,
     setInput,
+    setTypingInput,
+    notifyStoppedTyping,
     replyTo,
     setReplyTo,
     attachmentPickerVisible,
@@ -790,8 +796,9 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
+    notifyStoppedTyping();
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo]);
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -802,7 +809,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   useEffect(() => {
-    setIsTyping(false);
     // Reset new-message tracking so the new conversation's historical
     // messages do not trigger bubble enter animations.
     knownMessageIdsRef.current = new Set(messagesRef.current.map((m) => m.id));
@@ -2037,7 +2043,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           <ChatComposerBar
             value={input}
-            onChangeText={setInput}
+            onChangeText={setTypingInput}
             onSend={handleSend}
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
             onCameraPress={() => handleAttachmentSelect("camera")}

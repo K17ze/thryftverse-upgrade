@@ -96,6 +96,14 @@ const GROUPS: CategoryGroup[] = [
         iconColor: 'discovery',
         defaultEnabled: true,
       },
+      {
+        key: 'auctionAlerts',
+        label: 'Auction alerts',
+        description: 'Outbid, auction ending, and auction won alerts',
+        icon: 'trophy-outline',
+        iconColor: 'bronze',
+        defaultEnabled: true,
+      },
     ],
   },
   {

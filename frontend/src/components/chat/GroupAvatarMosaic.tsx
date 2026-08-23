@@ -37,6 +37,7 @@ export function GroupAvatarMosaic({
   const { colors } = useAppTheme();
   const halfSize = (size - 3) / 2;
   const avatarRadius = halfSize / 2;
+  const overflowCount = Math.max(0, members.length - 4);
 
   // If a group photo was uploaded, show it full.
   if (groupPhoto) {
@@ -132,6 +133,32 @@ export function GroupAvatarMosaic({
           </View>
         ))}
       </View>
+      {overflowCount > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+            minWidth: size * 0.36,
+            height: size * 0.36,
+            borderRadius: Radius.full,
+            backgroundColor: colors.overlay,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 4,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: size * 0.22,
+              fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+              color: colors.textInverse,
+            }}
+          >
+            +{overflowCount}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

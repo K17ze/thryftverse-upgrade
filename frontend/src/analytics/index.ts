@@ -21,7 +21,7 @@
 export { PostHogProvider, getPostHogClient, isPostHogAvailable, getDeviceInfo, getPlatform } from './PostHogProvider';
 
 // Tracking — typed track() and trackRaw() for dynamic event names.
-export { track, trackRaw } from './track';
+export { track, trackRaw, trackFunnelStep } from './track';
 
 // Identification — identify and reset user identity.
 export { identifyUser, resetIdentity } from './identify';

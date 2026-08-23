@@ -6,6 +6,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -67,7 +68,7 @@ export default function WalletConvertScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
+  const { currencyCode, goldRates, rateUpdatedAt, refreshRates } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const biometricGate = useBiometricGate();
 
@@ -136,6 +137,40 @@ export default function WalletConvertScreen() {
       minute: '2-digit',
     });
   }, [rateUpdatedAt]);
+
+  // ── Rate expiry: rates are valid for 30 minutes from the timestamp ──
+  const RATE_VALIDITY_MINUTES = 30;
+  const [rateExpiryMs, setRateExpiryMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!rateUpdatedAt) {
+      setRateExpiryMs(null);
+      return;
+    }
+    const expiry = new Date(rateUpdatedAt).getTime() + RATE_VALIDITY_MINUTES * 60 * 1000;
+    setRateExpiryMs(expiry);
+  }, [rateUpdatedAt]);
+
+  const [remainingMs, setRemainingMs] = useState(0);
+
+  useEffect(() => {
+    if (rateExpiryMs === null) return;
+    const interval = setInterval(() => {
+      const remaining = rateExpiryMs - Date.now();
+      setRemainingMs(Math.max(0, remaining));
+      if (remaining <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rateExpiryMs]);
+
+  const rateExpiryLabel = React.useMemo(() => {
+    if (remainingMs <= 0) return 'expired';
+    const mins = Math.floor(remainingMs / 60000);
+    const secs = Math.floor((remainingMs % 60000) / 1000);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, [remainingMs]);
+
+  const isRateExpired = remainingMs <= 0 && rateExpiryMs !== null;
 
   const canReview =
     Number.isFinite(izeValue) &&
@@ -597,6 +632,21 @@ export default function WalletConvertScreen() {
                     <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
                       Rate as of {rateTimestampLabel}
                     </Text>
+                    {rateExpiryMs !== null && (
+                      <Text style={[styles.rateExpiryText, { color: isRateExpired ? colors.danger : colors.textMuted }]}>
+                        {isRateExpired ? ' · Expired' : ` · Valid ${rateExpiryLabel}`}
+                      </Text>
+                    )}
+                    {isRateExpired && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => void refreshRates()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Refresh exchange rate"
+                      >
+                        <Text style={[styles.rateExpiryText, { color: colors.brand }]}> · Refresh</Text>
+                      </Pressable>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -647,6 +697,21 @@ export default function WalletConvertScreen() {
                   <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
                     Reference rate as of {rateTimestampLabel}
                   </Text>
+                  {rateExpiryMs !== null && (
+                    <Text style={[styles.rateExpiryText, { color: isRateExpired ? colors.danger : colors.textMuted }]}>
+                      {isRateExpired ? ' · Expired' : ` · Valid ${rateExpiryLabel}`}
+                    </Text>
+                  )}
+                  {isRateExpired && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => void refreshRates()}
+                      accessibilityRole="button"
+                      accessibilityLabel="Refresh exchange rate"
+                    >
+                      <Text style={[styles.rateExpiryText, { color: colors.brand }]}> · Refresh</Text>
+                    </Pressable>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -1027,6 +1092,12 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       letterSpacing: Type.meta.letterSpacing,
+    },
+    rateExpiryText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.meta.letterSpacing,
+      fontVariant: ['tabular-nums'],
     },
 
     // ── Summary rows ──

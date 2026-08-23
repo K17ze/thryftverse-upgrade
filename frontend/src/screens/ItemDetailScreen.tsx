@@ -102,6 +102,7 @@ import {
 } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { track } from '../analytics/track';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
@@ -219,6 +220,7 @@ export default function ItemDetailScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  useVisuallyComplete('ItemDetail');
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [priceAlertEnabled, setPriceAlertEnabled] = useState(false);

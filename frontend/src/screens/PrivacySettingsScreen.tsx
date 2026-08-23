@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import { View, Text, StyleSheet, Linking, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -36,23 +36,30 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   // reflects real server-side state, not fabricated defaults.
   const [activityStatusVisible, setActivityStatusVisible] = React.useState<boolean | null>(null);
   const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden' | null>(null);
+  const [fetchError, setFetchError] = React.useState(false);
+  const mountedRef = React.useRef(true);
 
-  React.useEffect(() => {
-    let mounted = true;
+  const loadPrivacyPrefs = React.useCallback(() => {
+    setFetchError(false);
+    setActivityStatusVisible(null);
+    setSearchVisibility(null);
     fetchPrivacyPreferences()
       .then((prefs) => {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         setActivityStatusVisible(prefs.activityStatusVisible);
         setSearchVisibility(prefs.searchVisibility);
       })
       .catch(() => {
-        if (!mounted) return;
-        setActivityStatusVisible(true);
-        setSearchVisibility('visible');
-        show('Unable to load privacy preferences — using defaults', 'error');
+        if (!mountedRef.current) return;
+        setFetchError(true);
       });
-    return () => { mounted = false; };
   }, []);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    loadPrivacyPrefs();
+    return () => { mountedRef.current = false; };
+  }, [loadPrivacyPrefs]);
 
   const isHydrating = activityStatusVisible === null || searchVisibility === null;
 
@@ -100,8 +107,30 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
-      {/* Privacy posture hero — skeleton during hydration, score only when hydrated */}
-      {isHydrating ? (
+      {/* Privacy posture hero — error card on fetch failure, skeleton during hydration, score when hydrated */}
+      {fetchError ? (
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.danger }]}>
+              <Ionicons name="cloud-offline-outline" size={20} color={colors.textInverse} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Couldn't load privacy settings</Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                Check your connection and try again.
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.retryBtn, { borderColor: colors.brand }]}
+              onPress={loadPrivacyPrefs}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading privacy preferences"
+            >
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : isHydrating ? (
         <View style={[styles.heroCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.border }]} />
@@ -145,7 +174,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           subtitle="Show when you're online and active"
           toggleValue={activityStatusVisible === true}
           onToggle={handleActivityStatusToggle}
-          disabled={isHydrating}
+          disabled={isHydrating || fetchError}
         />
         <SettingsRow
           icon="search-outline"
@@ -153,7 +182,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           subtitle="Allow others to find you in search"
           toggleValue={searchVisibility === 'visible'}
           onToggle={handleSearchVisibilityToggle}
-          disabled={isHydrating}
+          disabled={isHydrating || fetchError}
           isLast
         />
       </SettingsSection>
@@ -282,6 +311,16 @@ function createStyles(colors: ThemeColors) {
     skeletonLine: {
       borderRadius: Radius.sm,
       backgroundColor: colors.border,
+    },
+    retryBtn: {
+      borderWidth: StyleSheet.hairlineWidth + 0.5,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+    },
+    retryBtnText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
     },
   });
 }

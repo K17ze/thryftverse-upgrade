@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Linking,
   Pressable,
+  Share,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -66,6 +68,24 @@ export default function AboutScreen({ navigation }: Props) {
     } catch {
       show('Unable to open link', 'error');
     }
+  };
+
+  const handleShareApp = async () => {
+    haptic.light();
+    try {
+      await Share.share({
+        message: 'Check out Thryftverse — the marketplace for second-hand fashion. https://thryftverse.app',
+        title: 'Thryftverse',
+      });
+    } catch {}
+  };
+
+  const handleRateApp = () => {
+    haptic.light();
+    const url = Platform.OS === 'ios'
+      ? 'itms-apps://itunes.apple.com/app/id thryftverse?action=write-review'
+      : 'market://details?id=com.thryftverse.app';
+    void handleOpenExternal(url);
   };
 
   return (
@@ -159,12 +179,44 @@ export default function AboutScreen({ navigation }: Props) {
               scaleValue={0.995}
               hapticFeedback="light"
             >
-              <View style={styles.rowRoot}>
+              <View style={[styles.rowRoot, styles.rowBorder]}>
                 <View style={styles.rowIconWrap}>
                   <Ionicons name="help-circle-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Help Centre</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </View>
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={handleRateApp}
+              activeOpacity={0.75}
+              scaleValue={0.995}
+              hapticFeedback="light"
+            >
+              <View style={[styles.rowRoot, styles.rowBorder]}>
+                <View style={styles.rowIconWrap}>
+                  <Ionicons name="star-outline" size={22} color={colors.textPrimary} />
+                </View>
+                <View style={styles.rowTextWrap}>
+                  <Text style={styles.rowTitle}>Rate Thryftverse</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </View>
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={() => void handleShareApp()}
+              activeOpacity={0.75}
+              scaleValue={0.995}
+              hapticFeedback="light"
+            >
+              <View style={styles.rowRoot}>
+                <View style={styles.rowIconWrap}>
+                  <Ionicons name="share-social-outline" size={22} color={colors.textPrimary} />
+                </View>
+                <View style={styles.rowTextWrap}>
+                  <Text style={styles.rowTitle}>Share with friends</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>

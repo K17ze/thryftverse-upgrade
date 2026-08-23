@@ -12,7 +12,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
-import { deleteConversationOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -33,9 +33,14 @@ export default function ArchivedConversationsScreen() {
     return conversations.filter((c) => archivedIds.includes(c.id));
   }, [conversations, archivedIds]);
 
-  const handleRestore = (id: string) => {
-    toggleArchived(id);
-    show('Conversation restored to inbox', 'success');
+  const handleRestore = async (id: string) => {
+    try {
+      await unarchiveConversationOnApi(id);
+      toggleArchived(id);
+      show('Conversation restored to inbox', 'success');
+    } catch {
+      show('Could not restore this conversation. Check your connection and try again.', 'error');
+    }
   };
 
   const handleDelete = (id: string, title: string) => {

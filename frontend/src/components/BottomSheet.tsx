@@ -17,6 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useModalFocusManagement } from '../hooks/useModalFocusManagement';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -149,6 +150,12 @@ export function BottomSheet({
   const backdropOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
 
+  // Focus management — moves screen reader focus to the sheet on open and
+  // restores it when the sheet closes. Complements `accessibilityViewIsModal`
+  // which traps VoiceOver focus on iOS.
+  const contentRef = React.useRef<View>(null);
+  useModalFocusManagement({ visible, contentRef });
+
   const open = useCallback(() => {
     // Subtle spring entrance — smooth, confident settle.
     // When reduced motion is on the spring is critically damped so the sheet
@@ -254,6 +261,8 @@ export function BottomSheet({
       {/* Sheet */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
+          ref={contentRef}
+          accessibilityRole="alert"
           style={[
             styles.sheet,
             {

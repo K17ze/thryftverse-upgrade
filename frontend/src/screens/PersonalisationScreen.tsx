@@ -2,9 +2,9 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, LetterSpacing, Control } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -12,6 +12,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
 import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { AppButton } from '../components/ui/AppButton';
+import { RootStackParamList } from '../navigation/types';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -26,6 +28,7 @@ const DEFAULT_MEMBERS_PREF = 'Everyone';
 
 export default function PersonalisationScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Personalisation'>>();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -38,6 +41,17 @@ export default function PersonalisationScreen() {
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
   const haptic = useHaptic();
+  const fromOnboarding = route.params?.fromOnboarding === true;
+
+  const handleContinue = useCallback(() => {
+    haptic.medium();
+    navigation.replace('AuthLanding');
+  }, [haptic, navigation]);
+
+  const handleSkip = useCallback(() => {
+    haptic.light();
+    navigation.replace('AuthLanding');
+  }, [haptic, navigation]);
 
   const handleSelectGender = useCallback(
     (gender: string) => {
@@ -138,7 +152,7 @@ export default function PersonalisationScreen() {
       header={
         <FlagshipHeader
           title="Personalisation"
-          onBack={() => navigation.goBack()}
+          onBack={fromOnboarding ? undefined : () => navigation.goBack()}
         />
       }
       scrollEnabled={false}
@@ -223,6 +237,27 @@ export default function PersonalisationScreen() {
         </View>
       </ScrollView>
 
+      {fromOnboarding && (
+        <View style={[styles.onboardingFooter, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+          <Pressable
+            onPress={handleSkip}
+            hitSlop={Control.hit / 2}
+            accessibilityRole="button"
+            accessibilityLabel="Skip personalisation"
+          >
+            <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip for now</Text>
+          </Pressable>
+          <AppButton
+            title="Continue"
+            onPress={handleContinue}
+            variant="primary"
+            size="lg"
+            style={styles.continueBtn}
+            accessibilityLabel="Continue to the app"
+          />
+        </View>
+      )}
+
       {/* 7. BottomSheetPicker */}
       <BottomSheetPicker
         visible={pickerMode !== null}
@@ -305,6 +340,25 @@ function createStyles(colors: ThemeColors) {
     resetBtnText: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
+    },
+
+    // Onboarding footer
+    onboardingFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.lg,
+      paddingTop: Space.md,
+      paddingBottom: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    skipText: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+    },
+    continueBtn: {
+      flex: 1,
+      marginLeft: Space.md,
     },
   });
 }

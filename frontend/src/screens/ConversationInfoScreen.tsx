@@ -15,7 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
-import { deleteConversationOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, muteConversationOnApi, unmuteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
 import { blockUser, unblockUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
@@ -92,17 +92,31 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     if (counterpartyId) openProfile(navigation, counterpartyId, currentUser?.id);
   };
 
-  const toggleMute = () => {
+  const toggleMute = async () => {
     haptic.light();
-    toggleMuted(conversationId);
-    show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    try {
+      if (isMuted) {
+        await unmuteConversationOnApi(conversationId);
+      } else {
+        await muteConversationOnApi(conversationId);
+      }
+      toggleMuted(conversationId);
+      show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    } catch {
+      show('Could not update mute status. Check your connection and try again.', 'error');
+    }
   };
 
-  const archive = () => {
+  const archive = async () => {
     haptic.medium();
-    archiveConversation(conversationId);
-    show('Conversation archived', 'success');
-    navigation.navigate('MainTabs', { screen: 'Inbox' });
+    try {
+      await archiveConversationOnApi(conversationId);
+      archiveConversation(conversationId);
+      show('Conversation archived', 'success');
+      navigation.navigate('MainTabs', { screen: 'Inbox' });
+    } catch {
+      show('Could not archive this conversation. Check your connection and try again.', 'error');
+    }
   };
 
   const toggleBlock = async () => {

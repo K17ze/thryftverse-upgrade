@@ -52,6 +52,14 @@ export interface SettingsPreferences {
    */
   biometricEnabled: boolean;
   /**
+   * When true, returning users with a stored auth snapshot must pass
+   * Face ID / Touch ID / fingerprint before the app restores their session.
+   * This is distinct from `biometricEnabled` (which gates sensitive actions
+   * while already in the app). Opt-in — defaults to false so users who
+   * have never enabled it are not surprised by a biometric prompt at launch.
+   */
+  biometricLoginEnabled: boolean;
+  /**
    * Device-local privacy preferences. These toggles are persisted to
    * AsyncStorage so they survive app restarts. They are not synced to a
    * backend account profile — the banner in DataPrivacyScreen is truthful
@@ -122,6 +130,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   analyticsOptOut: false,
   developerMode: false,
   biometricEnabled: true,
+  biometricLoginEnabled: false,
   personalizedAds: false,
   recommendationPersonalization: true,
   thirdPartySharing: false,
@@ -195,6 +204,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.biometricEnabled === 'boolean'
           ? parsed.biometricEnabled
           : DEFAULT_SETTINGS_PREFERENCES.biometricEnabled,
+      biometricLoginEnabled:
+        typeof parsed.biometricLoginEnabled === 'boolean'
+          ? parsed.biometricLoginEnabled
+          : DEFAULT_SETTINGS_PREFERENCES.biometricLoginEnabled,
       personalizedAds:
         typeof parsed.personalizedAds === 'boolean'
           ? parsed.personalizedAds

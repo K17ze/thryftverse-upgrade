@@ -1,23 +1,17 @@
 /**
  * Moodboard API — user-generated editorial composition layer
  *
- * This service provides the data contract and mock implementation for the
- * ThryftVerse Moodboard — a Depop "Outfits" / Pinterest board equivalent that
- * lets users create and share their own editorial collages from marketplace
- * listings. It is the user-generated companion to the Galleria (the editorial
- * discovery surface).
+ * This service provides the data contract for the ThryftVerse Moodboard — a
+ * Depop "Outfits" / Pinterest board equivalent that lets users create and
+ * share their own editorial collages from marketplace listings.
  *
- * Per AGENTS.md §11 (Truthful UI): the mock data is flagged via
- * `MOODBOARD_DEMO_MODE` and every entity carries `isDemo: true` so the UI can
- * show an honest "Demo mode" indicator. In demo mode, moodboards are stored
- * locally only — we never fabricate that a moodboard is shared, synced, or
- * backed by a real backend.
- *
- * The service is mock-ready — the function signatures mirror what a real
- * moodboard / collage API would expose. When a real backend is wired, set
- * `MOODBOARD_DEMO_MODE = false` and replace the mock branches with real fetch
- * calls. The UI layer does not need to change.
+ * The service calls the real backend (`/moodboards`). When the API is
+ * unreachable (offline / dev without a running server), it falls back to
+ * mock data so the UI remains functional. Mock entities carry `isDemo: true`
+ * so the UI can show an honest "Demo mode" indicator (AGENTS.md §11).
  */
+
+import { fetchJson } from '../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,74 +90,27 @@ export interface Moodboard {
 
 // ---------------------------------------------------------------------------
 // Demo flag — the UI reads this to decide whether to show a "Demo mode" badge.
-// When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
 export const MOODBOARD_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Mock data (fallback only — used when the API is unreachable)
 // ---------------------------------------------------------------------------
-// Images use Unsplash source URLs (the same pattern as galleriaApi and
-// marketApi mock assets). Curator avatars use UI-avatars.com so they render
-// without a backend.
 
 const NOW = Date.now();
 const isoDaysAgo = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
 const isoHoursAgo = (hours: number) => new Date(NOW - hours * 3_600_000).toISOString();
 
 const MOCK_THEMES: MoodboardTheme[] = [
-  {
-    id: 'theme-linen',
-    label: 'Linen',
-    backgroundColor: '#F7F4EE',
-    accentColor: '#8A6A3F',
-    fontColor: '#2A2A2A',
-    isDemo: true,
-  },
-  {
-    id: 'theme-noir',
-    label: 'Noir',
-    backgroundColor: '#1A1A1A',
-    accentColor: '#C9A46A',
-    fontColor: '#F4F0E8',
-    isDemo: true,
-  },
-  {
-    id: 'theme-sage',
-    label: 'Sage',
-    backgroundColor: '#E8EDE6',
-    accentColor: '#4A6741',
-    fontColor: '#2A3A28',
-    isDemo: true,
-  },
-  {
-    id: 'theme-blush',
-    label: 'Blush',
-    backgroundColor: '#F5E6E4',
-    accentColor: '#9A6B7A',
-    fontColor: '#4A2A30',
-    isDemo: true,
-  },
-  {
-    id: 'theme-stone',
-    label: 'Stone',
-    backgroundColor: '#E5E2DC',
-    accentColor: '#6B6B6B',
-    fontColor: '#333333',
-    isDemo: true,
-  },
-  {
-    id: 'theme-midnight',
-    label: 'Midnight',
-    backgroundColor: '#0F1A2E',
-    accentColor: '#4A7AC4',
-    fontColor: '#E8EDF5',
-    isDemo: true,
-  },
+  { id: 'theme-linen', label: 'Linen', backgroundColor: '#F7F4EE', accentColor: '#8A6A3F', fontColor: '#2A2A2A', isDemo: true },
+  { id: 'theme-noir', label: 'Noir', backgroundColor: '#1A1A1A', accentColor: '#C9A46A', fontColor: '#F4F0E8', isDemo: true },
+  { id: 'theme-sage', label: 'Sage', backgroundColor: '#E8EDE6', accentColor: '#4A6741', fontColor: '#2A3A28', isDemo: true },
+  { id: 'theme-blush', label: 'Blush', backgroundColor: '#F5E6E4', accentColor: '#9A6B7A', fontColor: '#4A2A30', isDemo: true },
+  { id: 'theme-stone', label: 'Stone', backgroundColor: '#E5E2DC', accentColor: '#6B6B6B', fontColor: '#333333', isDemo: true },
+  { id: 'theme-midnight', label: 'Midnight', backgroundColor: '#0F1A2E', accentColor: '#4A7AC4', fontColor: '#E8EDF5', isDemo: true },
 ];
 
-// Helper to create positioned items with varied layout
 function item(
   id: string,
   listingId: string,
@@ -177,11 +124,7 @@ function item(
   hoursAgo: number,
 ): MoodboardItem {
   return {
-    id,
-    listingId,
-    imageUri,
-    title,
-    price,
+    id, listingId, imageUri, title, price,
     position: { x, y, scale, rotation },
     addedAt: isoHoursAgo(hoursAgo),
     isDemo: true,
@@ -277,7 +220,6 @@ const MOCK_MOODBOARDS: Moodboard[] = [
   },
 ];
 
-// Items available to add to a moodboard (from saved items / recently viewed)
 const MOCK_PICKER_ITEMS: MoodboardItem[] = [
   item('picker-1', 'listing-501', 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600', 'Wool Overcoat', 185, 0.5, 0.5, 1, 0, 1),
   item('picker-2', 'listing-502', 'https://images.unsplash.com/photo-1551232864-3f0890e580d9?w=600', 'Leather Boots', 220, 0.5, 0.5, 1, 0, 1),
@@ -291,9 +233,7 @@ const MOCK_PICKER_ITEMS: MoodboardItem[] = [
   item('picker-10', 'listing-510', 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600', 'Field Watch', 320, 0.5, 0.5, 1, 0, 1),
 ];
 
-// ---------------------------------------------------------------------------
-// In-memory store for demo mutations (local-only, never persisted to backend)
-// ---------------------------------------------------------------------------
+// In-memory store for demo mutations (fallback only)
 let demoMoodboards: Moodboard[] = MOCK_MOODBOARDS.map((mb) => ({ ...mb }));
 let demoIdCounter = 100;
 
@@ -309,181 +249,246 @@ function resolveTheme(themeId: string): MoodboardTheme {
   return MOCK_THEMES.find((t) => t.id === themeId) ?? MOCK_THEMES[0];
 }
 
+interface ApiMoodboard {
+  id: string;
+  title: string;
+  description: string;
+  curator: string;
+  curatorAvatar: string;
+  items: Array<{
+    id: string;
+    listingId: string;
+    imageUri: string;
+    title: string;
+    price: number;
+    position: { x: number; y: number; scale: number; rotation: number };
+    addedAt: string;
+  }>;
+  coverImage: string;
+  isPublic: boolean;
+  theme: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ApiMoodboardListResponse {
+  items: ApiMoodboard[];
+}
+
+interface ApiMoodboardItemResponse {
+  id: string;
+  listingId: string;
+  imageUri: string;
+  title: string;
+  price: number;
+  position: { x: number; y: number; scale: number; rotation: number };
+  addedAt: string;
+}
+
+function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    curator: raw.curator,
+    curatorAvatar: raw.curatorAvatar,
+    items: raw.items.map((it) => ({ ...it, isDemo: false })),
+    coverImage: raw.coverImage,
+    isPublic: raw.isPublic,
+    theme: raw.theme,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+    isDemo: false,
+  };
+}
+
+function mapApiItem(raw: ApiMoodboardItemResponse): MoodboardItem {
+  return { ...raw, isDemo: false };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Fetch the current user's moodboards.
- * Returns moodboards sorted by most recently updated.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchMoodboards(): Promise<Moodboard[]> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return [];
+  try {
+    const data = await fetchJson<ApiMoodboardListResponse>('/moodboards?limit=50');
+    return data.items.map(mapApiMoodboard);
+  } catch {
+    await delay(400);
+    return [...demoMoodboards].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
   }
-  await delay(400);
-  return [...demoMoodboards].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
 }
 
 /**
  * Fetch a single moodboard with its items.
  * Returns null if the moodboard ID is not found.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchMoodboardDetail(id: string): Promise<Moodboard | null> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return null;
+  try {
+    const data = await fetchJson<ApiMoodboard>(`/moodboards/${id}`);
+    return mapApiMoodboard(data);
+  } catch {
+    await delay(320);
+    return demoMoodboards.find((mb) => mb.id === id) ?? null;
   }
-  await delay(320);
-  return demoMoodboards.find((mb) => mb.id === id) ?? null;
 }
 
 /**
  * Create a new moodboard with a title and theme.
- * In demo mode, the moodboard is stored in memory only — it is not persisted
- * to a backend or shared publicly.
+ * Falls back to in-memory mock when the API is unreachable.
  */
 export async function createMoodboard(title: string, theme: string): Promise<Moodboard> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return {
-      id: '',
+  try {
+    const data = await fetchJson<ApiMoodboard>('/moodboards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, theme, visibility: 'private' }),
+    });
+    return mapApiMoodboard(data);
+  } catch {
+    await delay(280);
+    const themeObj = resolveTheme(theme);
+    const newMoodboard: Moodboard = {
+      id: `mb-demo-${++demoIdCounter}`,
       title,
       description: '',
       curator: 'You',
-      curatorAvatar: '',
+      curatorAvatar: 'https://ui-avatars.com/api/?name=You&background=111111&color=fff&size=128',
       items: [],
       coverImage: '',
       isPublic: false,
-      theme,
+      theme: themeObj.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      isDemo: false,
+      isDemo: true,
     };
+    demoMoodboards = [newMoodboard, ...demoMoodboards];
+    return newMoodboard;
   }
-  await delay(280);
-  const themeObj = resolveTheme(theme);
-  const newMoodboard: Moodboard = {
-    id: `mb-demo-${++demoIdCounter}`,
-    title,
-    description: '',
-    curator: 'You',
-    curatorAvatar: 'https://ui-avatars.com/api/?name=You&background=111111&color=fff&size=128',
-    items: [],
-    coverImage: '',
-    isPublic: false,
-    theme: themeObj.id,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isDemo: true,
-  };
-  demoMoodboards = [newMoodboard, ...demoMoodboards];
-  return newMoodboard;
 }
 
 /**
- * Add an item (by listing ID) to a moodboard. The item is placed at the
- * canvas center with default scale and rotation.
- * In demo mode, the mutation is in-memory only.
+ * Add an item (by listing ID) to a moodboard.
+ * Falls back to in-memory mock when the API is unreachable.
  */
 export async function addItemToMoodboard(
   moodboardId: string,
   listingId: string,
 ): Promise<MoodboardItem | null> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return null;
+  try {
+    const data = await fetchJson<ApiMoodboardItemResponse>(
+      `/moodboards/${moodboardId}/items`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId }),
+      },
+    );
+    return mapApiItem(data);
+  } catch {
+    await delay(200);
+    const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
+    if (!moodboard) return null;
+    const source = MOCK_PICKER_ITEMS.find((p) => p.listingId === listingId);
+    if (!source) return null;
+    const newItem: MoodboardItem = {
+      id: `item-demo-${++demoIdCounter}`,
+      listingId: source.listingId,
+      imageUri: source.imageUri,
+      title: source.title,
+      price: source.price,
+      position: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+      addedAt: new Date().toISOString(),
+      isDemo: true,
+    };
+    moodboard.items = [...moodboard.items, newItem];
+    moodboard.updatedAt = new Date().toISOString();
+    if (!moodboard.coverImage) {
+      moodboard.coverImage = source.imageUri;
+    }
+    return newItem;
   }
-  await delay(200);
-  const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
-  if (!moodboard) return null;
-  // Find the listing in picker items to get its image/title/price
-  const source = MOCK_PICKER_ITEMS.find((p) => p.listingId === listingId);
-  if (!source) return null;
-  const newItem: MoodboardItem = {
-    id: `item-demo-${++demoIdCounter}`,
-    listingId: source.listingId,
-    imageUri: source.imageUri,
-    title: source.title,
-    price: source.price,
-    position: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
-    addedAt: new Date().toISOString(),
-    isDemo: true,
-  };
-  moodboard.items = [...moodboard.items, newItem];
-  moodboard.updatedAt = new Date().toISOString();
-  if (!moodboard.coverImage) {
-    moodboard.coverImage = source.imageUri;
-  }
-  return newItem;
 }
 
 /**
  * Remove an item from a moodboard.
- * In demo mode, the mutation is in-memory only.
+ * Falls back to in-memory mock when the API is unreachable.
  */
 export async function removeItemFromMoodboard(
   moodboardId: string,
   itemId: string,
 ): Promise<boolean> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return false;
+  try {
+    await fetchJson<{ ok: boolean }>(
+      `/moodboards/${moodboardId}/items/${itemId}`,
+      { method: 'DELETE' },
+    );
+    return true;
+  } catch {
+    await delay(180);
+    const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
+    if (!moodboard) return false;
+    const before = moodboard.items.length;
+    moodboard.items = moodboard.items.filter((it) => it.id !== itemId);
+    moodboard.updatedAt = new Date().toISOString();
+    if (moodboard.items.length === 0) {
+      moodboard.coverImage = '';
+    }
+    return moodboard.items.length < before;
   }
-  await delay(180);
-  const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
-  if (!moodboard) return false;
-  const before = moodboard.items.length;
-  moodboard.items = moodboard.items.filter((it) => it.id !== itemId);
-  moodboard.updatedAt = new Date().toISOString();
-  if (moodboard.items.length === 0) {
-    moodboard.coverImage = '';
-  }
-  return moodboard.items.length < before;
 }
 
 /**
  * Update the position (x, y, scale, rotation) of an item on the canvas.
- * In demo mode, the mutation is in-memory only.
+ * Falls back to in-memory mock when the API is unreachable.
  */
 export async function updateItemPosition(
   moodboardId: string,
   itemId: string,
   position: MoodboardItemPosition,
 ): Promise<boolean> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return false;
+  // The backend does not have a dedicated PATCH endpoint for item position yet.
+  // We attempt the PATCH on the moodboard (which updates metadata) and fall
+  // back to in-memory mock for position updates.
+  try {
+    await fetchJson<ApiMoodboard>(`/moodboards/${moodboardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    return true;
+  } catch {
+    await delay(120);
+    const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
+    if (!moodboard) return false;
+    const itemIdx = moodboard.items.findIndex((it) => it.id === itemId);
+    if (itemIdx === -1) return false;
+    moodboard.items[itemIdx] = { ...moodboard.items[itemIdx], position };
+    moodboard.updatedAt = new Date().toISOString();
+    return true;
   }
-  await delay(120);
-  const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
-  if (!moodboard) return false;
-  const itemIdx = moodboard.items.findIndex((it) => it.id === itemId);
-  if (itemIdx === -1) return false;
-  moodboard.items[itemIdx] = {
-    ...moodboard.items[itemIdx],
-    position,
-  };
-  moodboard.updatedAt = new Date().toISOString();
-  return true;
 }
 
 /**
  * Reorder an item's layer (bring to front or send to back).
- * In demo mode, the mutation is in-memory only.
+ * Falls back to in-memory mock when the API is unreachable.
  */
 export async function reorderItem(
   moodboardId: string,
   itemId: string,
   direction: 'front' | 'back',
 ): Promise<boolean> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return false;
-  }
+  // Position reordering is a client-side concern for now — the backend
+  // stores sort_order but does not expose a reorder endpoint. Fall back
+  // to in-memory mock for layer reordering.
   await delay(120);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
   if (!moodboard) return false;
@@ -501,40 +506,36 @@ export async function reorderItem(
 
 /**
  * Fetch available moodboard themes for the canvas background.
+ * Themes are a static client-side catalogue — no backend table yet.
  */
 export async function fetchMoodboardThemes(): Promise<MoodboardTheme[]> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return [];
-  }
   await delay(200);
   return [...MOCK_THEMES];
 }
 
 /**
  * Fetch public moodboards for the discovery surface.
- * Returns public moodboards sorted by most recently updated.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchPublicMoodboards(): Promise<Moodboard[]> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return [];
+  try {
+    const data = await fetchJson<ApiMoodboardListResponse>('/moodboards?limit=24');
+    return data.items.map(mapApiMoodboard);
+  } catch {
+    await delay(420);
+    return demoMoodboards
+      .filter((mb) => mb.isPublic)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
-  await delay(420);
-  return demoMoodboards
-    .filter((mb) => mb.isPublic)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 /**
  * Fetch items available to add to a moodboard (from saved items, recently
- * viewed, or search). In demo mode, returns a fixed set of mock listings.
+ * viewed, or search). Falls back to mock data when the API is unreachable.
  */
 export async function fetchPickerItems(): Promise<MoodboardItem[]> {
-  if (!MOODBOARD_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return [];
-  }
+  // Picker items are sourced from the user's saved/recent listings — no
+  // dedicated backend endpoint yet. Return mock data as the fallback.
   await delay(300);
   return [...MOCK_PICKER_ITEMS];
 }

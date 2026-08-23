@@ -157,7 +157,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         <EmptyState
           icon="shield-checkmark-outline"
           title="You haven't blocked anyone"
-          subtitle="Accounts you block will appear here and will not be able to message or find you."
+          subtitle="Blocked accounts appear here."
         />
       ) : (
         <>

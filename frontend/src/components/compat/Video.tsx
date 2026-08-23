@@ -43,6 +43,10 @@ export interface VideoProps {
   accessibilityRole?: 'image' | 'button' | 'link' | 'none';
   /** Accessibility label describing the video for screen readers. */
   accessibilityLabel?: string;
+  /** Legacy `expo-av`-style status callback — fires periodically with position/duration. */
+  onPlaybackStatusUpdate?: (status: { positionMillis: number; durationMillis: number; isPlaying: boolean }) => void;
+  /** Exposes the underlying expo-video player instance to the parent for seeking. */
+  playerRef?: React.MutableRefObject<any>;
 }
 
 function resolveSourceUri(source: VideoProps['source']): string | null {
@@ -98,6 +102,8 @@ export const Video: React.FC<VideoProps> = ({
   useNativeControls = false,
   accessibilityRole,
   accessibilityLabel,
+  onPlaybackStatusUpdate,
+  playerRef,
 }) => {
   const sourceUri = useMemo(() => resolveSourceUri(source), [source]);
 
@@ -112,6 +118,32 @@ export const Video: React.FC<VideoProps> = ({
       onError?.(error);
     }
   });
+
+  useEffect(() => {
+    if (playerRef) {
+      playerRef.current = player;
+    }
+  }, [player, playerRef]);
+
+  useEffect(() => {
+    if (!player || !onPlaybackStatusUpdate || !shouldPlay) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      try {
+        onPlaybackStatusUpdate({
+          positionMillis: (player.currentTime ?? 0) * 1000,
+          durationMillis: (player.duration ?? 0) * 1000,
+          isPlaying: shouldPlay,
+        });
+      } catch (error) {
+        onError?.(error);
+      }
+    }, 200);
+
+    return () => clearInterval(intervalId);
+  }, [player, shouldPlay, onPlaybackStatusUpdate, onError]);
 
   useEffect(() => {
     if (!player) {

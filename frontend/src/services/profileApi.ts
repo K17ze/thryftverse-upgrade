@@ -187,6 +187,8 @@ export interface FollowListUser {
   avatar: string | null;
   /** Whether the authenticated viewer currently follows this user. */
   isFollowing?: boolean;
+  /** Whether the viewer and this user follow each other (mutual). */
+  isMutual?: boolean;
 }
 
 export async function fetchFollowCounts(userId: string): Promise<{ followerCount: number; followingCount: number }> {

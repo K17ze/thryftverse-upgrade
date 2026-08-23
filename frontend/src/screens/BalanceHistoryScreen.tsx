@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -11,6 +11,9 @@ import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useToast } from '../context/ToastContext';
+
+const PAGE_SIZE = 50;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
@@ -49,24 +52,31 @@ function labelForType(type: string, lineType: string): string {
 export default function BalanceHistoryScreen({ navigation }: Props) {
   useScreenCaptureProtection();
   const { colors } = useAppTheme();
+  const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { isOffline } = useConnectivity();
-  const [transactions, setTransactions] = React.useState<UserTransaction[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isError, setIsError] = React.useState(false);
+  const [transactions, setTransactions] = useState<UserTransaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
 
-  const hydrate = React.useCallback(async () => {
+  const hydrate = useCallback(async () => {
     if (!currentUser?.id) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     setIsError(false);
+    setOffset(0);
+    setHasMore(true);
     try {
-      const result = await listUserTransactions(currentUser.id, 50, 0);
+      const result = await listUserTransactions(currentUser.id, PAGE_SIZE, 0);
       setTransactions(result.items);
+      setHasMore(result.items.length >= PAGE_SIZE);
     } catch {
       setIsError(true);
       setTransactions([]);
@@ -75,7 +85,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
     }
   }, [currentUser?.id]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (!currentUser?.id) {
@@ -85,8 +95,11 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
       setIsLoading(true);
       setIsError(false);
       try {
-        const result = await listUserTransactions(currentUser.id, 50, 0);
-        if (!cancelled) setTransactions(result.items);
+        const result = await listUserTransactions(currentUser.id, PAGE_SIZE, 0);
+        if (!cancelled) {
+          setTransactions(result.items);
+          setHasMore(result.items.length >= PAGE_SIZE);
+        }
       } catch {
         if (!cancelled) {
           setIsError(true);
@@ -99,6 +112,23 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
     void run();
     return () => { cancelled = true; };
   }, [currentUser?.id]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore || !currentUser?.id) return;
+    setIsLoadingMore(true);
+    const nextOffset = offset + PAGE_SIZE;
+    try {
+      const result = await listUserTransactions(currentUser.id, PAGE_SIZE, nextOffset);
+      setTransactions((prev) => [...prev, ...result.items]);
+      setOffset(nextOffset);
+      setHasMore(result.items.length >= PAGE_SIZE);
+    } catch {
+      setHasMore(false);
+      show('Could not load more transactions. Pull to retry.', 'error');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, offset, currentUser?.id]);
 
   // ── Net flow: total in minus total out (the useful hero metric) ──
   const netFlow = useMemo(() => {
@@ -173,6 +203,21 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                 {idx < transactions.length - 1 && <View style={styles.separator} />}
               </View>
             ))}
+            {hasMore && (
+              <Pressable
+                style={({ pressed }) => [styles.loadMoreBtn, pressed && styles.loadMoreBtnPressed]}
+                onPress={() => void handleLoadMore()}
+                disabled={isLoadingMore}
+                accessibilityRole="button"
+                accessibilityLabel="Load more transactions"
+              >
+                {isLoadingMore ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                )}
+              </Pressable>
+            )}
           </View>
         </>
       )}
@@ -266,6 +311,22 @@ function createStyles(colors: ThemeColors) {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginLeft: Space.md + 36 + Space.sm + 2,
+  },
+  loadMoreBtn: {
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    marginTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  loadMoreBtnPressed: {
+    opacity: 0.6,
+  },
+  loadMoreText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.brand,
+    letterSpacing: Type.body.letterSpacing,
   },
   });
 }

@@ -244,6 +244,9 @@ import { registerSellerRoutes } from './routes/sellers.js';
 import { registerSellerHubRoutes } from './routes/sellerHub.js';
 import { registerPoliciesRoutes } from './routes/policies.js';
 import { registerFeedRoutes } from './routes/feed.js';
+import { registerGalleriaRoutes } from './routes/galleria.js';
+import { registerMoodboardRoutes } from './routes/moodboards.js';
+import { registerConversationalSearchRoutes } from './routes/conversationalSearch.js';
 import { registerVisualSearchRoutes } from './routes/visualSearch.js';
 import { registerPosterRoutes } from './routes/posters.js';
 import { registerLookRoutes } from './routes/looks.js';
@@ -12945,8 +12948,10 @@ app.get('/users/me/chat-privacy', async (request, reply) => {
   const result = await db.query<{
     read_receipts_enabled: boolean;
     allow_messages_from: string;
+    offers_in_chat_enabled: boolean;
+    order_updates_in_chat_enabled: boolean;
   }>(
-    `SELECT read_receipts_enabled, allow_messages_from FROM users WHERE id = $1`,
+    `SELECT read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled FROM users WHERE id = $1`,
     [request.authUser.userId]
   );
 
@@ -12960,6 +12965,8 @@ app.get('/users/me/chat-privacy', async (request, reply) => {
     chatPrivacy: {
       readReceiptsEnabled: result.rows[0].read_receipts_enabled,
       allowMessagesFrom: result.rows[0].allow_messages_from,
+      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
+      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
     },
   };
 });
@@ -12974,6 +12981,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const bodySchema = z.object({
     readReceiptsEnabled: z.boolean().optional(),
     allowMessagesFrom: z.enum(['everyone', 'following', 'nobody']).optional(),
+    offersInChatEnabled: z.boolean().optional(),
+    orderUpdatesInChatEnabled: z.boolean().optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
@@ -12981,6 +12990,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const allowed: Record<string, unknown> = {};
   if (payload.readReceiptsEnabled !== undefined) allowed.read_receipts_enabled = payload.readReceiptsEnabled;
   if (payload.allowMessagesFrom !== undefined) allowed.allow_messages_from = payload.allowMessagesFrom;
+  if (payload.offersInChatEnabled !== undefined) allowed.offers_in_chat_enabled = payload.offersInChatEnabled;
+  if (payload.orderUpdatesInChatEnabled !== undefined) allowed.order_updates_in_chat_enabled = payload.orderUpdatesInChatEnabled;
 
   if (Object.keys(allowed).length === 0) {
     reply.code(400);
@@ -12990,9 +13001,9 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
   const values = Object.values(allowed);
 
-  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string }>(
+  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string; offers_in_chat_enabled: boolean; order_updates_in_chat_enabled: boolean }>(
     `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
-     RETURNING read_receipts_enabled, allow_messages_from`,
+     RETURNING read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled`,
     [request.authUser.userId, ...values]
   );
 
@@ -13006,6 +13017,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
     chatPrivacy: {
       readReceiptsEnabled: result.rows[0].read_receipts_enabled,
       allowMessagesFrom: result.rows[0].allow_messages_from,
+      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
+      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
     },
   };
 });
@@ -19193,7 +19206,7 @@ app.get('/chat/conversations', async (request) => {
     };
   }
 
-  const [memberRows, botRows] = await Promise.all([
+  const [memberRows, botRows, stateRows] = await Promise.all([
     db.query<{
       conversation_id: string;
       user_id: string;
@@ -19225,6 +19238,19 @@ app.get('/chat/conversations', async (request) => {
         ORDER BY installed_at ASC
       `,
       [conversationIds]
+    ),
+    db.query<{
+      conversation_id: string;
+      is_muted: boolean;
+      is_archived: boolean;
+      request_status: string;
+    }>(
+      `
+        SELECT conversation_id, is_muted, is_archived, request_status
+        FROM chat_conversation_user_state
+        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
+      `,
+      [actorUserId, conversationIds]
     ),
   ]);
 
@@ -19258,21 +19284,36 @@ app.get('/chat/conversations', async (request) => {
     botsByConversation.set(row.conversation_id, current);
   }
 
+  const stateByConversation = new Map<string, { isMuted: boolean; isArchived: boolean; requestStatus: string }>();
+  for (const row of stateRows.rows) {
+    stateByConversation.set(row.conversation_id, {
+      isMuted: row.is_muted,
+      isArchived: row.is_archived,
+      requestStatus: row.request_status,
+    });
+  }
+
   return {
     ok: true,
-    items: conversationsResult.rows.map((row) => ({
-      id: row.id,
-      type: row.type,
-      title: row.title,
-      ownerId: row.owner_id,
-      itemId: row.item_id,
-      participantIds: membersByConversation.get(row.id) ?? [],
-      participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
-      botIds: botsByConversation.get(row.id) ?? [],
-      lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
-      lastMessageTime: row.last_message_created_at ?? row.updated_at,
-      unread: false,
-    })),
+    items: conversationsResult.rows.map((row) => {
+      const state = stateByConversation.get(row.id);
+      return {
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        ownerId: row.owner_id,
+        itemId: row.item_id,
+        participantIds: membersByConversation.get(row.id) ?? [],
+        participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
+        botIds: botsByConversation.get(row.id) ?? [],
+        lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
+        lastMessageTime: row.last_message_created_at ?? row.updated_at,
+        unread: false,
+        isMuted: state?.isMuted ?? false,
+        isArchived: state?.isArchived ?? false,
+        requestStatus: state?.requestStatus ?? 'accepted',
+      };
+    }),
   };
 });
 
@@ -19512,6 +19553,62 @@ app.post('/chat/conversations/:conversationId/messages', {
       createdAt: result.rows[0].created_at,
     },
   };
+});
+
+// P0 #1 / P2 #56: Typing indicator endpoint.
+// Ephemeral realtime-only signal — no DB writes. The composer debounces
+// "started typing" (1s) and "stopped typing" (3s inactivity / on send) on
+// the client; this endpoint just fans the signal out to other participants
+// via the conversation's realtime topic so `useTypingIndicator` lights up.
+app.post('/chat/conversations/:conversationId/typing', {
+  config: {
+    rateLimit: {
+      max: 10,
+      timeWindow: '10 seconds',
+    },
+  },
+  schema: {
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', minLength: 2, maxLength: 120 },
+      },
+    },
+    body: {
+      type: 'object',
+      required: ['isTyping'],
+      properties: {
+        isTyping: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+}, async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    isTyping: z.boolean(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const { isTyping } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.typing.update',
+    payload: {
+      conversationId,
+      userId: actorUserId,
+      isTyping,
+    },
+  });
+
+  return { ok: true };
 });
 
 app.post('/chat/conversations/:conversationId/members', async (request) => {
@@ -21062,6 +21159,274 @@ app.get('/chat/conversations/:conversationId/participants', async (request, repl
     })),
     lastActivityAt: result.rows[0]?.last_activity_at ?? null,
   };
+});
+
+// ── Per-user conversation state: mute, archive, message-request status ──
+
+app.post('/chat/conversations/:conversationId/mute', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
+      VALUES ($1, $2, TRUE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_muted = TRUE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isMuted: true };
+});
+
+app.delete('/chat/conversations/:conversationId/mute', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
+      VALUES ($1, $2, FALSE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_muted = FALSE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isMuted: false };
+});
+
+app.post('/chat/conversations/:conversationId/archive', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
+      VALUES ($1, $2, TRUE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_archived = TRUE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isArchived: true };
+});
+
+app.delete('/chat/conversations/:conversationId/archive', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
+      VALUES ($1, $2, FALSE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_archived = FALSE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isArchived: false };
+});
+
+app.post('/chat/conversations/:conversationId/accept', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
+      VALUES ($1, $2, 'accepted', NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET request_status = 'accepted', updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, requestStatus: 'accepted' };
+});
+
+app.post('/chat/conversations/:conversationId/decline', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
+      VALUES ($1, $2, 'declined', NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET request_status = 'declined', updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, requestStatus: 'declined' };
+});
+
+// ── Quick replies ──────────────────────────────────────────────────────
+
+app.get('/chat/quick-replies', async (request) => {
+  const querySchema = z.object({
+    role: z.enum(['buyer', 'seller']).optional(),
+  });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { role } = querySchema.parse(request.query ?? {});
+
+  const result = await db.query<{
+    id: string;
+    role: string;
+    title: string;
+    body: string;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, role, title, body, sort_order, created_at::text, updated_at::text
+      FROM chat_quick_replies
+      WHERE user_id = $1 ${role ? 'AND role = $2' : ''}
+      ORDER BY sort_order ASC, created_at ASC
+    `,
+    role ? [actorUserId, role] : [actorUserId]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      role: row.role,
+      title: row.title,
+      body: row.body,
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.post('/chat/quick-replies', async (request) => {
+  const bodySchema = z.object({
+    role: z.enum(['buyer', 'seller']),
+    title: z.string().trim().min(1).max(40),
+    body: z.string().trim().min(1).max(200),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const id = `qr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const sortOrder = payload.sortOrder ?? Date.now();
+
+  await db.query(
+    `
+      INSERT INTO chat_quick_replies (id, user_id, role, title, body, sort_order)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [id, actorUserId, payload.role, payload.title, payload.body, sortOrder]
+  );
+
+  return {
+    ok: true,
+    quickReply: {
+      id,
+      role: payload.role,
+      title: payload.title,
+      body: payload.body,
+      sortOrder,
+    },
+  };
+});
+
+app.put('/chat/quick-replies/:replyId', async (request) => {
+  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
+  const bodySchema = z.object({
+    title: z.string().trim().min(1).max(40).optional(),
+    body: z.string().trim().min(1).max(200).optional(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { replyId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const setClauses: string[] = [];
+  const values: unknown[] = [replyId, actorUserId];
+  let paramIdx = 3;
+
+  if (payload.title !== undefined) {
+    setClauses.push(`title = $${paramIdx++}`);
+    values.push(payload.title);
+  }
+  if (payload.body !== undefined) {
+    setClauses.push(`body = $${paramIdx++}`);
+    values.push(payload.body);
+  }
+  if (payload.sortOrder !== undefined) {
+    setClauses.push(`sort_order = $${paramIdx++}`);
+    values.push(payload.sortOrder);
+  }
+
+  if (setClauses.length === 0) {
+    return { ok: true, replyId, updated: {} };
+  }
+
+  setClauses.push(`updated_at = NOW()`);
+
+  const result = await db.query<{ id: string }>(
+    `
+      UPDATE chat_quick_replies
+      SET ${setClauses.join(', ')}
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+    `,
+    values
+  );
+
+  if (result.rowCount === 0) {
+    throw createApiError('NOT_FOUND', 'Quick reply not found');
+  }
+
+  return {
+    ok: true,
+    replyId,
+    updated: {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.body !== undefined ? { body: payload.body } : {}),
+      ...(payload.sortOrder !== undefined ? { sortOrder: payload.sortOrder } : {}),
+    },
+  };
+});
+
+app.delete('/chat/quick-replies/:replyId', async (request) => {
+  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { replyId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ id: string }>(
+    `DELETE FROM chat_quick_replies WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [replyId, actorUserId]
+  );
+
+  if (result.rowCount === 0) {
+    throw createApiError('NOT_FOUND', 'Quick reply not found');
+  }
+
+  return { ok: true, replyId, deleted: true };
 });
 
 app.post('/wallets/:userId/snapshot', async (request, reply) => {
@@ -41758,6 +42123,12 @@ registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 registerCollectionRoutes({ app, db: createKysely(db), createApiError });
 
 registerSearchRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerGalleriaRoutes({ app, db, readDb, createApiError, resolveAuthenticatedUserId });
+
+registerMoodboardRoutes({ app, db, createApiError, resolveAuthenticatedUserId, ensureUserExists });
+
+registerConversationalSearchRoutes({ app, db, readDb });
 
 type PosterStoryAccessRow = {
   id: string;

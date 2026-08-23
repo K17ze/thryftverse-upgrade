@@ -236,6 +236,8 @@ export default function SettingsScreen({ navigation }: Props) {
     developerMode,
     biometricEnabled,
     setBiometricEnabled,
+    biometricLoginEnabled,
+    setBiometricLoginEnabled,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -577,6 +579,20 @@ export default function SettingsScreen({ navigation }: Props) {
               }
               toggleValue={biometricEnabled && isBiometricAvailable}
               onToggle={(v) => setBiometricEnabled(v)}
+              disabled={!isBiometricAvailable}
+            />
+            <SettingsRow
+              icon="lock-closed-outline"
+              title="Biometric login"
+              subtitle={
+                !isBiometricAvailable
+                  ? 'Not available on this device'
+                  : biometricLoginEnabled
+                    ? 'Require Face ID, Touch ID or fingerprint on app launch'
+                    : 'Disabled — app opens directly to your account'
+              }
+              toggleValue={biometricLoginEnabled && isBiometricAvailable}
+              onToggle={(v) => setBiometricLoginEnabled(v)}
               disabled={!isBiometricAvailable}
             />
             <SettingsRow

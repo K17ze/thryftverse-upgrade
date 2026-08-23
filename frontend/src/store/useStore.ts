@@ -7,6 +7,7 @@ import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
+import { identifyUser, resetIdentity } from '../analytics';
 import { appStorage } from '../storage/mmkv';
 import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
@@ -17,7 +18,7 @@ import {
   updateCustomBotOnApi,
   deleteCustomBotOnApi,
 } from '../services/botsApi';
-import { fetchChatBotsFromApi } from '../services/chatApi';
+import { fetchChatBotsFromApi, fetchQuickRepliesFromApi, createQuickReplyOnApi, updateQuickReplyOnApi, deleteQuickReplyOnApi } from '../services/chatApi';
 import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
@@ -261,6 +262,13 @@ interface AuctionRuntimeState {
   closedAtMs?: number;
   closedReason?: 'buy-now' | 'expired';
   settled?: boolean;
+  /**
+   * Anti-sniping: when a bid is placed within the extension window (last 5
+   * minutes), the auction end is extended. This stores the extended end
+   * timestamp (ms since epoch) so the countdown logic can use it instead of
+   * the original `endsAt`. Null/undefined means no extension has been applied.
+   */
+  extendedEndMs?: number;
 }
 
 interface CoOwnRuntimeState {
@@ -294,6 +302,13 @@ const makeLedgerEntry = (
   id: makeStableId('ml'),
   timestamp: new Date().toISOString(),
 });
+
+// Anti-sniping (pop-bidding) constants — when a bid is placed within the
+// extension window of the auction end, the end time is extended to give
+// other bidders a fair chance to respond. This is standard practice on
+// eBay, Catawiki, and other flagship auction platforms.
+const ANTI_SNIPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes before end
+const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000; // extend by 5 minutes
 
 async function persistLocalAuthSnapshot(
   currentUser: User | null,
@@ -348,6 +363,14 @@ interface StoreState {
   logout: () => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
+  /**
+   * When true, the app has restored an auth snapshot from SecureStore but is
+   * waiting for the user to pass biometric authentication before revealing the
+   * main app. The BiometricLogin screen clears this flag on success; on
+   * failure/cancel it calls logout() which also clears it.
+   */
+  biometricLoginPending: boolean;
+  setBiometricLoginPending: (value: boolean) => void;
 
   // General app onboarding — first-launch gate.
   // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
@@ -505,7 +528,7 @@ interface StoreState {
   setOffersInChatEnabled: (v: boolean) => void;
   orderUpdatesInChatEnabled: boolean;
   setOrderUpdatesInChatEnabled: (v: boolean) => void;
-  // Quick replies (seller-side, locally editable)
+  // Quick replies (persisted to API, locally editable)
   sellerQuickReplies: QuickReply[];
   addSellerQuickReply: (reply: QuickReply) => void;
   updateSellerQuickReply: (index: number, reply: QuickReply) => void;
@@ -514,6 +537,10 @@ interface StoreState {
   addBuyerQuickReply: (reply: QuickReply) => void;
   updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
+  loadQuickRepliesFromApi: () => Promise<void>;
+  addQuickReplyOnApi: (role: 'buyer' | 'seller', title: string, message: string) => Promise<QuickReply>;
+  updateQuickReplyOnApi: (role: 'buyer' | 'seller', index: number, title: string, message: string) => Promise<void>;
+  removeQuickReplyOnApi: (role: 'buyer' | 'seller', index: number) => Promise<void>;
   // Enabled bots (global)
   enabledBotIds: string[];
   toggleEnabledBot: (botId: string) => void;
@@ -557,6 +584,8 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  biometricLoginPending: false,
+  setBiometricLoginPending: (value) => set({ biometricLoginPending: value }),
   hasCompletedOnboarding: false,
   setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
   login: (user) => {
@@ -569,12 +598,18 @@ export const useStore = create<StoreState>()(
       email: user.email ?? undefined,
       username: user.username,
     });
+    identifyUser({
+      id: user.id,
+      email: user.email ?? undefined,
+      username: user.username,
+    });
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
+    resetIdentity();
   },
   updateUserProfile: (updates) =>
     set((state) => {
@@ -809,12 +844,25 @@ export const useStore = create<StoreState>()(
       return { ok: false, message: 'Bid must be above current bid' };
     }
 
+    // Anti-sniping: if the bid is placed within the extension window of the
+    // auction end, extend the end time so other bidders can respond. The
+    // effective end time accounts for any previous extensions.
+    const now = Date.now();
+    const originalEndMs = new Date(auction.endsAt).getTime();
+    const effectiveEndMs = runtime?.extendedEndMs ?? originalEndMs;
+    const msToEnd = effectiveEndMs - now;
+    let extendedEndMs = runtime?.extendedEndMs;
+    if (msToEnd <= ANTI_SNIPE_WINDOW_MS) {
+      extendedEndMs = Math.max(effectiveEndMs, now) + ANTI_SNIPE_EXTENSION_MS;
+    }
+
     const nextRuntime: AuctionRuntimeState = {
       currentBid: amount,
       bidCount: (runtime?.bidCount ?? auction.bidCount) + 1,
       lastBidderId: bidderId,
       winnerUserId: runtime?.winnerUserId,
       settled: false,
+      extendedEndMs,
     };
 
     set({
@@ -1570,9 +1618,21 @@ export const useStore = create<StoreState>()(
     })),
   isMessageRequest: (id) => get().messageRequests.includes(id),
   offersInChatEnabled: true,
-  setOffersInChatEnabled: (v) => set({ offersInChatEnabled: v }),
+  setOffersInChatEnabled: (v) => {
+    const previous = get().offersInChatEnabled;
+    set({ offersInChatEnabled: v });
+    void updateChatPrivacy({ offersInChatEnabled: v }).catch(() => {
+      set({ offersInChatEnabled: previous });
+    });
+  },
   orderUpdatesInChatEnabled: true,
-  setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
+  setOrderUpdatesInChatEnabled: (v) => {
+    const previous = get().orderUpdatesInChatEnabled;
+    set({ orderUpdatesInChatEnabled: v });
+    void updateChatPrivacy({ orderUpdatesInChatEnabled: v }).catch(() => {
+      set({ orderUpdatesInChatEnabled: previous });
+    });
+  },
   sellerQuickReplies: [
     { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
     { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
@@ -1603,6 +1663,57 @@ export const useStore = create<StoreState>()(
   removeBuyerQuickReply: (index) => set((state) => ({
     buyerQuickReplies: state.buyerQuickReplies.filter((_, i) => i !== index),
   })),
+  loadQuickRepliesFromApi: async () => {
+    try {
+      const apiReplies = await fetchQuickRepliesFromApi();
+      const sellerReplies: QuickReply[] = [];
+      const buyerReplies: QuickReply[] = [];
+      for (const r of apiReplies) {
+        const reply: QuickReply = { id: r.id, title: r.title, message: r.body };
+        if (r.role === 'seller') sellerReplies.push(reply);
+        else buyerReplies.push(reply);
+      }
+      set({
+        sellerQuickReplies: sellerReplies.length ? sellerReplies : get().sellerQuickReplies,
+        buyerQuickReplies: buyerReplies.length ? buyerReplies : get().buyerQuickReplies,
+      });
+    } catch {
+      // Silently keep local defaults if the API is unavailable.
+    }
+  },
+  addQuickReplyOnApi: async (role, title, message) => {
+    const created = await createQuickReplyOnApi({ role, title, body: message });
+    const reply: QuickReply = { id: created.id, title: created.title, message: created.body };
+    if (role === 'seller') {
+      get().addSellerQuickReply(reply);
+    } else {
+      get().addBuyerQuickReply(reply);
+    }
+    return reply;
+  },
+  updateQuickReplyOnApi: async (role, index, title, message) => {
+    const replies = role === 'seller' ? get().sellerQuickReplies : get().buyerQuickReplies;
+    const existing = replies[index];
+    if (!existing) throw new Error('Quick reply not found');
+    await updateQuickReplyOnApi(existing.id, { title, body: message });
+    const reply: QuickReply = { ...existing, title, message };
+    if (role === 'seller') {
+      get().updateSellerQuickReply(index, reply);
+    } else {
+      get().updateBuyerQuickReply(index, reply);
+    }
+  },
+  removeQuickReplyOnApi: async (role, index) => {
+    const replies = role === 'seller' ? get().sellerQuickReplies : get().buyerQuickReplies;
+    const existing = replies[index];
+    if (!existing) throw new Error('Quick reply not found');
+    await deleteQuickReplyOnApi(existing.id);
+    if (role === 'seller') {
+      get().removeSellerQuickReply(index);
+    } else {
+      get().removeBuyerQuickReply(index);
+    }
+  },
   supportTickets: [],
   createSupportTicket: (ticket) => {
     const id = makeStableId('ticket', 9);

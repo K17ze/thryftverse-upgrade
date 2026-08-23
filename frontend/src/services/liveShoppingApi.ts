@@ -16,6 +16,7 @@
 import { formatFiatAmount } from '../utils/currency';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { fetchJson } from '../lib/apiClient';
+import { getRealtimeClient, type RealtimeEnvelope } from '../platform/realtime';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -394,6 +395,313 @@ async function joinLiveSessionFromBackend(id: string): Promise<LiveJoinToken> {
     };
   } catch {
     return { sessionId: id, token: '', isDemo: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backend API — live chat, current lot, in-stream bids (P0 #6)
+// ---------------------------------------------------------------------------
+// These functions call the real backend streaming endpoints and are used
+// when LIVE_SHOPPING_DEMO_MODE is false. The mock branches above remain
+// for dev/fixture builds.
+
+interface BackendChatMessage {
+  id: string;
+  sessionId: string;
+  userId: string;
+  userName: string;
+  message: string;
+  type: string;
+  isSeller: boolean;
+  createdAt: string;
+}
+
+interface BackendChatResponse {
+  ok: boolean;
+  messages: BackendChatMessage[];
+  message?: BackendChatMessage;
+}
+
+interface BackendCurrentLot {
+  sessionId: string;
+  listingId: string;
+  lotNumber: number;
+  currentPrice: number;
+  bidCount: number;
+  updatedAt: string;
+}
+
+interface BackendCurrentLotResponse {
+  ok: boolean;
+  lot: BackendCurrentLot | null;
+}
+
+interface BackendBidResponse {
+  ok: boolean;
+  bid: {
+    id: string;
+    sessionId: string;
+    listingId: string;
+    lotNumber: number;
+    bidderId: string;
+    bidderName: string;
+    amount: number;
+    createdAt: string;
+  };
+  lot: BackendCurrentLot;
+  error?: string;
+}
+
+interface BackendViewerCountResponse {
+  ok: boolean;
+  viewerCount: number;
+}
+
+const mapBackendChatMessage = (msg: BackendChatMessage): LiveStreamChatMessage => ({
+  id: msg.id,
+  streamId: msg.sessionId,
+  userId: msg.userId,
+  userName: msg.userName,
+  message: msg.message,
+  type: msg.type as LiveStreamChatMessage['type'],
+  isSeller: msg.isSeller,
+  timestamp: msg.createdAt,
+});
+
+/** Fetch recent chat messages from the backend (paginated). */
+async function fetchChatMessagesFromBackend(
+  sessionId: string,
+  limit = 50,
+): Promise<LiveStreamChatMessage[]> {
+  try {
+    const response = await fetchJson<BackendChatResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/chat?limit=${limit}`,
+    );
+    return (response.messages ?? []).map(mapBackendChatMessage);
+  } catch {
+    return [];
+  }
+}
+
+/** Send a chat message via the backend. */
+async function sendChatMessageToBackend(
+  sessionId: string,
+  message: string,
+): Promise<{ success: boolean; message: LiveStreamChatMessage | null }> {
+  try {
+    const response = await fetchJson<BackendChatResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      },
+    );
+    if (!response.ok || !response.message) {
+      return { success: false, message: null };
+    }
+    return { success: true, message: mapBackendChatMessage(response.message) };
+  } catch {
+    return { success: false, message: null };
+  }
+}
+
+/** Fetch the current lot for a session from the backend. */
+async function fetchCurrentLotFromBackend(
+  sessionId: string,
+): Promise<BackendCurrentLot | null> {
+  try {
+    const response = await fetchJson<BackendCurrentLotResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/current-lot`,
+    );
+    return response.lot ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Set the current lot (host action) via the backend. */
+async function setCurrentLotOnBackend(
+  sessionId: string,
+  listingId: string,
+  lotNumber: number,
+): Promise<BackendCurrentLot | null> {
+  try {
+    const response = await fetchJson<BackendCurrentLotResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/current-lot`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId, lotNumber }),
+      },
+    );
+    return response.lot ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Place a bid on the current lot via the backend. */
+async function placeBidOnBackend(
+  sessionId: string,
+  amount: number,
+): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
+  try {
+    const response = await fetchJson<BackendBidResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/bids`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      },
+    );
+    if (!response.ok || !response.bid) {
+      return { success: false, lot: null, bid: null, error: response.error ?? 'Bid failed' };
+    }
+    const bid: LiveBid = {
+      id: response.bid.id,
+      lotId: response.bid.listingId,
+      bidderId: response.bid.bidderId,
+      bidderName: response.bid.bidderName,
+      amount: response.bid.amount,
+      timestamp: response.bid.createdAt,
+    };
+    const lot: LiveLot = {
+      id: response.lot.listingId,
+      listingId: response.lot.listingId,
+      title: '',
+      imageUri: '',
+      startingPrice: response.lot.currentPrice,
+      currentPrice: response.lot.currentPrice,
+      bidCount: response.lot.bidCount,
+      status: 'active',
+    };
+    return { success: true, lot, bid };
+  } catch {
+    return { success: false, lot: null, bid: null, error: 'Could not place bid' };
+  }
+}
+
+/** Notify the backend that a viewer has left the session. */
+async function leaveSessionOnBackend(sessionId: string): Promise<void> {
+  try {
+    await fetchJson<BackendViewerCountResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/leave`,
+      { method: 'POST' },
+    );
+  } catch {
+    // Best-effort — viewer count will reconcile on session end.
+  }
+}
+
+/** Connect to a live stream from the backend: fetch the session, request
+ *  a viewer token, and load the current lot. Returns a LiveStream
+ *  snapshot suitable for the viewer screen. */
+async function connectToStreamFromBackend(streamId: string): Promise<LiveStream | null> {
+  try {
+    // Request a viewer token (increments viewer count on the backend).
+    await fetchJson<BackendStreamTokenResponse>(
+      `/streaming/sessions/${encodeURIComponent(streamId)}/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'viewer' }),
+      },
+    );
+
+    // Fetch the session metadata.
+    const sessionResponse = await fetchJson<{
+      ok: boolean;
+      session: BackendStreamRoom | null;
+    }>(`/streaming/sessions/${encodeURIComponent(streamId)}`);
+    const session = sessionResponse.session;
+    if (!session) return null;
+
+    // Fetch the current lot (if set).
+    const currentLot = await fetchCurrentLotFromBackend(streamId);
+    const lots: LiveLot[] = currentLot
+      ? [{
+          id: currentLot.listingId,
+          listingId: currentLot.listingId,
+          title: '',
+          imageUri: '',
+          startingPrice: currentLot.currentPrice,
+          currentPrice: currentLot.currentPrice,
+          bidCount: currentLot.bidCount,
+          status: 'active',
+        }]
+      : [];
+
+    const stream: LiveStream = {
+      id: session.roomId,
+      sellerId: session.hostUserId,
+      sellerName: '',
+      title: session.title,
+      status: session.status === 'live' ? 'live' : session.status === 'ended' ? 'ended' : 'scheduled',
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      viewerCount: session.viewerCount,
+      likeCount: 0,
+      currentLotIndex: 0,
+      lots,
+      chatEnabled: true,
+      isDemo: false,
+    };
+    return stream;
+  } catch {
+    return null;
+  }
+}
+
+// ── Realtime topic + event type constants ──
+
+const LIVE_SESSION_TOPIC_PREFIX = 'live.session:';
+
+function liveSessionTopic(sessionId: string): string {
+  return `${LIVE_SESSION_TOPIC_PREFIX}${sessionId}`;
+}
+
+const LIVE_CHAT_EVENT = 'live.chat.message';
+const LIVE_BID_EVENT = 'live.bid.placed';
+const LIVE_CURRENT_LOT_EVENT = 'live.current_lot.update';
+const LIVE_VIEWER_COUNT_EVENT = 'live.viewer_count.update';
+
+/** Subscribe to a live session realtime topic. Returns an unsubscribe
+ *  function. Returns a no-op if the realtime client is not available. */
+function subscribeToLiveSessionTopic(
+  sessionId: string,
+  eventType: string,
+  handler: (payload: Record<string, unknown>, envelope: RealtimeEnvelope) => void,
+): () => void {
+  const client = getRealtimeClient();
+  if (!client) return () => {};
+
+  const topic = liveSessionTopic(sessionId);
+  client.subscribe([topic]);
+  const unsubscribe = client.on(topic, (envelope) => {
+    if (envelope.type !== eventType) return;
+    handler(envelope.payload as Record<string, unknown>, envelope as RealtimeEnvelope);
+  });
+
+  return () => {
+    unsubscribe();
+    client.unsubscribe([topic]);
+  };
+}
+
+/** Map backend realtime event types to the frontend StreamEventType union. */
+function backendToStreamEventType(type: string): StreamEventType | null {
+  switch (type) {
+    case LIVE_CHAT_EVENT:
+      return 'chat';
+    case LIVE_BID_EVENT:
+      return 'bid';
+    case LIVE_CURRENT_LOT_EVENT:
+      return 'lot_change';
+    case LIVE_VIEWER_COUNT_EVENT:
+      return 'viewer_count';
+    default:
+      return null;
   }
 }
 
@@ -856,8 +1164,7 @@ const STREAM_CHAT_SEED: Omit<LiveStreamChatMessage, 'id' | 'timestamp'>[] = [
  */
 export async function fetchStreamChatHistory(streamId: string): Promise<LiveStreamChatMessage[]> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return [];
+    return fetchChatMessagesFromBackend(streamId);
   }
   await delay(200);
   void streamId;
@@ -893,8 +1200,7 @@ export async function fetchLiveStream(streamId: string): Promise<LiveStream | nu
  */
 export async function connectToStream(streamId: string): Promise<LiveStream | null> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return null;
+    return connectToStreamFromBackend(streamId);
   }
   await delay(150);
   const stream = MOCK_STREAMS[streamId];
@@ -976,6 +1282,31 @@ export async function connectToStream(streamId: string): Promise<LiveStream | nu
  * Returns an unsubscribe function.
  */
 export function subscribeToStreamEvents(streamId: string, callback: Listener): () => void {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    // Subscribe to all live.session events via the realtime client.
+    const client = getRealtimeClient();
+    if (!client) return () => {};
+
+    const topic = liveSessionTopic(streamId);
+    client.subscribe([topic]);
+    const unsubscribe = client.on(topic, (envelope) => {
+      const streamEventType = backendToStreamEventType(envelope.type);
+      if (!streamEventType) return;
+      const event: StreamEvent = {
+        type: streamEventType,
+        streamId,
+        payload: envelope.payload,
+        timestamp: envelope.timestamp,
+      };
+      callback(event);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }
+
   const conn = connections.get(streamId);
   if (!conn) {
     // No active connection — return a no-op unsubscribe
@@ -996,7 +1327,17 @@ export function subscribeToBids(
 ): () => void {
   return subscribeToStreamEvents(streamId, (event) => {
     if (event.type === 'bid') {
-      callback(event.payload as BidEventPayload);
+      const raw = event.payload as Record<string, unknown>;
+      // Backend sends lot: BackendCurrentLot — map lotId from the top-level
+      // field or from bid.listingId for compatibility.
+      const lotId = (raw.lotId as string) ?? (raw.bid as Record<string, unknown>)?.listingId as string;
+      const bid = raw.bid as LiveBid;
+      callback({
+        lotId,
+        bid,
+        newCurrentPrice: raw.newCurrentPrice as number,
+        newBidCount: raw.newBidCount as number,
+      });
     }
   });
 }
@@ -1010,7 +1351,13 @@ export function subscribeToChat(
 ): () => void {
   return subscribeToStreamEvents(streamId, (event) => {
     if (event.type === 'chat') {
-      callback(event.payload as ChatEventPayload);
+      const raw = event.payload as Record<string, unknown>;
+      const msg = raw.message as LiveStreamChatMessage;
+      // Backend sends createdAt; demo sends timestamp. Normalise.
+      if (msg && !msg.timestamp && (raw.message as Record<string, unknown>)?.createdAt) {
+        msg.timestamp = (raw.message as Record<string, unknown>).createdAt as string;
+      }
+      callback({ message: msg });
     }
   });
 }
@@ -1024,7 +1371,26 @@ export function subscribeToLotChanges(
 ): () => void {
   return subscribeToStreamEvents(streamId, (event) => {
     if (event.type === 'lot_change') {
-      callback(event.payload as LotChangeEventPayload);
+      const raw = event.payload as Record<string, unknown>;
+      const backendLot = raw.lot as BackendCurrentLot | undefined;
+      // Map BackendCurrentLot → LiveLot for the frontend contract.
+      const lot: LiveLot = backendLot
+        ? {
+            id: backendLot.listingId,
+            listingId: backendLot.listingId,
+            title: '',
+            imageUri: '',
+            startingPrice: backendLot.currentPrice,
+            currentPrice: backendLot.currentPrice,
+            bidCount: backendLot.bidCount,
+            status: 'active',
+          }
+        : (raw.lot as LiveLot);
+      callback({
+        previousLotIndex: raw.previousLotIndex as number,
+        newLotIndex: raw.newLotIndex as number,
+        lot,
+      });
     }
   });
 }
@@ -1070,8 +1436,10 @@ export async function placeStreamBid(
   amount: number,
 ): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return { success: false, lot: null, bid: null, error: 'Live Shopping not available' };
+    // lotId is the current lot's listingId — the backend operates on the
+    // session's current lot, so we only need the amount here.
+    void lotId;
+    return placeBidOnBackend(streamId, amount);
   }
   await delay(400);
   const conn = connections.get(streamId);
@@ -1124,8 +1492,7 @@ export async function sendStreamChatMessage(
   message: string,
 ): Promise<{ success: boolean; message: LiveStreamChatMessage | null }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
-    return { success: false, message: null };
+    return sendChatMessageToBackend(streamId, message);
   }
   await delay(100);
   const conn = connections.get(streamId);
@@ -1142,6 +1509,76 @@ export async function sendStreamChatMessage(
   });
   emitEvent(conn, 'chat', { message: msg });
   return { success: true, message: msg };
+}
+
+/**
+ * Fetch the current lot for a live session. Returns null if no lot is set.
+ */
+export async function fetchCurrentLot(
+  streamId: string,
+): Promise<LiveLot | null> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const lot = await fetchCurrentLotFromBackend(streamId);
+    if (!lot) return null;
+    return {
+      id: lot.listingId,
+      listingId: lot.listingId,
+      title: '',
+      imageUri: '',
+      startingPrice: lot.currentPrice,
+      currentPrice: lot.currentPrice,
+      bidCount: lot.bidCount,
+      status: 'active',
+    };
+  }
+  const conn = connections.get(streamId);
+  if (!conn) return null;
+  const lot = conn.stream.lots[conn.stream.currentLotIndex];
+  return lot ? { ...lot } : null;
+}
+
+/** Alias for fetchStreamChatHistory — fetch recent chat messages. */
+export async function fetchChatMessages(
+  streamId: string,
+): Promise<LiveStreamChatMessage[]> {
+  return fetchStreamChatHistory(streamId);
+}
+
+/** Alias for sendStreamChatMessage — send a chat message. */
+export async function sendChatMessage(
+  streamId: string,
+  message: string,
+): Promise<{ success: boolean; message: LiveStreamChatMessage | null }> {
+  return sendStreamChatMessage(streamId, message);
+}
+
+/**
+ * Set the current lot for a live session (host action).
+ */
+export async function setCurrentLot(
+  streamId: string,
+  listingId: string,
+  lotNumber: number,
+): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const lot = await setCurrentLotOnBackend(streamId, listingId, lotNumber);
+    if (!lot) return { success: false, lot: null, error: 'Could not set current lot' };
+    return {
+      success: true,
+      lot: {
+        id: lot.listingId,
+        listingId: lot.listingId,
+        title: '',
+        imageUri: '',
+        startingPrice: lot.currentPrice,
+        currentPrice: lot.currentPrice,
+        bidCount: lot.bidCount,
+        status: 'active',
+      },
+    };
+  }
+  // Demo mode: no-op (lot management is handled via advanceToNextLot)
+  return { success: false, lot: null, error: 'Not available in demo mode' };
 }
 
 /**
@@ -1429,6 +1866,11 @@ export async function createLiveStream(params: {
  * Disconnect from a live stream — cleans up all timers and listeners.
  */
 export function disconnectFromStream(streamId: string): void {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    // Best-effort viewer count decrement on the backend.
+    void leaveSessionOnBackend(streamId);
+    return;
+  }
   const conn = connections.get(streamId);
   if (!conn) return;
   conn.isActive = false;

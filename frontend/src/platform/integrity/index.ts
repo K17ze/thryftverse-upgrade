@@ -37,18 +37,17 @@ let nativeModuleLoadError: string | null = null;
 let unsupportedStub: ThryftIntegrityModule | null = null;
 
 /**
- * Lazily load the native integrity module. Returns `null` when the native
- * code is absent so the caller can fall back to the unsupported stub.
+ * Lazily load the native integrity module via `requireNativeModule`. Returns
+ * `null` when the native code is absent so the caller can fall back to the
+ * unsupported stub.
  */
 function loadNativeModule(): ThryftIntegrityNativeModule | null {
   if (nativeModule !== null || nativeModuleLoadError !== null) {
     return nativeModule;
   }
   try {
-    const mod = require('thryft-native') as {
-      ThryftIntegrity: ThryftIntegrityNativeModule;
-    };
-    nativeModule = mod.ThryftIntegrity;
+    const mod = requireNativeModule<ThryftIntegrityNativeModule>('ThryftNative');
+    nativeModule = mod;
   } catch (error) {
     nativeModuleLoadError =
       error instanceof Error ? error.message : String(error);

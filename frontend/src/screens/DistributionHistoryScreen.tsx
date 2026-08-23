@@ -147,7 +147,7 @@ export default function DistributionHistoryScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No distributions yet"
-          subtitle="When this position pays a distribution, it will appear here with the amount, record date, and payment date."
+          subtitle="Distributions appear here with amount and dates."
           actionLabel="Back to portfolio"
           onAction={() => { haptics.tap(); handleBack(); }}
         />

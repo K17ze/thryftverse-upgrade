@@ -76,6 +76,7 @@ import {
 } from '../platform/payments/stripeMobile';
 import { t } from '../i18n';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { track, trackFunnelStep } from '../analytics';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -644,6 +645,8 @@ export default function CheckoutScreen() {
 
     // Performance mark: checkout flow start (user confirmed payment).
     performance.mark('checkout:start');
+    track('checkout_started', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp });
+    trackFunnelStep('checkout', 'checkout_started', { listing_id: item.id });
 
     const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
     const POSTAGE_FEE = postageOption.priceFromGbp;
@@ -773,6 +776,7 @@ export default function CheckoutScreen() {
       // challenge during presentation. This stage makes the authentication
       // step visible to the user (audit 09: canonical payment state).
       setStage('authenticating');
+      trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId });
       const { error: sheetPresentationError } = await presentPaymentSheet();
       if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
         setStage('idle');
@@ -818,6 +822,8 @@ export default function CheckoutScreen() {
         isSubmittingRef.current = false;
         // Performance mark: checkout flow complete (payment settled).
         performance.mark('checkout:complete');
+        track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+        trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
         handleSettlementNavigation('succeeded', orderId, attemptId);
         return;
       }

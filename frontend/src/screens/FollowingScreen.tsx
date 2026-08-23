@@ -123,7 +123,14 @@ export default function FollowingScreen() {
             )}
           </View>
           <View style={styles.identityCol}>
-            <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
+              {item.isMutual ? (
+                <View style={styles.mutualBadge}>
+                  <Text style={styles.mutualBadgeText}>Mutual</Text>
+                </View>
+              ) : null}
+            </View>
             {item.username ? (
               <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
             ) : null}
@@ -340,7 +347,19 @@ function createStyles(colors: ThemeColors) {
     avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
     avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
     identityCol: { flex: 1 },
-    displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+    displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1 },
+    mutualBadge: {
+      paddingHorizontal: Space.xs + 1,
+      paddingVertical: 1,
+      borderRadius: Radius.sm,
+      backgroundColor: `${colors.brand}15`,
+    },
+    mutualBadgeText: {
+      fontSize: Type.caption.size - 1,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+    },
     handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
     followBtn: {
       minWidth: Control.hit + Space.sm,

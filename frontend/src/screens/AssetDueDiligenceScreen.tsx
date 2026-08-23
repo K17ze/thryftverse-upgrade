@@ -56,9 +56,12 @@ import {
   type CoOwnRightsRow,
 } from '../components/coown';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { useHaptic } from '../hooks/useHaptic';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+
+const DOCK_HEIGHT = 52;
 
 /** Format rights version for the badge — normalises raw strings. */
 function formatRightsVersion(raw: string): string {
@@ -91,6 +94,7 @@ export default function AssetDueDiligenceScreen() {
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -316,7 +320,7 @@ export default function AssetDueDiligenceScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.lg) + Space.lg }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.lg) + Space.lg + DOCK_HEIGHT }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -818,6 +822,30 @@ export default function AssetDueDiligenceScreen() {
         )}
       </ScrollView>
 
+      {/* ── Back-to-asset sticky dock ── */}
+      <View
+        style={[
+          styles.backDock,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.borderSubtle,
+            paddingBottom: Math.max(insets.bottom, Space.sm),
+          },
+        ]}
+      >
+        <Pressable
+          style={({ pressed }) => [styles.backDockBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => { haptic.light(); navigation.goBack(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Back to asset"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.brand} />
+          <Text style={[styles.backDockLabel, { color: colors.brand }]}>
+            Back to asset
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Rights sheet — 13-row modal */}
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
@@ -1113,5 +1141,30 @@ const styles = StyleSheet.create({
   documentSubtitle: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
+  },
+  // ── Back-to-asset sticky dock ──
+  backDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  backDockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    height: DOCK_HEIGHT,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+  },
+  backDockLabel: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
 });

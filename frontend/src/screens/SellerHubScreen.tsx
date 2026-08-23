@@ -24,6 +24,7 @@ import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { track } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -125,6 +126,8 @@ export default function SellerHubScreen() {
     load().finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [load]);
+
+  useEffect(() => { track('seller_dashboard_viewed'); }, []);
 
   const onRefresh = async () => {
     setIsRefreshing(true);

@@ -8,6 +8,7 @@ import {
   Dimensions,
   Image,
   Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -47,7 +48,12 @@ import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBackendData } from '../context/BackendDataContext';
 import { useFeatureFlag } from '../analytics';
+import { track, trackFunnelStep } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import {
+  fetchAutocompleteSuggestions,
+  type AutocompleteSuggestion,
+} from '../services/searchAutocompleteApi';
 import {
   evaluateListingCompleteness,
   type ListingFieldValues,
@@ -105,6 +111,8 @@ export default function SellScreen() {
     if (isGuest) {
       requireAuth('create_listing');
       navigation.goBack();
+    } else {
+      trackFunnelStep('listing_creation', 'listing_started');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -174,6 +182,9 @@ export default function SellScreen() {
   const [originalPrice, setOriginalPrice] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [tagSuggestionsVisible, setTagSuggestionsVisible] = useState(false);
+  const tagDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [category, setCategory] = useState<string>('');
   const [brand, setBrand] = useState('');
   const [size, setSize] = useState('');
@@ -475,6 +486,34 @@ export default function SellScreen() {
     setTags((prev) => prev.filter((x) => x !== tag));
   }, []);
 
+  useEffect(() => {
+    const trimmed = tagInput.trim();
+    if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
+    if (trimmed.length < 2) {
+      setTagSuggestions([]);
+      return;
+    }
+    tagDebounceRef.current = setTimeout(() => {
+      fetchAutocompleteSuggestions(trimmed, undefined, 5).then((res) => {
+        setTagSuggestions(res.suggestions.slice(0, 5));
+      });
+    }, 300);
+    return () => {
+      if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
+    };
+  }, [tagInput]);
+
+  const handleTagSuggestionPick = useCallback((suggestion: AutocompleteSuggestion) => {
+    const raw = suggestion.query.trim().toLowerCase();
+    if (!raw) return;
+    const parts = raw.split(/[,\s]+/).filter(Boolean);
+    setTags((prev) => [...new Set([...prev, ...parts])].slice(0, 8));
+    setTagInput('');
+    setTagSuggestions([]);
+    setTagSuggestionsVisible(false);
+    haptics.tap();
+  }, []);
+
   /* -- photo handling -- */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
     setMediaDraftItems((prev) => {
@@ -704,6 +743,7 @@ export default function SellScreen() {
     }
 
     setErrors({});
+    trackFunnelStep('listing_creation', 'listing_submitted', { mode: listingMode });
 
     // Performance mark: listing creation flow start (validation passed).
     performance.mark('listing:create:start');
@@ -934,6 +974,7 @@ export default function SellScreen() {
       haptics.success();
       // Performance mark: listing creation complete (standard path).
       performance.mark('listing:create:complete');
+      track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
       navigation.replace('ListingSuccess', {
         listingId,
         title: trimmedTitle,
@@ -1854,25 +1895,57 @@ export default function SellScreen() {
             </View>
 
             <Text style={[styles.fieldLabel, t.fieldLabel]}>Tags</Text>
-            <View style={styles.tagWrap}>
-              {tags.map((tag) => (
-                <View key={tag} style={[styles.tagChip, t.tagChip]}>
-                  <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
-                  <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
-                    <Ionicons name="close" size={12} color={colors.textMuted} aria-hidden={true} />
-                  </Pressable>
+            <View style={styles.tagAutocompleteWrap}>
+              <View style={styles.tagWrap}>
+                {tags.map((tag) => (
+                  <View key={tag} style={[styles.tagChip, t.tagChip]}>
+                    <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
+                    <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
+                      <Ionicons name="close" size={12} color={colors.textMuted} aria-hidden={true} />
+                    </Pressable>
+                  </View>
+                ))}
+                <TextInput
+                  style={[styles.tagInput, t.tagInput]}
+                  placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
+                  placeholderTextColor={colors.textMuted}
+                  value={tagInput}
+                  onChangeText={setTagInput}
+                  onFocus={() => setTagSuggestionsVisible(true)}
+                  onBlur={() => {
+                    setTimeout(() => setTagSuggestionsVisible(false), 150);
+                  }}
+                  onSubmitEditing={() => {
+                    handleTagSubmit();
+                    setTagSuggestions([]);
+                    setTagSuggestionsVisible(false);
+                  }}
+                  blurOnSubmit={false}
+                  returnKeyType="done"
+                />
+              </View>
+              {tagSuggestionsVisible && tagSuggestions.length > 0 && (
+                <View style={[styles.tagSuggestionDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <FlatList
+                    data={tagSuggestions}
+                    keyExtractor={(item) => `${item.query}_${item.type}`}
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                      <Pressable
+                        style={({ pressed }) => [styles.tagSuggestionRow, pressed && { opacity: 0.6 }]}
+                        onPress={() => handleTagSuggestionPick(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add tag ${item.query}`}
+                      >
+                        <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} aria-hidden={true} />
+                        <Text style={[styles.tagSuggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {item.query}
+                        </Text>
+                      </Pressable>
+                    )}
+                  />
                 </View>
-              ))}
-              <TextInput
-                style={[styles.tagInput, t.tagInput]}
-                placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
-                placeholderTextColor={colors.textMuted}
-                value={tagInput}
-                onChangeText={setTagInput}
-                onSubmitEditing={handleTagSubmit}
-                blurOnSubmit={false}
-                returnKeyType="done"
-              />
+              )}
             </View>
             <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
             {tags.length > 0 && tags.length < 3 && (
@@ -2440,6 +2513,37 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.body.letterSpacing,
     paddingVertical: Space.xs,
+  },
+  tagAutocompleteWrap: {
+    position: 'relative',
+  },
+  tagSuggestionDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: Space.xs,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 1000,
+    paddingVertical: Space.xs,
+  },
+  tagSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.sm,
+  },
+  tagSuggestionText: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
 
   /* -- co-own auth photos -- */

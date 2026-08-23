@@ -96,6 +96,7 @@ export type RootStackParamList = {
   AuthLanding: undefined;
   Login: undefined;
   SignUp: undefined;
+  BiometricLogin: undefined;
 
   // ── Main Tabs ──
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
@@ -222,7 +223,7 @@ export type RootStackParamList = {
   MyOrders: undefined;
 
   // ── Settings & Account ──
-  Personalisation: undefined;
+  Personalisation: { fromOnboarding?: boolean } | undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
@@ -258,7 +259,7 @@ export type RootStackParamList = {
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
-  GlobalSearch: undefined;
+  GlobalSearch: { initialQuery?: string } | undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens
@@ -427,7 +428,7 @@ export type RootStackParamList = {
     totalValue: number;
     fee: number;
     netValue: number;
-    orderMode: 'limit';
+    orderMode: 'market' | 'limit';
     ticketOrderType: 'protected_instant' | 'limit';
     limitPriceGbp: number;
     averageFillPriceGbp: number;
@@ -528,7 +529,7 @@ export type HomeTabParamList = {
 
 export type ExploreTabParamList = {
   Explore: undefined;
-  GlobalSearch: undefined;
+  GlobalSearch: { initialQuery?: string } | undefined;
   CategoryDetail: RootStackParamList['CategoryDetail'];
   CategoryTree: RootStackParamList['CategoryTree'];
   Browse: RootStackParamList['Browse'];

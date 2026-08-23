@@ -241,6 +241,8 @@ export async function revokeOtherSessions(): Promise<number> {
 export interface ChatPrivacySettings {
   readReceiptsEnabled: boolean;
   allowMessagesFrom: 'everyone' | 'following' | 'nobody';
+  offersInChatEnabled: boolean;
+  orderUpdatesInChatEnabled: boolean;
 }
 
 export async function fetchChatPrivacy(): Promise<ChatPrivacySettings> {
@@ -344,6 +346,7 @@ export interface EmailPreferences {
   securityAlerts: boolean;
   distributionNotices: boolean;
   corporateActionNotices: boolean;
+  auctionAlerts: boolean;
 }
 
 export async function fetchEmailPreferences(): Promise<EmailPreferences> {

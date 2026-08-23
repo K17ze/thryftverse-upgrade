@@ -38,6 +38,7 @@ import {
 } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
+import { track } from '../analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -171,6 +172,8 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             source: 'initial',
           },
         });
+
+      track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
 
       const offerText = isCounterOffer
         ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`

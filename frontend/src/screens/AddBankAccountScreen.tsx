@@ -161,7 +161,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             variant="empty"
             icon="ban-outline"
             title="Bank payouts unavailable"
-            subtitle="Bank withdrawals are not available in your region. Switch your country policy to enable bank withdrawal rails."
+            subtitle="Bank withdrawals unavailable in your region."
           />
         ) : (
           <>

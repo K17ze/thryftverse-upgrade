@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -60,6 +61,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [results, setResults] = useState<Listing[]>([]);
   const [visualMatching, setVisualMatching] = useState(false);
+  const [similarityMethod, setSimilarityMethod] = useState<string | undefined>(undefined);
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -196,7 +198,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       brand: brand.trim() || undefined,
       minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
       maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
-      sort: 'newest' as const,
+      sort: 'similarity' as const,
       limit: 48,
     };
   }, [description, selectedCategory, brand, minPrice, maxPrice]);
@@ -228,13 +230,41 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     [listings]
   );
 
+  // Read a local image URI as a base64 string for the backend. Remote/data
+  // URIs are passed through as-is via imageUrl where possible. Returns null
+  // when the file cannot be read (the backend then falls back to filter-only).
+  const readImageAsBase64 = useCallback(async (uri: string): Promise<string | null> => {
+    if (/^data:/i.test(uri)) {
+      return uri;
+    }
+    if (/^https?:/i.test(uri)) {
+      return null;
+    }
+    try {
+      return await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Run the visual search: prefer the backend, fall back to cached listings.
   const runSearch = useCallback(async () => {
     if (!imageUri) return;
     setStatus('loading');
     const payload = buildFilterPayload();
 
-    const apiResult = await visualSearch(payload);
+    // Send the captured image to the backend so it can run real colour-feature
+    // similarity scoring. Local file URIs are base64-encoded; remote URLs are
+    // forwarded via imageUrl.
+    const isRemote = /^https?:/i.test(imageUri);
+    const imageBase64 = isRemote ? null : await readImageAsBase64(imageUri);
+    const apiResult = await visualSearch({
+      ...payload,
+      imageBase64: imageBase64 ?? undefined,
+      imageUrl: isRemote ? imageUri : undefined,
+    });
     if (!isMountedRef.current) return;
     let items: Listing[] = apiResult.listings;
     let usedFallback = apiResult.source === 'fallback';
@@ -250,13 +280,14 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
     setResults(items);
     setVisualMatching(apiResult.visualMatching);
+    setSimilarityMethod(apiResult.similarityMethod);
     setResultNote(
       usedFallback && !apiResult.visualMatching
         ? 'Showing matches from your category, brand, and description filters.'
         : apiResult.note
     );
     setStatus(items.length > 0 ? 'populated' : 'empty');
-  }, [imageUri, buildFilterPayload, filterCachedListings]);
+  }, [imageUri, buildFilterPayload, filterCachedListings, readImageAsBase64]);
 
   // Auto-run search once a photo is selected (initial coarse result set).
   useEffect(() => {
@@ -593,12 +624,24 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   );
 
   // ── Honest integrated note ────────────────────────────────────────────
+  // Labels the matching method truthfully. Never claims AI/ML when the
+  // backend used a deterministic colour-and-layout heuristic.
+  const honestNoteText = useMemo(() => {
+    if (similarityMethod === 'heuristic_color_features') {
+      return 'Results matched by colour similarity (heuristic, not AI).';
+    }
+    if (similarityMethod === 'filter_only') {
+      return resultNote ?? 'Results matched by category, brand & description.';
+    }
+    return resultNote;
+  }, [similarityMethod, resultNote]);
+
   const renderHonestNote = () => {
-    if (!resultNote) return null;
+    if (!honestNoteText) return null;
     return (
       <View style={styles.honestNote}>
         <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-        <Text style={styles.honestNoteText}>{resultNote}</Text>
+        <Text style={styles.honestNoteText}>{honestNoteText}</Text>
       </View>
     );
   };

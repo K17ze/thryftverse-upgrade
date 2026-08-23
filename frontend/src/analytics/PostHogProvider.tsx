@@ -4,6 +4,7 @@ import { PostHogProvider as PostHogProviderCore, PostHog, usePostHog } from 'pos
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import type { FeatureFlagKey } from './types';
+import { setTelemetryHandler } from '../lib/telemetry';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Environment configuration — EXPO_PUBLIC_ prefix follows Expo convention.
@@ -181,6 +182,14 @@ export function PostHogProvider({ children }: PostHogProviderProps): React.React
 
     posthogClient = client;
 
+    // Bridge telemetry events to PostHog so every `trackTelemetryEvent` call
+    // also fires `posthog.capture()` with the same event name and properties.
+    // PII scrubbing and the analytics opt-out preference are already applied
+    // inside `trackTelemetryEvent` before the handler is invoked.
+    setTelemetryHandler((eventName, properties) =>
+      client.capture(eventName, properties as Record<string, any> | undefined)
+    );
+
     // Wait for the client to be ready, then persist flags for next boot.
     client
       .ready()
@@ -200,6 +209,7 @@ export function PostHogProvider({ children }: PostHogProviderProps): React.React
         // Best-effort flush.
       });
       posthogClient = null;
+      setTelemetryHandler(null);
     };
   }, []);
 

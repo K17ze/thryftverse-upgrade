@@ -145,9 +145,9 @@ export interface ResizePreset {
 }
 
 const RESIZE_PRESETS: Record<string, ResizePreset> = {
-  avatar: { maxWidth: 400, maxHeight: 400, format: SaveFormat.JPEG, compress: 0.85, aspect: '1:1' },
+  avatar: { maxWidth: 400, maxHeight: 400, format: SaveFormat.WEBP, compress: 0.85, aspect: '1:1' },
   cover: { maxWidth: 1500, maxHeight: 500, format: SaveFormat.JPEG, compress: 0.82, aspect: '3:1' },
-  listing: { maxWidth: 1200, maxHeight: 1600, format: SaveFormat.JPEG, compress: 0.8 },
+  listing: { maxWidth: 1200, maxHeight: 1600, format: SaveFormat.WEBP, compress: 0.8 },
   look: { maxWidth: 1080, maxHeight: 1350, format: SaveFormat.JPEG, compress: 0.8, aspect: '4:5' },
   poster: { maxWidth: 1080, maxHeight: 1920, format: SaveFormat.JPEG, compress: 0.78, aspect: '9:16' },
   thumbnail: { maxWidth: 300, maxHeight: 300, format: SaveFormat.JPEG, compress: 0.7, aspect: '1:1' },

@@ -21,6 +21,7 @@ import {
   fetchComposerStateFromApi,
   upsertComposerStateOnApi,
   clearComposerStateOnApi,
+  setTypingStatus,
 } from "../../services/chatApi";
 
 import * as ImagePicker from "expo-image-picker";
@@ -58,11 +59,18 @@ export function useConversationComposer({
   } | null>(null);
   const [reactingToMessage, setReactingToMessage] = useState<Message | null>(null);
 
-  // Typing indicator state — shows after 500ms of continuous typing and
-  // hides after 3s of inactivity (WhatsApp 2026 typing indicator pattern).
+  // Typing indicator publisher (P0 #1 / P2 #56).
+  // Local `isTyping` mirrors the realtime signal we publish to other
+  // participants. The composer debounces "started typing" (1s) and clears
+  // "stopped typing" after 3s of inactivity; on send the caller invokes
+  // `notifyStoppedTyping` to clear immediately. The publish itself is
+  // fired by the effect below whenever `isTyping` transitions, so the
+  // debounce timers are the single source of truth for state changes.
   const [isTyping, setIsTyping] = useState(false);
   const typingStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+  isTypingRef.current = isTyping;
 
   const setTypingInput = useCallback((value: string) => {
     setInput(value);
@@ -73,11 +81,11 @@ export function useConversationComposer({
     }
     if (value.length > 0) {
       // Start the show timer if not already typing and no pending start
-      if (!typingStartTimerRef.current && !isTyping) {
+      if (!typingStartTimerRef.current && !isTypingRef.current) {
         typingStartTimerRef.current = setTimeout(() => {
           setIsTyping(true);
           typingStartTimerRef.current = null;
-        }, 500);
+        }, 1000);
       }
       // Schedule the stop timer for 3s of inactivity
       typingStopTimerRef.current = setTimeout(() => {
@@ -92,7 +100,29 @@ export function useConversationComposer({
       }
       setIsTyping(false);
     }
-  }, [isTyping]);
+  }, []);
+
+  // Publish typing state to the backend whenever it transitions. The
+  // backend fans the event out to other participants via the conversation's
+  // realtime topic; `useTypingIndicator` on the receiving side lights up.
+  useEffect(() => {
+    if (!conversationId) return;
+    setTypingStatus(conversationId, isTyping).catch(() => undefined);
+  }, [conversationId, isTyping]);
+
+  // Immediate stop — used by the send path so the recipient's typing
+  // indicator clears the moment a message is sent, not 3s later.
+  const notifyStoppedTyping = useCallback(() => {
+    if (typingStartTimerRef.current) {
+      clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    setIsTyping(false);
+  }, []);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? "");
@@ -244,6 +274,7 @@ export function useConversationComposer({
     setInput,
     setTypingInput,
     isTyping,
+    notifyStoppedTyping,
     replyTo,
     setReplyTo,
     attachmentPickerVisible,

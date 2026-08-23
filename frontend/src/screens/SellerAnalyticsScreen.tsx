@@ -15,7 +15,7 @@ import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type To
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { useFeatureFlag } from '../analytics';
+import { useFeatureFlag, track } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -298,6 +298,8 @@ export default function SellerAnalyticsScreen() {
     load().finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [load]);
+
+  useEffect(() => { track('seller_dashboard_viewed'); }, []);
 
   const onRefresh = async () => {
     setIsRefreshing(true);

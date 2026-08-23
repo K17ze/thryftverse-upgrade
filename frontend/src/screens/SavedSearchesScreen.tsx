@@ -254,7 +254,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
           <EmptyState
             icon="notifications-outline"
             title="No saved searches yet"
-            subtitle="Save a search from the search results page to get alerts when new items match. It's the easiest way to catch drops before anyone else."
+            subtitle="Save searches to get alerts on new items."
             ctaLabel="Start searching"
             onCtaPress={handleDiscoverSellers}
           />

@@ -21,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
+import { AppInput } from '../components/ui/AppInput';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -346,6 +347,7 @@ export default function MoodboardHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ── Data loading ──
   const loadAll = useCallback(async (isRefresh: boolean) => {
@@ -414,9 +416,21 @@ export default function MoodboardHomeScreen() {
   }, [navigation]);
 
   // ── Derived data ──
+  const filteredPublicMoodboards = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return publicMoodboards;
+    return publicMoodboards.filter((mb) => {
+      return (
+        mb.title.toLowerCase().includes(q) ||
+        mb.curator.toLowerCase().includes(q) ||
+        mb.description.toLowerCase().includes(q)
+      );
+    });
+  }, [publicMoodboards, searchQuery]);
+
   const masonryColumns = useMemo(
-    () => buildMasonryColumns(publicMoodboards),
-    [publicMoodboards],
+    () => buildMasonryColumns(filteredPublicMoodboards),
+    [filteredPublicMoodboards],
   );
 
   // ── Error state ──
@@ -540,6 +554,37 @@ export default function MoodboardHomeScreen() {
           </View>
         </View>
 
+        {/* ── Search ── */}
+        <View style={styles.searchWrap}>
+          <AppInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search moodboards"
+            placeholderTextColor={colors.textMuted}
+            appearance="filled"
+            returnKeyType="search"
+            autoCorrect={false}
+            inputContainerStyle={styles.searchInputContainer}
+            inputStyle={styles.searchInput}
+            prefix={
+              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            }
+            suffix={
+              searchQuery.length > 0 ? (
+                <Pressable
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => setSearchQuery('')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  accessibilityHint="Clears the search query"
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null
+            }
+          />
+        </View>
+
         {/* ── Section 1: Your Moodboards rail ── */}
         {loading ? (
           <View style={styles.sectionWrap}>
@@ -571,7 +616,17 @@ export default function MoodboardHomeScreen() {
             <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
             <DiscoverMasonrySkeleton />
           </View>
-        ) : publicMoodboards.length > 0 ? (
+        ) : searchQuery.trim().length > 0 && filteredPublicMoodboards.length === 0 ? (
+          <View style={styles.searchEmptyWrap}>
+            <Ionicons name="search-outline" size={32} color={colors.textMuted} />
+            <Text style={styles.searchEmptyTitle}>
+              No moodboards match '{searchQuery.trim()}'
+            </Text>
+            <Text style={styles.searchEmptySubtitle}>
+              Try a different title, curator, or keyword.
+            </Text>
+          </View>
+        ) : filteredPublicMoodboards.length > 0 ? (
           <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
             <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
             <View style={styles.masonryGrid}>
@@ -733,6 +788,41 @@ function useStyles() {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
+        },
+        // ── Search ──
+        searchWrap: {
+          paddingHorizontal: Space.md,
+          paddingTop: Space.xs,
+          paddingBottom: Space.sm,
+        },
+        searchInputContainer: {
+          minHeight: 40,
+          borderRadius: Radius.lg,
+        },
+        searchInput: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.regular,
+          paddingVertical: 8,
+        },
+        searchEmptyWrap: {
+          alignItems: 'center',
+          gap: Space.sm,
+          paddingVertical: Space.xxl,
+          paddingHorizontal: Space.lg,
+        },
+        searchEmptyTitle: {
+          fontSize: Type.bodyStrong.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textPrimary,
+          textAlign: 'center',
+          letterSpacing: Type.body.letterSpacing,
+        },
+        searchEmptySubtitle: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+          textAlign: 'center',
+          lineHeight: Type.body.lineHeight,
         },
         // Beta badge — additive indicator gated by the moodboard_beta flag.
         // A compact label on the Create button so users know the collage

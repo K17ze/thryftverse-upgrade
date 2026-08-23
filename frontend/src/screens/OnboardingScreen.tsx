@@ -126,8 +126,7 @@ export default function OnboardingScreen() {
     setHasCompletedOnboarding(true);
     track('onboarding_completed');
     trackFunnelStep('signup', 'onboarding_completed');
-    // Navigate to the auth entry point — the app's normal first-run destination.
-    navigation.replace('AuthLanding');
+    navigation.replace('Personalisation', { fromOnboarding: true });
   }, [navigation, setHasCompletedOnboarding]);
 
   const goNext = useCallback(() => {

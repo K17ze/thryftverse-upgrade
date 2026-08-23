@@ -35,10 +35,18 @@ interface FeedLookRow {
   createdAt: string;
 }
 
+type HomeFeedUnitType = 'listing' | 'poster' | 'look';
+
+interface HomeFeedUnit {
+  id: string;
+  type: HomeFeedUnitType;
+  rank: number;
+  data: FeedListingRow | FeedPosterRow | FeedLookRow;
+}
+
 interface HomeFeedResponse {
-  listings: FeedListingRow[];
-  posters: FeedPosterRow[];
-  looks: FeedLookRow[];
+  items: HomeFeedUnit[];
+  nextCursor?: string | null;
 }
 
 export interface HomeFeedResult {
@@ -47,21 +55,45 @@ export interface HomeFeedResult {
   lookIds: string[];
   source: 'api';
   error?: string;
+  nextCursor?: string | null;
 }
 
-export async function fetchHomeFeed(): Promise<HomeFeedResult> {
+export async function fetchHomeFeed(
+  cursor?: string | null,
+  limit?: number,
+): Promise<HomeFeedResult> {
   try {
-    const payload = await fetchJson<HomeFeedResponse>('/feed/home');
-    const listings = mapBackendListings(payload.listings);
-    const posterIds = (payload.posters ?? []).map((p) => p.id);
-    const lookIds = (payload.looks ?? []).map((l) => l.id);
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (limit) params.set('limit', String(Math.min(Math.max(limit, 1), 100)));
+    const qs = params.toString();
+
+    const payload = await fetchJson<HomeFeedResponse>(`/feed/home${qs ? `?${qs}` : ''}`);
+    const units = Array.isArray(payload.items) ? payload.items : [];
+
+    const listingRows: FeedListingRow[] = [];
+    const posterIds: string[] = [];
+    const lookIds: string[] = [];
+
+    for (const unit of units) {
+      if (unit.type === 'listing') {
+        listingRows.push(unit.data as FeedListingRow);
+      } else if (unit.type === 'poster') {
+        posterIds.push((unit.data as FeedPosterRow).id);
+      } else if (unit.type === 'look') {
+        lookIds.push((unit.data as FeedLookRow).id);
+      }
+    }
+
+    const listings = mapBackendListings(listingRows);
 
     return {
       listings,
       posterIds,
       lookIds,
       source: 'api',
-      error: listings.length === 0 ? 'Feed returned zero listings.' : undefined,
+      nextCursor: payload.nextCursor ?? null,
+      error: listings.length === 0 && !cursor ? 'Feed returned zero listings.' : undefined,
     };
   } catch (error) {
     return {
@@ -69,6 +101,7 @@ export async function fetchHomeFeed(): Promise<HomeFeedResult> {
       posterIds: [],
       lookIds: [],
       source: 'api',
+      nextCursor: null,
       error: friendlyBackendError(error),
     };
   }

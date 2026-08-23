@@ -25,7 +25,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
-import { deleteConversationOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, acceptMessageRequestOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -63,22 +63,18 @@ export default function MessageRequestsScreen() {
     );
   };
 
-  const handleAccept = (id: string) => {
+  const handleAccept = async (id: string) => {
     if (pendingId) return;
     haptic.medium();
     setPendingId(id);
     setPendingAction('accept');
     try {
-      // Accepting a message request is a frontend-only categorisation change:
-      // the conversation already exists on the backend and the user is already
-      // a member (DMs are created with both participants as members). There is
-      // no server-side "request status" to mutate — we simply move the
-      // conversation from the requests bucket to the main inbox.
+      await acceptMessageRequestOnApi(id);
       acceptMessageRequest(id);
       show('Request accepted', 'success');
       navigation.navigate('Chat', { conversationId: id });
     } catch {
-      show('Could not accept this request. Try again.', 'error');
+      show('Could not accept this request. Check your connection and try again.', 'error');
     } finally {
       setPendingId(null);
       setPendingAction(null);
@@ -333,7 +329,7 @@ export default function MessageRequestsScreen() {
         <EmptyState
           icon="mail-outline"
           title="No message requests"
-          subtitle="When someone you don't follow sends you a message, it will appear here for you to review."
+          subtitle="Messages from people you don't follow appear here."
           ctaLabel="Back to Inbox"
           onCtaPress={() => navigation.goBack()}
         />

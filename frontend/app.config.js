@@ -121,10 +121,17 @@ module.exports = function ({ config }) {
       },
     ],
     // react-native-share — social sharing (Instagram Stories, TikTok, etc.)
-    'react-native-share',
+    // Registered with an explicit empty props object because the plugin's
+    // config function reads `props.android` / `props.ios` without guarding
+    // for undefined. When a plugin is listed as a bare string, Expo passes
+    // `props = undefined` (see @expo/config-plugins normalizeStaticPlugin),
+    // which crashes prebuild with "Cannot read properties of undefined
+    // (reading 'android')". Passing `{}` gives the plugin the object it
+    // expects while keeping all defaults.
+    ['react-native-share', {}],
     // react-native-haptic-feedback — Core Haptics (no native changes, but
     // registered for Expo CNG compatibility).
-    'react-native-haptic-feedback',
+    ['react-native-haptic-feedback', {}],
   ];
 
   if (hasSentryConfig) {
@@ -154,6 +161,12 @@ module.exports = function ({ config }) {
     const enforcePinning = environment === 'production';
     plugins.push([require('./plugins/withTrustKit'), { enforcePinning }]);
   }
+
+  // Android security XML resources — generates network_security_config.xml,
+  // backup_rules.xml, and data_extraction_rules.xml so they survive
+  // `expo prebuild --clean` / EAS Build. Always registered because the
+  // android config below references @xml/* paths that must exist.
+  plugins.push(require('./plugins/withAndroidSecurityXml'));
 
   if (intercomAppId) {
     plugins.push([

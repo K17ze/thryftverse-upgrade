@@ -3,9 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Dimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,8 +20,6 @@ import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -239,12 +236,13 @@ export default function PulseFeedScreen() {
       scrollEnabled={false}
       header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
     >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {events.map((event, i) => (
-          <EventCard key={event.id} event={event} index={i} />
-        ))}
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <FlashList
+        data={events}
+        renderItem={({ item, index }) => <EventCard event={item} index={index} />}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      />
     </FlagshipScreen>
   );
 }

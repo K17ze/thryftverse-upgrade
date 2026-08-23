@@ -14,6 +14,11 @@ const followingQuerySchema = z.object({
   cursor: z.string().optional(),
 });
 
+const homeQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().optional(),
+});
+
 const trendingQuerySchema = z.object({
   window: z.enum(['24h', '7d', '30d']).default('24h'),
   category: z.string().max(64).optional(),
@@ -75,7 +80,13 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     };
   });
 
-  app.get('/feed/home', async () => {
+  app.get('/feed/home', async (request) => {
+    const { limit, cursor } = homeQuerySchema.parse(request.query ?? {});
+
+    const cursorCondition = cursor ? `AND created_at < $1` : '';
+    const cursorParams = cursor ? [cursor, limit] : [limit];
+    const limitSlot = `$${cursorParams.length}`;
+
     const listingsResult = await readDb.query<{
       id: string;
       seller_id: string;
@@ -96,9 +107,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           status, category, brand, size, condition, original_price_gbp, created_at
         FROM listings
         WHERE status = 'active'
+          ${cursorCondition}
         ORDER BY created_at DESC
-        LIMIT 20
-      `
+        LIMIT ${limitSlot}
+      `,
+      cursorParams
     );
 
     const listingIds = listingsResult.rows.map((r) => r.id);
@@ -127,9 +140,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         SELECT id, creator_id, media_url, caption, created_at
         FROM posters
         WHERE status = 'published'
+          ${cursorCondition}
         ORDER BY created_at DESC
-        LIMIT 6
-      `
+        LIMIT ${limitSlot}
+      `,
+      cursorParams
     );
 
     const looksResult = await readDb.query<{
@@ -143,43 +158,78 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         SELECT id, creator_id, title, media_url, created_at
         FROM looks
         WHERE status = 'published'
+          ${cursorCondition}
         ORDER BY created_at DESC
-        LIMIT 6
-      `
+        LIMIT ${limitSlot}
+      `,
+      cursorParams
     );
 
-    return {
-      listings: listingsResult.rows.map((row) => ({
-        id: row.id,
-        sellerId: row.seller_id,
-        title: row.title,
-        description: row.description,
-        priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
-        images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
-        status: row.status,
-        category: row.category,
-        brand: row.brand,
-        size: row.size,
-        condition: row.condition,
-        originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
-        createdAt: row.created_at,
-      })),
-      posters: postersResult.rows.map((row) => ({
-        id: row.id,
-        creatorId: row.creator_id,
-        mediaUrl: row.media_url,
-        caption: row.caption,
-        createdAt: row.created_at,
-      })),
-      looks: looksResult.rows.map((row) => ({
-        id: row.id,
-        creatorId: row.creator_id,
-        title: row.title,
-        mediaUrl: row.media_url,
-        createdAt: row.created_at,
-      })),
+    type HomeFeedItemType = 'listing' | 'poster' | 'look';
+    type RankedHomeFeedEntry = {
+      type: HomeFeedItemType;
+      createdAt: string;
+      data: Record<string, unknown>;
     };
+
+    const entries: RankedHomeFeedEntry[] = [
+      ...listingsResult.rows.map((row) => ({
+        type: 'listing' as const,
+        createdAt: row.created_at,
+        data: {
+          id: row.id,
+          sellerId: row.seller_id,
+          title: row.title,
+          description: row.description,
+          priceGbp: Number(row.price_gbp),
+          imageUrl: row.image_url,
+          images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+          status: row.status,
+          category: row.category,
+          brand: row.brand,
+          size: row.size,
+          condition: row.condition,
+          originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+          createdAt: row.created_at,
+        },
+      })),
+      ...postersResult.rows.map((row) => ({
+        type: 'poster' as const,
+        createdAt: row.created_at,
+        data: {
+          id: row.id,
+          creatorId: row.creator_id,
+          mediaUrl: row.media_url,
+          caption: row.caption,
+          createdAt: row.created_at,
+        },
+      })),
+      ...looksResult.rows.map((row) => ({
+        type: 'look' as const,
+        createdAt: row.created_at,
+        data: {
+          id: row.id,
+          creatorId: row.creator_id,
+          title: row.title,
+          mediaUrl: row.media_url,
+          createdAt: row.created_at,
+        },
+      })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const sliced = entries.slice(0, limit);
+    const nextCursor = entries.length > limit
+      ? sliced[sliced.length - 1]?.createdAt ?? null
+      : null;
+
+    const items = sliced.map((entry, idx) => ({
+      id: `${entry.type}:${entry.data.id}`,
+      type: entry.type,
+      rank: idx + 1,
+      data: entry.data,
+    }));
+
+    return { items, nextCursor };
   });
 
   // GET /feed/trending — trending listings based on engagement velocity.

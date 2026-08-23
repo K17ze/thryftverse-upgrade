@@ -1,0 +1,9 @@
+# Generated local dev certificates — DO NOT COMMIT private keys or CSRs.
+# Only the CA cert and leaf certs are needed by the nginx-tls image; keys
+# are mounted at runtime via the build context but should never be pushed.
+*.key
+*.csr
+*.srl
+san.cnf
+api-san.cnf
+cdn-san.cnf

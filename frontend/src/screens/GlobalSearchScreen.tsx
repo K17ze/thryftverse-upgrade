@@ -329,8 +329,8 @@ const peopleRowStyles = StyleSheet.create({
   },
 });
 
-export default function GlobalSearchScreen({ navigation }: Props) {
-  const [query, setQuery] = useState('');
+export default function GlobalSearchScreen({ navigation, route }: Props) {
+  const [query, setQuery] = useState(route.params?.initialQuery ?? '');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const inputRef = useRef<any>(null);
   const currentUser = useStore((state) => state.currentUser);
@@ -349,6 +349,15 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const reducedMotion = useReducedMotion();
   const { width: windowWidth } = useWindowDimensions();
   const focusProgress = useSharedValue(0);
+
+  // Apply initial query passed from Explore search to browse filters so
+  // results render immediately on mount.
+  useEffect(() => {
+    if (route.params?.initialQuery) {
+      updateBrowseFilters({ query: route.params.initialQuery });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Feature flag — gates the conversational AI search entry point. Additive
   // pill; absent when the flag is off (current behaviour). When enabled, an

@@ -24,13 +24,15 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -54,6 +56,7 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 export default function NotificationPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show } = useToast();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const {
@@ -115,6 +118,28 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
   const toggleCategory = (key: string) => {
     haptic.selection();
     setPushNotificationToggle(key, !toggles[key]);
+  };
+
+  const handleTestNotification = async () => {
+    haptic.medium();
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        show('Enable push notifications to test them.', 'error');
+        return;
+      }
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Test notification 🔔',
+          body: 'Your notification settings are working correctly.',
+          data: { type: 'test' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
+      });
+      show('Test notification scheduled — check your notifications.', 'success');
+    } catch {
+      show('Could not schedule test notification.', 'error');
+    }
   };
 
   return (
@@ -336,6 +361,18 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             subtitle="Show message content in notification previews"
             toggleValue={showPreview}
             onToggle={handleShowPreviewChange}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+
+      {/* ── Test notification ── */}
+        <SettingsSection title="Diagnostics" noCard>
+          <SettingsRow
+            icon="notifications-outline"
+            title="Send test notification"
+            subtitle="Verify your notification settings are working"
+            onPress={handleTestNotification}
             isFirst
             isLast
           />

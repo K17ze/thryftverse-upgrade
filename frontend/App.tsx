@@ -58,6 +58,7 @@ import { parseApiError } from './src/lib/apiClient';
 import { useOfflineQueue } from './src/lib/offlineQueue';
 import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences';
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
+import { getStoredSettingsPreferences } from './src/preferences/settingsPreferences';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
 import { initializeSslPinning } from './src/utils/sslPinning';
@@ -142,6 +143,35 @@ Notifications.setNotificationHandler({
         : Notifications.AndroidNotificationPriority.DEFAULT,
     };
   },
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Notification action categories — interactive buttons on message notifications.
+// ----------------------------------------------------------------------------
+// Registers a "message" category with "Reply" and "Mark as read" actions so
+// the OS presents inline action buttons on chat message notifications. The
+// notification tap handler (usePushNotificationTap) already handles navigation
+// on tap; these actions are registered so the buttons are available, with
+// response handling as a no-op for now.
+// ──────────────────────────────────────────────────────────────────────────
+Notifications.setNotificationCategoryAsync('message', [
+  {
+    identifier: 'reply',
+    buttonTitle: 'Reply',
+    options: {
+      opensAppToForeground: false,
+    },
+  },
+  {
+    identifier: 'mark_as_read',
+    buttonTitle: 'Mark as read',
+    options: {
+      opensAppToForeground: false,
+      isDestructive: false,
+    },
+  },
+]).catch(() => {
+  // Category registration is best-effort — must not crash app startup.
 });
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -268,14 +298,23 @@ export default function App() {
       const preference = await getStoredThemePreference();
       applyThemePreference(preference);
 
-      const [storedProfileMedia, localAuthSnapshot] = await Promise.all([
+      const [storedProfileMedia, localAuthSnapshot, storedSettings] = await Promise.all([
         getStoredProfileMedia(),
         getStoredAuthSnapshot(),
+        getStoredSettingsPreferences(),
       ]);
 
       const store = useStore.getState();
 
       if (localAuthSnapshot?.user) {
+        // When biometric login is enabled, restore the user into the store
+        // (so the navigator knows they are authenticated) but set the
+        // pending flag so AppNavigator shows BiometricLogin as the initial
+        // route instead of MainTabs. The BiometricLogin screen clears the
+        // flag after a successful Face ID / Touch ID prompt.
+        if (storedSettings.biometricLoginEnabled) {
+          store.setBiometricLoginPending(true);
+        }
         store.login(localAuthSnapshot.user);
         store.setTwoFactorEnabled(localAuthSnapshot.twoFactorEnabled);
       }

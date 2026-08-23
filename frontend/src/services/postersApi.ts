@@ -821,6 +821,15 @@ export async function fetchPosterHighlights(userId: string): Promise<{ items: Po
   return fetchJson<{ items: PosterHighlight[] }>(`/users/${userId}/poster-highlights`);
 }
 
+/** Fetch a single highlight by id — avoids loading all highlights just to find one. */
+export async function fetchPosterHighlightById(highlightId: string): Promise<PosterHighlight | null> {
+  try {
+    return await fetchJson<PosterHighlight>(`/poster-highlights/${encodeURIComponent(highlightId)}`);
+  } catch {
+    return null;
+  }
+}
+
 export async function createPosterHighlight(body: {
   id: string;
   title: string;

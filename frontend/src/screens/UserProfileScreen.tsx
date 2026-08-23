@@ -75,6 +75,7 @@ import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfi
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { track } from '../analytics';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -167,6 +168,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       navigation.replace('MainTabs', { screen: 'Profile' });
     }
   }, [userId, currentUserId, navigation]);
+
+  useEffect(() => {
+    if (userId && userId !== currentUserId) {
+      track('profile_viewed', { user_id: userId });
+    }
+  }, [userId, currentUserId]);
 
   const publicProfileQuery = usePublicProfileQuery(userId);
   const activeListingsQuery = useUserListingsInfinite(targetUserId, 'active');
