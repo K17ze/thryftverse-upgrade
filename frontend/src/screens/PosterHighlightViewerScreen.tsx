@@ -61,6 +61,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
+  const [reloadKey, setReloadKey] = React.useState(0);
   // Caption expand/collapse — 3-line clamp with "more" tap.
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
@@ -95,7 +96,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
       }
     })();
     return () => { cancelled = true; };
-  }, [highlightId]);
+  }, [highlightId, reloadKey]);
 
   const activeFrame = highlight?.frames[frameIndex] ?? null;
 
@@ -219,24 +220,24 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
           <View style={styles.errorBtnRow}>
             <AnimatedPressable
               onPress={() => {
-                haptic.error();
+                haptic.light();
+                setHighlight(null);
                 setLoadError(false);
+                setMediaError(false);
+                setFrameIndex(0);
+                setProgress(0);
                 setIsLoading(true);
-                // Re-trigger the load effect by re-running the fetch
-                // Force re-mount by changing a state that the effect depends on
-                const reloadKey = Date.now();
-                void reloadKey;
-                navigation.goBack();
+                setReloadKey((k) => k + 1);
               }}
               style={styles.errorBtn}
               scaleValue={0.97}
               hapticFeedback="light"
               activeOpacity={0.85}
-              accessibilityLabel="Go back"
-              accessibilityHint="Returns to the previous screen"
+              accessibilityLabel="Retry loading highlight"
+              accessibilityHint="Retries loading the highlight data"
               accessibilityRole="button"
             >
-              <Text style={styles.errorBtnText}>Go back</Text>
+              <Text style={styles.errorBtnText}>Retry</Text>
             </AnimatedPressable>
           </View>
         </View>

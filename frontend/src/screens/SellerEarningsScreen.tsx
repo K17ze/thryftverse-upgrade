@@ -32,6 +32,8 @@ import { CoOwnStateCanvas, CoOwnWalletBreakdownSkeleton } from '../components/co
 import { getSellerWalletBalances, type SellerWalletBalanceItem } from '../services/walletApi';
 import { parseApiError } from '../lib/apiClient';
 import { haptics } from '../utils/haptics';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SellerEarnings'>;
 
@@ -43,6 +45,7 @@ interface SellerBalances {
 }
 
 export default function SellerEarningsScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
@@ -131,6 +134,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
       }
       scrollEnabled={false}
     >
+      <OfflineBanner onRetry={() => void handleRefresh()} />
       {isLoading ? (
         <CoOwnWalletBreakdownSkeleton />
       ) : isError ? (

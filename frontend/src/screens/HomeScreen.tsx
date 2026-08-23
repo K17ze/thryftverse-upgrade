@@ -36,11 +36,12 @@ import { fetchLooksFromApi } from '../services/looksApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useStore } from '../store/useStore';
+import { useStore, useIsGuest } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
@@ -68,6 +69,7 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { markInteractive } from '../platform/monitoring';
+import { useFeatureFlag } from '../analytics';
 
 // Lazy-load the monitoring module at call time to avoid circular import
 // issues where the static binding may be undefined during initial module
@@ -211,14 +213,23 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
+  const isGuest = useIsGuest();
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const reducedMotionEnabled = useReducedMotion();
   const { spring } = useMotionConfig();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
   const { isOffline } = useConnectivity();
+
+  // Feature flags — additive enhancements gated by PostHog. Both default to
+  // false (current behaviour) when PostHog is not configured.
+  // - new_home_feed: shows an editorial section header introducing the feed.
+  // - live_shopping_enabled: shows a Live shopping badge in the header.
+  const newHomeFeedEnabled = useFeatureFlag('new_home_feed');
+  const liveShoppingEnabled = useFeatureFlag('live_shopping_enabled');
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
@@ -681,7 +692,7 @@ export default function HomeScreen() {
                     <View style={styles.posterShade} />
 
                     <View style={styles.posterCreatorOverlay}>
-                      <Text style={styles.posterCreatorName} numberOfLines={1}>
+                      <Text style={styles.posterCreatorName} numberOfLines={1} maxFontSizeMultiplier={1.5}>
                         @{story.creator.username ?? story.creatorId}
                       </Text>
                       <View
@@ -710,7 +721,7 @@ export default function HomeScreen() {
                   <View style={styles.posterShade} />
 
                   <View style={styles.posterCreatorOverlay}>
-                    <Text style={styles.posterCreatorName} numberOfLines={1}>
+                    <Text style={styles.posterCreatorName} numberOfLines={1} maxFontSizeMultiplier={1.5}>
                       @{story.creator.username ?? story.creatorId}
                     </Text>
                     <View
@@ -831,7 +842,7 @@ export default function HomeScreen() {
           <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
             <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
-                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }}>
+                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
                   Looks to shop
                 </Text>
               </View>
@@ -907,13 +918,38 @@ export default function HomeScreen() {
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
-            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Thryftverse</Text>
+            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
+            {isGuest ? (
+              <Pressable
+                onPress={() => navigation.navigate('AuthLanding')}
+                hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+                accessibilityRole="link"
+                accessibilityLabel="Browsing as guest. Tap to sign in."
+                accessibilityHint="Opens the sign-in screen"
+              >
+                <Text style={styles.guestLabel} maxFontSizeMultiplier={1.2}>
+                  Browsing as guest · Sign in
+                </Text>
+              </Pressable>
+            ) : null}
           </Reanimated.View>
 
           <View style={styles.headerRight}>
+            {liveShoppingEnabled ? (
+              <AnimatedPressable
+                style={styles.liveBadge}
+                onPress={() => navigation.navigate('LiveShopping')}
+                accessibilityLabel="Live shopping — watch live streams"
+                accessibilityRole="button"
+                accessibilityHint="Opens live shopping"
+              >
+                <View style={styles.liveDot} pointerEvents="none" accessible={false} />
+                <Text style={styles.liveBadgeText}>Live</Text>
+              </AnimatedPressable>
+            ) : null}
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('Sell')}
+              onPress={() => { if (!requireAuth('create_listing')) return; navigation.navigate('Sell'); }}
               accessibilityLabel="List an item"
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
@@ -939,7 +975,7 @@ export default function HomeScreen() {
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
-                  <Text style={styles.notificationBadgeText}>
+                  <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
                     {notificationCount > 99 ? '99+' : notificationCount}
                   </Text>
                 </View>
@@ -998,11 +1034,11 @@ export default function HomeScreen() {
                       : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
                     accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
+                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                       {label}
                     </Text>
                     {option === 'following' && followingFeed.listings.length > 0 ? (
-                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
+                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={1.5}>
                         {followingFeed.listings.length}
                       </Text>
                     ) : null}
@@ -1011,6 +1047,22 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {/* New home feed editorial header — gated by the new_home_feed
+                feature flag. Additive enhancement; absent when the flag is
+                off (current behaviour). Introduces the feed with a curated
+                editorial label so the surface reads as authored, not as a
+                generic product grid. */}
+            {newHomeFeedEnabled ? (
+              <View style={styles.editorialHeader}>
+                <Text style={styles.editorialEyebrow} numberOfLines={1}>
+                  Editor’s picks
+                </Text>
+                <Text style={styles.editorialTitle} numberOfLines={1}>
+                  Today’s drops, handpicked
+                </Text>
+              </View>
+            ) : null}
 
             {/* Search prompt — compact tappable field that communicates
                 marketplace discoverability in the first viewport. Grailed's
@@ -1027,7 +1079,7 @@ export default function HomeScreen() {
               accessibilityHint="Opens global search"
             >
               <Ionicons name="search" size={18} color={colors.textMuted} />
-              <Text style={styles.searchPromptText} numberOfLines={1}>
+              <Text style={styles.searchPromptText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                 Search drops, brands, sellers
               </Text>
             </Pressable>
@@ -1092,12 +1144,12 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13 }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
             </View>
           ) : !hasMore && feedGridData.length > 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
               <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
                 You've reached the end
               </Text>
             </View>
@@ -1148,7 +1200,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.peekMeta}>
-                <Text style={styles.peekTitle} numberOfLines={1}>{peekItem.identity.primary}</Text>
+                <Text style={styles.peekTitle} numberOfLines={1} maxFontSizeMultiplier={1.3}>{peekItem.identity.primary}</Text>
 
                 <View style={styles.peekActionsRow}>
                   <AppButton
@@ -1230,9 +1282,69 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     color: colors.textPrimary,
   },
+  // Guest indicator — a small, restrained text label below the brand title.
+  // Not a banner; communicates state and provides a sign-in entry point.
+  guestLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: FontFamily.medium,
+    letterSpacing: 0.1,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
   headerRight: {
     flexDirection: 'row',
     gap: 2,
+  },
+  // Live shopping badge — additive entry point gated by the
+  // live_shopping_enabled feature flag. A compact pill with a live dot so
+  // it reads as a status indicator, not decorative chrome.
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+    height: 28,
+    paddingHorizontal: Space.sm,
+    marginRight: Space.xxs,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    backgroundColor: `${colors.danger}14`,
+    alignSelf: 'center',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    backgroundColor: colors.danger,
+  },
+  liveBadgeText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.danger,
+    letterSpacing: 0.2,
+  },
+  // New home feed editorial header — additive section gated by the
+  // new_home_feed feature flag. An eyebrow + title pair that introduces the
+  // feed with an authored, curated voice.
+  editorialHeader: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    gap: Space.xxs,
+  },
+  editorialEyebrow: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.brand,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  editorialTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.textPrimary,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   headerBtn: {
     width: 44,

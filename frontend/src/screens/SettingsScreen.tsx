@@ -40,7 +40,122 @@ import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkelet
 
 import { Space, FontFamily, Radius, Type } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { useFeatureFlag, type FeatureFlagKey } from '../analytics';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+
+// All feature flags defined in src/analytics/types.ts. Listed here so the
+// debug view shows every flag the app can evaluate — QA can verify flag
+// states without navigating to each consuming screen.
+const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
+  'new_home_feed',
+  'live_shopping_enabled',
+  'co_own_v2',
+  'ai_listing_assist',
+  'moodboard_beta',
+  'conversational_search',
+  'advanced_filters',
+  'seller_analytics_v2',
+];
+
+/**
+ * Read-only feature flag debug section for QA teams.
+ *
+ * Renders each flag name and its current boolean value. Shown only inside
+ * the developer-gated "Advanced" section so ordinary consumers never see
+ * implementation detail. Uses the existing `useFeatureFlag` hook — no new
+ * hooks, no new dependencies.
+ */
+function FeatureFlagDebugSection() {
+  const { colors } = useAppTheme();
+  return (
+    <View style={flagStyles.container}>
+      <Text style={[flagStyles.heading, { color: colors.textMuted }]}>
+        Feature flags
+      </Text>
+      {ALL_FEATURE_FLAGS.map((flag) => (
+        <FeatureFlagRow key={flag} flagKey={flag} />
+      ))}
+    </View>
+  );
+}
+
+/** Single flag row — calls the hook and renders the live value. */
+function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
+  const { colors } = useAppTheme();
+  const enabled = useFeatureFlag(flagKey);
+  return (
+    <View style={flagStyles.row}>
+      <Text style={[flagStyles.flagName, { color: colors.textSecondary }]}>
+        {flagKey}
+      </Text>
+      <View
+        style={[
+          flagStyles.statusPill,
+          { backgroundColor: enabled ? `${colors.success}22` : colors.surfaceAlt },
+        ]}
+      >
+        <View
+          style={[
+            flagStyles.statusDot,
+            { backgroundColor: enabled ? colors.success : colors.textMuted },
+          ]}
+        />
+        <Text
+          style={[
+            flagStyles.statusText,
+            { color: enabled ? colors.success : colors.textMuted },
+          ]}
+        >
+          {enabled ? 'On' : 'Off'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const flagStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  heading: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128,128,128,0.15)',
+  },
+  flagName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    flex: 1,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xxs + 1,
+    borderRadius: Radius.full,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+  },
+  statusText: {
+    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+  },
+});
 
 interface DestinationMeta {
   key: keyof RootStackParamList;
@@ -750,10 +865,20 @@ export default function SettingsScreen({ navigation }: Props) {
                 subtitle="Diagnostic checks for local runtime"
                 onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isFirst
+              />
+              <SettingsRow
+                icon="flag-outline"
+                title="Feature flags"
+                subtitle="Current flag values for QA"
+                onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isLast
               />
             </SettingsSection>
           ) : null}
+
+          {/* Feature flag debug view — read-only flag status for QA teams.
+              Shown only when developer mode is enabled (Advanced section). */}
+          {showAdvancedDeveloper ? <FeatureFlagDebugSection /> : null}
     
           {/* ── DESTRUCTIVE ACTIONS — separate group at the bottom ── */}
           {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit

@@ -23,6 +23,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -44,19 +45,85 @@ const CARBON_TARGETS = [10, 25, 50, 100, 250];
 // Secondhand ratio goal options (percentage of purchases that are secondhand).
 const RATIO_TARGETS = [25, 50, 75, 100];
 
+const SUSTAINABILITY_PREFS_KEY = '@thryftverse/sustainability_prefs';
+
+interface SustainabilityPrefs {
+  carbonTarget: number;
+  ratioTarget: number;
+  carbonNeutralShipping: boolean;
+  plasticFreePackaging: boolean;
+  showBadges: boolean;
+  trackImpact: boolean;
+  localFirst: boolean;
+}
+
+const DEFAULT_PREFS: SustainabilityPrefs = {
+  carbonTarget: 50,
+  ratioTarget: 50,
+  carbonNeutralShipping: true,
+  plasticFreePackaging: true,
+  showBadges: true,
+  trackImpact: true,
+  localFirst: false,
+};
+
 export default function SustainabilityPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Local preference state — persisted to AsyncStorage in a real implementation.
-  const [carbonTarget, setCarbonTarget] = React.useState(50);
-  const [ratioTarget, setRatioTarget] = React.useState(50);
-  const [carbonNeutralShipping, setCarbonNeutralShipping] = React.useState(true);
-  const [plasticFreePackaging, setPlasticFreePackaging] = React.useState(true);
-  const [showBadges, setShowBadges] = React.useState(true);
-  const [trackImpact, setTrackImpact] = React.useState(true);
-  const [localFirst, setLocalFirst] = React.useState(false);
+  // Preference state — persisted to AsyncStorage so it survives app restarts.
+  // The backend account-preferences endpoint does not yet support sustainability
+  // fields, so these are device-local (truthful per AGENTS.md §11).
+  const [carbonTarget, setCarbonTarget] = React.useState(DEFAULT_PREFS.carbonTarget);
+  const [ratioTarget, setRatioTarget] = React.useState(DEFAULT_PREFS.ratioTarget);
+  const [carbonNeutralShipping, setCarbonNeutralShipping] = React.useState(DEFAULT_PREFS.carbonNeutralShipping);
+  const [plasticFreePackaging, setPlasticFreePackaging] = React.useState(DEFAULT_PREFS.plasticFreePackaging);
+  const [showBadges, setShowBadges] = React.useState(DEFAULT_PREFS.showBadges);
+  const [trackImpact, setTrackImpact] = React.useState(DEFAULT_PREFS.trackImpact);
+  const [localFirst, setLocalFirst] = React.useState(DEFAULT_PREFS.localFirst);
+  const [hydrated, setHydrated] = React.useState(false);
+
+  // Hydrate from AsyncStorage on mount.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SUSTAINABILITY_PREFS_KEY);
+        if (!mounted || !raw) return;
+        const parsed = JSON.parse(raw) as Partial<SustainabilityPrefs>;
+        if (typeof parsed.carbonTarget === 'number') setCarbonTarget(parsed.carbonTarget);
+        if (typeof parsed.ratioTarget === 'number') setRatioTarget(parsed.ratioTarget);
+        if (typeof parsed.carbonNeutralShipping === 'boolean') setCarbonNeutralShipping(parsed.carbonNeutralShipping);
+        if (typeof parsed.plasticFreePackaging === 'boolean') setPlasticFreePackaging(parsed.plasticFreePackaging);
+        if (typeof parsed.showBadges === 'boolean') setShowBadges(parsed.showBadges);
+        if (typeof parsed.trackImpact === 'boolean') setTrackImpact(parsed.trackImpact);
+        if (typeof parsed.localFirst === 'boolean') setLocalFirst(parsed.localFirst);
+      } catch {
+        // AsyncStorage read failure — keep defaults
+      } finally {
+        if (mounted) setHydrated(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Persist to AsyncStorage whenever preferences change (after hydration).
+  React.useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(
+      SUSTAINABILITY_PREFS_KEY,
+      JSON.stringify({
+        carbonTarget,
+        ratioTarget,
+        carbonNeutralShipping,
+        plasticFreePackaging,
+        showBadges,
+        trackImpact,
+        localFirst,
+      } satisfies SustainabilityPrefs),
+    ).catch(() => {});
+  }, [hydrated, carbonTarget, ratioTarget, carbonNeutralShipping, plasticFreePackaging, showBadges, trackImpact, localFirst]);
 
   // Illustrative impact stats (demo mode).
   const co2SavedKg = 34;

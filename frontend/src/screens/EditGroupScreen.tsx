@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { updateConversationOnApi, deleteConversationOnApi } from '../services/chatApi';
+import { updateConversationOnApi, leaveGroupOnApi } from '../services/chatApi';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
+  const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
 
@@ -67,7 +68,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     setIsSaving(true);
 
     try {
-      await updateConversationOnApi(conversationId, { title: name.trim() });
+      await updateConversationOnApi(conversationId, { title: name.trim(), description: description.trim() });
       upsertConversation({
         ...conversation,
         title: name.trim(),
@@ -110,7 +111,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             haptic.heavy();
             setIsLeaving(true);
             try {
-              await deleteConversationOnApi(conversationId);
+              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
               deleteConversation(conversationId);
               show('You left the group', 'info');
               navigation.navigate('MainTabs', { screen: 'Inbox' });

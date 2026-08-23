@@ -99,7 +99,6 @@ export default function CategoryTreeScreen() {
             style={styles.section}
           >
             <DiscoverySectionHeader
-              kicker="SHOP BY"
               title={section.title}
               actionLabel="Explore"
               onAction={() => navigation.navigate('Browse', {

@@ -82,6 +82,7 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { useStore } from '../store/useStore';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { createDmConversationOnApi } from '../services/chatApi';
 import type { Listing } from '../services/listingsApi';
 import {
@@ -112,6 +113,7 @@ export default function AuctionDetailScreen() {
     initialBidAmount,
   } = route.params;
   const { show } = useToast();
+  const { requireAuth } = useSignupWall();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
   const insets = useSafeAreaInsets();
@@ -274,6 +276,7 @@ export default function AuctionDetailScreen() {
 
   const handleToggleWatch = async () => {
     if (!auction || watchToggling) return;
+    if (!requireAuth('save_item')) return;
     setWatchToggling(true);
     const wasWatching = auction.isWatched;
     setAuction({ ...auction, isWatched: !wasWatching });
@@ -313,6 +316,7 @@ export default function AuctionDetailScreen() {
 
   const openBidSheet = () => {
     if (!auction) return;
+    if (!requireAuth('place_bid')) return;
     setBidSheetVisible(true);
   };
 
@@ -352,6 +356,7 @@ export default function AuctionDetailScreen() {
 
   const openBuyNowSheet = () => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
+    if (!requireAuth('purchase')) return;
     setBuyNowSheetVisible(true);
   };
 
@@ -524,6 +529,18 @@ export default function AuctionDetailScreen() {
   }, [auction, currentUser?.id]);
 
   const social = useProductSocialState(viewModel);
+
+  // Guest gating: wrap save/like actions with the soft signup wall so
+  // guests can browse auctions freely but cannot commit to saving or
+  // liking without an account.
+  const guardedOpenCollectionPicker = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.openCollectionPicker();
+  }, [requireAuth, social]);
+  const guardedToggleLike = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.toggleLike();
+  }, [requireAuth, social]);
 
   const { data: sellerTrustData } = useSellerTrust(auction?.seller.id);
   const sellerFollowMutation = useSellerFollow(auction?.seller.id);
@@ -853,8 +870,8 @@ export default function AuctionDetailScreen() {
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={social.openShare}
-          onSave={social.openCollectionPicker}
-          onToggleFav={social.toggleLike}
+          onSave={guardedOpenCollectionPicker}
+          onToggleFav={guardedToggleLike}
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
@@ -892,7 +909,7 @@ export default function AuctionDetailScreen() {
               icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
               label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
-              onPress: social.openCollectionPicker,
+              onPress: guardedOpenCollectionPicker,
               isActive: social.isSavedToCollection,
             },
           ]}
@@ -1147,10 +1164,7 @@ export default function AuctionDetailScreen() {
                 ? {
                     label: isResolvingConversation ? 'Starting…' : 'Message',
                     onPress: async () => {
-                      if (!currentUser?.id) {
-                        show('Sign in to message the seller.', 'error');
-                        return;
-                      }
+                      if (!requireAuth('message_seller')) return;
                       if (isResolvingConversation) return;
                       setIsResolvingConversation(true);
                       try {
@@ -1176,10 +1190,7 @@ export default function AuctionDetailScreen() {
                 ? {
                     label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
                     onPress: () => {
-                      if (!currentUser?.id) {
-                        show('Sign in to follow this seller.', 'error');
-                        return;
-                      }
+                      if (!requireAuth('follow_seller')) return;
                       sellerFollowMutation.mutate(undefined, {
                         onSuccess: (data) => {
                           show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
@@ -1574,7 +1585,7 @@ export default function AuctionDetailScreen() {
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {
             setOverflowVisible(false);
-            social.openCollectionPicker();
+            guardedOpenCollectionPicker();
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
@@ -1593,7 +1604,7 @@ export default function AuctionDetailScreen() {
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {
             setOverflowVisible(false);
-            social.toggleLike();
+            guardedToggleLike();
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}

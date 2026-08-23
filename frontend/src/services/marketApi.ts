@@ -1449,6 +1449,31 @@ export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnA
   }
 }
 
+// ── Co-Own asset issue reporting ──────────────────────────────────────
+// The backend has a `coown_asset_issues` table (migration 126) with columns
+// for asset_id, reporter_id, category, description, and status. The POST
+// endpoint to create issues still needs to be implemented on the backend.
+// This function calls the expected path so it works once the endpoint lands.
+// TODO(backend): Implement POST /co-own/assets/:assetId/issues in api/src/index.ts
+export async function createCoOwnAssetIssue(input: {
+  assetId: string;
+  category: 'dispute' | 'technical' | 'fraud' | 'other';
+  description: string;
+}): Promise<{ id: string; status: string }> {
+  const payload = await fetchJson<{
+    ok: true;
+    issue: { id: string; status: string };
+  }>(`/co-own/assets/${encodeURIComponent(input.assetId)}/issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      category: input.category,
+      description: input.description.trim(),
+    }),
+  });
+  return payload.issue;
+}
+
 export interface CoOwnOrderBookEntry {
   side: 'buy' | 'sell';
   unitPriceGbp: number;

@@ -149,13 +149,14 @@ export function ProfileHero({
   const isVerified = sellerTrust?.verified === true || emailVerified === true;
   const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
 
-  // Trust line: "4.9 · 47 sold · Joined June 2026"
+  // Trust line: "4.9 · 47 sold · Joined June 2026 · Replies within 2h"
   const trustParts: string[] = [];
   if (hasRating && ratingValue !== null && ratingValue !== undefined) {
     trustParts.push(`${ratingValue.toFixed(1)}`);
   }
   if (soldCount > 0) trustParts.push(`${soldCount} sold`);
   if (memberSince) trustParts.push(`Joined ${memberSince}`);
+  if (sellerTrust?.responseTimeLabel) trustParts.push(`Replies ${sellerTrust.responseTimeLabel}`);
   const trustLine = trustParts.join(' · ');
 
   return (
@@ -322,6 +323,10 @@ export function ProfileHero({
               ) : null}
               {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
               {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+              {(hasRating || soldCount > 0 || memberSince) && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+              {sellerTrust?.responseTimeLabel ? (
+                <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -609,6 +614,11 @@ function createStyles(colors: ThemeColors) {
   trustStatic: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  trustResponse: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   trustDot: {

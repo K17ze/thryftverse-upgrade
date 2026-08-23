@@ -41,10 +41,12 @@ import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
 export default function WalletScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);

@@ -82,7 +82,7 @@ export interface ScreenViewProperties {
  * - **Security**: `biometric_login_attempted`, `biometric_login_success`
  * - **Onboarding**: `onboarding_completed`, `age_verification_completed`
  * - **Notifications & deep links**: `push_notification_tapped`,
- *   `deep_link_opened`
+ *   `push_notification_received`, `deep_link_opened`
  * - **Experiments**: `feature_flag_evaluated`
  * - **Sharing**: `share_initiated`, `share_completed`
  * - **Live shopping**: `live_stream_viewed`, `live_stream_joined`,
@@ -90,6 +90,7 @@ export interface ScreenViewProperties {
  * - **Looks & moodboards**: `look_created`, `look_viewed`,
  *   `moodboard_created`, `collection_created`
  * - **Trust & safety**: `review_written`, `report_submitted`
+ * - **Screen capture**: `screenshot_taken`
  *
  * To add a new event, append it to this union and optionally add a
  * specific properties type in `EventProperties` below.
@@ -124,6 +125,7 @@ export type EventName =
   | 'onboarding_completed'
   | 'age_verification_completed'
   | 'push_notification_tapped'
+  | 'push_notification_received'
   | 'deep_link_opened'
   | 'feature_flag_evaluated'
   | 'share_initiated'
@@ -136,11 +138,23 @@ export type EventName =
   | 'moodboard_created'
   | 'collection_created'
   | 'review_written'
-  | 'report_submitted';
+  | 'report_submitted'
+  | 'screenshot_taken';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Event properties — mapped type linking event names to property shapes.
 // ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Properties attached to a `screenshot_taken` event.
+ *
+ * - `screen` — the route name of the screen that was active when the
+ *   screenshot was taken, or `'unknown'` when the navigator was not ready.
+ *   Enables funnel analysis without recording PII.
+ */
+export interface ScreenshotTakenProperties {
+  screen: string;
+}
 
 /**
  * Base property value type for analytics events.
@@ -191,6 +205,7 @@ type DefaultEventProperties = Record<string, EventPropertyValue>;
  */
 export type EventProperties = {
   screen_view: ScreenViewProperties;
+  screenshot_taken: ScreenshotTakenProperties;
 };
 
 // ──────────────────────────────────────────────────────────────────────────

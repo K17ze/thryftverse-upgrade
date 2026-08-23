@@ -17,6 +17,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
+  FadeIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,6 +53,7 @@ import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -569,6 +571,8 @@ export default function MyProfileScreen() {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
+      <OfflineBanner />
+
       {/* ── 1. FULL-WIDTH COVER ── */}
       <Reanimated.View style={[styles.coverWrap, t.coverWrap, coverStyle]}>
         <FlagshipProfileMedia
@@ -625,13 +629,13 @@ export default function MyProfileScreen() {
 
             <AnimatedPressable
               style={styles.topUtilityIconBtn}
-              onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-              accessibilityLabel="Open settings"
+              onPress={() => { haptic.light(); navigation.navigate('EditProfile', {}); }}
+              accessibilityLabel="Edit profile"
               accessibilityRole="button"
-              accessibilityHint="Opens account and app settings"
+              accessibilityHint="Opens profile editor"
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="settings-outline" size={22} color={colors.textInverse} aria-hidden={true} />
+                <Ionicons name="create-outline" size={20} color={colors.textInverse} aria-hidden={true} />
               </View>
             </AnimatedPressable>
           </View>
@@ -793,7 +797,11 @@ export default function MyProfileScreen() {
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
-          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <Reanimated.View
+            key="listings"
+            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
+          >
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
                 <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
@@ -896,12 +904,16 @@ export default function MyProfileScreen() {
                 </View>
               </>
             )}
-          </View>
+          </Reanimated.View>
         )}
 
         {/* LOOKS TAB — 2-column grid (Instagram/Pinterest profile pattern) */}
         {activeTab === 'looks' && (
-          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <Reanimated.View
+            key="looks"
+            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
+          >
             {looksLoading ? (
               <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel="Loading your Looks">
                 <SkeletonLoader width="100%" height={360} borderRadius={RadiusRoleValue.standalonePanel} />
@@ -936,7 +948,7 @@ export default function MyProfileScreen() {
                 navigation={navigation}
               />
             )}
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ABOUT TAB — flat editorial layout */}
@@ -944,7 +956,11 @@ export default function MyProfileScreen() {
             The About tab shows only information NOT already visible: website,
             shop policies, and Co-Own portfolio (recessed from the hero). */}
         {activeTab === 'about' && (
-          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <Reanimated.View
+            key="about"
+            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
+          >
             {/* ── CO-OWN PORTFOLIO PREVIEW — recessed into About tab ── */}
             {coOwnHoldings.length > 0 ? (
               <AnimatedPressable
@@ -1039,7 +1055,7 @@ export default function MyProfileScreen() {
             {!user.website && !sellerTrust && (
               <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No additional details available.</Text>
             )}
-          </View>
+          </Reanimated.View>
         )}
         </View>
 

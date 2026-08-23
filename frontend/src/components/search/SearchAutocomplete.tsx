@@ -1,9 +1,10 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import {
 } from '../../theme/designTokens';
 import {
   AUTOCOMPLETE_DEMO_MODE,
+  fetchAutocompleteSuggestions,
   type AutocompleteSuggestion,
   type AutocompleteSuggestionType,
 } from '../../services/searchAutocompleteApi';
@@ -37,17 +39,87 @@ const TYPE_ICON: Record<AutocompleteSuggestionType, keyof typeof Ionicons.glyphM
 };
 
 // ---------------------------------------------------------------------------
+// Debounced backend autocomplete hook
+// ---------------------------------------------------------------------------
+
+/** Debounce delay for autocomplete API calls (ms). */
+const AUTOCOMPLETE_DEBOUNCE_MS = 300;
+
+interface UseAutocompleteSuggestionsResult {
+  suggestions: AutocompleteSuggestion[];
+  isLoading: boolean;
+  isDemo: boolean;
+  error: string | null;
+}
+
+/**
+ * Debounced, stale-safe autocomplete fetcher. Calls the backend
+ * `/search/autocomplete` endpoint 300ms after the query stops changing,
+ * cancels in-flight results on unmount or new input, and falls back to the
+ * client-side catalogue on error.
+ *
+ * When `enabled` is false (e.g. query too short or dropdown hidden) no
+ * request is made and suggestions are cleared.
+ */
+function useAutocompleteSuggestions(
+  query: string,
+  enabled: boolean,
+  userId?: string,
+): UseAutocompleteSuggestionsResult {
+  const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!enabled || trimmed.length < 2) {
+      setSuggestions([]);
+      setIsLoading(false);
+      setIsDemo(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    const timer = setTimeout(() => {
+      fetchAutocompleteSuggestions(trimmed, userId).then((result) => {
+        if (cancelled) return;
+        setSuggestions(result.suggestions);
+        setIsDemo(result.isDemo);
+        setError(result.error ?? null);
+        setIsLoading(false);
+      });
+    }, AUTOCOMPLETE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, enabled, userId]);
+
+  return { suggestions, isLoading, isDemo, error };
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export interface SearchAutocompleteProps {
-  /** Ranked autocomplete suggestions for the current query. */
-  suggestions: AutocompleteSuggestion[];
+  /**
+   * Ranked autocomplete suggestions for the current query. When omitted,
+   * the component fetches suggestions from the backend automatically with
+   * 300ms debouncing.
+   */
+  suggestions?: AutocompleteSuggestion[];
   /** Trending searches shown at the top (3–5). */
   trending: string[];
   /** Recent searches shown when the input is empty and focused. */
   recent: string[];
-  /** The raw query — used to highlight the matched portion. */
+  /** The raw query — used to highlight the matched portion and fetch suggestions. */
   query: string;
   /** Whether the dropdown is visible (focused + no explicit hide). */
   visible: boolean;
@@ -55,6 +127,8 @@ export interface SearchAutocompleteProps {
   onSelect: (suggestion: AutocompleteSuggestion | { query: string; type: 'recent' | 'trending'; confidence: number; source: 'recent' | 'trending' }) => void;
   /** Called when the user clears recent searches. */
   onClearRecent?: () => void;
+  /** Optional user id for recent-search enrichment in the fallback. */
+  userId?: string;
 }
 
 /**
@@ -69,17 +143,28 @@ export interface SearchAutocompleteProps {
  * illustrative.
  */
 export function SearchAutocomplete({
-  suggestions,
+  suggestions: suggestionsProp,
   trending,
   recent,
   query,
   visible,
   onSelect,
   onClearRecent,
+  userId,
 }: SearchAutocompleteProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // When no explicit suggestions are passed in, fetch from the backend with
+  // 300ms debouncing. The hook handles loading, error, and client-side
+  // fallback states internally.
+  const isSelfFetching = suggestionsProp === undefined;
+  const { suggestions: fetchedSuggestions, isLoading, isDemo: fetchedIsDemo } =
+    useAutocompleteSuggestions(query, visible && isSelfFetching, userId);
+
+  const suggestions = suggestionsProp ?? fetchedSuggestions;
+  const isDemo = isSelfFetching ? fetchedIsDemo : AUTOCOMPLETE_DEMO_MODE;
 
   const handleSelect = useCallback(
     (s: Parameters<SearchAutocompleteProps['onSelect']>[0]) => {
@@ -98,11 +183,16 @@ export function SearchAutocomplete({
     | { kind: 'recent'; term: string }
     | { kind: 'clear' }
     | { kind: 'suggestion'; suggestion: AutocompleteSuggestion }
+    | { kind: 'loading' }
     | { kind: 'demo' };
 
   const rows: Row[] = useMemo(() => {
     const out: Row[] = [];
-    if (trending.length > 0) {
+    // Show trending only when the query is empty or very short (<= 2 chars)
+    // so they don't compete with ranked suggestions once the user has typed
+    // enough to get meaningful matches.
+    const showTrending = query.trim().length <= 2;
+    if (showTrending && trending.length > 0) {
       out.push({ kind: 'header', text: 'Trending' });
       for (const term of trending.slice(0, 5)) {
         out.push({ kind: 'trending', term });
@@ -121,16 +211,19 @@ export function SearchAutocomplete({
         out.push({ kind: 'suggestion', suggestion });
       }
     }
-    if (AUTOCOMPLETE_DEMO_MODE) {
+    if (isSelfFetching && isLoading && suggestions.length === 0) {
+      out.push({ kind: 'loading' });
+    }
+    if (isDemo) {
       out.push({ kind: 'demo' });
     }
     return out;
-  }, [trending, recent, suggestions, onClearRecent]);
+  }, [trending, recent, suggestions, onClearRecent, query, isSelfFetching, isLoading, isDemo]);
 
   const hasContent = rows.some(
-    (r) => r.kind === 'trending' || r.kind === 'recent' || r.kind === 'suggestion',
+    (r) => r.kind === 'trending' || r.kind === 'recent' || r.kind === 'suggestion' || r.kind === 'loading',
   );
-  if (!hasContent && !AUTOCOMPLETE_DEMO_MODE) return null;
+  if (!hasContent && !isDemo) return null;
 
   const renderItem = ({ item }: { item: Row }) => {
     switch (item.kind) {
@@ -216,6 +309,13 @@ export function SearchAutocomplete({
             </Text>
           </View>
         );
+      case 'loading':
+        return (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
+            <Text style={styles.loadingText}>Searching suggestions…</Text>
+          </View>
+        );
       default:
         return null;
     }
@@ -233,6 +333,8 @@ export function SearchAutocomplete({
         return 'clear';
       case 'suggestion':
         return `suggestion_${item.suggestion.query}_${item.suggestion.type}`;
+      case 'loading':
+        return 'loading';
       case 'demo':
         return 'demo';
       default:
@@ -414,6 +516,18 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       letterSpacing: 0.15,
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.sm,
+    },
+    loadingText: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
     },
   });
 }

@@ -47,13 +47,15 @@ import { friendlyBackendError } from '../services/listingMapper';
 import type { ListingCondition } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult, followUser, unfollowUser } from '../services/profileApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { track } from '../analytics/track';
+import { useFeatureFlag } from '../analytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useHaptic } from '../hooks/useHaptic';
 import { BottomSheet } from '../components/BottomSheet';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { EditorialSection } from '../components/discover/EditorialSection';
-import { FontFamily, Space, Control, Radius } from '../theme/designTokens';
+import { FontFamily, Space, Control, Radius, Type, Stroke } from '../theme/designTokens';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { CATEGORIES } from '../constants/categories';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
@@ -347,6 +349,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const reducedMotion = useReducedMotion();
   const { width: windowWidth } = useWindowDimensions();
   const focusProgress = useSharedValue(0);
+
+  // Feature flag — gates the conversational AI search entry point. Additive
+  // pill; absent when the flag is off (current behaviour). When enabled, an
+  // "AI Search" pill appears on the search landing that opens the
+  // conversational search surface.
+  const conversationalSearchEnabled = useFeatureFlag('conversational_search');
 
   // Geometry follows the current viewport rather than a module-load snapshot,
   // so rotation and split-screen keep the masonry skeleton/final media aligned.
@@ -651,7 +659,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     const backgroundColor = interpolateColor(
       focusProgress.value,
       [0, 1],
-      [colors.surfaceAlt, colors.surfaceAlt],
+      [colors.surfaceAlt, colors.background],
     );
     return {
       backgroundColor,
@@ -762,7 +770,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         setAutocompleteError(result.error ?? null);
         setIsAutocompleteLoading(false);
       });
-    }, 120);
+    }, 300);
 
     return () => {
       cancelled = true;
@@ -783,6 +791,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     if (!trimmedQuery) return;
     updateBrowseFilters({ query: trimmedQuery });
     saveRecentSearch(trimmedQuery);
+    track('search_performed', { query: trimmedQuery, result_count: backendSearchResults.length });
     inputRef.current?.blur();
     setIsSearchFocused(false);
   };
@@ -1213,6 +1222,26 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </View>
                 ) : (
                 <>
+                {/* Conversational AI Search pill — gated by the
+                    conversational_search feature flag. Additive entry
+                    point; absent when the flag is off (current behaviour).
+                    Opens the natural-language search surface. */}
+                {conversationalSearchEnabled ? (
+                  <View style={styles.aiSearchPillWrap}>
+                    <AnimatedPressable
+                      style={[styles.aiSearchPill, { borderColor: `${colors.brand}40`, backgroundColor: `${colors.brand}0D` }]}
+                      onPress={() => navigation.navigate('ConversationalSearch')}
+                      accessibilityRole="button"
+                      accessibilityLabel="AI Search — search in natural language"
+                      accessibilityHint="Opens conversational AI search"
+                    >
+                      <Ionicons name="sparkles" size={16} color={colors.brand} aria-hidden={true} />
+                      <Text style={[styles.aiSearchPillText, { color: colors.brand }]}>Ask AI Search</Text>
+                      <Ionicons name="arrow-forward" size={14} color={colors.brand} aria-hidden={true} />
+                    </AnimatedPressable>
+                  </View>
+                ) : null}
+
                 {/* Discover masonry grid — media first, scaffolds secondary */}
                 <EditorialSection
                   title="Discover"
@@ -1829,6 +1858,30 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  // Conversational AI Search pill — additive entry point gated by the
+  // conversational_search feature flag. A hairline-bordered pill with a
+  // sparkles icon so it reads as a distinct search mode, not decoration.
+  // Brand-tinted colours are applied inline (static styles can't see theme).
+  aiSearchPillWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  aiSearchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    height: Control.hit,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.hairline,
+  },
+  aiSearchPillText: {
+    flex: 1,
+    fontSize: Type.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
   },
 
   // Header — geometry matches Explore's search field for smooth transition.

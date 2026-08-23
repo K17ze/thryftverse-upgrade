@@ -56,7 +56,8 @@ import {
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import { deleteConversationOnApi, leaveGroupOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, leaveGroupOnApi, sendConversationMessageOnApi, fetchConversationMessagesFromApi } from '../services/chatApi';
+import { useChatMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import type { Message as ConversationMessage } from '../domain';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
@@ -101,34 +102,106 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
   const listRef = useRef<FlashListRef<GroupMessage>>(null);
 
-  // Resolve messages from the store conversation (if present).
+  // Resolve messages from the store conversation (if present) and fetch
+  // the latest messages from the backend so the screen reflects real state.
   useEffect(() => {
     if (!conversation) {
-      // Allow a brief loading window; if still missing, show error state.
       const timer = setTimeout(() => setLoadState('error'), 600);
       return () => clearTimeout(timer);
     }
-    const mapped: GroupMessage[] = (conversation.messages ?? [])
-      .filter((m) => !m.isSystem)
-      .map((m) => ({
-        id: m.id,
-        text: m.text ?? '',
-        senderId: m.senderId,
-        senderLabel:
-          conversation.participantProfiles?.find((p) => p.id === m.senderId)?.displayName ??
-          conversation.participantProfiles?.find((p) => p.id === m.senderId)?.username ??
-          'Member',
-        isMe: m.senderId === currentUser?.id,
-        timestamp: m.timestamp,
-      }));
-    setMessages(mapped);
-    setLoadState('ready');
-  }, [conversation, currentUser?.id]);
+    const conv = conversation; // non-optional capture for async closure
+    let cancelled = false;
+
+    async function loadFromApi() {
+      try {
+        const apiMessages = await fetchConversationMessagesFromApi(groupId);
+        if (cancelled) return;
+        const mapped: GroupMessage[] = apiMessages
+          .filter((m) => !m.isSystem)
+          .map((m) => ({
+            id: m.id,
+            text: m.text ?? '',
+            senderId: m.senderId,
+            senderLabel:
+              conv.participantProfiles?.find((p) => p.id === m.senderId)?.displayName ??
+              conv.participantProfiles?.find((p) => p.id === m.senderId)?.username ??
+              'Member',
+            isMe: m.senderId === currentUser?.id,
+            timestamp: m.timestamp,
+          }));
+        setMessages(mapped);
+        setLoadState('ready');
+      } catch {
+        if (cancelled) return;
+        const storeMapped: GroupMessage[] = (conv.messages ?? [])
+          .filter((m) => !m.isSystem)
+          .map((m) => ({
+            id: m.id,
+            text: m.text ?? '',
+            senderId: m.senderId,
+            senderLabel:
+              conv.participantProfiles?.find((p) => p.id === m.senderId)?.displayName ??
+              conv.participantProfiles?.find((p) => p.id === m.senderId)?.username ??
+              'Member',
+            isMe: m.senderId === currentUser?.id,
+            timestamp: m.timestamp,
+          }));
+        setMessages(storeMapped);
+        setLoadState('ready');
+      }
+    }
+
+    void loadFromApi();
+    return () => { cancelled = true; };
+  }, [conversation, currentUser?.id, groupId]);
 
   // Sync deployed agents from the demo service on mount.
   useEffect(() => {
     setDeployedAgents(getDeployedAgents(groupId));
   }, [groupId]);
+
+  // Realtime subscription — append incoming group messages live.
+  // useChatMessageEvent subscribes to the group's conversation topic and
+  // invokes the handler for each `chat.message.created` event. The handler
+  // deduplicates by id, maps the payload to the GroupMessage shape, and
+  // appends to both local state and the conversation store.
+  useChatMessageEvent(
+    groupId,
+    useCallback(
+      (payload) => {
+        // Deduplicate — the server may replay events after a reconnect and
+        // the optimistic local send already inserted by id.
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.id)) return prev;
+
+          const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
+          const senderProfile = conversation?.participantProfiles?.find(
+            (p) => p.id === domainMessage.senderId,
+          );
+          const groupMessage: GroupMessage = {
+            id: domainMessage.id,
+            text: domainMessage.text ?? '',
+            senderId: domainMessage.senderId,
+            senderLabel:
+              senderProfile?.displayName ??
+              senderProfile?.username ??
+              'Member',
+            isMe: Boolean(currentUser?.id && domainMessage.senderId === currentUser.id),
+            timestamp: domainMessage.timestamp,
+          };
+
+          // Persist into the conversation store so the inbox preview and
+          // hydration stay in sync.
+          if (conversation) {
+            appendConversationMessage(conversation.id, domainMessage);
+          }
+
+          return [...prev, groupMessage];
+        });
+      },
+      [conversation, currentUser?.id, appendConversationMessage],
+    ),
+  );
 
   const memberCount = conversation?.participantIds?.length ?? 0;
   const memberProfiles = conversation?.participantProfiles ?? [];
@@ -163,7 +236,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     haptic.light();
 
     const localId = makeStableId('g', 7);
-    const outgoing: GroupMessage = {
+    const optimistic: GroupMessage = {
       id: localId,
       text: trimmed,
       senderId: currentUser?.id ?? 'me',
@@ -172,45 +245,63 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, outgoing]);
+    // Optimistic update — show the message immediately.
+    setMessages((prev) => [...prev, optimistic]);
     setInput('');
 
-    // Persist into the store conversation so it survives navigation.
-    if (conversation) {
-      const storeMessage: ConversationMessage = {
-        id: localId,
-        senderId: currentUser?.id ?? 'me',
-        text: trimmed,
-        timestamp: outgoing.timestamp,
-        type: 'text',
-        sender: 'me',
-      };
-      appendConversationMessage(conversation.id, storeMessage);
-    }
-
-    // If an agent is deployed, surface an agent response (demo).
-    if (deployedAgents.length > 0) {
-      setTimeout(() => {
-        const agentResponse = getAgentResponse(groupId, trimmed);
-        if (!agentResponse.content) return;
-        const agentMsg: GroupMessage = {
-          id: agentResponse.id,
-          text: agentResponse.content,
-          senderId: agentResponse.agentId,
-          senderLabel: deployedAgents[0]?.name ?? 'AI Agent',
-          isMe: false,
-          timestamp: agentResponse.createdAt,
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-        refreshSuggestions(agentResponse.content);
+    // Send to backend. On success, replace the optimistic message with
+    // the server-confirmed one. On failure, show a toast and remove the
+    // optimistic message so the user knows it wasn't sent.
+    const conversationId = conversation?.id ?? groupId;
+    sendConversationMessageOnApi(conversationId, trimmed)
+      .then((serverMessage) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === localId ? {
+            ...m,
+            id: serverMessage.id,
+            timestamp: serverMessage.timestamp,
+          } : m)),
+        );
+        if (conversation) {
+          const storeMessage: ConversationMessage = {
+            id: serverMessage.id,
+            senderId: currentUser?.id ?? 'me',
+            text: trimmed,
+            timestamp: serverMessage.timestamp,
+            type: 'text',
+            sender: 'me',
+          };
+          appendConversationMessage(conversation.id, storeMessage);
+        }
         setSending(false);
-      }, 500);
-    } else {
-      setSending(false);
-    }
+
+        // If an agent is deployed, surface an agent response (demo).
+        if (deployedAgents.length > 0) {
+          setTimeout(() => {
+            const agentResponse = getAgentResponse(groupId, trimmed);
+            if (!agentResponse.content) return;
+            const agentMsg: GroupMessage = {
+              id: agentResponse.id,
+              text: agentResponse.content,
+              senderId: agentResponse.agentId,
+              senderLabel: deployedAgents[0]?.name ?? 'AI Agent',
+              isMe: false,
+              timestamp: agentResponse.createdAt,
+            };
+            setMessages((prev) => [...prev, agentMsg]);
+            refreshSuggestions(agentResponse.content);
+          }, 500);
+        }
+      })
+      .catch(() => {
+        // Remove the optimistic message — the send failed.
+        setMessages((prev) => prev.filter((m) => m.id !== localId));
+        show('Failed to send message. Please try again.', 'error');
+        setSending(false);
+      });
 
     refreshSuggestions(trimmed);
-  }, [input, haptic, currentUser, conversation, appendConversationMessage, deployedAgents, groupId, refreshSuggestions]);
+  }, [input, haptic, currentUser, conversation, appendConversationMessage, deployedAgents, groupId, refreshSuggestions, show]);
 
   const handleSelectSuggestion = useCallback(
     (reply: SuggestedReply) => {

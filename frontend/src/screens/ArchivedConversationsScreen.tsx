@@ -12,6 +12,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import { deleteConversationOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -46,9 +47,14 @@ export default function ArchivedConversationsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            deleteConversation(id);
-            show('Conversation deleted', 'info');
+          onPress: async () => {
+            try {
+              await deleteConversationOnApi(id);
+              deleteConversation(id);
+              show('Conversation deleted', 'info');
+            } catch {
+              show('Could not delete this conversation. Check your connection and try again.', 'error');
+            }
           },
         },
       ]
@@ -65,9 +71,23 @@ export default function ArchivedConversationsScreen() {
         {
           text: 'Clear all',
           style: 'destructive',
-          onPress: () => {
-            archivedConversations.forEach((c) => deleteConversation(c.id));
-            show('Archive cleared', 'info');
+          onPress: async () => {
+            let failedCount = 0;
+            await Promise.all(
+              archivedConversations.map(async (c) => {
+                try {
+                  await deleteConversationOnApi(c.id);
+                  deleteConversation(c.id);
+                } catch {
+                  failedCount++;
+                }
+              })
+            );
+            if (failedCount > 0) {
+              show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
+            } else {
+              show('Archive cleared', 'info');
+            }
           },
         },
       ]

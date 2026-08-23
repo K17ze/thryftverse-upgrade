@@ -25,6 +25,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
+import { deleteConversationOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -68,6 +69,11 @@ export default function MessageRequestsScreen() {
     setPendingId(id);
     setPendingAction('accept');
     try {
+      // Accepting a message request is a frontend-only categorisation change:
+      // the conversation already exists on the backend and the user is already
+      // a member (DMs are created with both participants as members). There is
+      // no server-side "request status" to mutate — we simply move the
+      // conversation from the requests bucket to the main inbox.
       acceptMessageRequest(id);
       show('Request accepted', 'success');
       navigation.navigate('Chat', { conversationId: id });
@@ -89,15 +95,16 @@ export default function MessageRequestsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
             setPendingId(id);
             setPendingAction('delete');
             try {
+              await deleteConversationOnApi(id);
               declineMessageRequest(id);
               show('Request deleted', 'info');
             } catch {
-              show('Could not delete this request. Try again.', 'error');
+              show('Could not delete this request. Check your connection and try again.', 'error');
             } finally {
               setPendingId(null);
               setPendingAction(null);
@@ -128,6 +135,7 @@ export default function MessageRequestsScreen() {
                 await blockUser(counterpartyId);
                 toggleBlockedUser(counterpartyId);
               }
+              await deleteConversationOnApi(id);
               declineMessageRequest(id);
               show(`${name} blocked`, 'info');
             } catch {

@@ -131,7 +131,12 @@ export async function fetchSearchAutocomplete(
     const payload = await fetchJson<{
       ok: boolean;
       query: string;
-      suggestions: Array<{
+      // The backend has two /search/autocomplete handlers. The
+      // SearchAdapter-backed route (search.ts, registered last) returns
+      // `string[]`; the postgres-backed route (searchExtended.ts) returns
+      // `Array<{ text, type, score }>`. Normalise both shapes here so the
+      // frontend is robust to whichever handler is active at runtime.
+      suggestions: Array<string | {
         text: string;
         type?: SearchAutocompleteSuggestionType;
         score?: number;
@@ -142,12 +147,17 @@ export async function fetchSearchAutocomplete(
 
     return {
       suggestions: (payload.suggestions ?? [])
-        .filter((suggestion) => suggestion.text.trim().length > 0)
-        .map((suggestion) => ({
-          text: suggestion.text.trim(),
-          type: suggestion.type ?? 'query',
-          score: Number.isFinite(suggestion.score) ? Number(suggestion.score) : 0,
-        })),
+        .map((suggestion) => {
+          if (typeof suggestion === 'string') {
+            return { text: suggestion.trim(), type: 'query' as const, score: 0 };
+          }
+          return {
+            text: suggestion.text.trim(),
+            type: suggestion.type ?? 'query',
+            score: Number.isFinite(suggestion.score) ? Number(suggestion.score) : 0,
+          };
+        })
+        .filter((suggestion) => suggestion.text.length > 0),
       fromCache: payload.fromCache,
       responseTimeMs: payload.responseTimeMs,
     };

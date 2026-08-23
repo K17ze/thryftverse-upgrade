@@ -56,7 +56,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
 
   useEffect(() => {
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 1);
+    const t = setTimeout(() => setLoading(false), 400);
     return () => clearTimeout(t);
   }, [conversationId]);
 

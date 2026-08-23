@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +14,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Control, Radius, Space, Type, TypeStyles } from '../theme/designTokens';
-import { deleteConversationOnApi, createGroupInviteLinkOnApi, type GroupInviteLink } from '../services/chatApi';
+import { deleteConversationOnApi, leaveGroupOnApi, createGroupInviteLinkOnApi, type GroupInviteLink } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
@@ -26,6 +27,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const conversations = useStore((state) => state.conversations);
+  const currentUser = useStore((state) => state.currentUser);
   const archiveConversation = useStore((state) => state.archiveConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
@@ -79,7 +81,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             haptic.heavy();
             setIsLeaving(true);
             try {
-              await deleteConversationOnApi(conversationId);
+              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
               deleteConversation(conversationId);
               show('You left the group', 'info');
               navigation.navigate('MainTabs', { screen: 'Inbox' });
@@ -151,10 +153,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleCopyInviteLink = () => {
+  const handleCopyInviteLink = async () => {
     if (!inviteLink) return;
     haptic.light();
-    show('Invite link copied', 'success');
+    try {
+      await Clipboard.setStringAsync(inviteLink.inviteLink);
+      show('Invite link copied', 'success');
+    } catch {
+      show('Could not copy link. Long-press to copy manually.', 'error');
+    }
   };
 
   const handleShareInviteLink = async () => {

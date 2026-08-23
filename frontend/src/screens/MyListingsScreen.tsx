@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { haptics } from '../utils/haptics';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'MyListings'>;
@@ -385,6 +386,7 @@ export default function MyListingsScreen() {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      <OfflineBanner onRetry={() => void onRefresh()} />
       {listings.length === 0 ? (
         <View style={styles.body}>
           <EmptyState

@@ -2014,3 +2014,13 @@ export const useStore = create<StoreState>()(
     },
   ),
 );
+
+/**
+ * Guest mode selector — returns true when the user is not authenticated
+ * (no currentUser and isAuthenticated is false). Used by the tab navigator,
+ * HomeScreen, SellScreen, and other surfaces to gate account-bound actions
+ * behind the soft signup wall while allowing browse-only access.
+ */
+export function useIsGuest(): boolean {
+  return useStore((s) => !s.currentUser && !s.isAuthenticated);
+}

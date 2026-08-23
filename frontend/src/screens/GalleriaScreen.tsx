@@ -25,6 +25,8 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   fetchGalleriaCollections,
   fetchGalleriaEditorials,
@@ -452,6 +454,7 @@ export default function GalleriaScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
 
   const [collections, setCollections] = useState<GalleriaCollection[]>([]);
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
@@ -612,7 +615,7 @@ export default function GalleriaScreen() {
         {loading ? (
           <CollectionRailSkeleton />
         ) : collections.length > 0 ? (
-          <View style={styles.sectionWrap}>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
             <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
             {featuredCollection && (
               <FeaturedCollectionCard
@@ -635,7 +638,7 @@ export default function GalleriaScreen() {
                 ))}
               </HorizontalRail>
             )}
-          </View>
+          </Reanimated.View>
         ) : null}
 
         {/* ── Section 3: Featured Assets masonry ── */}
@@ -645,7 +648,7 @@ export default function GalleriaScreen() {
             <FeaturedMasonrySkeleton />
           </>
         ) : featuredAssets.length > 0 ? (
-          <>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
             <View style={styles.masonryGrid}>
               {masonryColumns.map((columnItems, colIdx) => (
@@ -664,7 +667,7 @@ export default function GalleriaScreen() {
                 </View>
               ))}
             </View>
-          </>
+          </Reanimated.View>
         ) : null}
 
         {/* ── Section 4: Editorial list ── */}

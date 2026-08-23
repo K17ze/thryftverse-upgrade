@@ -40,6 +40,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
+import { useFeatureFlag } from '../analytics';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
@@ -113,6 +114,12 @@ export default function FilterScreen() {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Feature flag — gates the advanced filter section (quick price presets).
+  // Additive enhancement; absent when the flag is off (current behaviour).
+  // When enabled, an "Advanced" collapsible section surfaces quick price
+  // range presets that set the existing priceMin/priceMax fields.
+  const advancedFiltersEnabled = useFeatureFlag('advanced_filters');
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
@@ -900,6 +907,56 @@ export default function FilterScreen() {
                     </View>
                   </View>
                 )}
+
+                {/* Advanced Section — collapsible, gated by the
+                    advanced_filters feature flag. Additive; absent when the
+                    flag is off (current behaviour). Surfaces quick price
+                    range presets that set the existing priceMin/priceMax
+                    fields — a progressive-disclosure shortcut for power
+                    users. */}
+                {advancedFiltersEnabled ? (
+                  <>
+                    <View style={styles.sectionDivider} />
+                    <Pressable
+                      style={styles.collapsibleHeader}
+                      onPress={() => toggleSection('advanced')}
+                      accessibilityRole="button"
+                      accessibilityLabel={expandedSections.has('advanced') ? 'Collapse advanced section' : 'Expand advanced section'}
+                      accessibilityState={{ expanded: expandedSections.has('advanced') }}
+                    >
+                      <Text style={styles.sectionHeading}>Advanced</Text>
+                      <Ionicons name={expandedSections.has('advanced') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                    </Pressable>
+                    {expandedSections.has('advanced') && (
+                      <View style={styles.wrapContainer}>
+                        {[
+                          { label: 'Under £20', min: '', max: '20' },
+                          { label: '£20 – £50', min: '20', max: '50' },
+                          { label: '£50 – £100', min: '50', max: '100' },
+                          { label: '£100+', min: '100', max: '' },
+                        ].map((preset) => {
+                          const isActive = priceMin === preset.min && priceMax === preset.max;
+                          return (
+                            <AppButton
+                              key={preset.label}
+                              title={preset.label}
+                              variant="secondary"
+                              size="sm"
+                              style={[styles.chip, isActive && styles.chipActive]}
+                              titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                              onPress={() => {
+                                haptics.press();
+                                setPriceMin(preset.min);
+                                setPriceMax(preset.max);
+                              }}
+                              accessibilityLabel={`Apply price preset: ${preset.label}`}
+                            />
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                ) : null}
               </>
             )}
 

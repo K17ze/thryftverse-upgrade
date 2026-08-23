@@ -18,6 +18,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
+import { useInboxMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption } from '../components/ui/Text';
@@ -129,6 +130,55 @@ export default function InboxScreen() {
   useEffect(() => {
     void loadConversations();
   }, []);
+
+  // Realtime subscription — live-update inbox rows when new messages arrive
+  // on any loaded conversation. useInboxMessageEvent subscribes to every
+  // conversation topic currently in the store and reconciles as the list
+  // changes.
+  useInboxMessageEvent(
+    useCallback(
+      (payload) => {
+        const existing = conversations.find((c) => c.id === payload.conversationId);
+        const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
+
+        // If the conversation isn't in the local store yet, reload the full
+        // inbox so the new thread appears.
+        if (!existing) {
+          void loadConversations();
+          return;
+        }
+
+        // Skip messages the current user just sent — the sending surface
+        // already optimistically updated the row.
+        const isOwnMessage = Boolean(
+          currentUser?.id && payload.senderType === 'user' && payload.senderUserId === currentUser.id,
+        );
+
+        // Deduplicate — the store may already hold this message after an
+        // optimistic send or a prior realtime event.
+        const alreadyStored = existing.messages.some((m) => m.id === domainMessage.id);
+
+        const nextLastMessage =
+          domainMessage.text ??
+          (domainMessage.mediaType === 'image'
+            ? '📷 Photo'
+            : domainMessage.mediaType === 'video'
+              ? '🎥 Video'
+              : domainMessage.systemTitle) ??
+          'New message';
+
+        upsertConversation({
+          ...existing,
+          lastMessage: nextLastMessage,
+          lastMessageTime: domainMessage.timestamp,
+          unread: isOwnMessage ? existing.unread : true,
+          messages: alreadyStored ? existing.messages : [...existing.messages, domainMessage],
+        });
+      },
+      [conversations, currentUser?.id, upsertConversation],
+    ),
+  );
+
   const handleRefresh = async () => {
     haptic.patterns.refresh();
     setRefreshing(true);

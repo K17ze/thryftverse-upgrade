@@ -54,6 +54,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { RootStackParamList, NativeStackNavigationProp } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { useFollowMutation } from '../platform/server';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -93,6 +94,7 @@ export function LiveStreamViewerScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { show } = useToast();
+  const { requireAuth } = useSignupWall();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -235,6 +237,7 @@ export function LiveStreamViewerScreen() {
 
   const handleSendChat = useCallback(async () => {
     if (!chatInput.trim()) return;
+    if (!requireAuth('message_seller')) return;
     const text = chatInput.trim();
     setChatInput('');
     haptic.light();
@@ -247,6 +250,7 @@ export function LiveStreamViewerScreen() {
 
   const handleBid = useCallback(async (amount: number) => {
     if (!currentLot) return;
+    if (!requireAuth('place_bid')) return;
     setBidPending(true);
     haptic.medium();
     try {
@@ -288,6 +292,7 @@ export function LiveStreamViewerScreen() {
 
   const handleBuyNow = useCallback(async () => {
     if (!currentLot) return;
+    if (!requireAuth('purchase')) return;
     setBuyNowPending(true);
     haptic.medium();
     try {
@@ -317,6 +322,7 @@ export function LiveStreamViewerScreen() {
 
   const handleFollowToggle = useCallback(() => {
     haptic.light();
+    if (!requireAuth('follow_seller')) return;
     if (isDemo) {
       // Demo session may use a placeholder sellerId, not a real user record.
       // Following would call the API against a non-existent user; be truthful.

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   ActivityIndicator,
   Pressable,
 } from 'react-native';
@@ -24,6 +23,7 @@ import { requestAccountDeletion } from '../services/accountApi';
 import { logoutFromSession } from '../services/authApi';
 import { clearUserScopedQueryCache } from '../platform/server';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useBiometricGate } from '../hooks/useBiometricGate';
@@ -256,31 +256,19 @@ export default function DeleteAccountScreen({ navigation }: Props) {
             control={control}
             name="confirmText"
             render={({ field: { onChange, onBlur, value } }) => (
-              <View style={styles.fieldWrap}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                  Type {DELETE_CONFIRM_PHRASE} to permanently delete your account
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    { color: colors.textPrimary, borderColor: errors.confirmText ? colors.danger : colors.border },
-                  ]}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  placeholder={DELETE_CONFIRM_PHRASE}
-                  placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Type DELETE to confirm account deletion"
-                  accessibilityHint={`Type the word ${DELETE_CONFIRM_PHRASE} to confirm`}
-                />
-                {errors.confirmText ? (
-                  <Text style={[styles.fieldError, { color: colors.danger }]}>
-                    {errors.confirmText.message}
-                  </Text>
-                ) : null}
-              </View>
+              <AppInput
+                label={`Type ${DELETE_CONFIRM_PHRASE} to permanently delete your account`}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                placeholder={DELETE_CONFIRM_PHRASE}
+                errorText={errors.confirmText?.message}
+                accessibilityLabel="Type DELETE to confirm account deletion"
+                accessibilityHint={`Type the word ${DELETE_CONFIRM_PHRASE} to confirm`}
+                containerStyle={styles.fieldWrap}
+              />
             )}
           />
 
@@ -289,32 +277,20 @@ export default function DeleteAccountScreen({ navigation }: Props) {
             control={control}
             name="password"
             render={({ field: { onChange, onBlur, value } }) => (
-              <View style={styles.fieldWrap}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                  Enter your password to verify identity
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    { color: colors.textPrimary, borderColor: errors.password ? colors.danger : colors.border },
-                  ]}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="Password"
-                  placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Password to verify identity before deletion"
-                  accessibilityHint="Enter your account password to confirm you are the account owner"
-                />
-                {errors.password ? (
-                  <Text style={[styles.fieldError, { color: colors.danger }]}>
-                    {errors.password.message}
-                  </Text>
-                ) : null}
-              </View>
+              <AppInput
+                label="Enter your password to verify identity"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Password"
+                errorText={errors.password?.message}
+                accessibilityLabel="Password to verify identity before deletion"
+                accessibilityHint="Enter your account password to confirm you are the account owner"
+                containerStyle={styles.fieldWrap}
+              />
             )}
           />
 

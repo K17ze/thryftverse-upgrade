@@ -15,6 +15,8 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { deleteConversationOnApi } from '../services/chatApi';
+import { blockUser, unblockUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -73,7 +75,11 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const avatarUrl =
     conversation.avatar ||
     (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar || null : null);
-  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
+  const handle = counterpartyId
+    ? participantNameLookup?.get(counterpartyId)
+      ? `@${participantNameLookup.get(counterpartyId)}`
+      : 'Member'
+    : 'Direct message';
   const mediaCount = conversation.messages?.filter((message) => message.mediaUri).length ?? 0;
   const linkCount =
     conversation.messages?.filter((message) => message.text && /https?:\/\//.test(message.text)).length ?? 0;
@@ -99,11 +105,22 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
-  const toggleBlock = () => {
+  const toggleBlock = async () => {
     if (!counterpartyId) return;
     haptic.heavy();
-    toggleBlockedUser(counterpartyId);
-    show(isBlocked ? 'User unblocked' : 'User blocked', isBlocked ? 'success' : 'info');
+    try {
+      if (isBlocked) {
+        await unblockUser(counterpartyId);
+        toggleBlockedUser(counterpartyId);
+        show('User unblocked', 'success');
+      } else {
+        await blockUser(counterpartyId);
+        toggleBlockedUser(counterpartyId);
+        show('User blocked', 'info');
+      }
+    } catch {
+      show('Could not update block status. Check your connection and try again.', 'error');
+    }
   };
 
   const deleteForMe = () => {
@@ -115,11 +132,16 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         {
           text: 'Delete for me',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteConversation(conversationId);
-            show('Conversation removed from your inbox', 'info');
-            navigation.navigate('MainTabs', { screen: 'Inbox' });
+            try {
+              await deleteConversationOnApi(conversationId);
+              deleteConversation(conversationId);
+              show('Conversation removed from your inbox', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch {
+              show('Could not delete this conversation. Check your connection and try again.', 'error');
+            }
           },
         },
       ]

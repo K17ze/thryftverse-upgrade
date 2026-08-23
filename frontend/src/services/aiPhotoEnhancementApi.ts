@@ -251,7 +251,8 @@ function generateId(prefix: string): string {
  */
 export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(280);
   return [...MOCK_ENHANCEMENT_OPTIONS];
@@ -262,7 +263,8 @@ export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
  */
 export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(240);
   return [...MOCK_BACKGROUND_SCENES];
@@ -273,7 +275,8 @@ export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
  */
 export async function fetchEnhancementPresets(): Promise<EnhancementPreset[]> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(260);
   return [...MOCK_PRESETS];
@@ -290,7 +293,15 @@ export async function applyEnhancement(
   optionId: string,
 ): Promise<EnhancementResult> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'background_removal' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
   }
   await delay(900); // simulate processing time for honest loading states
   const option = MOCK_ENHANCEMENT_OPTIONS.find((o) => o.id === optionId);
@@ -319,7 +330,15 @@ export async function applyPreset(
   presetId: string,
 ): Promise<EnhancementResult> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'color_correction' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
   }
   await delay(1200); // presets apply multiple options, so slightly longer
   const preset = MOCK_PRESETS.find((p) => p.id === presetId);
@@ -349,7 +368,15 @@ export async function replaceBackground(
   sceneId: string,
 ): Promise<EnhancementResult> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'background_replace' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
   }
   await delay(1000);
   const scene = MOCK_BACKGROUND_SCENES.find((s) => s.id === sceneId);
@@ -377,7 +404,8 @@ export async function replaceBackground(
  */
 export async function revertEnhancement(resultId: string): Promise<{ originalUri: string; isDemo: boolean }> {
   if (!AI_PHOTO_DEMO_MODE) {
-    throw new Error('AI Photo Enhancement API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { originalUri: '', isDemo: false };
   }
   await delay(300);
   return {

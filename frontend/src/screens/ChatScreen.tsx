@@ -663,6 +663,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     syncError,
     isOffline,
     showScrollToBottom,
+    unreadBelowCount,
     recentlyDeleted,
     composerSending,
     listRef,
@@ -2137,6 +2138,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         <ScrollToBottomFAB
           visible={showScrollToBottom}
+          unreadCount={unreadBelowCount}
           onPress={scrollToBottom}
         />
 

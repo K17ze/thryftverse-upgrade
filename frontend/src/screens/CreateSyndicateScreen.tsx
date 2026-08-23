@@ -27,7 +27,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   CoOwnIssueStudioStep,
   CoOwnStickyActionDock,
@@ -55,6 +57,7 @@ export default function CreateCoOwnScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
@@ -418,7 +421,7 @@ export default function CreateCoOwnScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={1}
               totalSteps={3}
@@ -465,12 +468,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               )}
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 2: Configure units and price ── */}
         {stage === 'configure' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={2}
               totalSteps={3}
@@ -659,12 +662,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               </View>
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 3: Review and issue ── */}
         {stage === 'review' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={3}
               totalSteps={3}
@@ -725,12 +728,12 @@ export default function CreateCoOwnScreen() {
               {/* Risk disclosure */}
               <CoOwnRiskDisclosure />
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
         {stage === 'recourse' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={4}
               totalSteps={4}
@@ -752,9 +755,20 @@ export default function CreateCoOwnScreen() {
                     </Text>
                   </View>
                 </View>
-                <Text style={[styles.recourseLiabilityNote, { color: colors.textSecondary }]}>
-                  If you fail to safeguard the physical asset, prove authenticity on demand, or produce the item when requested by a unit holder, you are legally liable to repay the total traded value of this asset.
-                </Text>
+                <View style={styles.recourseLiabilityBullets}>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you fail to safeguard the physical asset in the condition stated
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you cannot prove authenticity when requested by a unit holder
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you cannot produce the physical item on demand within 14 days
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2192'} You are legally liable to repay the total traded value of this asset
+                  </Text>
+                </View>
               </View>
 
               {/* Obligations list */}
@@ -805,7 +819,7 @@ export default function CreateCoOwnScreen() {
                 </Text>
               </Pressable>
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
       </ScrollView>
 
@@ -1186,7 +1200,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: Type.priceList.letterSpacing,
   },
-  recourseLiabilityNote: {
+  recourseLiabilityBullets: {
+    gap: Space.xs,
+  },
+  recourseBulletText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.size + 6,

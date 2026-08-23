@@ -18,7 +18,9 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius, Stroke, Control } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CURRENCIES } from '../constants/currencies';
+import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
@@ -58,6 +60,7 @@ type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' |
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
   // via this themed proxy so the screen is fully dark-mode compatible.
@@ -541,6 +544,7 @@ export default function EditListingScreen() {
       });
 
       setSaveStage('completed');
+      haptics.success();
       showToast('Listing updated successfully.', 'success');
       // Refresh feed + invalidate cached detail so the edit propagates
       // immediately when the user returns to the feed or profile.
@@ -790,8 +794,8 @@ export default function EditListingScreen() {
               onRemoveItem={handleRemoveItem}
               onRetryItem={handleRetryItem}
               canRemoveItem={canRemoveItem}
-              reorderEnabled={false}
-              lockedNote="Existing listing photos cannot be removed or reordered yet."
+              reorderEnabled={true}
+              lockedNote="Existing listing photos cannot be removed yet."
               removeLabel="Remove"
             />
           ) : (
@@ -804,7 +808,7 @@ export default function EditListingScreen() {
               onRetryItem={handleRetryItem}
               onPickFromLibrary={handlePickFromLibrary}
               onPickFromCamera={handlePickFromCamera}
-              reorderEnabled={false}
+              reorderEnabled={true}
               canRemoveItem={() => false}
               lockedNote="You do not have permission to edit this listing."
             />
@@ -824,7 +828,11 @@ export default function EditListingScreen() {
               <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {!photoGuideCollapsed && (
-              <View style={styles.photoGuideTips}>
+              <Reanimated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(200)}
+                exiting={reducedMotion ? undefined : FadeOut.duration(200)}
+                style={styles.photoGuideTips}
+              >
                 <View style={styles.photoGuideTipRow}>
                   <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
@@ -837,7 +845,7 @@ export default function EditListingScreen() {
                   <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
                 </View>
-              </View>
+              </Reanimated.View>
             )}
           </View>
 
@@ -1205,24 +1213,32 @@ export default function EditListingScreen() {
             <View style={[styles.qualityBarFill, { width: `${qualityResult.score}%`, backgroundColor: colors.brand }]} />
           </View>
           {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
-            <View style={[styles.qualityTipsRow, t.qualityTipsRow]}>
+            <Reanimated.View
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
+              style={[styles.qualityTipsRow, t.qualityTipsRow]}
+            >
               {qualityResult.missingItems.slice(0, 6).map((item) => (
                 <View key={item.key} style={styles.qualityTipChip}>
                   <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{item.label}</Text>
                 </View>
               ))}
-            </View>
+            </Reanimated.View>
           )}
           {qualityTipsExpanded && qualityResult.tips.length > 0 && (
-            <View style={styles.qualityTipsList}>
+            <Reanimated.View
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
+              style={styles.qualityTipsList}
+            >
               {qualityResult.tips.slice(0, 4).map((tip, i) => (
                 <View key={i} style={styles.qualityTipBulletRow}>
                   <Text style={[styles.qualityTipBullet, t.qualityTipsText]}>•</Text>
                   <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{tip}</Text>
                 </View>
               ))}
-            </View>
+            </Reanimated.View>
           )}
         </View>
       )}

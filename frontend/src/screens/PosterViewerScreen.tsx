@@ -1682,7 +1682,7 @@ function ParticleHeart({ config }: { config: ParticleConfig }) {
   }));
 
   return (
-    <Reanimated.Text style={[heartBurstStyles.particle, animatedStyle]} allowFontScaling={false}>
+    <Reanimated.Text style={[heartBurstStyles.particle, animatedStyle]} allowFontScaling={false} /* decorative animation particle — not content text; must not scale with Dynamic Type */>
       ❤️
     </Reanimated.Text>
   );
@@ -1708,7 +1708,7 @@ function ReducedMotionHeart({ x, y }: { x: number; y: number }) {
 
   return (
     <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">
-      <Reanimated.Text style={[heartBurstStyles.text, animatedStyle]} allowFontScaling={false}>
+      <Reanimated.Text style={[heartBurstStyles.text, animatedStyle]} allowFontScaling={false} /* decorative animation particle — not content text; must not scale with Dynamic Type */>
         ❤️
       </Reanimated.Text>
     </View>

@@ -13,6 +13,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
@@ -24,6 +32,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchLiveSessions,
   LIVE_CATEGORIES,
@@ -41,9 +50,31 @@ const UPCOMING_THUMB_SIZE = 72;
 
 // ── Live dot ──
 function LivePulse({ size = 8, color }: { size?: number; color: string }) {
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      scale.value = 1;
+      return;
+    }
+    // Subtle pulse: scale 1.0 → 1.3 → 1.0, looping infinitely.
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.0, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+    );
+  }, [reducedMotion, scale]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <View
-      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}
+    <Reanimated.View
+      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, animStyle]}
     />
   );
 }

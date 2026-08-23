@@ -53,6 +53,10 @@ export interface ProductMediaItem {
   focalPoint?: { x: number; y: number } | null;
   /** `contain` is the product-safe default; `cover` requires authored crop data. */
   fit?: 'contain' | 'cover';
+  /** BlurHash string for progressive image loading. When provided,
+   * CachedImage renders the blurhash placeholder while the full image
+   * loads, then crossfades. */
+  blurhash?: string | null;
 }
 
 export type ViewerRole =

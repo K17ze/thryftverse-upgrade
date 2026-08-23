@@ -18,6 +18,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -875,10 +876,26 @@ export default function ClosetScreen() {
           </View>
         ) : null}
 
-        {activeTab === 'SAVED' && renderSavedContent()}
-        {activeTab === 'WISHLIST' && renderWishlistContent()}
-        {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
-        {activeTab === 'OUTFITS' && renderOutfitsContent()}
+        {activeTab === 'SAVED' && (
+          <Reanimated.View key="SAVED" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderSavedContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'WISHLIST' && (
+          <Reanimated.View key="WISHLIST" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderWishlistContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'COLLECTIONS' && (
+          <Reanimated.View key="COLLECTIONS" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderCollectionsContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'OUTFITS' && (
+          <Reanimated.View key="OUTFITS" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderOutfitsContent()}
+          </Reanimated.View>
+        )}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>

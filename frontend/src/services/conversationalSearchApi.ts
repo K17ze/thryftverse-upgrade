@@ -354,7 +354,8 @@ const MOCK_CONVERSATIONS = new Map<string, SearchConversation>();
  */
 export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
   if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
-    throw new Error('Conversational Search API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(180);
   return [...MOCK_SUGGESTIONS];
@@ -367,7 +368,14 @@ export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
  */
 export async function startConversation(query: string): Promise<SearchConversation> {
   if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
-    throw new Error('Conversational Search API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('conv'),
+      query,
+      messages: [],
+      createdAt: nowIso(),
+      isDemo: false,
+    };
   }
   await delay(520); // simulate processing latency for honest loading state
 
@@ -414,7 +422,14 @@ export async function continueConversation(
   query: string,
 ): Promise<ChatMessage> {
   if (!CONVERSATIONAL_SEARCH_DEMO_MODE) {
-    throw new Error('Conversational Search API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('msg'),
+      role: 'assistant',
+      content: 'Conversational search is coming soon.',
+      timestamp: nowIso(),
+      isDemo: false,
+    };
   }
   await delay(520);
 

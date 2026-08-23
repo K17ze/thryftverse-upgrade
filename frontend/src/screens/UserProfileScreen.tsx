@@ -24,6 +24,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   runOnJS,
+  FadeIn,
 } from 'react-native-reanimated';
 // Note: useAnimatedScrollHandler + AnimatedFlashList crashes on web due to
 // Reanimated 4.x not backporting the FlashList scroll-event fix from 3.12.
@@ -52,6 +53,8 @@ import {
 } from '../platform/server';
 import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -71,6 +74,7 @@ import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -108,7 +112,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
+  const { requireAuth } = useSignupWall();
   const { colors, isDark } = useAppTheme();
+  const haptic = useHaptic();
 
   // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
@@ -346,10 +352,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // Handlers
   const handleShare = useCallback(async () => {
+    haptic.light();
     try {
       await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
-  }, [displayUsername, profileDeepLink]);
+  }, [displayUsername, profileDeepLink, haptic]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -362,12 +369,18 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   }, [profileDeepLink, showToast]);
 
   const handleMessageProfile = useCallback(() => {
+    haptic.light();
+    if (!requireAuth('message_seller')) return;
     if (!targetUserId) return;
     if (viewer && !viewer.canMessage) return;
     navigation.navigate('NewMessage', { preselectedUserId: targetUserId, preselectedDisplayName: displayUsername });
-  }, [displayUsername, navigation, targetUserId, viewer]);
+  }, [requireAuth, displayUsername, navigation, targetUserId, viewer, haptic]);
 
-  const handleFollowToggle = useCallback(() => { if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing); }, [targetUserId, viewer, followMutation]);
+  const handleFollowToggle = useCallback(() => {
+    haptic.light();
+    if (!requireAuth('follow_seller')) return;
+    if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing);
+  }, [requireAuth, targetUserId, viewer, followMutation, haptic]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
   const handleBlock = useCallback(() => { setMoreSheetVisible(false); setBlockConfirmVisible(true); }, []);
@@ -630,6 +643,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
+      <OfflineBanner onRetry={() => void handleRefresh()} />
+
       {/* Top utility controls - overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
@@ -776,7 +791,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           onContentSizeChange={handleContentSizeChange}
         >
           {listHeader}
-          {listEmpty}
+          {listEmpty && (
+            <Reanimated.View
+              key={currentDestination}
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            >
+              {listEmpty}
+            </Reanimated.View>
+          )}
           {listData.length > 0 && (
             numColumns > 1 ? (
               <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP }}>
@@ -803,7 +825,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           renderItem={renderItem}
           keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={listEmpty}
+          ListEmptyComponent={listEmpty ? (
+            <Reanimated.View
+              key={currentDestination}
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            >
+              {listEmpty}
+            </Reanimated.View>
+          ) : null}
           ListFooterComponent={listFooter}
           numColumns={numColumns}
           {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } } : {})}
@@ -814,7 +843,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-          key={`list-${numColumns}`}
+          key={`list-${currentDestination}`}
           onContentSizeChange={handleContentSizeChange}
         />
       )}

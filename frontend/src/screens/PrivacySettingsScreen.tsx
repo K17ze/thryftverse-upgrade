@@ -46,8 +46,10 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         setSearchVisibility(prefs.searchVisibility);
       })
       .catch(() => {
-        // If the backend is unreachable, leave values as null so the posture
-        // hero shows a loading skeleton rather than a fabricated score.
+        if (!mounted) return;
+        setActivityStatusVisible(true);
+        setSearchVisibility('visible');
+        show('Unable to load privacy preferences — using defaults', 'error');
       });
     return () => { mounted = false; };
   }, []);

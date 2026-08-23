@@ -10,6 +10,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
@@ -46,6 +47,7 @@ function labelForType(type: string, lineType: string): string {
 }
 
 export default function BalanceHistoryScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();

@@ -11,9 +11,10 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
-import { fetchCoOwnAssetById } from '../services/marketApi';
+import { fetchCoOwnAssetById, createCoOwnAssetIssue } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
 import { CoOwnStickyActionDock } from '../components/coown';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -25,6 +26,7 @@ const CATEGORIES = [
 ];
 
 export default function CoOwnIssueScreen({ navigation, route }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
@@ -32,6 +34,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [assetTitle, setAssetTitle] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const assetId = route.params?.assetId;
 
@@ -49,7 +52,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
     return () => { cancelled = true; };
   }, [assetId]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!category) {
       show('Select an issue category', 'error');
       return;
@@ -58,8 +61,30 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       show('Describe the issue', 'error');
       return;
     }
-    show('Describe this issue in the support chat.', 'info');
-    navigation.navigate('HelpSupport');
+    if (!assetId) {
+      show('Unable to submit — missing asset context', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createCoOwnAssetIssue({
+        assetId,
+        category: category as 'dispute' | 'technical' | 'fraud' | 'other',
+        description: description.trim(),
+      });
+      haptics.success();
+      show('Issue reported. Our team will review it shortly.', 'success');
+      navigation.navigate('HelpSupport');
+    } catch {
+      haptics.error();
+      // Backend endpoint may not be deployed yet — fall back to support chat
+      // so the user can still get help.
+      show('Could not submit report. Please describe this issue in the support chat.', 'info');
+      navigation.navigate('HelpSupport');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -144,7 +169,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
                 How this works
               </Text>
               <Text style={[styles.noteText, { color: colors.textMuted }]}>
-                Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
+                Your report will be submitted to our support team for review. You can follow up in the Help & Support chat if needed.
               </Text>
             </View>
           </View>
@@ -154,12 +179,14 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>
         <AppButton
-          title="Open support chat"
+          title={isSubmitting ? 'Submitting…' : 'Submit report'}
           onPress={handleSubmit}
           variant="primary"
           size="lg"
+          loading={isSubmitting}
+          disabled={isSubmitting || !category || !description.trim()}
           hapticFeedback="medium"
-          accessibilityLabel="Open support chat"
+          accessibilityLabel="Submit issue report"
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>

@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    minHeight: 50,
+    minHeight: 56,
     gap: Space.sm,
   },
   // 44pt transparent hit target — no visible chrome, just the touch area.

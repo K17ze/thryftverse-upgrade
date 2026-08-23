@@ -15,6 +15,7 @@ import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type To
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { useFeatureFlag } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -249,6 +250,10 @@ export default function SellerAnalyticsScreen() {
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { isOffline } = useConnectivity();
+
+  // Feature flag — gates the enhanced Seller Analytics v2 metrics section.
+  // Defaults to false (current behaviour) when PostHog is not loaded.
+  const sellerAnalyticsV2Enabled = useFeatureFlag('seller_analytics_v2');
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
@@ -580,6 +585,47 @@ export default function SellerAnalyticsScreen() {
           ))}
         </View>
 
+        {/* ── Seller Analytics v2 — enhanced metrics (gated by feature flag) ──
+            Additive section: engagement ratio + active inventory count. When
+            the flag is off this section is absent (current behaviour). */}
+        {sellerAnalyticsV2Enabled ? (
+          <View style={styles.v2Section}>
+            <View style={styles.v2Header}>
+              <Ionicons name="sparkles" size={14} color={colors.brand} />
+              <Text style={[styles.v2HeaderTitle, { color: colors.textPrimary }]}>Engagement insights</Text>
+            </View>
+            <View style={styles.kpiList}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="heart-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Like-to-view ratio</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {totalViews > 0 ? `${((totalLikes / totalViews) * 100).toFixed(1)}%` : '—'}
+                </Text>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Active listings</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {listings.filter((l) => l.status === 'active').length}
+                </Text>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Avg rating</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {avgRating != null ? `${avgRating.toFixed(1)}${reviewCount > 0 ? ` (${reviewCount})` : ''}` : '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         {/* ── Top listings — horizontal scroll of compact cards ── */}
         <View>
           <View style={styles.sectionHeader}>
@@ -774,6 +820,24 @@ function createStyles(colors: ThemeColors) {
     // ── KPI flat rows ──
     kpiList: {
       marginTop: Space.sm,
+    },
+    // ── Seller Analytics v2 — engagement insights section ──
+    v2Section: {
+      marginTop: Space.lg,
+      paddingTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    v2Header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginBottom: Space.xs,
+    },
+    v2HeaderTitle: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
     },
     kpiRow: {
       flexDirection: 'row',

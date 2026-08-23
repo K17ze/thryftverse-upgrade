@@ -137,32 +137,28 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       </View>
 
       {/* Referral Code */}
-      <View>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
-          <View style={styles.codeRow}>
-            <Text style={styles.codeText}>{referralCode}</Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-              <Ionicons name="copy-outline" size={18} color={ACCENT} />
-              <Text style={styles.copyText}>Copy</Text>
-            </AnimatedPressable>
-          </View>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
+        <View style={styles.codeRow}>
+          <Text style={styles.codeText}>{referralCode}</Text>
+          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
+            <Ionicons name="copy-outline" size={18} color={ACCENT} />
+            <Text style={styles.copyText}>Copy</Text>
+          </AnimatedPressable>
         </View>
       </View>
 
       {/* Share Link */}
-      <View>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
-          <View style={styles.linkRow}>
-            <Text style={styles.linkText} numberOfLines={1}>
-              {inviteLink}
-            </Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-              <Ionicons name="copy-outline" size={18} color={ACCENT} />
-              <Text style={styles.copyText}>Copy</Text>
-            </AnimatedPressable>
-          </View>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+        <View style={styles.linkRow}>
+          <Text style={styles.linkText} numberOfLines={1}>
+            {inviteLink}
+          </Text>
+          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
+            <Ionicons name="copy-outline" size={18} color={ACCENT} />
+            <Text style={styles.copyText}>Copy</Text>
+          </AnimatedPressable>
         </View>
       </View>
 
@@ -186,104 +182,98 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       </View>
 
       {/* Rewards Summary */}
-      <View>
-        <View style={styles.rewardsCard}>
-          <View style={styles.rewardsHeader}>
-            <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
-            <Text style={styles.rewardsTitle}>Your rewards</Text>
-          </View>
-          {statsUnavailable ? (
-            <View style={styles.statsUnavailableRow}>
-              <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
-              <Text style={styles.statsUnavailableText}>
-                Stats unavailable right now. Pull down to refresh or try again later.
-              </Text>
-            </View>
-          ) : !hasReferrals ? (
-            <View style={styles.statsUnavailableRow}>
-              <Ionicons name="people-outline" size={20} color={MUTED} />
-              <Text style={styles.statsUnavailableText}>
-                No referrals yet — share your code to start earning.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.statsRow}>
-              <View style={styles.statCell}>
-                <Text style={styles.statValue}>{referralStats.invited}</Text>
-                <Text style={styles.statLabel}>Invited</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={styles.statValue}>{referralStats.joined}</Text>
-                <Text style={styles.statLabel}>Joined</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
-                <Text style={styles.statLabel}>Rewarded</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
-                <Text style={styles.statLabel}>Credits</Text>
-              </View>
-            </View>
-          )}
-          <Text style={styles.rewardsFootnote}>
-            Earn Thryftverse credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
-          </Text>
+      <View style={styles.flatSection}>
+        <View style={styles.rewardsHeader}>
+          <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
+          <Text style={styles.rewardsTitle}>Your rewards</Text>
         </View>
+        {statsUnavailable ? (
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              Stats unavailable right now. Pull down to refresh or try again later.
+            </Text>
+          </View>
+        ) : !hasReferrals ? (
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="people-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              No referrals yet — share your code to start earning.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
+              <Text style={styles.statValue}>{referralStats.invited}</Text>
+              <Text style={styles.statLabel}>Invited</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={styles.statValue}>{referralStats.joined}</Text>
+              <Text style={styles.statLabel}>Joined</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
+              <Text style={styles.statLabel}>Rewarded</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
+              <Text style={styles.statLabel}>Credits</Text>
+            </View>
+          </View>
+        )}
+        <Text style={styles.rewardsFootnote}>
+          Earn Thryftverse credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
+        </Text>
       </View>
 
-      {/* Loyalty Tier Card — tier is derived from referral activity only.
+      {/* Loyalty Tier — tier is derived from referral activity only.
           Per AGENTS.md §11, the tier badge is only shown when actually earned.
           We do NOT fabricate a "Bronze Member" tier for zero referrals, and we
           do NOT fabricate perks (reduced fees, priority support, exclusive
           drops) that the backend does not actually provide. */}
       {loyaltyTier && (
-        <View>
-          <View style={styles.loyaltyCard}>
-            <View style={styles.loyaltyHeader}>
-              <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
-                <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
-              </View>
-              <View style={styles.loyaltyInfo}>
-                <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
-                <Text style={styles.loyaltySubtext}>
-                  {loyaltyTier.nextThreshold
-                    ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Silver' ? 'Gold' : 'Silver'}`
-                    : 'Highest referral tier reached'}
-                </Text>
-              </View>
+        <View style={styles.flatSection}>
+          <View style={styles.loyaltyHeader}>
+            <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
+              <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
             </View>
-            <View style={styles.loyaltyProgressTrack}>
-              <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
+            <View style={styles.loyaltyInfo}>
+              <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
+              <Text style={styles.loyaltySubtext}>
+                {loyaltyTier.nextThreshold
+                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Silver' ? 'Gold' : 'Silver'}`
+                  : 'Highest referral tier reached'}
+              </Text>
             </View>
-            <Text style={styles.loyaltyFootnote}>
-              Tier is based on successful referrals only.
-            </Text>
           </View>
+          <View style={styles.loyaltyProgressTrack}>
+            <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
+          </View>
+          <Text style={styles.loyaltyFootnote}>
+            Tier is based on successful referrals only.
+          </Text>
         </View>
       )}
 
       {/* How it works */}
-      <View>
-        <View style={styles.howItWorksCard}>
-          <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-          {([
-            { icon: 'share-outline', text: 'Share your referral link with friends' },
-            { icon: 'person-add-outline', text: 'They sign up and create an account' },
-            { icon: 'pricetag-outline', text: 'They list their first item for sale' },
-            { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
-          ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
-            <View key={i} style={styles.stepRow}>
-              <View style={styles.stepIconWrap}>
-                <Ionicons name={step.icon} size={18} color={ACCENT} />
-              </View>
-              <Text style={styles.stepText}>{step.text}</Text>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
+        {([
+          { icon: 'share-outline', text: 'Share your referral link with friends' },
+          { icon: 'person-add-outline', text: 'They sign up and create an account' },
+          { icon: 'pricetag-outline', text: 'They list their first item for sale' },
+          { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
+        ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
+          <View key={i} style={[styles.stepRow, i < 3 && styles.stepRowBordered]}>
+            <View style={styles.stepIconWrap}>
+              <Ionicons name={step.icon} size={18} color={ACCENT} />
             </View>
-          ))}
-        </View>
+            <Text style={styles.stepText}>{step.text}</Text>
+          </View>
+        ))}
       </View>
     </FlagshipScreen>
   );
@@ -292,6 +282,12 @@ export default function InviteFriendsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: { padding: Space.lg },
+    flatSection: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: Space.lg,
+      marginBottom: Space.lg,
+    },
     heroCard: {
       backgroundColor: colors.surface,
       borderWidth: Stroke.standard,
@@ -333,12 +329,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm,
     },
     codeText: {
       fontSize: Type.title.size,
@@ -350,12 +341,7 @@ function createStyles(colors: ThemeColors) {
     linkRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm,
     },
     linkText: {
       flex: 1,
@@ -394,14 +380,6 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.meta.letterSpacing,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
-    },
-    rewardsCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.lg,
     },
     rewardsHeader: {
       flexDirection: 'row',
@@ -448,14 +426,6 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight + 2,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-    },
-    loyaltyCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.xl,
     },
     loyaltyHeader: {
       flexDirection: 'row',
@@ -516,19 +486,15 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },
-    howItWorksCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.xl,
-    },
     stepRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
+    },
+    stepRowBordered: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     stepIconWrap: {
       width: Control.chromeCompact,

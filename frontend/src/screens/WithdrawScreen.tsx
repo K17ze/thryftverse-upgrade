@@ -50,6 +50,7 @@ import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type WithdrawStep = 'form' | 'confirm' | 'success';
 
@@ -61,6 +62,7 @@ interface WithdrawSuccessData {
 }
 
 export default function WithdrawScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);

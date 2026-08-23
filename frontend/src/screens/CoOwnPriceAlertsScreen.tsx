@@ -34,6 +34,7 @@ import {
   type CoOwnPriceAlert,
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
 
@@ -46,6 +47,7 @@ function formatDate(iso: string): string {
 }
 
 export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();

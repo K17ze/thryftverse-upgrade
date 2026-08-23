@@ -24,12 +24,15 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   fetchMoodboards,
   fetchPublicMoodboards,
   MOODBOARD_DEMO_MODE,
   type Moodboard,
 } from '../services/moodboardApi';
+import { useFeatureFlag } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -330,6 +333,13 @@ export default function MoodboardHomeScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
+
+  // Feature flag — gates the moodboard beta badge on the creation entry
+  // points. Additive indicator; absent when the flag is off (current
+  // behaviour). When enabled, the Create and Studio buttons surface a
+  // "Beta" label so users know the collage tooling is in beta.
+  const moodboardBetaEnabled = useFeatureFlag('moodboard_beta');
 
   const [userMoodboards, setUserMoodboards] = useState<Moodboard[]>([]);
   const [publicMoodboards, setPublicMoodboards] = useState<Moodboard[]>([]);
@@ -516,11 +526,16 @@ export default function MoodboardHomeScreen() {
               activeOpacity={0.8}
               scaleValue={0.96}
               accessibilityRole="button"
-              accessibilityLabel="Create a new moodboard"
+              accessibilityLabel={moodboardBetaEnabled ? 'Create a new moodboard (beta)' : 'Create a new moodboard'}
               accessibilityHint="Opens the moodboard editor to create a new collage"
             >
               <Ionicons name="add" size={20} color={colors.textInverse} />
               <Text style={styles.createButtonText}>Create</Text>
+              {moodboardBetaEnabled ? (
+                <View style={styles.betaBadge} pointerEvents="none" accessible={false}>
+                  <Text style={styles.betaBadgeText}>Beta</Text>
+                </View>
+              ) : null}
             </AnimatedPressable>
           </View>
         </View>
@@ -532,7 +547,7 @@ export default function MoodboardHomeScreen() {
             <UserRailSkeleton />
           </View>
         ) : userMoodboards.length > 0 ? (
-          <View style={styles.sectionWrap}>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
             <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
             <HorizontalRail
               contentContainerStyle={styles.railContent}
@@ -547,7 +562,7 @@ export default function MoodboardHomeScreen() {
                 />
               ))}
             </HorizontalRail>
-          </View>
+          </Reanimated.View>
         ) : null}
 
         {/* ── Section 2: Discover Moodboards masonry ── */}
@@ -557,7 +572,7 @@ export default function MoodboardHomeScreen() {
             <DiscoverMasonrySkeleton />
           </View>
         ) : publicMoodboards.length > 0 ? (
-          <View style={styles.sectionWrap}>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
             <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
             <View style={styles.masonryGrid}>
               {masonryColumns.map((col, colIdx) => (
@@ -576,7 +591,7 @@ export default function MoodboardHomeScreen() {
                 </View>
               ))}
             </View>
-          </View>
+          </Reanimated.View>
         ) : null}
 
         {/* ── Empty user moodboards inline prompt ── */}
@@ -718,6 +733,24 @@ function useStyles() {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
+        },
+        // Beta badge — additive indicator gated by the moodboard_beta flag.
+        // A compact label on the Create button so users know the collage
+        // tooling is in beta. Absent when the flag is off.
+        betaBadge: {
+          marginLeft: Space.xxs,
+          paddingHorizontal: Space.xs,
+          paddingVertical: 1,
+          borderRadius: Radius.sm,
+          backgroundColor: `${colors.textInverse}24`,
+        },
+        betaBadgeText: {
+          fontSize: 9,
+          lineHeight: 12,
+          fontFamily: Typography.family.bold,
+          color: colors.textInverse,
+          letterSpacing: 0.3,
+          textTransform: 'uppercase',
         },
         // ── Section wrappers ──
         sectionWrap: {

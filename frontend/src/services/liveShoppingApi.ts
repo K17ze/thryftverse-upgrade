@@ -440,7 +440,8 @@ export async function fetchLiveSessions(
  */
 export async function fetchLiveSession(id: string): Promise<LiveSession | null> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(360);
   const session = MOCK_SESSIONS.find((s) => s.id === id) ?? null;
@@ -452,7 +453,8 @@ export async function fetchLiveSession(id: string): Promise<LiveSession | null> 
  */
 export async function fetchLiveChatMessages(sessionId: string): Promise<LiveChatMessage[]> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(200);
   // Both params acknowledged — sessionId selects the room in a real backend.
@@ -493,7 +495,8 @@ export async function joinLiveSession(id: string): Promise<LiveJoinToken> {
  */
 export async function leaveLiveSession(id: string): Promise<void> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return;
   }
   void id;
   await delay(80);
@@ -508,7 +511,8 @@ export async function placeLiveBid(
   amount: number,
 ): Promise<{ success: boolean; currentBid: number; bidCount: number; isHighBidder: boolean }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production — bids cannot be placed');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, currentBid: 0, bidCount: 0, isHighBidder: false };
   }
   await delay(520);
   const session = MOCK_SESSIONS.find((s) => s.id === sessionId);
@@ -852,7 +856,8 @@ const STREAM_CHAT_SEED: Omit<LiveStreamChatMessage, 'id' | 'timestamp'>[] = [
  */
 export async function fetchStreamChatHistory(streamId: string): Promise<LiveStreamChatMessage[]> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(200);
   void streamId;
@@ -864,7 +869,8 @@ export async function fetchStreamChatHistory(streamId: string): Promise<LiveStre
  */
 export async function fetchLiveStream(streamId: string): Promise<LiveStream | null> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(300);
   const stream = MOCK_STREAMS[streamId];
@@ -887,7 +893,8 @@ export async function fetchLiveStream(streamId: string): Promise<LiveStream | nu
  */
 export async function connectToStream(streamId: string): Promise<LiveStream | null> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(150);
   const stream = MOCK_STREAMS[streamId];
@@ -1063,7 +1070,8 @@ export async function placeStreamBid(
   amount: number,
 ): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production — bids cannot be placed');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, lot: null, bid: null, error: 'Live Shopping not available' };
   }
   await delay(400);
   const conn = connections.get(streamId);
@@ -1116,7 +1124,8 @@ export async function sendStreamChatMessage(
   message: string,
 ): Promise<{ success: boolean; message: LiveStreamChatMessage | null }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, message: null };
   }
   await delay(100);
   const conn = connections.get(streamId);
@@ -1143,7 +1152,8 @@ export async function buyNowDuringStream(
   lotId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production — purchases cannot be made');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, lot: null, error: 'Live Shopping not available' };
   }
   await delay(350);
   const conn = connections.get(streamId);
@@ -1200,7 +1210,8 @@ export async function buyNowDuringStream(
  */
 export async function likeStream(streamId: string): Promise<{ success: boolean; totalLikes: number }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, totalLikes: 0 };
   }
   await delay(80);
   const conn = connections.get(streamId);
@@ -1221,7 +1232,8 @@ export async function advanceToNextLot(
   streamId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, lot: null, error: 'Live Shopping not available' };
   }
   await delay(200);
   const conn = connections.get(streamId);
@@ -1284,7 +1296,8 @@ export async function endCurrentLot(
   streamId: string,
 ): Promise<{ success: boolean; lot: LiveLot | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, lot: null, error: 'Live Shopping not available' };
   }
   await delay(200);
   const conn = connections.get(streamId);
@@ -1326,7 +1339,8 @@ export async function endLiveStream(
   streamId: string,
 ): Promise<{ success: boolean; summary: StreamEndEventPayload | null }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, summary: null };
   }
   await delay(300);
   const conn = connections.get(streamId);
@@ -1365,7 +1379,8 @@ export async function createLiveStream(params: {
   scheduledStartAt?: string;
 }): Promise<{ success: boolean; stream: LiveStream | null; error?: string }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    throw new Error('Live Shopping API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { success: false, stream: null, error: 'Live Shopping not available' };
   }
   await delay(500);
   if (!params.title.trim()) {

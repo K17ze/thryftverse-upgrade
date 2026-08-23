@@ -360,9 +360,8 @@ function delay(ms: number): Promise<void> {
  */
 export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> {
   if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(420); // simulate network latency for honest loading states
   return [...MOCK_COLLECTIONS].sort(
@@ -376,9 +375,8 @@ export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> 
  */
 export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
   if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(380);
   return [...MOCK_EDITORIALS].sort(
@@ -391,9 +389,8 @@ export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
  */
 export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
   if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(360);
   return [...MOCK_FEATURED_ASSETS];
@@ -405,9 +402,8 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
  */
 export async function fetchCollectionDetail(id: string): Promise<GalleriaCollectionDetail | null> {
   if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(320);
   const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;

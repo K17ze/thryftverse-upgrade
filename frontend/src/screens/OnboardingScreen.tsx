@@ -22,6 +22,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
+import { track, trackFunnelStep } from '../analytics/track';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 
@@ -123,6 +124,8 @@ export default function OnboardingScreen() {
   const finishOnboarding = useCallback(async () => {
     await markOnboardingComplete();
     setHasCompletedOnboarding(true);
+    track('onboarding_completed');
+    trackFunnelStep('signup', 'onboarding_completed');
     // Navigate to the auth entry point — the app's normal first-run destination.
     navigation.replace('AuthLanding');
   }, [navigation, setHasCompletedOnboarding]);

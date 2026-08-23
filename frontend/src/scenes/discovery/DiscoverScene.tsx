@@ -26,9 +26,9 @@ import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSu
 const DISCOVER_NUM_COLUMNS = 2;
 
 /**
- * Category pill bar categories. Visual presence only — the backend filtering
- * path is not wired yet, so selecting a pill is a no-op beyond the active
- * state. "All" is the default active category.
+ * Category pill bar categories. Selecting a pill filters the feed client-side
+ * by matching the listing's `category` / `subcategory` against a keyword.
+ * "All" is the default active category and shows every listing.
  */
 const DISCOVER_CATEGORIES = [
   'All',
@@ -41,8 +41,31 @@ const DISCOVER_CATEGORIES = [
   'Art',
 ] as const;
 
+/**
+ * Maps a discover category pill to a predicate that tests whether a listing
+ * belongs to that category. The listing's `subcategory` ID (e.g.
+ * `women-clothing`, `men-shoes`, `designer-jewellery`, `hob-arts`) carries
+ * the granular type; `category` is the top-level ID (`home`, `women`, …).
+ *
+ * Matching is keyword-based on the subcategory so that items across all
+ * top-level groups (Women, Men, Designer, Kids) are included — e.g. tapping
+ * "Clothing" surfaces `women-clothing`, `men-clothing`, `designer-clothing`,
+ * and `kids-clothing` alike.
+ */
+const CATEGORY_FILTERS: Record<string, (listing: Listing) => boolean> = {
+  Clothing: (l) => !!l.subcategory && l.subcategory.includes('clothing'),
+  Shoes: (l) => !!l.subcategory && l.subcategory.includes('shoes'),
+  Bags: (l) => !!l.subcategory && l.subcategory.includes('bags'),
+  Accessories: (l) => !!l.subcategory && l.subcategory.includes('accessories'),
+  // "jewel" catches both the British "jewellery" and American "jewelry" spellings.
+  Jewelry: (l) => !!l.subcategory && l.subcategory.includes('jewel'),
+  Home: (l) => l.category === 'home',
+  // "arts" matches the `hob-arts` (Arts & crafts) subcategory.
+  Art: (l) => !!l.subcategory && l.subcategory.includes('arts'),
+};
+
 // ============================================================================
-// CATEGORY BAR — horizontal scrollable pill bar (visual presence only)
+// CATEGORY BAR — horizontal scrollable pill bar (filters the feed)
 // ============================================================================
 
 interface DiscoverCategoryBarProps {
@@ -57,8 +80,8 @@ interface DiscoverCategoryBarProps {
  * are transparent with muted text. A hairline bottom border separates the bar
  * from the masonry grid.
  *
- * Filtering is NOT wired yet (backend not ready) — selection updates the
- * active pill only, with "All" as the default. The pills are Pressables with
+ * Selecting a pill filters the feed client-side (see CATEGORY_FILTERS). "All"
+ * is the default and shows every listing. The pills are Pressables with
  * accessibility labels and roles.
  */
 function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarProps) {
@@ -185,9 +208,8 @@ export function DiscoverScene({
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
-  // Active category for the pill bar. Visual presence only — backend
-  // filtering is not wired yet, so selection is a local no-op beyond the
-  // active state. "All" is the default.
+  // Active category for the pill bar. Drives client-side filtering of the
+  // feed via CATEGORY_FILTERS. "All" is the default and shows every listing.
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
   useScrollToTop(scrollRef);
@@ -201,14 +223,24 @@ export function DiscoverScene({
     [colors],
   );
 
-  // Assemble the heterogeneous feed units from the raw listings. This is the
+  // Filter listings by the active category pill. "All" passes everything
+  // through; any other pill applies the matching predicate from
+  // CATEGORY_FILTERS. The filtered set is then assembled into heterogeneous
+  // feed units so the grid stays a pure function of DiscoveryFeedUnit[].
+  const filteredListings = useMemo(() => {
+    if (activeCategory === 'All') return listings;
+    const filterFn = CATEGORY_FILTERS[activeCategory];
+    return filterFn ? listings.filter(filterFn) : listings;
+  }, [listings, activeCategory]);
+
+  // Assemble the heterogeneous feed units from the filtered listings. This is the
   // single place where Discover's feed rhythm + span decisions are made, so
   // the grid stays a pure function of DiscoveryFeedUnit[]. Stable across
   // pagination: break positions are index-based and hero eligibility is
   // per-listing, so appending pages never reshuffles earlier units.
   const units = useMemo(
-    () => assembleDiscoveryFeed(listings, DISCOVER_NUM_COLUMNS),
-    [listings],
+    () => assembleDiscoveryFeed(filteredListings, DISCOVER_NUM_COLUMNS),
+    [filteredListings],
   );
 
   // Plain JS scroll handler drives the RefreshIndicator's shared scrollY
@@ -246,6 +278,10 @@ export function DiscoverScene({
     lastError && listings.length === 0 && !isSyncing;
   const showEmpty =
     listings.length === 0 && !isSyncing && !lastError;
+  // The active category filter excluded every listing. Distinct from showEmpty
+  // (no data at all) — here we have data, just none matching the selected pill.
+  const showFilteredEmpty =
+    listings.length > 0 && filteredListings.length === 0 && !isSyncing;
 
   // Error and empty states are authored here (with recovery CTAs) and render
   // as non-scrollable surfaces. The loading skeleton + populated feed are
@@ -281,8 +317,27 @@ export function DiscoverScene({
     );
   }
 
+  if (showFilteredEmpty) {
+    return (
+      <View style={[styles.container, styles.stateWrap]}>
+        <DiscoverCategoryBar
+          activeCategory={activeCategory}
+          onSelect={setActiveCategory}
+        />
+        <EmptyState
+          density="compact"
+          icon="pricetags-outline"
+          title={`No ${activeCategory.toLowerCase()} items yet`}
+          subtitle="Try another category or check back soon."
+          ctaLabel="Show all"
+          onCtaPress={() => setActiveCategory('All')}
+        />
+      </View>
+    );
+  }
+
   // Category pill bar — scrolls with the feed (ListHeaderComponent, not
-  // sticky-fixed). Visual presence only; filtering is not wired yet.
+  // sticky-fixed). Selection filters the feed client-side via CATEGORY_FILTERS.
   const categoryBar = useMemo(
     () => (
       <DiscoverCategoryBar

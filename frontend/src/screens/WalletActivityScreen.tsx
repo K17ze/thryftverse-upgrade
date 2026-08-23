@@ -20,6 +20,7 @@ import { Space, Type, Typography, Radius, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { haptics } from '../utils/haptics';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WalletActivity'>;
 
@@ -32,6 +33,7 @@ const FILTERS: Array<{ value: AssetFilter; label: string; accessibilityLabel: st
 ];
 
 export default function WalletActivityScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const [assetFilter, setAssetFilter] = React.useState<AssetFilter>('ALL');
 

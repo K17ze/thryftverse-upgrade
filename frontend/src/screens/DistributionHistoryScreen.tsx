@@ -28,6 +28,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
 import { AppButton } from '../components/ui/AppButton';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -49,6 +50,7 @@ function formatDate(iso: string | null): string {
 }
 
 export default function DistributionHistoryScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
@@ -306,6 +308,7 @@ function createStyles(colors: ThemeColors) {
   summaryValue: {
     fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.priceHero.letterSpacing,
   },
   summaryCount: {
@@ -353,6 +356,7 @@ function createStyles(colors: ThemeColors) {
   amountText: {
     fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.bodyStrong.letterSpacing,
   },
   distDetails: {
@@ -373,6 +377,7 @@ function createStyles(colors: ThemeColors) {
   detailValue: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.caption.letterSpacing,
   },
   dripCard: {

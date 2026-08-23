@@ -13,6 +13,8 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useStore } from '../store/useStore';
+import { useIsGuest } from '../store/useStore';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { CachedImage } from '../components/CachedImage';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import { useTabScroll } from '../context/TabScrollContext';
@@ -57,7 +59,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
           accessibilityLabel={`${badgeLabel} unread`}
         >
-          <Text style={[tabStyles.badgeText, { color: colors.surface }]}>{badgeLabel}</Text>
+          <Text style={[tabStyles.badgeText, { color: colors.surface }]} maxFontSizeMultiplier={1.3}>{badgeLabel}</Text>
         </View>
       )}
     </View>
@@ -73,6 +75,7 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
   const { colors } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
   const userAvatar = useStore((s) => s.userAvatar);
+  const isGuest = useIsGuest();
   const avatarUri = userAvatar ?? currentUser?.avatar ?? null;
   const displayName = currentUser?.displayName ?? currentUser?.username ?? '';
   const initials = displayName
@@ -82,6 +85,25 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
     .slice(0, 2)
     .join('')
     .toUpperCase() || '?';
+
+  // Guest mode: show a person icon instead of the avatar/initials fallback.
+  // The Profile tab becomes a "Sign in" entry point for unauthenticated
+  // users — clear recognition over the ambiguous '?' placeholder.
+  if (isGuest) {
+    return (
+      <View
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        style={tabStyles.tabIconWrap}
+      >
+        <Ionicons
+          name={focused ? 'person' : 'person-outline'}
+          size={24}
+          color={color}
+        />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -100,7 +122,7 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
         />
       ) : (
         <View style={[tabStyles.avatarFallback, { backgroundColor: colors.borderSubtle }]}>
-          <Text style={[tabStyles.avatarFallbackText, { color: colors.textMuted }]}>{initials}</Text>
+          <Text style={[tabStyles.avatarFallbackText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{initials}</Text>
         </View>
       )}
     </View>
@@ -207,6 +229,8 @@ export default function TabNavigator() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors, isDark } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
+  const isGuest = useIsGuest();
+  const { requireAuth } = useSignupWall();
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
   const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
@@ -231,6 +255,9 @@ export default function TabNavigator() {
   }, []);
 
   const handleCreatePress = useCallback(() => {
+    // Guest gating: creating listings requires an account. Show the soft
+    // signup wall instead of opening the CreatorStudio modal.
+    if (!requireAuth('create_listing')) return;
     haptic.light();
     // Opens CreatorStudio directly as a modal overlay with the camera/gallery
     // entry screen shown (openEntry). This removes the redundant CreateCamera
@@ -240,7 +267,7 @@ export default function TabNavigator() {
       type: persistedCreateMode,
       openEntry: true,
     });
-  }, [haptic, navigation, persistedCreateMode]);
+  }, [haptic, navigation, persistedCreateMode, requireAuth]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -294,6 +321,13 @@ export default function TabNavigator() {
             // opens a modal overlay without changing the active tab.
             if (currentTab === 'Create') {
               e.preventDefault?.();
+              return;
+            }
+            // Guest mode: Inbox and Profile are gated (signup wall / auth
+            // landing). The per-screen listener calls preventDefault, so the
+            // tab does not switch — skip the tab-switch haptic and do not
+            // update lastTabRef to avoid a phantom switch signal.
+            if (isGuest && (currentTab === 'Inbox' || currentTab === 'Profile')) {
               return;
             }
             if (currentTab !== lastTabRef.current) {
@@ -369,20 +403,49 @@ export default function TabNavigator() {
               ? `Inbox, ${inboxBadgeCount > 99 ? '99+' : inboxBadgeCount} unread`
               : 'Inbox',
           }}
+          // Guest gating: messaging requires an account. Intercept the tab
+          // press and show the soft signup wall instead of opening the inbox.
+          listeners={
+            isGuest
+              ? {
+                  tabPress: (e) => {
+                    e.preventDefault();
+                    requireAuth('message_seller');
+                  },
+                }
+              : undefined
+          }
         />
         <Tab.Screen
           name="Profile"
           getComponent={() => require('./tabStacks/ProfileStack').ProfileStack}
           options={{
-            tabBarLabel: 'Profile',
+            // Guest mode: the Profile tab becomes a "Sign in" entry point.
+            tabBarLabel: isGuest ? 'Sign in' : 'Profile',
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <ProfileTabIcon color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: currentUser?.displayName
-              ? `Profile, ${currentUser.displayName}`
-              : 'Profile',
+            tabBarAccessibilityLabel: isGuest
+              ? 'Sign in'
+              : currentUser?.displayName
+                ? `Profile, ${currentUser.displayName}`
+                : 'Profile',
           }}
+          // Guest gating: tapping the Profile tab navigates directly to the
+          // auth landing screen — a clear, self-explanatory sign-in entry
+          // point rather than a gated wall.
+          listeners={
+            isGuest
+              ? {
+                  tabPress: (e) => {
+                    e.preventDefault();
+                    haptic.light();
+                    navigation.navigate('AuthLanding');
+                  },
+                }
+              : undefined
+          }
         />
       </Tab.Navigator>
 

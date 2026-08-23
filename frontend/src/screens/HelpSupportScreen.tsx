@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
+import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -11,6 +11,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { useStore, type SupportTicket } from '../store/useStore';
 type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
@@ -110,22 +111,19 @@ export default function HelpSupportScreen({ navigation }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Find answers fast" onBack={() => navigation.goBack()} />} keyboardAvoiding>
         {/* Search as the hero — self-serve first */}
         <View style={{ paddingHorizontal: Space.md, paddingTop: Space.md, paddingBottom: Space.sm }}>
-          <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              value={faqSearch}
-              onChangeText={setFaqSearch}
-              placeholder="Search for help…"
-              placeholderTextColor={colors.textMuted}
-              accessibilityLabel="Search help articles"
-            />
-            {faqSearch ? (
+          <AppInput
+            value={faqSearch}
+            onChangeText={setFaqSearch}
+            placeholder="Search for help…"
+            accessibilityLabel="Search help articles"
+            prefix={<Ionicons name="search-outline" size={18} color={colors.textMuted} />}
+            suffix={faqSearch ? (
               <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8} accessibilityLabel="Clear search" accessibilityRole="button">
                 <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </AnimatedPressable>
-            ) : null}
-          </View>
+            ) : undefined}
+            inputContainerStyle={{ backgroundColor: colors.surface, borderRadius: Radius.xl }}
+          />
         </View>
 
         {/* Popular articles — only when not searching */}

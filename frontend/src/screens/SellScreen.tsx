@@ -22,8 +22,11 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CURRENCIES } from '../constants/currencies';
-import { useStore } from '../store/useStore';
+import { useStore, useIsGuest } from '../store/useStore';
+import { useSignupWall } from '../hooks/useSignupWall';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useSellerTrust } from '../platform/product';
+import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
 import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
@@ -36,12 +39,14 @@ import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
+import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector, ListingMode, getListingModeOptions, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBackendData } from '../context/BackendDataContext';
+import { useFeatureFlag } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   evaluateListingCompleteness,
@@ -88,6 +93,21 @@ export default function SellScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
+  const isGuest = useIsGuest();
+  const { requireAuth } = useSignupWall();
+  const reducedMotion = useReducedMotion();
+
+  // Guest gating: creating a listing requires an account. Show the soft
+  // signup wall and dismiss the sell screen back to where the user came
+  // from. The wall is rendered by the SignupWallProvider at the app root,
+  // so it persists after this screen unmounts.
+  useEffect(() => {
+    if (isGuest) {
+      requireAuth('create_listing');
+      navigation.goBack();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -210,6 +230,10 @@ export default function SellScreen() {
   const [autofillDismissed, setAutofillDismissed] = useState(false);
   const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
   const [sellerTipsDismissed, setSellerTipsDismissed] = useState(false);
+
+  // Feature flag — gates the enhanced AI listing assist banner. Defaults to
+  // false (current autofill-only behaviour) when PostHog is not loaded.
+  const aiListingAssistEnabled = useFeatureFlag('ai_listing_assist');
 
   // ── New seller detection ──
   // Per research: new seller tips/guidance if first-time seller.
@@ -1033,10 +1057,14 @@ export default function SellScreen() {
               checkmark that fades after 1.5s. Not a permanent label. */}
           <View style={styles.navDraftStatus}>
             {draftSavedVisible ? (
-              <View style={styles.navDraftSavedRow}>
+              <Reanimated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(200)}
+                exiting={reducedMotion ? undefined : FadeOut.duration(200)}
+                style={styles.navDraftSavedRow}
+              >
                 <Ionicons name="checkmark" size={12} color={colors.success} aria-hidden={true} />
                 <Text style={[styles.navDraftText, { color: colors.success }]}>Saved</Text>
-              </View>
+              </Reanimated.View>
             ) : null}
           </View>
         </View>
@@ -1145,18 +1173,30 @@ export default function SellScreen() {
             </View>
           )}
           {/* -- 2. LARGE LISTING MEDIA STUDIO -- */}
-          <ListingMediaStudio
-            items={mediaDraftItems}
-            queueItems={queueState.items}
-            maxCount={10}
-            errorText={errors.photos}
-            onPickFromLibrary={handlePickFromLibrary}
-            onPickFromCamera={handlePickFromCamera}
-            onReorder={handleReorderIds}
-            onRemoveItem={removeItem}
-            onRetryItem={handleRetryItem}
-            onSetCover={handleSetCover}
-          />
+          {mediaDraftItems.length === 0 ? (
+            <EmptyState
+              icon="camera-outline"
+              title="Add photos to get started"
+              subtitle="Well-lit photos from multiple angles sell faster."
+              ctaLabel="Upload from library"
+              onCtaPress={handlePickFromLibrary}
+              secondaryCtaLabel="Take photo"
+              onSecondaryCtaPress={handlePickFromCamera}
+            />
+          ) : (
+            <ListingMediaStudio
+              items={mediaDraftItems}
+              queueItems={queueState.items}
+              maxCount={10}
+              errorText={errors.photos}
+              onPickFromLibrary={handlePickFromLibrary}
+              onPickFromCamera={handlePickFromCamera}
+              onReorder={handleReorderIds}
+              onRemoveItem={removeItem}
+              onRetryItem={handleRetryItem}
+              onSetCover={handleSetCover}
+            />
+          )}
 
           {/* -- 2a. CONTEXTUAL PHOTO COUNT HINT -- */}
           {/* Not a quality score — a specific, actionable check next to the
@@ -1287,6 +1327,21 @@ export default function SellScreen() {
               <View style={[styles.hairline, t.hairline]} />
             </View>
           </View>
+
+          {/* -- 2d. AI LISTING ASSIST (enhanced, gated by feature flag) -- */}
+          {/* Additive banner — only shown when ai_listing_assist is enabled.
+              When the flag is off, the current autofill-only behaviour runs. */}
+          {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
+            <View style={[styles.autofillCard, t.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
+              <Ionicons name="sparkles" size={18} color={colors.brand} aria-hidden={true} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.autofillTitle, t.autofillTitle]}>AI Listing Assist</Text>
+                <Text style={[t.autofillDesc, { marginTop: 2 }]}>
+                  Smart suggestions from your photos — titles, brands, and fair pricing.
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           {/* -- 2d. SUGGESTED DETAILS (neutral, from photo filename) -- */}
           {/* Inline suggestion — subtle tint, no heavy card chrome (§4 surface budget).

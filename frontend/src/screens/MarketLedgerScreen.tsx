@@ -22,6 +22,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -92,6 +93,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 }
 
 export default function MarketLedgerScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
@@ -390,6 +392,7 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   summaryStatDivider: {
     width: Stroke.standard,

@@ -4,6 +4,7 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import { extractRouteFromPushData, resolveNotificationRoute, type ResolvedRoute } from '../utils/notificationRouting';
 import { useStore } from '../store/useStore';
+import { track } from '../analytics';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -51,10 +52,40 @@ function queueRoute(route: ResolvedRoute) {
   }
 }
 
+/**
+ * Extract a stable notification-type identifier from the push payload.
+ *
+ * The backend sends one of two fields:
+ *   - `type` — the semantic notification type (e.g. `new_message`, `outbid`)
+ *   - `eventType` — the structured event type from the notification registry
+ *
+ * We prefer `type` (the user-facing semantic name) and fall back to
+ * `eventType` so both legacy and V2 payloads are covered. Returns `unknown`
+ * only when neither field is present.
+ */
+function readNotificationType(data: Record<string, unknown> | undefined): string {
+  if (data) {
+    if (typeof data.type === 'string' && data.type) return data.type;
+    if (typeof data.eventType === 'string' && data.eventType) return data.eventType;
+  }
+  return 'unknown';
+}
+
 function handleNotificationResponse(response: Notifications.NotificationResponse) {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
   const route = extractRouteFromPushData(data);
   queueRoute(route);
+
+  // Fire-and-forget analytics. PostHog no-ops in dev (no API key), and we
+  // additionally guard on __DEV__ so no capture work runs locally.
+  if (!__DEV__) {
+    const notificationType = readNotificationType(data);
+    const targetScreen = route && 'screen' in route ? route.screen : null;
+    track('push_notification_tapped', {
+      notification_type: notificationType,
+      target_screen: targetScreen,
+    });
+  }
 }
 
 export function usePushNotificationTap() {
@@ -64,15 +95,27 @@ export function usePushNotificationTap() {
   const notificationCount = useStore((state) => state.notificationCount);
   const isAuthenticated = useStore((state) => state.isAuthenticated);
 
-  const handleForegroundNotification = useCallback(() => {
-    if (isAuthenticated) {
-      setNotificationCount(notificationCount + 1);
-    }
-  }, [isAuthenticated, notificationCount, setNotificationCount]);
+  const handleForegroundNotification = useCallback(
+    (notification: Notifications.Notification) => {
+      if (isAuthenticated) {
+        setNotificationCount(notificationCount + 1);
+      }
+
+      // Track foreground delivery — separate from the tap event. Fire-and-
+      // forget; PostHog no-ops in dev, and we guard on __DEV__ anyway.
+      if (!__DEV__) {
+        const data = notification.request.content.data as Record<string, unknown> | undefined;
+        track('push_notification_received', {
+          notification_type: readNotificationType(data),
+        });
+      }
+    },
+    [isAuthenticated, notificationCount, setNotificationCount],
+  );
 
   useEffect(() => {
-    receivedListenerRef.current = Notifications.addNotificationReceivedListener(() => {
-      handleForegroundNotification();
+    receivedListenerRef.current = Notifications.addNotificationReceivedListener((notification) => {
+      handleForegroundNotification(notification);
     });
 
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {

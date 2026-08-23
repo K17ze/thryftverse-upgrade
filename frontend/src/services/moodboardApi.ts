@@ -319,7 +319,8 @@ function resolveTheme(themeId: string): MoodboardTheme {
  */
 export async function fetchMoodboards(): Promise<Moodboard[]> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(400);
   return [...demoMoodboards].sort(
@@ -333,7 +334,8 @@ export async function fetchMoodboards(): Promise<Moodboard[]> {
  */
 export async function fetchMoodboardDetail(id: string): Promise<Moodboard | null> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(320);
   return demoMoodboards.find((mb) => mb.id === id) ?? null;
@@ -346,7 +348,21 @@ export async function fetchMoodboardDetail(id: string): Promise<Moodboard | null
  */
 export async function createMoodboard(title: string, theme: string): Promise<Moodboard> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return {
+      id: '',
+      title,
+      description: '',
+      curator: 'You',
+      curatorAvatar: '',
+      items: [],
+      coverImage: '',
+      isPublic: false,
+      theme,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDemo: false,
+    };
   }
   await delay(280);
   const themeObj = resolveTheme(theme);
@@ -378,7 +394,8 @@ export async function addItemToMoodboard(
   listingId: string,
 ): Promise<MoodboardItem | null> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return null;
   }
   await delay(200);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
@@ -413,7 +430,8 @@ export async function removeItemFromMoodboard(
   itemId: string,
 ): Promise<boolean> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return false;
   }
   await delay(180);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
@@ -437,7 +455,8 @@ export async function updateItemPosition(
   position: MoodboardItemPosition,
 ): Promise<boolean> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return false;
   }
   await delay(120);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
@@ -462,7 +481,8 @@ export async function reorderItem(
   direction: 'front' | 'back',
 ): Promise<boolean> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return false;
   }
   await delay(120);
   const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
@@ -484,7 +504,8 @@ export async function reorderItem(
  */
 export async function fetchMoodboardThemes(): Promise<MoodboardTheme[]> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(200);
   return [...MOCK_THEMES];
@@ -496,7 +517,8 @@ export async function fetchMoodboardThemes(): Promise<MoodboardTheme[]> {
  */
 export async function fetchPublicMoodboards(): Promise<Moodboard[]> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(420);
   return demoMoodboards
@@ -510,7 +532,8 @@ export async function fetchPublicMoodboards(): Promise<Moodboard[]> {
  */
 export async function fetchPickerItems(): Promise<MoodboardItem[]> {
   if (!MOODBOARD_DEMO_MODE) {
-    throw new Error('Moodboard API not configured for production');
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
   }
   await delay(300);
   return [...MOCK_PICKER_ITEMS];

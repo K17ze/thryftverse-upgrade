@@ -118,3 +118,42 @@ export function trackRaw(
   if (!client) return;
   client.capture(event, properties as PostHogProperties | undefined);
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// trackFunnelStep — funnel progression tracking.
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Captures a funnel step event for PostHog funnel analysis.
+ *
+ * Funnel steps are emitted as their own named events (e.g.
+ * `signup_started`, `checkout_completed`) so they can be assembled into
+ * PostHog funnels directly. The `funnel` property groups the steps that
+ * belong to the same funnel so dashboards can filter by funnel name.
+ *
+ * Unlike `track()`, the step name is a free-form string — funnel step
+ * names are not part of the core `EventName` taxonomy because they are
+ * analysis constructs rather than product events. This keeps the
+ * `EventName` union focused on user-facing actions.
+ *
+ * No-op when PostHog is not configured (dev mode), so call sites never
+ * need null checks.
+ *
+ * @param funnel - The funnel identifier (e.g. `'signup'`, `'checkout'`).
+ * @param step - The step name (e.g. `'signup_started'`, `'purchase_completed'`).
+ * @param properties - Optional extra properties for this step.
+ *
+ * @example
+ * trackFunnelStep('signup', 'signup_started', { method: 'email' });
+ * trackFunnelStep('checkout', 'purchase_completed', { order_id: 'abc' });
+ */
+export function trackFunnelStep(
+  funnel: string,
+  step: string,
+  properties?: Record<string, EventPropertyValue>,
+): void {
+  const client = getPostHogClient();
+  if (!client) return;
+  const props: PostHogProperties = { funnel, ...(properties as PostHogProperties | undefined) };
+  client.capture(step, props);
+}

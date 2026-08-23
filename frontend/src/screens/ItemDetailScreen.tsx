@@ -35,6 +35,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { createDmConversationOnApi } from '../services/chatApi';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -100,6 +101,7 @@ import {
   isRecommendationLook,
 } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
+import { track } from '../analytics/track';
 import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
@@ -301,12 +303,18 @@ export default function ItemDetailScreen() {
   useEffect(() => {
     if (item) {
       ProductAnalytics.itemView(item.id, sectionKey, position, reasonCode, personalised);
+      track('item_viewed', {
+        listing_id: item.id,
+        seller_id: item.sellerId ?? item.seller?.id ?? '',
+        price: item.price,
+      });
     }
   }, [item?.id, sectionKey, position, reasonCode, personalised]);
 
   const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
 
   const handleTogglePriceAlert = useCallback(async () => {
     if (!item?.id || priceAlertLoading) return;
@@ -456,6 +464,7 @@ export default function ItemDetailScreen() {
   const handleDoubleTap = () => {
     haptic.heavy();
     if (item && !isFav) {
+      if (!requireAuth('save_item')) return;
       toggleFav(item.id);
       show('Added to wishlist', 'success');
     }
@@ -474,8 +483,10 @@ export default function ItemDetailScreen() {
 
   const handleToggleFav = () => {
     if (!item) return;
+    if (!requireAuth('save_item')) return;
     toggleFav(item.id);
     ProductAnalytics.itemSave(item.id);
+    track('item_favorited', { listing_id: item.id, action: isFav ? 'unsave' : 'save' });
     if (!isFav) {
       show('Added to wishlist', 'success');
     }
@@ -835,7 +846,7 @@ export default function ItemDetailScreen() {
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={handleShare}
-          onSave={() => { haptic.patterns.save(); setCollectionModalVisible(true); }}
+          onSave={() => { if (!requireAuth('save_item')) return; haptic.patterns.save(); setCollectionModalVisible(true); }}
           onToggleFav={handleToggleFav}
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
@@ -943,7 +954,7 @@ export default function ItemDetailScreen() {
                     accessibilityRole="button"
                   >
                     <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]}>
+                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
                       {item.condition}
                     </Text>
                     <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
@@ -955,7 +966,7 @@ export default function ItemDetailScreen() {
                     item.category,
                   ].filter(Boolean).join(' · ');
                   return remaining ? (
-                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
                       {remaining}
                     </Text>
                   ) : null;
@@ -965,7 +976,7 @@ export default function ItemDetailScreen() {
                     in the same row. Only included when the backend
                     provides positive counts — never fabricated. */}
                 {socialProofLine ? (
-                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1}>
+                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
                     · {socialProofLine}
                   </Text>
                 ) : null}
@@ -978,7 +989,7 @@ export default function ItemDetailScreen() {
                   accessibilityLabel="View size guide"
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]}>
+                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1}>
                     Size guide
                   </Text>
                 </Pressable>
@@ -990,7 +1001,7 @@ export default function ItemDetailScreen() {
               below the attribute row. Kept separate because it is a
               price-adjacent fact, not an attribute. */}
           {priceIzeText ? (
-            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
               {priceIzeText}
             </Text>
           ) : null}
@@ -1078,7 +1089,7 @@ export default function ItemDetailScreen() {
                   ) : (
                     <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
                   )}
-                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1}>
+                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
                     {row.label}
                   </Text>
                 </View>
@@ -1112,6 +1123,7 @@ export default function ItemDetailScreen() {
                 <Text
                   style={[styles.descriptionText, { color: colors.textPrimary }]}
                   numberOfLines={descriptionExpanded ? undefined : 3}
+                  maxFontSizeMultiplier={2}
                 >
                   {item.description}
                 </Text>
@@ -1134,7 +1146,7 @@ export default function ItemDetailScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ expanded: descriptionExpanded }}
                 >
-                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]}>
+                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
                     {descriptionExpanded ? 'Show less' : 'Read more'}
                   </Text>
                 </Pressable>
@@ -1240,7 +1252,7 @@ export default function ItemDetailScreen() {
           })()}
 
           {item.createdAt ? (
-            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           ) : null}
@@ -1261,10 +1273,7 @@ export default function ItemDetailScreen() {
               isFollowing={sellerTrustData?.isFollowing ?? false}
               isFollowPending={sellerFollowMutation.isPending}
               onFollow={() => {
-                if (!currentUser?.id) {
-                  show('Sign in to follow this seller.', 'error');
-                  return;
-                }
+                if (!requireAuth('follow_seller')) return;
                 sellerFollowMutation.mutate(undefined, {
                   onSuccess: (data) => {
                     show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
@@ -1275,10 +1284,7 @@ export default function ItemDetailScreen() {
                 });
               }}
               onMessage={async () => {
-                if (!currentUser?.id) {
-                  show('Sign in to message the seller.', 'error');
-                  return;
-                }
+                if (!requireAuth('message_seller')) return;
                 if (isResolvingConversation) return;
                 if (item) ProductAnalytics.sellerMessageStart(item.id);
                 setIsResolvingConversation(true);
@@ -1315,7 +1321,7 @@ export default function ItemDetailScreen() {
             module in the tail (which incentivises multi-item purchase). */}
         {seller && moreFromSellerRailItems.length >= 2 ? (
           <View style={[styles.moreFromSellerRailWrap, { borderBottomColor: colors.borderSubtle }]}>
-            <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+            <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={2}>
               More from {seller.username ?? 'this seller'}
             </Text>
             <HorizontalRail
@@ -1401,7 +1407,7 @@ export default function ItemDetailScreen() {
                         size={18}
                         color={priceAlertEnabled ? colors.brand : colors.textSecondary}
                       />
-                      <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]}>
+                      <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
                         Price drop alerts
                       </Text>
                     </View>
@@ -1485,15 +1491,15 @@ export default function ItemDetailScreen() {
                           style={styles.moreLikeThisImage}
                         />
                       )}
-                      <Text style={[styles.moreLikeThisTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                      <Text style={[styles.moreLikeThisTitle, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
                         {simItem.title}
                       </Text>
                       {(simItem.brand || simItem.condition) && (
-                        <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                        <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
                           {[simItem.brand, simItem.condition].filter(Boolean).join(' · ')}
                         </Text>
                       )}
-                      <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                      <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={2}>
                         {simPriceFormatted}
                       </Text>
                     </Pressable>
@@ -1549,7 +1555,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.success }]}>
+                <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={1}>
                   Sold
                 </Text>
               }
@@ -1584,7 +1590,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
+                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
                   {unavailableCopy.label}
                 </Text>
               }
@@ -1611,10 +1617,7 @@ export default function ItemDetailScreen() {
           ? {
               label: 'Enquire',
               onPress: async () => {
-                if (!currentUser?.id) {
-                  show('Sign in to enquire about this item.', 'error');
-                  return;
-                }
+                if (!requireAuth('message_seller')) return;
                 if (isResolvingConversation) return;
                 const sellerId = item.sellerId ?? item.seller?.id;
                 if (!sellerId) return;
@@ -1644,10 +1647,7 @@ export default function ItemDetailScreen() {
           ? {
               label: 'Request viewing',
               onPress: async () => {
-                if (!currentUser?.id) {
-                  show('Sign in to request a viewing.', 'error');
-                  return;
-                }
+                if (!requireAuth('message_seller')) return;
                 if (isResolvingConversation) return;
                 const sellerId = item.sellerId ?? item.seller?.id;
                 if (!sellerId) return;
@@ -1676,6 +1676,7 @@ export default function ItemDetailScreen() {
         const buyNowAction = {
           label: t('product.buyNow'),
           onPress: () => {
+            if (!requireAuth('purchase')) return;
             if (item) ProductAnalytics.checkoutStart(item.id);
             // Do not fire a success haptic before the purchase has
             // actually completed. "Buy now" navigates to checkout — it
@@ -1691,6 +1692,7 @@ export default function ItemDetailScreen() {
           ? {
               label: 'Make offer',
               onPress: () => {
+                if (!requireAuth('purchase')) return;
                 if (item) ProductAnalytics.offerStart(item.id);
                 setMakeOfferVisible(true);
               },
@@ -1821,10 +1823,10 @@ export default function ItemDetailScreen() {
       >
         <View style={[styles.purchaseSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
           <View>
-            <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               Costs, delivery & protection
             </Text>
-            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]}>
+            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
               Confirmed terms for this listing
             </Text>
           </View>
@@ -1901,7 +1903,7 @@ export default function ItemDetailScreen() {
         snapPoint={0.7}
       >
         <View style={[styles.qaSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]}>
+          <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             Questions & answers
           </Text>
           <Pressable
@@ -1928,7 +1930,7 @@ export default function ItemDetailScreen() {
         snapPoint={0.4}
       >
         <View style={[styles.overflowHeader, { borderColor: colors.border }]}>
-          <Text style={[styles.overflowTitle, { color: colors.textPrimary }]}>More actions</Text>
+          <Text style={[styles.overflowTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>More actions</Text>
         </View>
         <Pressable
           style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
@@ -1940,7 +1942,7 @@ export default function ItemDetailScreen() {
           accessibilityLabel="Share listing"
         >
           <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>Share listing</Text>
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>Share listing</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
@@ -1953,7 +1955,7 @@ export default function ItemDetailScreen() {
           accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
         >
           <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
           </Text>
         </Pressable>
@@ -1967,7 +1969,7 @@ export default function ItemDetailScreen() {
           accessibilityLabel="Report this listing"
         >
           <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
-          <Text style={[styles.overflowRowText, { color: colors.textSecondary }]}>Report listing</Text>
+          <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>Report listing</Text>
         </Pressable>
       </BottomSheet>
 
@@ -2003,7 +2005,7 @@ export default function ItemDetailScreen() {
       >
         <View style={styles.conditionSheetWrap}>
           <View style={styles.conditionSheetHeader}>
-            <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               Condition
             </Text>
             <Pressable
@@ -2018,12 +2020,12 @@ export default function ItemDetailScreen() {
           <View style={styles.conditionSheetBody}>
             <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]}>
+              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>
                 {item.condition}
               </Text>
             </View>
             {conditionMeta ? (
-              <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]}>
+              <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                 {conditionMeta.definition}
               </Text>
             ) : null}
@@ -2042,7 +2044,7 @@ export default function ItemDetailScreen() {
                 accessibilityRole="button"
               >
                 <Ionicons name="images-outline" size={18} color={colors.brand} />
-                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]}>
+                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1}>
                   View condition photos
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.brand} />

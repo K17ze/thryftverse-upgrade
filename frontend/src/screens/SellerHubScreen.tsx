@@ -23,6 +23,7 @@ import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { haptics } from '../utils/haptics';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -299,6 +300,7 @@ export default function SellerHubScreen() {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      <OfflineBanner onRetry={() => void onRefresh()} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}

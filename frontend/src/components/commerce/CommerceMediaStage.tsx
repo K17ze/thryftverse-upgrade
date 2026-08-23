@@ -234,6 +234,7 @@ function MediaPage({
             <CachedImage
               key={retryKey}
               uri={item.uri}
+              blurhash={item.blurhash ?? undefined}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
@@ -1144,6 +1145,7 @@ export function CommerceMediaStage({
                     <CachedImage
                       uri={item.uri}
                       previewUri={item.posterUri ?? undefined}
+                      blurhash={item.blurhash ?? undefined}
                       style={styles.thumbnailImage}
                       containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       contentFit="cover"

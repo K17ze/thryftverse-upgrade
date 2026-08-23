@@ -78,7 +78,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
         return {
           backgroundColor: 'transparent',
           borderWidth: 0,
-          borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+          borderBottomWidth: Stroke.standard,
           borderRadius: Radius.none,
           paddingHorizontal: 0,
         };
@@ -86,7 +86,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
       default:
         return {
           backgroundColor: colors.input,
-          borderWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+          borderWidth: Stroke.standard,
           borderRadius: Radius.lg,
         };
     }

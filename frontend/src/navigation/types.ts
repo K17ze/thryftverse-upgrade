@@ -210,6 +210,8 @@ export type RootStackParamList = {
   // Followers / following — full-screen people lists (spec 50)
   Followers: { userId: string };
   Following: { userId: string };
+  // Unified followers/following list — mode determines which to show.
+  ConnectionList: { userId: string; mode: 'followers' | 'following' };
 
   // ── Wallet & Payments ──
   Wallet: undefined;

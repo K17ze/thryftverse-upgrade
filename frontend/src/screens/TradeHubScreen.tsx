@@ -123,6 +123,11 @@ function mapOpenOrders(history: MarketHistoryItem[]): OpenOrderEntry[] {
         (item.status === 'open' || item.status === 'partially_filled'),
     )
     .map((item) => {
+      // Extract numeric order ID from the history item ID. The backend
+      // doesn't currently expose a separate orderId field on MarketHistoryItem,
+      // so we parse the trailing digits. This handles formats like
+      // "co-own-order-12345" and "order:12345" but falls back to 0
+      // (which the cancel handler guards against) for unparseable IDs.
       const orderIdMatch = item.id.match(/(\d+)$/);
       const orderId = orderIdMatch ? parseInt(orderIdMatch[1], 10) : 0;
       return {

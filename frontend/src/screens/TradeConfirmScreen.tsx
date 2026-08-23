@@ -21,10 +21,12 @@ import {
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
 } from '../components/coown';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
+  useScreenCaptureProtection();
   const {
     assetId,
     assetTitle,

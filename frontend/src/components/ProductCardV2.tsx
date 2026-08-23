@@ -15,6 +15,7 @@ import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { Listing } from '../domain';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT, getListingCoverUri } from '../utils/media';
@@ -83,6 +84,7 @@ function ProductCardV2Base({
   const toggleSaved = useStore((state) => state.toggleSavedProduct);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
@@ -128,6 +130,7 @@ function ProductCardV2Base({
     !item.isSold && (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
 
   const handleToggleFav = () => {
+    if (!requireAuth('save_item')) return;
     haptic.light();
     toggleFav(item.id);
     if (!isFav) {
@@ -137,6 +140,7 @@ function ProductCardV2Base({
   };
 
   const handleToggleSave = () => {
+    if (!requireAuth('save_item')) return;
     haptic.light();
     toggleSaved(item.id);
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');

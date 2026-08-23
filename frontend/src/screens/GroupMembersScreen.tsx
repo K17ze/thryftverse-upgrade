@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +12,7 @@ import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -94,30 +94,13 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Search */}
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search members..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            accessibilityLabel="Search members"
-          />
-          {searchQuery.length > 0 && (
-            <AnimatedPressable
-              onPress={() => setSearchQuery('')}
-              activeOpacity={0.7}
-              scaleValue={0.9}
-              hapticFeedback="light"
-            >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </AnimatedPressable>
-          )}
-        </View>
+        <AppSearchBar
+          placeholder="Search members..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          containerStyle={styles.searchRow}
+        />
 
         {/* Member list */}
         {filteredMembers.length === 0 ? (

@@ -16,6 +16,7 @@ import {
   Alert,
   Platform,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -32,6 +33,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
@@ -276,7 +278,7 @@ function createScoreStyles(colors: ThemeColors) {
 
 export default function OutfitBuilderScreen() {
   const navigation = useNavigation<NavT>();
-  const { listings } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
@@ -465,6 +467,16 @@ export default function OutfitBuilderScreen() {
     haptics.success();
   };
 
+  // ── Screen-level state coverage (loading / empty / error / offline) ──
+  const showLoading = isSyncing && listings.length === 0;
+  const showError = !isSyncing && !!lastError && listings.length === 0;
+  const showEmpty = !isSyncing && !lastError && listings.length === 0;
+  const showContent = listings.length > 0;
+
+  const handleRetry = useCallback(() => {
+    refreshListings();
+  }, [refreshListings]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -494,9 +506,12 @@ export default function OutfitBuilderScreen() {
         </AnimatedPressable>
       </View>
 
+      {/* Offline banner — non-blocking; cached items may still be visible */}
+      <OfflineBanner onRetry={handleRetry} />
+
       {/* Undo / Redo toolbar — progressive disclosure: only visible when
           there is history to traverse. Disabled states are truthful. */}
-      {(canUndo || canRedo) && (
+      {showContent && (canUndo || canRedo) && (
         <View style={styles.undoRedoBar}>
           <AnimatedPressable
             style={[styles.undoRedoBtn, !canUndo && styles.undoRedoBtnDisabled]}
@@ -527,6 +542,44 @@ export default function OutfitBuilderScreen() {
         </View>
       )}
 
+      {/* ── Loading state ── */}
+      {showLoading && (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <T.Body color={colors.textMuted} style={{ marginTop: Space.md }}>
+            Loading your closet…
+          </T.Body>
+        </View>
+      )}
+
+      {/* ── Error state ── */}
+      {showError && (
+        <View style={styles.stateContainer}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load items"
+            subtitle={lastError ?? 'Check your connection and try again.'}
+            ctaLabel="Retry"
+            onCtaPress={handleRetry}
+          />
+        </View>
+      )}
+
+      {/* ── Empty state ── */}
+      {showEmpty && (
+        <View style={styles.stateContainer}>
+          <EmptyState
+            icon="shirt-outline"
+            title="Your closet is empty"
+            subtitle="Add listings to your shop to start building outfits from your items."
+            ctaLabel="Go back"
+            onCtaPress={() => navigation.goBack()}
+          />
+        </View>
+      )}
+
+      {/* ── Populated content ── */}
+      {showContent && (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
         <View style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
@@ -646,8 +699,10 @@ export default function OutfitBuilderScreen() {
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>
+      )}
 
       {/* Footer CTA */}
+      {showContent && (
       <View style={styles.footer}>
         <View style={styles.footerRow}>
           <AnimatedPressable
@@ -673,6 +728,7 @@ export default function OutfitBuilderScreen() {
           </View>
         </View>
       </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -738,6 +794,12 @@ function createStyles(colors: ThemeColors) {
   },
   scrollContent: {
     paddingTop: Space.sm,
+  },
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
   },
   previewWrap: {
     marginHorizontal: Space.md,

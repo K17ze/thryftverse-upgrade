@@ -24,7 +24,9 @@ import { loadAsync as fontLoadAsync } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
+import * as Notifications from 'expo-notifications';
 import { View, ActivityIndicator, Text, TextInput, Alert } from 'react-native';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from './src/constants/colors';
 import { ToastProvider } from './src/context/ToastContext';
 import { TabScrollProvider } from './src/context/TabScrollContext';
@@ -58,10 +60,15 @@ import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
+import { initializeSslPinning } from './src/utils/sslPinning';
 import { linking } from './src/navigation/linking';
+import { SignupWallProvider } from './src/hooks/useSignupWall';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
+import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
+import { useScreenshotTracking } from './src/platform/screenCapture';
 import { trackScreenView } from './src/lib/telemetry';
+import { trackScreenChange } from './src/analytics/useScreenTracking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
@@ -73,6 +80,69 @@ initSentry();
 // logged and forwarded to Sentry, while preserving the dev redbox and native
 // crash reporting behaviour. Idempotent — safe to call once at startup.
 installGlobalErrorHandler();
+
+// ──────────────────────────────────────────────────────────────────────────
+// Foreground notification presentation
+// ----------------------------------------------------------------------------
+// `setNotificationHandler` MUST be configured at module level (outside any
+// React component) so expo-notifications can consult it before the first
+// component mounts. Without it, notifications delivered while the app is in
+// the foreground are silently dropped — no alert, no banner, no sound.
+//
+// Presentation is driven by the notification's `eventType` payload field:
+//   - Actionable events (auction outbid/won, order lifecycle, chat, payouts,
+//     resolution) interrupt with a sound, badge update, and high priority.
+//   - Low-priority "generic" / news notifications present silently with a
+//     default priority so they don't pull the user's attention away from the
+//     foreground task.
+//
+// The brand accent colour for notification chrome is applied via the
+// navigation theme (`notification: Colors.danger`) and the Android
+// notification channel colour — `NotificationBehavior` itself exposes no
+// colour field, so the brand token is referenced here for documentation.
+// ──────────────────────────────────────────────────────────────────────────
+const ACTIONABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'auction_outbid',
+  'auction_won',
+  'auction_ending_soon',
+  'order_created',
+  'order_paid',
+  'order_dispatched',
+  'order_delivered',
+  'order_cancelled',
+  'order_refunded',
+  'resolution_opened',
+  'resolution_status_changed',
+  'chat_message',
+  'payout_processed',
+  'refund_completed',
+]);
+
+Notifications.setNotificationHandler({
+  handleNotification: async (notification) => {
+    const data = (notification.request.content.data ?? {}) as Record<string, unknown>;
+    const eventType = typeof data.eventType === 'string' ? data.eventType : null;
+    const isActionable = eventType ? ACTIONABLE_EVENT_TYPES.has(eventType) : false;
+    const isGeneric = eventType === null || eventType === 'generic';
+
+    return {
+      // iOS: present an alert banner; Android: show the heads-up banner.
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      // Sound only for actionable categories — silent for generic/news so the
+      // foreground experience stays calm.
+      shouldPlaySound: isActionable,
+      // Badge updates for everything except generic news pings.
+      shouldSetBadge: !isGeneric,
+      // Android priority: HIGH interrupts with a heads-up; DEFAULT respects
+      // the channel's importance without forcing a peek.
+      priority: isActionable
+        ? Notifications.AndroidNotificationPriority.HIGH
+        : Notifications.AndroidNotificationPriority.DEFAULT,
+    };
+  },
+});
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -91,16 +161,16 @@ function applyGlobalTypographyDefaults(useInterFonts: boolean) {
   const textDefaultProps = (Text as any).defaultProps ?? {};
   (Text as any).defaultProps = {
     ...textDefaultProps,
-    allowFontScaling: false,
-    maxFontSizeMultiplier: 1.06,
+    allowFontScaling: true,
+    maxFontSizeMultiplier: 1.35,
     style: [textDefaultProps.style, { fontFamily: textFamily, letterSpacing: 0 }],
   };
 
   const inputDefaultProps = (TextInput as any).defaultProps ?? {};
   (TextInput as any).defaultProps = {
     ...inputDefaultProps,
-    allowFontScaling: false,
-    maxFontSizeMultiplier: 1.04,
+    allowFontScaling: true,
+    maxFontSizeMultiplier: 1.35,
     selectionColor: Colors.brand,
     style: [inputDefaultProps.style, { fontFamily: inputFamily, letterSpacing: 0 }],
   };
@@ -121,6 +191,11 @@ export default function App() {
 
   usePushNotificationTap();
   useUnreadNotificationCount();
+  usePushTokenCleanup();
+  // Detect screenshots on non-protected screens and report them to analytics.
+  // Protected screens block screenshots at the OS level, so this listener only
+  // fires on surfaces where tracking (not blocking) is the desired behaviour.
+  useScreenshotTracking();
 
   // Performance: only block first paint on the Inter family (used on every
   // screen from boot). The 8 display fonts below are used exclusively in the
@@ -180,6 +255,16 @@ export default function App() {
     let mounted = true;
 
     const initializeAppBootstrapState = async () => {
+      // Initialise SSL public-key pinning before any network request so every
+      // HTTPS connection (fetch, Axios, image loaders) is validated against
+      // the pinned keys once the native module is installed. Safe to call in
+      // dev — it no-ops when the module is absent and never throws.
+      try {
+        await initializeSslPinning();
+      } catch {
+        // Pinning init must never block app startup.
+      }
+
       const preference = await getStoredThemePreference();
       applyThemePreference(preference);
 
@@ -291,6 +376,10 @@ export default function App() {
         // is respected inside trackTelemetryEvent.
         const params = currentRoute.params as Record<string, string | number> | undefined;
         trackScreenView(currentRoute.name, params);
+        // PostHog screen view tracking — emits a typed `screen_view` event
+        // with previous-screen context for funnel/flow analysis. No-op in
+        // dev mode (no PostHog API key).
+        trackScreenChange(currentRoute);
       }
     } catch {
       // Navigation observability must never crash the app.
@@ -511,6 +600,10 @@ export default function App() {
                 <CurrencyProvider>
                   <SettingsPreferencesProvider>
                     <TabScrollProvider>
+                      {/* Global reduced-motion config — ensures every Reanimated
+                          animation respects the device's Reduce Motion setting.
+                          Placed at the app root so it covers all child animations. */}
+                      <ReducedMotionConfig mode={ReduceMotion.System} />
                       <NavigationContainer
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
@@ -541,7 +634,9 @@ export default function App() {
                         }}
                       >
                         <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} />
-                        {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
+                        <SignupWallProvider>
+                          {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
+                        </SignupWallProvider>
                       </NavigationContainer>
                     </TabScrollProvider>
                   </SettingsPreferencesProvider>

@@ -503,12 +503,14 @@ function createStyles(colors: ThemeColors) {
   amountLabel: {
     fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.priceHero.letterSpacing,
     marginTop: Space.sm,
   },
   totalLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs,
   },

@@ -30,7 +30,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   Pressable,
   ActivityIndicator,
   ScrollView,
@@ -52,6 +51,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppInput } from '../components/ui/AppInput';
 import { CachedImage } from '../components/CachedImage';
 import { AITrustBadge, type AIConfidence } from '../components/ai/AITrustBadge';
 import { AITrustSignal } from '../components/ai/AITrustSignal';
@@ -424,17 +424,15 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
             </Text>
 
             <View style={styles.addTopicRow}>
-              <TextInput
-                style={[styles.topicInput, { backgroundColor: colors.input, color: colors.inputText, borderColor: colors.border }]}
+              <AppInput
                 placeholder="e.g. Vintage watches"
-                placeholderTextColor={colors.textMuted}
                 value={newTopicLabel}
                 onChangeText={setNewTopicLabel}
                 accessibilityLabel="Topic label input"
-                accessibilityRole="text"
                 accessibilityHint="Enter the name of a topic to add to your algorithm profile"
                 returnKeyType="done"
                 onSubmitEditing={handleAddTopic}
+                inputContainerStyle={styles.topicInput}
               />
             </View>
 

@@ -29,6 +29,7 @@ export const Caption: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.caption,
         { color: color ?? colors.textSecondary },
@@ -50,6 +51,7 @@ export const CaptionEmphasis: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.captionEmphasis,
         { color: color ?? colors.textPrimary },
@@ -75,6 +77,7 @@ export const Body: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={2}
       style={[
         styles.body,
         { color: color ?? colors.textPrimary },
@@ -96,6 +99,7 @@ export const BodyEmphasis: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={2}
       style={[
         styles.bodyEmphasis,
         { color: color ?? colors.textPrimary },
@@ -121,6 +125,7 @@ export const Headline: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.4}
       style={[
         styles.headline,
         { color: color ?? colors.textPrimary },
@@ -146,6 +151,7 @@ export const Title3: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.title3,
         { color: color ?? colors.textPrimary },
@@ -167,6 +173,7 @@ export const Title2: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.title2,
         { color: color ?? colors.textPrimary },
@@ -188,6 +195,7 @@ export const Title1: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.title1,
         { color: color ?? colors.textPrimary },
@@ -219,6 +227,7 @@ export const Price: React.FC<PriceProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.price,
         { color: color ?? colors.textPrimary },
@@ -241,6 +250,7 @@ export const PriceCompact: React.FC<PriceProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.priceCompact,
         { color: color ?? colors.textPrimary },
@@ -263,6 +273,7 @@ export const PriceLarge: React.FC<PriceProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.3}
       style={[
         styles.priceLarge,
         { color: color ?? colors.textPrimary },
@@ -288,6 +299,7 @@ export const Meta: React.FC<TextComponentProps> = ({
   const { colors } = useAppTheme();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.meta,
         { color: color ?? colors.textSecondary },

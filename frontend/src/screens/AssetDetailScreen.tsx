@@ -87,6 +87,9 @@ import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import { useSignupWall } from '../hooks/useSignupWall';
+import { useFeatureFlag } from '../analytics';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -101,6 +104,7 @@ interface RecommendationItem {
 }
 
 export default function AssetDetailScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
@@ -114,6 +118,12 @@ export default function AssetDetailScreen() {
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
+  const { requireAuth } = useSignupWall();
+
+  // Feature flag — gates the enhanced Co-Own v2 UI (supply disclosure row +
+  // beta badge). Defaults to false (current behaviour) when PostHog is not
+  // loaded.
+  const coOwnV2Enabled = useFeatureFlag('co_own_v2');
 
   const assetId = route.params?.assetId;
 
@@ -318,6 +328,18 @@ export default function AssetDetailScreen() {
 
   const social = useProductSocialState(viewModel);
 
+  // Guest gating: wrap save/like actions with the soft signup wall so
+  // guests can browse Co-Own assets freely but cannot commit to saving
+  // or liking without an account.
+  const guardedOpenCollectionPicker = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.openCollectionPicker();
+  }, [requireAuth, social]);
+  const guardedToggleLike = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.toggleLike();
+  }, [requireAuth, social]);
+
   const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
     asset?.listingId
   );
@@ -492,6 +514,7 @@ export default function AssetDetailScreen() {
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight + Space.md;
 
   const handleTradePress = (side: 'buy' | 'sell') => {
+    if (!requireAuth('purchase')) return;
     if (holdingsError || yourUnits == null) {
       show('Your position is unavailable. Refresh it before trading.', 'error');
       return;
@@ -641,8 +664,8 @@ export default function AssetDetailScreen() {
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={social.openShare}
-          onSave={social.openCollectionPicker}
-          onToggleFav={social.toggleLike}
+          onSave={guardedOpenCollectionPicker}
+          onToggleFav={guardedToggleLike}
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
@@ -664,7 +687,7 @@ export default function AssetDetailScreen() {
               icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
               label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
-              onPress: social.openCollectionPicker,
+              onPress: guardedOpenCollectionPicker,
               isActive: social.isSavedToCollection,
             },
           ]}
@@ -692,6 +715,15 @@ export default function AssetDetailScreen() {
             interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
           />
 
+          {/* Co-Own v2 beta badge — gated by the co_own_v2 feature flag.
+              Additive indicator; absent when the flag is off (current behaviour). */}
+          {coOwnV2Enabled ? (
+            <View style={[styles.coOwnV2Badge, { backgroundColor: `${colors.brand}14`, borderColor: `${colors.brand}40` }]}>
+              <Ionicons name="sparkles" size={12} color={colors.brand} aria-hidden={true} />
+              <Text style={[styles.coOwnV2BadgeText, { color: colors.brand }]} maxFontSizeMultiplier={1.3}>Co-Own v2</Text>
+            </View>
+          ) : null}
+
           {/* Issuer — shared seller row primitive, configured for
               institutional Co-Own issuers. Taps into issuer profile. */}
           <View style={styles.collectibleIssuerWrap}>
@@ -717,10 +749,8 @@ export default function AssetDetailScreen() {
                   ? {
                       label: 'Message',
                       onPress: async () => {
-                        if (!currentUser?.id) {
-                          show('Sign in to message the issuer.', 'error');
-                          return;
-                        }
+                        if (!requireAuth('message_seller')) return;
+                        if (!currentUser) return;
                         if (isResolvingConversation) return;
                         setIsResolvingConversation(true);
                         try {
@@ -757,10 +787,11 @@ export default function AssetDetailScreen() {
               adjustsFontSizeToFit
               minimumFontScale={0.82}
               numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
             >
               {formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
             </Text>
-            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]}>
+            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
               per unit
             </Text>
           </View>
@@ -770,7 +801,7 @@ export default function AssetDetailScreen() {
               Avoid "Continuous · Open" — use simple "Market open".
               State escalates only when actionability requires it. */}
           <View style={styles.collectibleAvailabilityRow}>
-            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]}>
+            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
               {availableUnits} available
             </Text>
             <View style={[styles.collectibleAvailabilityDot, {
@@ -780,7 +811,7 @@ export default function AssetDetailScreen() {
                   ? colors.success
                   : colors.textMuted,
             }]} />
-            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]}>
+            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
               {reconciliationActive
                 ? 'Orders paused'
                 : asset.isOpen
@@ -971,14 +1002,14 @@ export default function AssetDetailScreen() {
                       },
                     ]}
                   />
-                  <Text style={[styles.marketStatusText, { color: colors.textPrimary }]}>
+                  <Text style={[styles.marketStatusText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                     {reconciliationActive ? 'Trading paused · settling' : asset.isOpen ? 'Market open' : 'Market closed'}
                   </Text>
                   {dataStale && dataStaleAgeLabel && (
                     <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
                   )}
                 </View>
-                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                   {orderBookError
                     ? 'Depth unavailable'
                     : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
@@ -1007,7 +1038,7 @@ export default function AssetDetailScreen() {
                 ]}
               />
             </View>
-            <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
               {allocatedPct}% allocated · {availableUnits} units available
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
@@ -1057,32 +1088,32 @@ export default function AssetDetailScreen() {
           {fundamentalsExpanded ? (
             <View style={[styles.fundamentalsStacked, { borderTopColor: colors.border }]}>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Reference vs NAV</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Reference vs NAV</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                   {referenceVsNavPct != null
                     ? `${referenceVsNavPct >= 0 ? '+' : ''}${referenceVsNavPct.toFixed(1)}%`
                     : 'Not available'}
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>NAV / unit</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>NAV / unit</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                   {navPerUnitGbp != null
                     ? formatFromFiat(navPerUnitGbp, 'GBP')
                     : 'Not available'}
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Next report</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Next report</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                   {asset.appraisalValuedAt
                     ? new Date(asset.appraisalValuedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
                     : 'Not scheduled'}
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Next distribution</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>Not scheduled</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Next distribution</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>Not scheduled</Text>
               </View>
             </View>
           ) : null}
@@ -1099,15 +1130,15 @@ export default function AssetDetailScreen() {
           ) : (
             <View style={[styles.marketBookRow, { borderTopColor: colors.border }]}>
               <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Highest bid</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Highest bid</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.3}>
                   {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
                 </Text>
               </View>
               <View style={[styles.marketBookDivider, { backgroundColor: colors.border }]} />
               <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Lowest ask</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Lowest ask</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.3}>
                   {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
                 </Text>
               </View>
@@ -1184,6 +1215,7 @@ export default function AssetDetailScreen() {
             <Text
               style={[styles.assetStoryText, { color: colors.textSecondary }]}
               numberOfLines={3}
+              maxFontSizeMultiplier={2}
             >
               {asset.provenance}
             </Text>
@@ -1670,7 +1702,7 @@ export default function AssetDetailScreen() {
         snapPoint={0.7}
       >
         <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]}>
+          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
             Risk disclosure
           </Text>
           <Pressable
@@ -1722,7 +1754,7 @@ export default function AssetDetailScreen() {
         onClose={() => setOverflowVisible(false)}
         onShare={social.openShare}
         onOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
-        onToggleFav={social.toggleLike}
+        onToggleFav={guardedToggleLike}
         isFav={social.isLiked}
         onWatch={() => {
           toggleCoOwnWatch(asset.id);
@@ -1755,8 +1787,8 @@ export default function AssetDetailScreen() {
                 <Ionicons name="notifications" size={20} color={colors.textInverse} />
               </View>
               <View style={priceAlertStyles.headerText}>
-                <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]}>Create price alert</Text>
-                <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]}>
+                <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Create price alert</Text>
+                <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                   Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
                 </Text>
               </View>
@@ -1860,6 +1892,23 @@ const styles = StyleSheet.create({
   },
   collectibleIssuerWrap: {
     marginTop: Space.md,
+  },
+  // Co-Own v2 beta badge — additive indicator gated by the co_own_v2 flag.
+  coOwnV2Badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xxs + 1,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.sm,
+  },
+  coOwnV2BadgeText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   collectiblePriceRow: {
     flexDirection: 'row',

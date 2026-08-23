@@ -38,6 +38,7 @@ import {
   type CoOwnRecurringOrder,
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnRecurringOrders'>;
 
@@ -62,6 +63,7 @@ const FREQUENCY_SHORT: Record<string, string> = {
 };
 
 export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();

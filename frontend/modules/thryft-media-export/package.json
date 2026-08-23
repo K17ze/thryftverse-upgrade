@@ -1,0 +1,14 @@
+{
+  "name": "thryft-media-export",
+  "version": "1.0.0",
+  "description": "Nitro HybridObject module for on-device video/image composition + export. Consumes the Thryft composition document and an ExportIntent; produces a local file (mp4/png) with real progress and cancellation. iOS: AVFoundation (AVMutableComposition + AVVideoComposition + AVAssetExportSession). Android: Media3 Transformer (1.10.x) + Effects + Composition.setHdrMode.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "private": true,
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  }
+}

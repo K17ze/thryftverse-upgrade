@@ -32,6 +32,13 @@ import {
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
 } from "../../services/chatApi";
+import {
+  useChatMessageEvent,
+  realtimePayloadToMessage,
+  chatConversationTopic,
+  type ChatMessageCreatedPayload,
+} from "../../services/realtimeClient";
+import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 import { isVideoUri } from "../../utils/media";
@@ -131,6 +138,11 @@ export function useConversationMessages({
   const wasUnreadOnOpenRef = useRef(false);
   const composerSendingRef = useRef(false);
   const pushPermissionAskedRef = useRef(false);
+
+  // Tracks how many messages the user has seen when last at the bottom.
+  // When the user scrolls up, new messages arriving increment the unread
+  // count shown on the scroll-to-bottom FAB (Instagram/WhatsApp pattern).
+  const seenMessageCountRef = useRef(0);
 
   // Sync local messages when hydrated store messages change
   useEffect(() => {
@@ -240,6 +252,68 @@ export function useConversationMessages({
   const pushMessage = useCallback((next: Message) => {
     setMessages((prev) => [...prev, next]);
   }, []);
+
+  // Realtime subscription — append incoming messages live.
+  // useChatMessageEvent subscribes to the conversation's topic and invokes
+  // the handler for each `chat.message.created` event. The handler is held
+  // in a ref by the hook so a fresh closure is captured every render without
+  // re-subscribing.
+  useChatMessageEvent(
+    conversationId,
+    useCallback(
+      (payload: ChatMessageCreatedPayload) => {
+        // Deduplicate by message id — the server may replay events after a
+        // reconnect, and the optimistic local send also inserts by id.
+        if (messagesRef.current.some((m) => m.id === payload.id)) return;
+
+        const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
+
+        // Map the domain Message into the local chat Message shape used by
+        // this hook's UI state.
+        const localMessage: Message = {
+          id: domainMessage.id,
+          type:
+            domainMessage.type === "system"
+              ? "system"
+              : domainMessage.mediaType
+                ? "media"
+                : "text",
+          sender: domainMessage.sender === "me" ? "me" : "them",
+          senderId: domainMessage.senderId,
+          text: domainMessage.text,
+          isSystem: domainMessage.isSystem,
+          systemTitle: domainMessage.systemTitle,
+          date: domainMessage.timestamp,
+          mediaUri: domainMessage.mediaUri,
+          mediaType: domainMessage.mediaType,
+          status: "sent",
+        };
+
+        setMessages((prev) => [...prev, localMessage]);
+
+        // Persist into the conversation store so the inbox preview and
+        // hydration stay in sync.
+        if (conversationId) {
+          appendConversationMessage(conversationId, domainMessage);
+        }
+
+        scheduleScrollToEnd();
+      },
+      [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd],
+    ),
+  );
+
+  // Realtime resnapshot — when the bridge signals that canonical state for
+  // this conversation should be refetched (e.g. after a gap was replayed),
+  // re-sync the full message list from the API.
+  const needsResnapshot = useRealtimeResnapshot(
+    conversationId ? chatConversationTopic(conversationId) : "",
+  );
+  useEffect(() => {
+    if (needsResnapshot) {
+      void syncMessagesFromApi();
+    }
+  }, [needsResnapshot, syncMessagesFromApi]);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
   // below, because it performs the canonical server send and only then
@@ -667,9 +741,23 @@ export function useConversationMessages({
     [conversationId, haptic, show, scheduleUndoClear],
   );
 
+  // When the user is at the bottom, record the seen message count so
+  // unread messages arriving while scrolled up can be counted for the
+  // scroll-to-bottom FAB badge (Instagram/WhatsApp pattern).
+  useEffect(() => {
+    if (!showScrollToBottom) {
+      seenMessageCountRef.current = messages.length;
+    }
+  }, [messages.length, showScrollToBottom]);
+
+  const unreadBelowCount = showScrollToBottom
+    ? Math.max(0, messages.length - seenMessageCountRef.current)
+    : 0;
+
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
     setShowScrollToBottom(false);
+    seenMessageCountRef.current = messagesRef.current.length;
   }, []);
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -742,6 +830,7 @@ export function useConversationMessages({
     isOffline,
     showScrollToBottom,
     setShowScrollToBottom,
+    unreadBelowCount,
     recentlyDeleted,
     composerSending,
     listRef,

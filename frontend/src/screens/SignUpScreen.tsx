@@ -11,6 +11,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { signupWithPassword, loginWithAppleIdentityToken, loginWithGoogleIdToken } from '../services/authApi';
+import { track, trackFunnelStep } from '../analytics/track';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -83,6 +84,8 @@ export default function SignUpScreen() {
         const result = await loginWithGoogleIdToken(idToken);
         login(result.storeUser);
         setTwoFactorEnabled(result.user.twoFactorEnabled);
+        track('user_signed_up', { method: 'google' });
+        trackFunnelStep('signup', 'signup_completed', { method: 'google' });
         navigation.replace('MainTabs');
       } catch (error) {
         setAuthError(`Google sign-up failed: ${(error as Error).message}`);
@@ -127,6 +130,8 @@ export default function SignUpScreen() {
       const result = await loginWithAppleIdentityToken(credential.identityToken);
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
+      track('user_signed_up', { method: 'apple' });
+      trackFunnelStep('signup', 'signup_completed', { method: 'apple' });
       navigation.replace('MainTabs');
     } catch (error) {
       const code = (error as { code?: string }).code;
@@ -270,6 +275,7 @@ export default function SignUpScreen() {
     setErrorMsg('');
     setUsernameError('');
     setIsSubmitting(true);
+    trackFunnelStep('signup', 'signup_started', { method: 'email' });
 
     try {
       const result = await signupWithPassword({
@@ -280,6 +286,8 @@ export default function SignUpScreen() {
 
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
+      track('user_signed_up', { method: 'email' });
+      trackFunnelStep('signup', 'signup_completed', { method: 'email' });
       navigation.replace('MainTabs');
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to create account right now.');

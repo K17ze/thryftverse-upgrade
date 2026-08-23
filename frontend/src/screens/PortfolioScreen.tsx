@@ -35,10 +35,12 @@ import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);

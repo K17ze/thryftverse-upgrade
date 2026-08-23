@@ -29,11 +29,13 @@ import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const paymentPreferences = useStore((state) => state.paymentPreferences);

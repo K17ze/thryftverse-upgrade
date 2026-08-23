@@ -32,6 +32,7 @@ import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../utils/curren
 import { formatIzeAmount } from '../utils/currency';
 import { CURRENCIES } from '../constants/currencies';
 import { COPY } from '../constants/copy';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 import {
   Typography,
@@ -57,6 +58,7 @@ interface ConversionResult {
 }
 
 export default function WalletConvertScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
