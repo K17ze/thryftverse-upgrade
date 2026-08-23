@@ -1,13 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import {
   View,
   Text,
   StyleSheet,
-  Share,
-  FlatList
+  Share
 } from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -160,6 +160,46 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     show('Referral code copied.', 'success');
   }, [referralCode, show]);
 
+  const renderReferralItem = useCallback<ListRenderItem<ReferralHistoryItem>>(
+    ({ item, index }) => {
+      const name = item.inviteeName || item.inviteeHandle || 'Anonymous';
+      const dateLabel = new Date(item.invitedAt).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+      });
+      const badgeStyle =
+        item.status === 'invited' ? styles.badgeMuted :
+        item.status === 'joined' ? styles.badgeBrand :
+        styles.badgeSuccess;
+      const badgeText =
+        item.status === 'invited' ? styles.badgeMutedText :
+        item.status === 'joined' ? styles.badgeBrandText :
+        styles.badgeSuccessText;
+      const label =
+        item.status === 'invited' ? 'Invited' :
+        item.status === 'joined' ? 'Joined' :
+        item.status === 'completed' ? 'Completed' :
+        'Rewarded';
+      return (
+        <View style={[styles.historyRow, index < referralHistory.length - 1 && styles.historyRowBordered]}>
+          <View style={styles.historyInfo}>
+            <Text style={styles.historyName} numberOfLines={1}>{name}</Text>
+            <Text style={styles.historyDate}>{dateLabel}</Text>
+          </View>
+          <View style={[styles.badge, badgeStyle]}>
+            <Text style={[styles.badgeText, badgeText]}>{label}</Text>
+          </View>
+        </View>
+      );
+    },
+    [styles, referralHistory.length]
+  );
+
+  const referralKeyExtractor = useCallback(
+    (item: ReferralHistoryItem) => item.id,
+    []
+  );
+
   return (
     <FlagshipScreen
       header={<FlagshipHeader title="Invite friends" onBack={() => navigation.goBack()} />}
@@ -289,41 +329,12 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             <Ionicons name="time-outline" size={18} color={ACCENT} />
             <Text style={styles.rewardsTitle}>Referral history</Text>
           </View>
-          <FlatList
+          <FlashList
             data={referralHistory}
             scrollEnabled={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => {
-              const name = item.inviteeName || item.inviteeHandle || 'Anonymous';
-              const dateLabel = new Date(item.invitedAt).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-              });
-              const badgeStyle =
-                item.status === 'invited' ? styles.badgeMuted :
-                item.status === 'joined' ? styles.badgeBrand :
-                styles.badgeSuccess;
-              const badgeText =
-                item.status === 'invited' ? styles.badgeMutedText :
-                item.status === 'joined' ? styles.badgeBrandText :
-                styles.badgeSuccessText;
-              const label =
-                item.status === 'invited' ? 'Invited' :
-                item.status === 'joined' ? 'Joined' :
-                item.status === 'completed' ? 'Completed' :
-                'Rewarded';
-              return (
-                <View style={[styles.historyRow, index < referralHistory.length - 1 && styles.historyRowBordered]}>
-                  <View style={styles.historyInfo}>
-                    <Text style={styles.historyName} numberOfLines={1}>{name}</Text>
-                    <Text style={styles.historyDate}>{dateLabel}</Text>
-                  </View>
-                  <View style={[styles.badge, badgeStyle]}>
-                    <Text style={[styles.badgeText, badgeText]}>{label}</Text>
-                  </View>
-                </View>
-              );
-            }}
+            keyExtractor={referralKeyExtractor}
+            renderItem={renderReferralItem}
+            drawDistance={250}
           />
         </View>
       ) : null}

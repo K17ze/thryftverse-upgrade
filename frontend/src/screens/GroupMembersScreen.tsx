@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Alert,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +19,18 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import {
+  addConversationMembersOnApi,
+  removeConversationMemberOnApi,
+  leaveGroupOnApi,
+  promoteConversationMemberOnApi,
+  demoteConversationMemberOnApi,
+  transferConversationOwnershipOnApi,
+} from '../services/chatApi';
+import { searchUsers, type UserSearchResult } from '../services/profileApi';
+import { parseApiError } from '../lib/apiClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupMembers'>;
 
@@ -27,29 +41,62 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
+  const { show } = useToast();
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  const deleteConversation = useStore((state) => state.deleteConversation);
   const participantNameLookup = useStore(
     (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
   );
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  // Add-members flow state
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [addQuery, setAddQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
+  const [isAdding, setIsAdding] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
     [conversations, conversationId]
   );
 
-  // Determine roles: creator is owner, others are members (admins not yet supported by backend)
+  const currentRole: MemberRole | undefined = useMemo(() => {
+    if (!currentUser?.id) return undefined;
+    if (conversation?.ownerId === currentUser.id) return 'owner';
+    const role = conversation?.memberRoles?.[currentUser.id];
+    if (role === 'admin') return 'admin';
+    if (role === 'owner') return 'owner';
+    return 'member';
+  }, [conversation, currentUser?.id]);
+
+  const canManage = currentRole === 'owner' || currentRole === 'admin';
+
+  // Determine roles from memberRoles / ownerId
   const members = useMemo(() => {
     const ids = conversation?.participantIds ?? [];
-    const creatorId = conversation?.creatorId ?? ids[0];
     return ids.map((id) => {
       const name = id === currentUser?.id
         ? 'You'
         : participantNameLookup?.get(id) ?? `User ${id.slice(-6)}`;
-      const role: MemberRole = id === creatorId ? 'owner' : 'member';
+      let role: MemberRole = 'member';
+      if (id === conversation?.ownerId) {
+        role = 'owner';
+      } else if (conversation?.memberRoles?.[id] === 'admin') {
+        role = 'admin';
+      } else if (conversation?.memberRoles?.[id] === 'owner') {
+        role = 'owner';
+      }
       return {
         id,
         name,
@@ -64,6 +111,287 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     const q = searchQuery.toLowerCase();
     return members.filter((m) => m.name.toLowerCase().includes(q));
   }, [members, searchQuery]);
+
+  const performSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setHasSearched(false);
+      setSearchError('');
+      return;
+    }
+    setIsSearching(true);
+    setHasSearched(false);
+    setSearchError('');
+    try {
+      const results = await searchUsers(trimmed, 20);
+      const existingIds = new Set(conversation?.participantIds ?? []);
+      const filtered = results.filter((r) => r.id !== currentUser?.id && !existingIds.has(r.id));
+      setSearchResults(filtered);
+      setHasSearched(true);
+    } catch (err) {
+      setSearchResults([]);
+      setHasSearched(true);
+      setSearchError(parseApiError(err, 'Search failed. Check your connection.').message);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [conversation?.participantIds, currentUser?.id]);
+
+  useEffect(() => {
+    if (!showAddMembers) return;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!addQuery.trim()) {
+      setSearchResults([]);
+      setHasSearched(false);
+      setIsSearching(false);
+      setSearchError('');
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      void performSearch(addQuery);
+    }, 350);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [addQuery, performSearch, showAddMembers]);
+
+  const toggleSelectToAdd = (userId: string) => {
+    haptic.light();
+    setSelectedToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const handleAddMembers = async () => {
+    if (selectedToAdd.size === 0) return;
+    haptic.medium();
+    setIsAdding(true);
+    try {
+      const result = await addConversationMembersOnApi(conversationId, Array.from(selectedToAdd));
+      upsertConversation({
+        ...conversation!,
+        participantIds: result.participantIds,
+      });
+      show(`${selectedToAdd.size} member${selectedToAdd.size === 1 ? '' : 's'} added`, 'success');
+      setSelectedToAdd(new Set());
+      setAddQuery('');
+      setSearchResults([]);
+      setHasSearched(false);
+      setShowAddMembers(false);
+    } catch (err) {
+      show(parseApiError(err, 'Could not add members. Try again.').message, 'error');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Remove member?',
+      `Remove ${memberName} from this group?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.heavy();
+            setRemovingId(memberId);
+            try {
+              const result = await removeConversationMemberOnApi(conversationId, memberId);
+              upsertConversation({
+                ...conversation!,
+                participantIds: result.participantIds,
+              });
+              show('Member removed', 'info');
+            } catch (err) {
+              show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePromoteMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Promote to admin?',
+      `${memberName} will be able to manage members, edit group info, and remove others.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Promote',
+          onPress: async () => {
+            haptic.medium();
+            setRemovingId(memberId);
+            try {
+              const result = await promoteConversationMemberOnApi(conversationId, memberId);
+              upsertConversation({
+                ...conversation!,
+                memberRoles: Object.fromEntries(
+                  Object.entries(result.memberRoles).filter(
+                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+                  ),
+                ) as Record<string, 'owner' | 'admin' | 'member'>,
+              });
+              show(`${memberName} is now an admin.`, 'success');
+            } catch (err) {
+              show(parseApiError(err, 'Could not promote member.').message, 'error');
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDemoteMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Demote admin?',
+      `${memberName} will no longer have admin privileges.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Demote',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.medium();
+            setRemovingId(memberId);
+            try {
+              const result = await demoteConversationMemberOnApi(conversationId, memberId);
+              upsertConversation({
+                ...conversation!,
+                memberRoles: Object.fromEntries(
+                  Object.entries(result.memberRoles).filter(
+                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+                  ),
+                ) as Record<string, 'owner' | 'admin' | 'member'>,
+              });
+              show(`${memberName} is now a member.`, 'info');
+            } catch (err) {
+              show(parseApiError(err, 'Could not demote member.').message, 'error');
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleTransferOwnership = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Transfer ownership?',
+      `You will no longer be the owner. ${memberName} will become the new group owner and have full control.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Transfer',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.heavy();
+            setRemovingId(memberId);
+            try {
+              const result = await transferConversationOwnershipOnApi(conversationId, memberId);
+              upsertConversation({
+                ...conversation!,
+                ownerId: result.ownerId,
+                memberRoles: Object.fromEntries(
+                  Object.entries(result.memberRoles).filter(
+                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+                  ),
+                ) as Record<string, 'owner' | 'admin' | 'member'>,
+              });
+              show(`Ownership transferred to ${memberName}.`, 'success');
+            } catch (err) {
+              show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMemberLongPress = (member: { id: string; name: string; role: MemberRole }) => {
+    if (!canManage || member.id === currentUser?.id) return;
+    const isOwner = currentUser?.id === conversation?.ownerId;
+    const options: Array<{ text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }> = [
+      { text: 'Cancel', style: 'cancel' },
+    ];
+
+    if (member.role === 'member') {
+      options.unshift({
+        text: 'Promote to admin',
+        onPress: () => handlePromoteMember(member.id, member.name),
+      });
+      options.unshift({
+        text: 'Remove from group',
+        style: 'destructive',
+        onPress: () => handleRemoveMember(member.id, member.name),
+      });
+    } else if (member.role === 'admin') {
+      options.unshift({
+        text: 'Demote to member',
+        onPress: () => handleDemoteMember(member.id, member.name),
+      });
+      options.unshift({
+        text: 'Remove from group',
+        style: 'destructive',
+        onPress: () => handleRemoveMember(member.id, member.name),
+      });
+    }
+
+    // Only owner can transfer ownership
+    if (isOwner && member.id !== currentUser?.id) {
+      options.unshift({
+        text: 'Transfer ownership',
+        style: 'destructive',
+        onPress: () => handleTransferOwnership(member.id, member.name),
+      });
+    }
+
+    Alert.alert(member.name, undefined, options);
+  };
+
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      'Leave group?',
+      'You will be removed from this group on all devices. Other members will keep their copy.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave group',
+          style: 'destructive',
+          onPress: async () => {
+            haptic.heavy();
+            setIsLeaving(true);
+            try {
+              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+              deleteConversation(conversationId);
+              show('You left the group', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch (err) {
+              show(parseApiError(err, 'Could not leave group. Try again.').message, 'error');
+            } finally {
+              setIsLeaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -102,6 +430,119 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           containerStyle={styles.searchRow}
         />
 
+        {/* Add members section */}
+        {canManage && !showAddMembers && (
+          <AnimatedPressable
+            onPress={() => setShowAddMembers(true)}
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Add members"
+            style={styles.addRow}
+          >
+            <View style={[styles.addAvatar, { backgroundColor: `${colors.brand}15` }]}>
+              <Ionicons name="person-add-outline" size={20} color={colors.brand} />
+            </View>
+            <BodyEmphasis style={{ color: colors.brand }}>Add members</BodyEmphasis>
+          </AnimatedPressable>
+        )}
+
+        {/* Inline add-members search */}
+        {showAddMembers && (
+          <View style={styles.addMembersSection}>
+            <View style={styles.addMembersHeader}>
+              <AppSearchBar
+                placeholder="Search by username..."
+                value={addQuery}
+                onChangeText={setAddQuery}
+                onClear={() => setAddQuery('')}
+                containerStyle={styles.addSearchRow}
+              />
+              <Pressable
+                onPress={() => {
+                  setShowAddMembers(false);
+                  setAddQuery('');
+                  setSearchResults([]);
+                  setSelectedToAdd(new Set());
+                  setHasSearched(false);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel add members"
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+
+            {isSearching && (
+              <View style={styles.searchingRow}>
+                <ActivityIndicator size="small" color={colors.brand} />
+              </View>
+            )}
+
+            {!isSearching && searchError ? (
+              <Caption color={colors.danger} style={styles.searchStatusText}>{searchError}</Caption>
+            ) : null}
+
+            {!isSearching && hasSearched && searchResults.length === 0 && !searchError ? (
+              <Caption color={colors.textMuted} style={styles.searchStatusText}>No users found.</Caption>
+            ) : null}
+
+            {!isSearching && searchResults.length > 0 && (
+              <View style={styles.searchResultList}>
+                {searchResults.map((user, idx) => {
+                  const isSelected = selectedToAdd.has(user.id);
+                  return (
+                    <View key={user.id}>
+                      <Pressable
+                        onPress={() => toggleSelectToAdd(user.id)}
+                        style={({ pressed }) => [styles.searchResultRow, pressed && styles.rowPressed]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Select ${user.displayName ?? user.username}`}
+                      >
+                        <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={styles.memberAvatarTextV2}>
+                            {(user.displayName ?? user.username).slice(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.memberTextV2}>
+                          <BodyEmphasis numberOfLines={1}>{user.displayName ?? user.username}</BodyEmphasis>
+                          <Caption color={colors.textMuted} numberOfLines={1}>@{user.username}</Caption>
+                        </View>
+                        <View style={[styles.selectCircle, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }]}>
+                          <Ionicons name="checkmark" size={16} color={colors.surface} />
+                        </View>
+                      </Pressable>
+                      {idx < searchResults.length - 1 && <View style={styles.memberDivider} />}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {selectedToAdd.size > 0 && (
+              <AnimatedPressable
+                onPress={handleAddMembers}
+                activeOpacity={0.7}
+                scaleValue={0.97}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel="Add selected members"
+                style={styles.addConfirmBtn}
+              >
+                {isAdding ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Text style={styles.addConfirmText}>
+                    Add {selectedToAdd.size} member{selectedToAdd.size === 1 ? '' : 's'}
+                  </Text>
+                )}
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         {/* Member list */}
         {filteredMembers.length === 0 ? (
           <View style={styles.emptyWrapV2}>
@@ -110,38 +551,79 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           </View>
         ) : (
           <View style={styles.memberList}>
-            {filteredMembers.map((member, index) => (
-              <View key={member.id}>
-                <AnimatedPressable
-                  onPress={() => openProfile(navigation, member.id, currentUser?.id)}
-                  activeOpacity={0.85}
-                  scaleValue={0.98}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${member.name} profile`}
-                  style={styles.memberRowV2}
-                >
-                  <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
-                    <Text style={styles.memberAvatarTextV2}>
-                      {member.name.slice(0, 2).toUpperCase()}
-                    </Text>
+            {filteredMembers.map((member, index) => {
+              const canRemove = canManage && !member.isMe && member.role !== 'owner';
+              const isRemovingThis = removingId === member.id;
+              return (
+                <View key={member.id}>
+                  <View style={styles.memberRowV2}>
+                    <AnimatedPressable
+                      onPress={() => openProfile(navigation, member.id, currentUser?.id)}
+                      onLongPress={() => handleMemberLongPress(member)}
+                      delayLongPress={400}
+                      activeOpacity={0.85}
+                      scaleValue={0.98}
+                      hapticFeedback="light"
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${member.name} profile`}
+                      accessibilityHint="Long-press for admin actions"
+                      style={styles.memberRowContent}
+                    >
+                      <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={styles.memberAvatarTextV2}>
+                          {member.name.slice(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.memberTextV2}>
+                        <View style={styles.nameRowV2}>
+                          <BodyEmphasis>{member.name}</BodyEmphasis>
+                          {roleBadge(member.role)}
+                        </View>
+                        {member.role === 'owner' && (
+                          <Caption color={colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
+                        )}
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                    </AnimatedPressable>
+
+                    {member.isMe ? (
+                      <Pressable
+                        onPress={handleLeaveGroup}
+                        disabled={isLeaving}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.actionBtn, pressed && styles.actionPressed]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Leave group"
+                      >
+                        {isLeaving ? (
+                          <ActivityIndicator size="small" color={colors.danger} />
+                        ) : (
+                          <Text style={styles.leaveText}>Leave</Text>
+                        )}
+                      </Pressable>
+                    ) : canRemove ? (
+                      <Pressable
+                        onPress={() => handleRemoveMember(member.id, member.name)}
+                        disabled={isRemovingThis}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.actionBtn, pressed && styles.actionPressed]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${member.name}`}
+                      >
+                        {isRemovingThis ? (
+                          <ActivityIndicator size="small" color={colors.danger} />
+                        ) : (
+                          <Text style={styles.removeText}>Remove</Text>
+                        )}
+                      </Pressable>
+                    ) : null}
                   </View>
-                  <View style={styles.memberTextV2}>
-                    <View style={styles.nameRowV2}>
-                      <BodyEmphasis>{member.name}</BodyEmphasis>
-                      {roleBadge(member.role)}
-                    </View>
-                    {member.role === 'owner' && (
-                      <Caption color={colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-                </AnimatedPressable>
-                {index < filteredMembers.length - 1 && (
-                  <View style={styles.memberDivider} />
-                )}
-              </View>
-            ))}
+                  {index < filteredMembers.length - 1 && (
+                    <View style={styles.memberDivider} />
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -255,6 +737,12 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     gap: Space.smMd,
   },
+  memberRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.smMd,
+  },
   memberAvatarV2: {
     width: Control.hit,
     height: Control.hit,
@@ -290,6 +778,110 @@ function createStyles(colors: ThemeColors) {
   },
   emptyTextV2: {
     textAlign: 'center',
+  },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.smMd,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+  },
+  addAvatar: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addMembersSection: {
+    gap: Space.sm,
+  },
+  addMembersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  addSearchRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.smMd,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  cancelText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.brand,
+  },
+  searchingRow: {
+    paddingVertical: Space.sm,
+    alignItems: 'center',
+  },
+  searchStatusText: {
+    paddingVertical: Space.sm,
+    textAlign: 'center',
+  },
+  searchResultList: {
+    gap: 0,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    gap: Space.smMd,
+    minHeight: Control.hit,
+  },
+  rowPressed: {
+    opacity: 0.6,
+  },
+  selectCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addConfirmBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: Radius.lg,
+    paddingVertical: Space.sm + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Control.hit,
+    marginTop: Space.xs,
+  },
+  addConfirmText: {
+    color: colors.surface,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  actionBtn: {
+    minWidth: Control.hit,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+  },
+  actionPressed: {
+    opacity: 0.5,
+  },
+  removeText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.danger,
+  },
+  leaveText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.danger,
   },
   });
 }

@@ -349,26 +349,46 @@ export default function InboxScreen() {
   }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
   const handleMute = useCallback((id: string) => {
     haptic.light();
-    toggleMutedConversation(id);
     const nowMuted = !mutedIds.includes(id);
-    showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
-  }, [toggleMutedConversation, mutedIds, showInfo, haptic]);
+    toggleMutedConversation(id)
+      .then(() => {
+        showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update mute status. Check your connection and try again.');
+      });
+  }, [toggleMutedConversation, mutedIds, showInfo, showError, haptic]);
   const handleArchive = useCallback((id: string) => {
     haptic.light();
-    toggleArchivedConversation(id);
     const nowArchived = !archivedIds.includes(id);
-    showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
-  }, [toggleArchivedConversation, archivedIds, showInfo, haptic]);
+    toggleArchivedConversation(id)
+      .then(() => {
+        showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update archive status. Check your connection and try again.');
+      });
+  }, [toggleArchivedConversation, archivedIds, showInfo, showError, haptic]);
   const handleAcceptRequest = useCallback((id: string) => {
     haptic.medium();
-    acceptMessageRequest(id);
-    showSuccess('Request accepted', 'Message request accepted.');
-  }, [acceptMessageRequest, showSuccess, haptic]);
+    acceptMessageRequest(id)
+      .then(() => {
+        showSuccess('Request accepted', 'Message request accepted.');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not accept this request. Check your connection and try again.');
+      });
+  }, [acceptMessageRequest, showSuccess, showError, haptic]);
   const handleDeclineRequest = useCallback((id: string) => {
     haptic.medium();
-    declineMessageRequest(id);
-    showInfo('Request declined', 'Message request declined.');
-  }, [declineMessageRequest, showInfo, haptic]);
+    declineMessageRequest(id)
+      .then(() => {
+        showInfo('Request declined', 'Message request declined.');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not decline this request. Check your connection and try again.');
+      });
+  }, [declineMessageRequest, showInfo, showError, haptic]);
   const handlePin = useCallback((id: string) => {
     haptic.medium();
     toggleConversationPinned(id);

@@ -2,13 +2,13 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -95,8 +95,8 @@ export default function FollowersScreen() {
     [navigation, currentUser?.id]
   );
 
-  const renderItem = useCallback(
-    ({ item }: { item: FollowListUser }) => {
+  const renderItem: ListRenderItem<FollowListUser> = useCallback(
+    ({ item }) => {
       const name = item.displayName || item.username || 'Thryft user';
       const initials = getInitials(name);
       const isSelf = item.id === currentUser?.id;
@@ -197,7 +197,7 @@ export default function FollowersScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
-      <FlatList
+      <FlashList
         data={filteredItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -206,6 +206,7 @@ export default function FollowersScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
+        drawDistance={250}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

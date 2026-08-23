@@ -39,6 +39,12 @@ S3_BACKUP_BUCKET="${S3_BACKUP_BUCKET:-}"
 S3_BACKUP_PREFIX="${S3_BACKUP_PREFIX:-db-backups}"
 ALERTING_WEBHOOK_URL="${ALERTING_WEBHOOK_URL:-}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-}"
+BACKUP_REQUIRE_ENCRYPTION="${BACKUP_REQUIRE_ENCRYPTION:-}"
+
+if { [ "$BACKUP_REQUIRE_ENCRYPTION" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; } && [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
+  echo "FATAL: BACKUP_ENCRYPTION_KEY is required when BACKUP_REQUIRE_ENCRYPTION=true or NODE_ENV=production" >&2
+  exit 1
+fi
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
@@ -46,6 +52,7 @@ TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
 BASE_NAME="thryftverse_${TIMESTAMP}"
 DUMP_FILE="${BACKUP_DIR}/${BASE_NAME}.dump"
 ENCRYPTED_FILE="${BACKUP_DIR}/${BASE_NAME}.dump.enc"
+CHECKSUM_FILE=""
 
 mkdir -p "$BACKUP_DIR"
 
@@ -65,7 +72,7 @@ cleanup() {
   if [ $exit_code -ne 0 ]; then
     send_alert "❌ **Automated DB backup FAILED** for database ${POSTGRES_DB} on ${POSTGRES_HOST}. Exit code: ${exit_code}"
   fi
-  rm -f "$DUMP_FILE"
+  rm -f "$DUMP_FILE" "$CHECKSUM_FILE"
   exit $exit_code
 }
 
@@ -107,7 +114,16 @@ fi
 if [ -n "$S3_BACKUP_BUCKET" ]; then
   S3_KEY="${S3_BACKUP_PREFIX}/$(basename "$UPLOAD_FILE")"
   echo "[$(date -u)] Uploading to s3://${S3_BACKUP_BUCKET}/${S3_KEY}..."
-  aws s3 cp "$UPLOAD_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_KEY}" --no-progress
+
+  CHECKSUM_FILE="${UPLOAD_FILE}.sha256"
+  sha256sum "$UPLOAD_FILE" | awk '{print $1}' > "$CHECKSUM_FILE"
+  S3_CHECKSUM_KEY="${S3_BACKUP_PREFIX}/$(basename "$CHECKSUM_FILE")"
+
+  aws s3 cp "$UPLOAD_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_KEY}" --no-progress --sse aws:kms
+  aws s3 cp "$CHECKSUM_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_CHECKSUM_KEY}" --no-progress --sse aws:kms
+
+  rm -f "$CHECKSUM_FILE"
+  CHECKSUM_FILE=""
 
   echo "[$(date -u)] Pruning S3 backups older than ${BACKUP_RETENTION_DAYS} days..."
   CUTOFF_DATE=$(date -u -d "${BACKUP_RETENTION_DAYS} days ago" +"%Y-%m-%d" 2>/dev/null || date -u -v-${BACKUP_RETENTION_DAYS}d +"%Y-%m-%d" 2>/dev/null || echo "")

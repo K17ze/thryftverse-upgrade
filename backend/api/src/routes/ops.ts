@@ -18,6 +18,7 @@ import {
 } from '../lib/pricingEngine.js';
 import {
   verifyAndNormalizeWebhook,
+  normalizeWebhookEvent,
   type ProviderSlug,
 } from '../lib/paymentProviders.js';
 
@@ -1033,7 +1034,6 @@ export const registerOpsRoutes = ({
           AND attempts < max_attempts
         ORDER BY next_retry_at ASC
         LIMIT $1
-        FOR UPDATE SKIP LOCKED
       `,
       [batchSize]
     );
@@ -1045,15 +1045,33 @@ export const registerOpsRoutes = ({
       try {
         await client.query('BEGIN');
 
-        // Mark as processing.
-        await client.query(
+        // Claim the item with a lease inside the transaction.
+        const claimed = await client.query<{ id: number }>(
           `UPDATE webhook_processing_outbox
-           SET status = 'processing', last_attempt_at = NOW(), attempts = attempts + 1, updated_at = NOW()
-           WHERE id = $1`,
-          [item.id]
+           SET status = 'processing',
+               last_attempt_at = NOW(),
+               attempts = attempts + 1,
+               lease_owner = $2,
+               lease_expires_at = NOW() + INTERVAL '30 seconds',
+               updated_at = NOW()
+           WHERE id = $1
+             AND status IN ('pending', 'failed')
+           RETURNING id`,
+          [item.id, `retry-sweep-${Date.now()}`]
         );
 
-        // Re-normalize and re-process the webhook event.
+        if (!claimed.rowCount) {
+          // Another sweep claimed it — skip.
+          await client.query('ROLLBACK');
+          continue;
+        }
+
+        // Re-process using the stored normalized payload.
+        // Signature re-verification is SKIPPED: the event was already
+        // signature-verified at receipt time.  The durable inbox row's
+        // existence proves verified receipt.  Re-verifying with a
+        // re-serialized payload and empty headers would always fail
+        // (Stripe generates a new signature on each delivery).
         const provider: ProviderSlug = item.gateway_id === 'stripe_americas' ? 'stripe'
           : item.gateway_id === 'razorpay_in' ? 'razorpay'
           : item.gateway_id === 'mollie_eu' ? 'mollie'
@@ -1062,18 +1080,13 @@ export const registerOpsRoutes = ({
           : item.gateway_id === 'wise_global' ? 'wise'
           : 'stripe';
 
-        const verification = await verifyAndNormalizeWebhook(
-          provider,
-          toJsonString(item.raw_payload),
-          {},
-          item.raw_payload
-        );
+        // Construct the event from the stored raw payload directly,
+        // without re-verifying the signature.
+        const event = await normalizeWebhookEvent(provider, item.raw_payload);
 
-        if (!verification.verified || !verification.event) {
-          throw new Error(verification.reason ?? 'Webhook re-verification failed');
+        if (!event) {
+          throw new Error('Failed to normalize stored webhook payload for retry');
         }
-
-        const event = verification.event;
         let intentRow: PaymentIntentRow | null = null;
         if (event.intentId) {
           const byId = await client.query<PaymentIntentRow>(

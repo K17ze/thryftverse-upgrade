@@ -97,7 +97,6 @@ interface MyProfileIdentityHeroProps {
   listingCount?: number;
   lookCount?: number;
   sellerTrust?: SellerTrustSummary | null;
-  emailVerified?: boolean;
   ratingAverage?: number | null;
   reviewCount?: number | null;
   soldCount?: number;
@@ -128,7 +127,6 @@ export function MyProfileIdentityHero({
   website,
   memberSince,
   sellerTrust,
-  emailVerified,
   ratingAverage,
   reviewCount,
   soldCount,
@@ -146,10 +144,10 @@ export function MyProfileIdentityHero({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const verified =
-    sellerTrust?.verified === true || emailVerified === true;
+  // Verification tier — only from seller trust (authoritative backend source).
+  // Email verification is never used as a proxy for seller/identity verification.
   const verificationTier: VerificationTier | null =
-    sellerTrust?.verificationTier ?? (verified ? 'email' : null);
+    sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
   const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
 
   const hasRating = ratingAverage !== null && ratingAverage !== undefined && (reviewCount ?? 0) > 0;

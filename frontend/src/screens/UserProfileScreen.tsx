@@ -517,7 +517,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         reviewCount={reviewCount}
         memberSince={memberSince}
         sellerTrust={sellerTrust}
-        emailVerified={targetProfile?.emailVerified}
         followPending={followMutation.isPending}
         isBlocked={isBlocked}
         scrollY={scrollY}

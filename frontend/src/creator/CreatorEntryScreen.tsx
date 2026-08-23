@@ -19,6 +19,7 @@ import { PressScale, SheetContainer } from './CreatorAnimations';
 import { MediaBrowserSheet, type SelectedAsset } from './tools/MediaBrowser';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { useHaptic } from '../hooks/useHaptic';
+import { CreatorModeSwitch, type CreatorCaptureMode } from './capture/CreatorModeSwitch';
 
 // ── Relative time formatter for draft "Last edited" timestamps ────────
 // Compact, human wording. Falls back to a localized date for old entries.
@@ -69,6 +70,8 @@ export interface CreatorEntryScreenProps {
    * one page per asset, Look creates stacked layers on one page.
    */
   onMediaSelected: (media: CreatorInitialMedia[]) => void;
+  /** Switches the canonical composer before any media is committed. */
+  onDocumentTypeChange: (type: 'look' | 'poster') => void;
   onBlankStart: () => void;
   /**
    * Optional: apply a template selected from inside the editor. Kept on the
@@ -96,6 +99,7 @@ export function CreatorEntryScreen({
   documentType,
   onClose,
   onMediaSelected,
+  onDocumentTypeChange,
   onBlankStart,
   onOpenDraft,
   onVisualSearchCapture,
@@ -110,6 +114,22 @@ export function CreatorEntryScreen({
   // reframe the capture intent without leaving the viewfinder. Initialized
   // from the documentType prop so the default mode matches the entry intent.
   const [mode, setMode] = useState<CreatorCameraMode>(documentType);
+
+  const handleModeChange = useCallback((nextMode: CreatorCaptureMode) => {
+    if (nextMode === mode) return;
+    if (nextMode === 'visual-search') {
+      setMode(nextMode);
+      return;
+    }
+    if (nextMode !== documentType) {
+      // Look and Poster are separate canonical composers. Switch the owner
+      // before capture so the selected mode can never publish into the wrong
+      // document contract.
+      onDocumentTypeChange(nextMode);
+      return;
+    }
+    setMode(nextMode);
+  }, [documentType, mode, onDocumentTypeChange]);
 
   // ── Sheet visibility ──
   const [showPhotos, setShowPhotos] = useState(false);
@@ -184,6 +204,11 @@ export function CreatorEntryScreen({
   const handlePhotosConfirm = useCallback((assets: SelectedAsset[]) => {
     setShowPhotos(false);
     if (assets.length === 0) return;
+    if (mode === 'visual-search') {
+      haptic.light();
+      onVisualSearchCapture?.(assets[0].uri);
+      return;
+    }
     const media: CreatorInitialMedia[] = assets.map((a, i) => ({
       id: `entry_${i}_${a.uri}`,
       uri: a.uri,
@@ -194,7 +219,7 @@ export function CreatorEntryScreen({
     }));
     haptic.light();
     onMediaSelected(media);
-  }, [onMediaSelected, haptic]);
+  }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
 
   // ── Drafts: open a draft in the composer ──
   const handleOpenDraft = useCallback((draftId: string) => {
@@ -221,27 +246,7 @@ export function CreatorEntryScreen({
             pointerEvents="box-none"
             style={[styles.modeSwitcherContainer, { bottom: insets.bottom + 100 }]}
           >
-            <View style={styles.modeSwitcher}>
-              {(['look', 'poster', 'visual-search'] as const).map((m) => (
-                <Pressable
-                  key={m}
-                  onPress={() => { haptic.selection(); setMode(m); }}
-                  style={styles.modeSwitcherItem}
-                  accessibilityLabel={`${m === 'visual-search' ? 'Search' : m === 'poster' ? 'Poster' : 'Look'} mode`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: mode === m }}
-                >
-                  <Text
-                    style={[
-                      styles.modeSwitcherText,
-                      mode === m && styles.modeSwitcherTextActive,
-                    ]}
-                  >
-                    {m === 'visual-search' ? 'Search' : m === 'poster' ? 'Poster' : 'Look'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <CreatorModeSwitch mode={mode} onModeChange={handleModeChange} />
           </View>
         )}
         renderTopRightAccessory={() => (
@@ -288,7 +293,7 @@ export function CreatorEntryScreen({
         visible={showPhotos}
         onClose={() => setShowPhotos(false)}
         onConfirm={handlePhotosConfirm}
-        maxSelections={isPoster ? 10 : 6}
+        maxSelections={mode === 'visual-search' ? 1 : isPoster ? 10 : 6}
         title="Select photos"
         showCameraTile={false}
         allowVideos
@@ -513,25 +518,5 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-  },
-  modeSwitcher: {
-    flexDirection: 'row',
-    gap: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.md,
-    paddingVertical: 6,
-  },
-  modeSwitcherItem: {
-    padding: 4,
-  },
-  modeSwitcherText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
-    fontFamily: Typography.family.regular,
-  },
-  modeSwitcherTextActive: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
   },
 });

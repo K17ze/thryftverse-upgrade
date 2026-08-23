@@ -23,3 +23,6 @@ export type { OnezeMintReserveHandlerDeps } from './onezeMintReserveHandler.js';
 
 export { processQueuedOnezeWithdrawalExecution } from './onezeWithdrawalHandler.js';
 export type { OnezeWithdrawalHandlerDeps } from './onezeWithdrawalHandler.js';
+
+export { processMediaIngestJob } from './mediaIngestHandler.js';
+export type { MediaIngestHandlerDeps } from './mediaIngestHandler.js';

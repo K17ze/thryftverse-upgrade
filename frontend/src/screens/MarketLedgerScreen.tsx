@@ -196,24 +196,6 @@ export default function MarketLedgerScreen() {
     navigation.navigate('Portfolio');
   }, [navigation]);
 
-  // ── Loading state (initial sync, no entries yet) ──
-  if (isSyncingLedger && entries.length === 0) {
-    return (
-      <FlagshipScreen
-        header={
-          <FlagshipHeader
-            title="Ledger"
-            subtitle="Market activity and trade history"
-            onBack={handleBack}
-          />
-        }
-        scrollEnabled={false}
-      >
-        <CoOwnActivitySkeleton />
-      </FlagshipScreen>
-    );
-  }
-
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible ledger rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
@@ -254,16 +236,25 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [
-    getEntryCashflow,
-    formatCoOwnIze,
-    formatMoney,
-    formatSignedMoney,
-    relativeTime,
-    haptics,
-    navigation,
-    resolveCommerceDestination,
-  ]);
+  }, [navigation]);
+
+  // ── Loading state (initial sync, no entries yet) ──
+  if (isSyncingLedger && entries.length === 0) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Ledger"
+            subtitle="Market activity and trade history"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
+        <CoOwnActivitySkeleton />
+      </FlagshipScreen>
+    );
+  }
 
   return (
     <FlagshipScreen

@@ -42,6 +42,7 @@ const updateMoodboardSchema = z.object({
 const addItemSchema = z.object({
   listingId: z.string().trim().max(120).optional(),
   mediaUrl: z.string().trim().max(1000).default(''),
+  mediaFinalizationId: z.string().trim().max(120).optional(),
   title: z.string().trim().max(200).default(''),
   priceGbp: z.coerce.number().min(0).default(0),
   caption: z.string().trim().max(500).default(''),
@@ -393,6 +394,39 @@ export function registerMoodboardRoutes({
       const itemId = randomUUID();
       const now = new Date();
 
+      let resolvedMediaUrl = data.mediaUrl;
+
+      if (data.mediaFinalizationId) {
+        const finalization = await db.query<{
+          owner_id: string;
+          status: string;
+          public_url: string;
+        }>(
+          `SELECT owner_id, status, public_url
+           FROM upload_finalizations
+           WHERE id = $1
+           LIMIT 1`,
+          [data.mediaFinalizationId]
+        );
+        const receipt = finalization.rows[0];
+        if (
+          !receipt
+          || receipt.owner_id !== actorUserId
+          || receipt.status !== 'finalized'
+        ) {
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'Media finalization receipt could not be verified',
+            code: 'MEDIA_RECEIPT_MISMATCH',
+          };
+        }
+        resolvedMediaUrl = receipt.public_url;
+      } else if (!data.listingId) {
+        reply.code(400);
+        return { ok: false, error: 'mediaFinalizationId or listingId required' };
+      }
+
       const sortOrderResult = await db.query<{ max_sort: string | number | null }>(
         `SELECT COALESCE(MAX(sort_order), -1) AS max_sort FROM moodboard_items WHERE moodboard_id = $1`,
         [moodboardId]
@@ -408,7 +442,7 @@ export function registerMoodboardRoutes({
           itemId,
           moodboardId,
           data.listingId ?? null,
-          data.mediaUrl,
+          resolvedMediaUrl,
           data.title,
           data.priceGbp,
           data.caption,
@@ -421,12 +455,12 @@ export function registerMoodboardRoutes({
         ]
       );
 
-      if (!data.mediaUrl) {
+      if (resolvedMediaUrl) {
         // If no cover image is set on the moodboard, use the first item's media.
         await db.query(
           `UPDATE moodboards SET cover_image_url = $1, updated_at = NOW()
            WHERE id = $2 AND (cover_image_url = '' OR cover_image_url IS NULL)`,
-          [data.mediaUrl, moodboardId]
+          [resolvedMediaUrl, moodboardId]
         );
       }
 

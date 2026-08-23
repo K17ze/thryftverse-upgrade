@@ -74,6 +74,8 @@ export interface CreatorSliderProps {
   hapticAtNeutral?: boolean;
   /** When true, the slider is non-interactive and dimmed. */
   disabled?: boolean;
+  /** Called when drag state changes (true on drag start, false on release). */
+  onDragStateChange?: (dragging: boolean) => void;
   /** Test ID. */
   testID?: string;
 }
@@ -91,6 +93,7 @@ export function CreatorSlider({
   accessibilityLabel,
   hapticAtNeutral = false,
   disabled = false,
+  onDragStateChange,
   testID,
 }: CreatorSliderProps): React.ReactElement {
   const { colors } = useAppTheme();
@@ -169,6 +172,7 @@ export function CreatorSlider({
         .onBegin((e) => {
           'worklet';
           isDraggingSV.value = true;
+          if (onDragStateChange) runOnJS(onDragStateChange)(true);
           updateFromPosition(e.x);
         })
         .onChange((e) => {
@@ -185,6 +189,7 @@ export function CreatorSlider({
             thumbPos.value = withSpring(thumbPos.value, springConfig);
           }
           isDraggingSV.value = false;
+          if (onDragStateChange) runOnJS(onDragStateChange)(false);
           if (onCommit) {
             const ratio = w > 0 ? Math.max(0, Math.min(1, thumbPos.value / w)) : 0;
             let finalVal = min + ratio * RANGE;
@@ -195,7 +200,7 @@ export function CreatorSlider({
           }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, reduceMotion, min, RANGE, step, onCommit, updateFromPosition],
+    [disabled, reduceMotion, min, RANGE, step, onCommit, onDragStateChange, updateFromPosition],
   );
 
   // Tap gesture — tap on track to jump

@@ -120,6 +120,8 @@ export const config = {
     360_000
   ),
   redisUrl: required('REDIS_URL', 'redis://localhost:6379'),
+  redisQueueUrl: required('REDIS_QUEUE_URL', required('REDIS_URL', 'redis://localhost:6379')),
+  redisCacheUrl: required('REDIS_CACHE_URL', required('REDIS_URL', 'redis://localhost:6379')),
   pgbouncerEnabled: asBoolean(process.env.PGBOUNCER_ENABLED, false),
   pgbouncerPort: asIntegerInRange('PGBOUNCER_PORT', process.env.PGBOUNCER_PORT, 6432, 1, 65_535),
   keyServiceUrl: required('KEY_SERVICE_URL', 'http://localhost:4100'),

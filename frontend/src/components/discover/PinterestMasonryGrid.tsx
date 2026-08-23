@@ -3,17 +3,23 @@ import {
   View,
   StyleSheet,
   useWindowDimensions,
-  ActivityIndicator,
   Text,
+  Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import Reanimated from 'react-native-reanimated';
 import type { Listing } from '../../domain';
 import type {
   DiscoveryFeedUnit,
   ListingFeedUnit,
+  LookFeedUnit,
+  MoodboardFeedUnit,
+  PosterFeedUnit,
   RecommendationBreakFeedUnit,
 } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
@@ -47,6 +53,7 @@ const FEED_UNIT_TYPES = new Set<string>([
   'listing',
   'look',
   'poster',
+  'moodboard',
   'editorial',
   'recommendation_break',
 ]);
@@ -82,6 +89,10 @@ interface Props {
   onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
   /** Returns whether a listing is currently saved. Drives the bookmark glyph. */
   isItemSaved?: (listingId: string) => boolean;
+  onLookPress?: (lookId: string) => void;
+  onPosterPress?: (storyId: string) => void;
+  /** Fired when a moodboard tile is tapped. */
+  onMoodboardPress?: (moodboardId: string) => void;
   /** Kept for interface compatibility; the discovery tile has no seller row. */
   onPressSeller?: (item: Listing) => void;
   onMessageSeller?: (item: Listing) => void;
@@ -143,12 +154,11 @@ interface Props {
  * Heterogeneous feed (DiscoveryFeedUnit[]):
  *  - The renderer switches on `unit.type` and honours `unit.span`, so the
  *    feed is an authored canvas (listings + full-width context breaks +
- *    hero listings + future editorial/look/poster modules), not a uniform
- *    catalogue. This is the structural fix for the Discover tab: the feed-
- *    unit model itself changed, not just the tile styling.
- *  - `editorial` / `look` / `poster` units render `null` until the backend
- *    sends valid data (truthful UI — the client never invents editorial
- *    media). The renderer is ready for them; the data path is not.
+ *    hero listings + live Looks/Posters/Moodboards), not a uniform catalogue.
+ *    This is the structural fix for the Discover tab: the feed-unit model
+ *    itself changed, not just the tile styling.
+ *  - Creator modules render only after the assembly layer validates live
+ *    media. Server editorial remains fail-closed until its route is wired.
  *
  * Recycling safety:
  *  - `keyExtractor` returns a stable `${id}` key.
@@ -164,6 +174,9 @@ export function PinterestMasonryGrid({
   onItemPress,
   onItemSaveToggle,
   isItemSaved,
+  onLookPress,
+  onPosterPress,
+  onMoodboardPress,
   onEndReached,
   isLoading = false,
   isLoadingMore = false,
@@ -181,11 +194,6 @@ export function PinterestMasonryGrid({
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-
-  // Heterogeneous path is active when the feed carries DiscoveryFeedUnit
-  // objects. An empty feed falls back to the listing path (the empty/loading
-  // states below are shape-agnostic).
-  const unitMode = items.length > 0 && isFeedUnit(items[0]);
 
   // Column width for CDN downscaling. FlashList v2 masonry gives each column
   // (windowWidth - 2*horizontalPadding) / numColumns; subtract the inter-item
@@ -240,6 +248,9 @@ export function PinterestMasonryGrid({
           onListingPress: handleUnitPress,
           onListingSaveToggle: onItemSaveToggle,
           isListingSaved: isItemSaved,
+          onLookPress,
+          onPosterPress,
+          onMoodboardPress,
         });
       }
       // Legacy listing path — unchanged single-column tile.
@@ -255,7 +266,7 @@ export function PinterestMasonryGrid({
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved],
+    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -363,6 +374,9 @@ interface UnitRenderContext {
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
   isListingSaved?: (listingId: string) => boolean;
+  onLookPress?: (lookId: string) => void;
+  onPosterPress?: (storyId: string) => void;
+  onMoodboardPress?: (moodboardId: string) => void;
 }
 
 function renderUnit(
@@ -400,17 +414,224 @@ function renderUnit(
       const u = unit as RecommendationBreakFeedUnit;
       return <RecommendationBreakRow label={u.label} gap={ctx.gap} />;
     }
+    case 'look': {
+      const u = unit as LookFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
+          <LookDiscoveryTile unit={u} onPress={ctx.onLookPress} />
+        </View>
+      );
+    }
+    case 'poster': {
+      const u = unit as PosterFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
+          <PosterDiscoveryTile unit={u} onPress={ctx.onPosterPress} />
+        </View>
+      );
+    }
+    case 'moodboard': {
+      const u = unit as MoodboardFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: Space.md }}>
+          <MoodboardDiscoveryTile unit={u} onPress={ctx.onMoodboardPress} />
+        </View>
+      );
+    }
     case 'editorial':
-    case 'look':
-    case 'poster':
-      // The renderer is wired for these unit types, but they render only when
-      // the backend sends valid media (discoveryFeedUnit.ts: the client never
-      // invents editorial media). Until that data path exists, render null so
-      // the feed never shows an empty-URI shell (AGENTS.md §11 — truthful UI).
+      // Editorial remains fail-closed until a valid server-owned module and
+      // destination are present. Looks, Posters and Moodboards have concrete
+      // renderers above and are filtered at the assembly boundary.
       return null;
     default:
       return null;
   }
+}
+
+function LookDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: LookFeedUnit;
+  onPress?: (lookId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const creator = unit.look.creator.username ?? 'creator';
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+        <ExpoImage
+          source={{ uri: unit.coverImageUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={unit.id}
+          transition={160}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.56)']}
+          locations={[0.48, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
+          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+            {unit.title}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
+            @{creator}
+          </Text>
+        </View>
+        {unit.itemIds.length > 0 ? (
+          <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
+            <Ionicons name="pricetag" size={15} color="#FFFFFF" />
+          </View>
+        ) : null}
+    </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.look.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${unit.title}, look by ${creator}`}
+      accessibilityHint="Opens the look"
+      style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
+}
+
+function PosterDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: PosterFeedUnit;
+  onPress?: (storyId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const creator = unit.story.creator.username ?? 'creator';
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+        <ExpoImage
+          source={{ uri: unit.coverUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={unit.id}
+          transition={160}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.5)']}
+          locations={[0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <Ionicons name="play" size={16} color="#FFFFFF" style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
+        <Text
+          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
+          numberOfLines={1}
+        >
+          @{creator}
+        </Text>
+    </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.story.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`Poster by ${creator}`}
+      accessibilityHint="Opens the poster"
+      style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
+}
+
+function MoodboardDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: MoodboardFeedUnit;
+  onPress?: (moodboardId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const imageUris = [unit.coverUri, ...unit.moodboard.items.map((item) => item.imageUri)]
+    .filter((uri, index, all) => uri.trim().length > 0 && all.indexOf(uri) === index)
+    .slice(0, 3);
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt, flexDirection: 'row', gap: 2 }}>
+        <ExpoImage
+          source={{ uri: imageUris[0] }}
+          style={{ flex: imageUris.length > 1 ? 1.35 : 1 }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={`${unit.id}:0`}
+          transition={160}
+        />
+        {imageUris.length > 1 ? (
+          <View style={{ flex: 0.9, gap: 2 }}>
+            {imageUris.slice(1).map((uri, index) => (
+              <ExpoImage
+                key={uri}
+                source={{ uri }}
+                style={{ flex: 1 }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`${unit.id}:${index + 1}`}
+                transition={160}
+              />
+            ))}
+          </View>
+        ) : null}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.62)']}
+          locations={[0.48, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ position: 'absolute', left: Space.md, right: Space.md, bottom: Space.smMd }}>
+          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
+            {unit.moodboard.title}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
+            {unit.moodboard.curator} · {unit.moodboard.items.length} pieces
+          </Text>
+        </View>
+      </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.moodboard.title}, moodboard by ${unit.moodboard.curator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.moodboard.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${unit.moodboard.title}, moodboard by ${unit.moodboard.curator}`}
+      accessibilityHint="Opens the moodboard"
+      style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
 }
 
 // ============================================================================

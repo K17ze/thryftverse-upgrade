@@ -305,6 +305,33 @@ describe('serialiseToLookPayload', () => {
     expect(() => serialiseToLookPayload(doc)).toThrow('non-look');
   });
 
+  it('binds the published Look cover to its authoritative upload receipt', () => {
+    const doc = makeLookDoc();
+    const withReceipt: CreatorDocument = {
+      ...doc,
+      pages: doc.pages.map((page) => ({
+        ...page,
+        layers: page.layers.map((layer) => layer.type === 'media'
+          ? {
+              ...layer,
+              payload: {
+                ...layer.payload,
+                mediaFinalizationId: 'ufinal_look_1',
+                mediaAssetId: 'masset_look_1',
+              },
+            }
+          : layer),
+      })),
+    };
+
+    const { payload } = serialiseToLookPayload(withReceipt);
+    expect(payload).toMatchObject({
+      mediaUrl: 'https://cdn.example.com/photo.jpg',
+      mediaFinalizationId: 'ufinal_look_1',
+      mediaAssetId: 'masset_look_1',
+    });
+  });
+
   it('throws when look has no media layer', () => {
     const doc = createEmptyDocument('look');
     expect(() => serialiseToLookPayload(doc)).toThrow('media layer');

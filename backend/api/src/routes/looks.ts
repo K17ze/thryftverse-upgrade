@@ -1,6 +1,8 @@
+import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import { config } from '../config.js';
 
 type LookRouteDependencies = {
   app: FastifyInstance;
@@ -20,6 +22,8 @@ const createLookBodySchema = z.object({
   title: z.string().max(120).default(''),
   caption: z.string().max(2200).default(''),
   mediaUrl: z.string().url().min(3),
+  mediaFinalizationId: z.string().min(2).max(160).optional(),
+  mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).default('image'),
   compositionDocument: z.unknown().optional(),
   visibility: z.enum(['public', 'followers', 'private']).default('public'),
@@ -47,6 +51,8 @@ const patchLookBodySchema = z.object({
   title: z.string().max(120).optional(),
   caption: z.string().max(2200).optional(),
   mediaUrl: z.string().url().optional(),
+  mediaFinalizationId: z.string().min(2).max(160).optional(),
+  mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).optional(),
   compositionDocument: z.unknown().nullable().optional(),
   visibility: z.enum(['public', 'followers', 'private']).optional(),
@@ -64,6 +70,163 @@ const createCommentBodySchema = z.object({
   id: z.string().min(2).max(120),
   body: z.string().trim().min(1).max(1000),
 });
+
+type VerifiedLookMedia = {
+  finalizationId: string;
+  mediaAssetId: string | null;
+  resolvedUrl: string;
+};
+
+type LookMediaVerification =
+  | { ok: true; media: VerifiedLookMedia }
+  | {
+      ok: false;
+      status: 409 | 422;
+      error: string;
+      code: 'MEDIA_FINALIZATION_REQUIRED' | 'MEDIA_RECEIPT_MISMATCH' | 'MEDIA_NOT_PUBLISHED';
+      mediaStatus?: string;
+    };
+
+async function verifyLookMedia(
+  client: PoolClient,
+  input: {
+    actorUserId: string;
+    lookId: string;
+    mediaUrl: string;
+    mediaType: 'image' | 'video';
+    mediaFinalizationId?: string;
+    mediaAssetId?: string;
+  },
+): Promise<LookMediaVerification> {
+  if (!input.mediaFinalizationId) {
+    return {
+      ok: false,
+      status: 422,
+      error: 'Verified upload finalization is required',
+      code: 'MEDIA_FINALIZATION_REQUIRED',
+    };
+  }
+
+  const verified = await client.query<{
+    id: string;
+    owner_id: string;
+    public_url: string;
+    folder: string;
+    content_type: string;
+    status: string;
+    scope: string;
+    scope_ref_id: string | null;
+    media_asset_id: string | null;
+    media_asset_status: string | null;
+    canonical_url: string | null;
+  }>(
+    `SELECT finalization.id, finalization.owner_id,
+            finalization.public_url, finalization.folder,
+            finalization.content_type, finalization.status,
+            finalization.scope, finalization.scope_ref_id,
+            finalization.media_asset_id,
+            asset.status AS media_asset_status,
+            asset.canonical_url
+     FROM upload_finalizations finalization
+     LEFT JOIN media_assets asset ON asset.id = finalization.media_asset_id
+     WHERE finalization.id = $1
+     LIMIT 1
+     FOR UPDATE OF finalization`,
+    [input.mediaFinalizationId],
+  );
+  const receipt = verified.rows[0];
+  const expectedContentPrefix = input.mediaType === 'video' ? 'video/' : 'image/';
+  const suppliedUrlMatches = receipt
+    && (receipt.public_url === input.mediaUrl || receipt.canonical_url === input.mediaUrl);
+  const suppliedAssetMatches = !input.mediaAssetId
+    || receipt?.media_asset_id === input.mediaAssetId;
+  const scopeMatches = !receipt?.scope_ref_id || receipt.scope_ref_id === input.lookId;
+
+  if (
+    !receipt
+    || receipt.owner_id !== input.actorUserId
+    || receipt.status !== 'finalized'
+    || receipt.folder !== 'looks'
+    || receipt.scope !== 'look'
+    || !receipt.content_type.startsWith(expectedContentPrefix)
+    || !suppliedUrlMatches
+    || !suppliedAssetMatches
+    || !scopeMatches
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: 'Primary media does not match its verified upload',
+      code: 'MEDIA_RECEIPT_MISMATCH',
+    };
+  }
+
+  if (
+    config.mediaPublicationGateEnabled
+    && (receipt.media_asset_status !== 'published' || !receipt.canonical_url)
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Primary media is still processing or under review',
+      code: 'MEDIA_NOT_PUBLISHED',
+      mediaStatus: receipt.media_asset_status ?? 'missing',
+    };
+  }
+
+  return {
+    ok: true,
+    media: {
+      finalizationId: receipt.id,
+      mediaAssetId: receipt.media_asset_status === 'published'
+        ? receipt.media_asset_id
+        : null,
+      resolvedUrl: config.mediaPublicationGateEnabled
+        ? receipt.canonical_url!
+        : (receipt.canonical_url ?? receipt.public_url),
+    },
+  };
+}
+
+async function bindLookMedia(
+  client: PoolClient,
+  input: { actorUserId: string; lookId: string; media: VerifiedLookMedia },
+): Promise<void> {
+  await client.query(
+    `UPDATE upload_finalizations
+     SET scope = 'look', scope_ref_id = $2, updated_at = NOW()
+     WHERE id = $1`,
+    [input.media.finalizationId, input.lookId],
+  );
+
+  await client.query(
+    `UPDATE media_bindings
+     SET removed_at = NOW()
+     WHERE target_type = 'look'
+       AND target_ref_id = $1
+       AND role = 'cover'
+       AND removed_at IS NULL
+       AND ($2::text IS NULL OR media_asset_id <> $2)`,
+    [input.lookId, input.media.mediaAssetId],
+  );
+
+  if (!input.media.mediaAssetId) return;
+  await client.query(
+    `INSERT INTO media_bindings (
+       id, media_asset_id, owner_id, target_type,
+       target_ref_id, role, sort_order
+     )
+     VALUES ($1, $2, $3, 'look', $4, 'cover', 0)
+     ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+     DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+    [
+      `mbind_${crypto.randomUUID()}`,
+      input.media.mediaAssetId,
+      input.actorUserId,
+      input.lookId,
+    ],
+  );
+}
 
 type LookRow = {
   id: string;
@@ -255,38 +418,90 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
   app.post('/looks', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const payload = createLookBodySchema.parse(request.body);
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(payload))
+      .digest('hex');
 
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [payload.id]);
 
-      const existing = await client.query<{ creator_id: string }>(
-        `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
+      const existing = await client.query<{
+        creator_id: string;
+        publication_payload_hash: string | null;
+      }>(
+        `SELECT creator_id, publication_payload_hash
+         FROM looks
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
         [payload.id]
       );
 
       if (existing.rowCount) {
+        const row = existing.rows[0];
+        if (
+          row.creator_id === actorUserId
+          && row.publication_payload_hash === payloadHash
+        ) {
+          await client.query('COMMIT');
+          reply.code(200);
+          return { ok: true, lookId: payload.id, replayed: true };
+        }
         await client.query('ROLLBACK');
         reply.code(409);
-        return { ok: false, error: 'Look ID already exists' };
+        return {
+          ok: false,
+          error: row.creator_id === actorUserId
+            ? 'Publication key was already used with different content'
+            : 'Look ID belongs to another creator',
+          code: 'IDEMPOTENCY_CONFLICT',
+        };
+      }
+
+      const mediaVerification = await verifyLookMedia(client, {
+        actorUserId,
+        lookId: payload.id,
+        mediaUrl: payload.mediaUrl,
+        mediaType: payload.mediaType,
+        mediaFinalizationId: payload.mediaFinalizationId,
+        mediaAssetId: payload.mediaAssetId,
+      });
+      if (!mediaVerification.ok) {
+        await client.query('ROLLBACK');
+        reply.code(mediaVerification.status);
+        return {
+          ok: false,
+          error: mediaVerification.error,
+          code: mediaVerification.code,
+          ...(mediaVerification.mediaStatus
+            ? { mediaStatus: mediaVerification.mediaStatus }
+            : {}),
+        };
       }
 
       await client.query(
         `INSERT INTO looks (
            id, creator_id, title, caption, media_url, media_type,
-           composition_document, status, visibility
+           composition_document, status, visibility,
+           upload_finalization_id, media_asset_id, publication_payload_hash
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           payload.id,
           actorUserId,
           payload.title,
           payload.caption,
-          payload.mediaUrl,
+          mediaVerification.media.resolvedUrl,
           payload.mediaType,
           payload.compositionDocument ?? null,
           payload.status,
           payload.visibility,
+          mediaVerification.media.finalizationId,
+          mediaVerification.media.mediaAssetId,
+          payloadHash,
         ]
       );
 
@@ -304,6 +519,12 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           [tagId, payload.id, tag.listingId ?? null, tag.label, tag.x, tag.y]
         );
       }
+
+      await bindLookMedia(client, {
+        actorUserId,
+        lookId: payload.id,
+        media: mediaVerification.media,
+      });
 
       await client.query('COMMIT');
     } catch (error) {
@@ -420,38 +641,84 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
     const { lookId } = lookIdParamsSchema.parse(request.params);
     const payload = patchLookBodySchema.parse(request.body);
 
-    // Ownership check
-    const existing = await db.query<{ creator_id: string }>(
-      'SELECT creator_id FROM looks WHERE id = $1 LIMIT 1',
-      [lookId]
-    );
-    if (existing.rows.length === 0) {
-      return reply.code(404).send({ error: 'Look not found' });
-    }
-    if (existing.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-      return reply.code(403).send({ error: 'Not authorised to edit this look' });
-    }
-
-    // Build update query dynamically
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    let paramIdx = 1;
-
-    if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
-    if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
-    if (payload.mediaUrl !== undefined) { updates.push(`media_url = $${paramIdx++}`); values.push(payload.mediaUrl); }
-    if (payload.mediaType !== undefined) { updates.push(`media_type = $${paramIdx++}`); values.push(payload.mediaType); }
-    if (payload.compositionDocument !== undefined) {
-      updates.push(`composition_document = $${paramIdx++}::jsonb`);
-      values.push(payload.compositionDocument === null ? null : JSON.stringify(payload.compositionDocument));
-    }
-    if (payload.visibility !== undefined) { updates.push(`visibility = $${paramIdx++}`); values.push(payload.visibility); }
-    if (payload.status !== undefined) { updates.push(`status = $${paramIdx++}`); values.push(payload.status); }
-    updates.push(`updated_at = NOW()`);
-
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+      const existing = await client.query<{
+        creator_id: string;
+        media_url: string;
+        media_type: 'image' | 'video';
+      }>(
+        `SELECT creator_id, media_url, media_type
+         FROM looks
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [lookId],
+      );
+      if (existing.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Look not found' });
+      }
+      if (existing.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+        await client.query('ROLLBACK');
+        return reply.code(403).send({ error: 'Not authorised to edit this look' });
+      }
+
+      let verifiedMedia: VerifiedLookMedia | null = null;
+      const primaryMediaChanged = (
+        payload.mediaUrl !== undefined
+        && payload.mediaUrl !== existing.rows[0].media_url
+      ) || (
+        payload.mediaType !== undefined
+        && payload.mediaType !== existing.rows[0].media_type
+      ) || payload.mediaFinalizationId !== undefined
+        || payload.mediaAssetId !== undefined;
+      if (primaryMediaChanged) {
+        const mediaVerification = await verifyLookMedia(client, {
+          actorUserId,
+          lookId,
+          mediaUrl: payload.mediaUrl ?? existing.rows[0].media_url,
+          mediaType: payload.mediaType ?? existing.rows[0].media_type,
+          mediaFinalizationId: payload.mediaFinalizationId,
+          mediaAssetId: payload.mediaAssetId,
+        });
+        if (!mediaVerification.ok) {
+          await client.query('ROLLBACK');
+          return reply.code(mediaVerification.status).send({
+            error: mediaVerification.error,
+            code: mediaVerification.code,
+            ...(mediaVerification.mediaStatus
+              ? { mediaStatus: mediaVerification.mediaStatus }
+              : {}),
+          });
+        }
+        verifiedMedia = mediaVerification.media;
+      }
+
+      // Build the update only after media ownership and lifecycle checks pass.
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let paramIdx = 1;
+      if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
+      if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
+      if (verifiedMedia) {
+        updates.push(`media_url = $${paramIdx++}`); values.push(verifiedMedia.resolvedUrl);
+        updates.push(`upload_finalization_id = $${paramIdx++}`); values.push(verifiedMedia.finalizationId);
+        updates.push(`media_asset_id = $${paramIdx++}`); values.push(verifiedMedia.mediaAssetId);
+      }
+      if (payload.mediaType !== undefined) { updates.push(`media_type = $${paramIdx++}`); values.push(payload.mediaType); }
+      if (payload.compositionDocument !== undefined) {
+        updates.push(`composition_document = $${paramIdx++}::jsonb`);
+        values.push(payload.compositionDocument === null ? null : JSON.stringify(payload.compositionDocument));
+      }
+      if (payload.visibility !== undefined) { updates.push(`visibility = $${paramIdx++}`); values.push(payload.visibility); }
+      if (payload.status !== undefined) { updates.push(`status = $${paramIdx++}`); values.push(payload.status); }
+      // A later edit means the original create payload is no longer an exact
+      // representation of this row; fail closed if that create is replayed.
+      updates.push('publication_payload_hash = NULL');
+      updates.push('updated_at = NOW()');
+
       if (updates.length > 1 || payload.tags !== undefined) {
         values.push(lookId);
         await client.query(`UPDATE looks SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
@@ -466,6 +733,9 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
             [`${lookId}_${tag.id}`, lookId, tag.listingId ?? null, tag.x, tag.y, tag.label]
           );
         }
+      }
+      if (verifiedMedia) {
+        await bindLookMedia(client, { actorUserId, lookId, media: verifiedMedia });
       }
       await client.query('COMMIT');
     } catch (error) {
@@ -482,24 +752,44 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
     const actorUserId = resolveAuthenticatedUserId(request);
     const { lookId } = lookIdParamsSchema.parse(request.params);
 
-    const ownerResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
-      [lookId]
-    );
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      const ownerResult = await client.query<{ creator_id: string }>(
+        `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1 FOR UPDATE`,
+        [lookId],
+      );
 
-    const owner = ownerResult.rows[0];
-    if (!owner) {
-      reply.code(404);
-      return { ok: false, error: 'Look not found' };
+      const owner = ownerResult.rows[0];
+      if (!owner) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Look not found' };
+      }
+
+      if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return { ok: false, error: 'Forbidden' };
+      }
+
+      await client.query(
+        `UPDATE media_bindings
+         SET removed_at = NOW()
+         WHERE target_type = 'look'
+           AND target_ref_id = $1
+           AND removed_at IS NULL`,
+        [lookId],
+      );
+      await client.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
+      await client.query('COMMIT');
+      return { ok: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-      reply.code(403);
-      return { ok: false, error: 'Forbidden' };
-    }
-
-    await db.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
-    return { ok: true };
   });
 
   // ── Look likes ─────────────────────────────────────────────────────

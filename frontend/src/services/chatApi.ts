@@ -10,6 +10,9 @@ interface ApiConversationPayload {
   title: string | null;
   ownerId: string | null;
   itemId: string | null;
+  description?: string | null;
+  avatar?: string | null;
+  coverPhoto?: string | null;
   participantIds: string[];
   participantProfiles?: Array<{
     id: string;
@@ -17,6 +20,7 @@ interface ApiConversationPayload {
     displayName: string | null;
     avatar: string | null;
     emailVerified: boolean;
+    identityVerified?: boolean;
   }>;
   botIds: string[];
   lastMessage: string;
@@ -145,6 +149,9 @@ function mapApiConversationToApp(
     title: payload.title ?? undefined,
     ownerId: payload.ownerId ?? undefined,
     itemId: payload.itemId ?? undefined,
+    description: payload.description ?? undefined,
+    avatar: payload.avatar ?? undefined,
+    coverPhoto: payload.coverPhoto ?? undefined,
     participantIds: payload.participantIds,
     participantProfiles: payload.participantProfiles,
     botIds: payload.botIds,
@@ -182,6 +189,9 @@ export async function createGroupConversationOnApi(input: {
   idempotencyKey?: string;
   description?: string;
   avatar?: string;
+  avatarFinalizationId?: string;
+  coverPhoto?: string;
+  coverPhotoFinalizationId?: string;
 }): Promise<Conversation> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -202,6 +212,9 @@ export async function createGroupConversationOnApi(input: {
       itemId: input.itemId,
       description: input.description,
       avatar: input.avatar,
+      avatarFinalizationId: input.avatarFinalizationId,
+      coverPhoto: input.coverPhoto,
+      coverPhotoFinalizationId: input.coverPhotoFinalizationId,
     }),
   });
 
@@ -236,8 +249,30 @@ export async function fetchConversationMessagesFromApi(
 export async function sendConversationMessageOnApi(
   conversationId: string,
   text: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  clientMessageId?: string,
+  options?: { type?: 'text' | 'image' | 'video'; mediaUri?: string },
 ): Promise<Message> {
+  // P0-MSG-1: Discriminated message payload. The backend accepts a
+  // `type` field — 'text' (or absent) requires text; 'image'/'video'
+  // require mediaUri and make text optional. We only forward fields
+  // that are present so text-only callers stay backwards compatible.
+  const body: Record<string, unknown> = {};
+  if (options?.type) {
+    body.type = options.type;
+  }
+  if (text) {
+    body.text = text;
+  }
+  if (options?.mediaUri) {
+    body.mediaUri = options.mediaUri;
+  }
+  if (metadata !== undefined) {
+    body.metadata = metadata;
+  }
+  if (clientMessageId) {
+    body.clientMessageId = clientMessageId;
+  }
   const payload = await fetchJson<{
     ok: true;
     message: ApiMessagePayload;
@@ -246,10 +281,7 @@ export async function sendConversationMessageOnApi(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      text,
-      metadata,
-    }),
+    body: JSON.stringify(body),
   });
 
   return mapApiMessageToConversationMessage(payload.message);
@@ -354,6 +386,9 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
   title: string | null;
   ownerId: string;
   itemId: string | null;
+  description: string | null;
+  avatar: string | null;
+  coverPhoto: string | null;
   metadata: Record<string, unknown>;
   participantIds: string[];
   memberRoles: Record<string, string>;
@@ -370,6 +405,9 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
       title: string | null;
       ownerId: string;
       itemId: string | null;
+      description: string | null;
+      avatar: string | null;
+      coverPhoto: string | null;
       metadata: Record<string, unknown>;
       participantIds: string[];
       memberRoles: Record<string, string>;
@@ -385,13 +423,47 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
 
 export async function updateConversationOnApi(
   conversationId: string,
-  updates: { title?: string; description?: string; avatar?: string }
-): Promise<void> {
-  await fetchJson<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+  updates: {
+    title?: string;
+    description?: string;
+    avatar?: string | null;
+    avatarFinalizationId?: string;
+    coverPhoto?: string | null;
+    coverPhotoFinalizationId?: string;
+  },
+  idempotencyKey?: string,
+): Promise<{
+  id: string;
+  type: 'group';
+  title: string;
+  ownerId: string;
+  itemId: string | null;
+  description: string | null;
+  avatar: string | null;
+  coverPhoto: string | null;
+  updatedAt: string;
+}> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
+  const payload = await fetchJson<{
+    ok: true;
+    conversation: {
+      id: string;
+      type: 'group';
+      title: string;
+      ownerId: string;
+      itemId: string | null;
+      description: string | null;
+      avatar: string | null;
+      coverPhoto: string | null;
+      updatedAt: string;
+    };
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(updates),
   });
+  return payload.conversation;
 }
 
 export async function fetchConversationMembersFromApi(conversationId: string): Promise<
@@ -600,6 +672,64 @@ export async function leaveGroupOnApi(
   );
 }
 
+/**
+ * Promote a group member to admin. Only the current owner (or another admin
+ * with the add-admins permission) can call this.
+ */
+export async function promoteConversationMemberOnApi(
+  conversationId: string,
+  userId: string,
+): Promise<{ memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'admin' }),
+  });
+  return { memberRoles: payload.memberRoles };
+}
+
+/**
+ * Demote an admin back to regular member. Only the owner (or another admin
+ * with the add-admins permission) can call this. The owner cannot be demoted.
+ */
+export async function demoteConversationMemberOnApi(
+  conversationId: string,
+  userId: string,
+): Promise<{ memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'member' }),
+  });
+  return { memberRoles: payload.memberRoles };
+}
+
+/**
+ * Transfer group ownership to another member. The current owner's role
+ * becomes admin after the transfer. Only the current owner can call this.
+ */
+export async function transferConversationOwnershipOnApi(
+  conversationId: string,
+  newOwnerId: string,
+): Promise<{ ownerId: string; memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    ownerId: string;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/transfer-ownership`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newOwnerId }),
+  });
+  return { ownerId: payload.ownerId, memberRoles: payload.memberRoles };
+}
+
 // ---------------------------------------------------------------------------
 // P0 #1 / P2 #56: Typing indicator publisher.
 // Ephemeral realtime signal — the backend fans this out to other participants
@@ -666,6 +796,22 @@ export async function declineMessageRequestOnApi(conversationId: string): Promis
     `/chat/conversations/${encodeURIComponent(conversationId)}/decline`,
     { method: 'POST' }
   );
+}
+
+export async function reportConversationOnApi(
+  conversationId: string,
+  reason: string,
+  details?: string,
+): Promise<{ reportId: string }> {
+  const response = await fetchJson<{ ok: boolean; reportId: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, details: details ?? undefined }),
+    },
+  );
+  return { reportId: response.reportId };
 }
 
 // ---------------------------------------------------------------------------

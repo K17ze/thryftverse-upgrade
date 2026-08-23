@@ -15,6 +15,10 @@ export interface ProfileUser {
   role: string;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +35,10 @@ export interface PublicProfileUser {
   coverVideo: string | null;
   role: string;
   emailVerified: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt: string;
 }
 

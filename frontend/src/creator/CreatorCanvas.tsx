@@ -83,6 +83,18 @@ export interface CreatorCanvasProps {
   selectedLayerIds?: string[];
   onLayerPress?: (layerId: string) => void;
   onCanvasPress?: () => void;
+  /** Fires when the user long-presses the canvas background (not a layer).
+   *  Used by the host to drive the Lightroom-style compare-to-original: while
+   *  the long-press is held, the host sets `compareOriginal` to true and the
+   *  canvas renders the selected media layer without effects/filters. */
+  onCanvasLongPress?: () => void;
+  /** Fires when the long-press is released (touch up). The host sets
+   *  `compareOriginal` back to false. */
+  onCanvasLongPressEnd?: () => void;
+  /** When true, media layers render without their effect stack (color
+   *  matrices, LUTs, blur, vignette) — the "original" image. Used for the
+   *  Lightroom long-press compare pattern. */
+  compareOriginal?: boolean;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
   onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onLayerDoubleTap?: (layerId: string) => void;
@@ -142,6 +154,9 @@ export function CreatorCanvas({
   selectedLayerIds,
   onLayerPress,
   onCanvasPress,
+  onCanvasLongPress,
+  onCanvasLongPressEnd,
+  compareOriginal,
   onLayerTransformChange,
   onLayerDoubleTap,
   onLayerLongPress,
@@ -166,6 +181,11 @@ export function CreatorCanvas({
   const visibleLayers = getVisibleLayersSorted(page);
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
+
+  // Track whether a compare-to-original long-press is active so onPressOut
+  // only fires the end callback when a compare was actually in progress
+  // (not on a regular tap release).
+  const comparingRef = React.useRef(false);
 
   // Context menu state — long-press opens an ActionSheet with layer actions.
   // The per-layer gesture composition calls onContextMenu(layer) to set this;
@@ -289,7 +309,28 @@ export function CreatorCanvas({
       {renderBackground()}
 
       {mode === 'edit' && (
-        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Canvas background, tap to deselect" accessibilityHint="Taps the canvas to deselect the current layer" accessibilityRole="button" />
+        <Pressable
+          style={styles.backgroundPressLayer}
+          onPress={onCanvasPress}
+          onLongPress={() => {
+            if (onCanvasLongPress) {
+              comparingRef.current = true;
+              onCanvasLongPress();
+            }
+          }}
+          onPressOut={() => {
+            // If a compare-to-original long-press is active, end it on touch-up.
+            if (comparingRef.current) {
+              comparingRef.current = false;
+              onCanvasLongPressEnd?.();
+            }
+          }}
+          delayLongPress={300}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Canvas background, tap to deselect, long-press to compare original"
+          accessibilityHint="Taps the canvas to deselect the current layer. Long-press to temporarily hide effects and compare against the original."
+          accessibilityRole="button"
+        />
       )}
 
       {visibleLayers.map((layer) => {
@@ -329,6 +370,7 @@ export function CreatorCanvas({
           onManipulationChange={onManipulationChange}
           isInTrashZoneSV={isInTrashZoneSV}
           onTrashZoneEnter={onTrashZoneEnter}
+          compareOriginal={compareOriginal}
         />
         );
       })}
@@ -454,6 +496,8 @@ interface LayerRendererProps {
   isInTrashZoneSV?: SharedValue<number>;
   /** Fires when the dragged layer's center enters the trash zone. */
   onTrashZoneEnter?: (layerId: string) => void;
+  /** When true, media layers render without effects (compare-to-original). */
+  compareOriginal?: boolean;
 }
 
 const SNAP_THRESHOLD = 0.02;
@@ -487,6 +531,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onManipulationChange,
   isInTrashZoneSV,
   onTrashZoneEnter,
+  compareOriginal,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -882,7 +927,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return opacity;
   }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers);
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers, compareOriginal);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -1109,10 +1154,11 @@ function renderLayerContent(
   playbackClock?: PlaybackClock | null,
   currentTimeMs?: number,
   siblingLayers?: CreatorLayer[],
+  compareOriginal?: boolean,
 ): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} compareOriginal={compareOriginal} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -1161,6 +1207,7 @@ function MediaLayerContent({
   playbackClock,
   currentTimeMs,
   siblingLayers,
+  compareOriginal,
 }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
@@ -1168,6 +1215,7 @@ function MediaLayerContent({
   playbackClock?: PlaybackClock | null;
   currentTimeMs?: number;
   siblingLayers?: CreatorLayer[];
+  compareOriginal?: boolean;
 }) {
   const { colors } = useAppTheme();
   const { payload } = layer;
@@ -1186,6 +1234,10 @@ function MediaLayerContent({
   //   - blur radii take the maximum
   //   - vignette / grain amounts are summed (clamped to 0..1)
   const evaluatedEffect = useMemo<EvaluatedEffect>(() => {
+    // Compare-to-original: when the user long-presses the canvas background,
+    // skip all effect evaluation so they see the ungraded image (Lightroom
+    // long-press compare pattern — recognition over recall, AGENTS.md §4).
+    if (compareOriginal) return {};
     const clipEffects = payload.effects ?? [];
     // Resolve active adjustment layers from the sibling set at the current
     // time. siblingLayers excludes this clip but includes adjustment layers
@@ -1242,7 +1294,7 @@ function MediaLayerContent({
     if (hasBlur && blurRadius > 0) result.blurRadius = blurRadius;
     if (hasVignette && vignetteAmount > 0) result.vignetteAmount = Math.min(1, vignetteAmount);
     return result;
-  }, [payload.effects, siblingLayers, timeMs, layer.id]);
+  }, [payload.effects, siblingLayers, timeMs, layer.id, compareOriginal]);
 
   const hasColorMatrix = !!evaluatedEffect?.colorMatrix && evaluatedEffect.colorMatrix.length === 20;
 

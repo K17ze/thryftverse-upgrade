@@ -6,11 +6,11 @@ import {
   Pressable,
   StatusBar,
   Text,
-  SectionList,
   ScrollView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,6 +43,19 @@ import {
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type SellerTab = 'scheduled' | 'live' | 'sold' | 'unsold' | 'cancelled';
+
+/**
+ * Flattened list item model.
+ *
+ * The original SectionList rendered a single section per active tab, with the
+ * tab rail as a sticky section header. FlashList has no native concept of
+ * sections, so the section is materialised as a discriminated header item
+ * followed by its row items in a flat `data` array.
+ */
+type SectionHeaderItem = { type: 'header'; sectionTitle: SellerTab };
+type SectionRowItem = { type: 'item' } & AuctionHomeItem;
+type SectionEmptyItem = { type: 'empty' };
+type FlatListItem = SectionHeaderItem | SectionRowItem | SectionEmptyItem;
 
 function toViewModel(api: MarketAuction): AuctionHomeItem {
   return {
@@ -453,6 +466,22 @@ export default function SellerAuctionCentreScreen() {
     });
   }, [allItems, activeTab, minuteClock]);
 
+  // Flatten the single section into a plain array for FlashList:
+  //   [header(activeTab), ...filteredItems]
+  // The header is always at index 0 so it can be made sticky. When the section
+  // has no rows, an explicit 'empty' item is emitted so the loading / error /
+  // empty-state content still renders beneath the sticky tab rail — mirroring
+  // SectionList's ListEmptyComponent behaviour (which FlashList cannot trigger
+  // because the header keeps `data` non-empty).
+  const flatData = useMemo<FlatListItem[]>(() => {
+    const header: SectionHeaderItem = { type: 'header', sectionTitle: activeTab };
+    if (filteredItems.length === 0) {
+      return [header, { type: 'empty' }];
+    }
+    const rows: SectionRowItem[] = filteredItems.map((i) => ({ type: 'item', ...i }));
+    return [header, ...rows];
+  }, [activeTab, filteredItems]);
+
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
     void fetchAuctions(true);
@@ -490,7 +519,7 @@ export default function SellerAuctionCentreScreen() {
   }, [navigation]);
 
   // Refs for sticky-tab scroll architecture
-  const listRef = useRef<SectionList>(null);
+  const listRef = useRef<FlashListRef<FlatListItem>>(null);
   const tabScrollRef = useRef<ScrollView>(null);
   const tabLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
 
@@ -499,7 +528,7 @@ export default function SellerAuctionCentreScreen() {
     setActiveTab(key);
     // Scroll to top so summary reappears — predictable on tab switch
     requestAnimationFrame(() => {
-      listRef.current?.getScrollResponder()?.scrollTo({ x: 0, y: 0, animated: false });
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
   }, []);
 
@@ -522,16 +551,9 @@ export default function SellerAuctionCentreScreen() {
     { key: 'cancelled', label: 'Cancelled', count: stats.cancelled },
   ];
 
-  const renderItem = useCallback(({ item }: { item: AuctionHomeItem }) => (
-    <SellerAuctionRow
-      item={item}
-      clockMs={secondClock}
-      onPress={() => navigateToDetail(item.id)}
-      formatFromFiat={formatFromFiat}
-      goldRates={goldRates}
-    />
-  ), [secondClock, navigateToDetail, formatFromFiat, goldRates]);
-
+  // Empty / loading / error state — rendered for the 'empty' item in the
+  // flattened FlashList data (see flatData). Defined before renderItem because
+  // renderItem closes over it.
   const renderEmpty = useCallback(() => {
     if (loading) {
       return (
@@ -608,7 +630,9 @@ export default function SellerAuctionCentreScreen() {
     );
   }, [loading, error, activeTab, fetchAuctions, navigateToCreate]);
 
-  // Tab rail — rendered as sticky section header
+  // Tab rail — rendered for the 'header' item in the flattened FlashList data.
+  // Kept sticky via `stickyHeaderIndices={[0]}` on FlashList (the header is
+  // always the first element of the flattened array).
   const renderSectionHeader = useCallback(() => (
     <View style={styles.tabBarContainer}>
       <ScrollView
@@ -653,6 +677,48 @@ export default function SellerAuctionCentreScreen() {
     </View>
   ), [tabs, activeTab, handleTabPress]);
 
+  // Distinguishes header items from row items so FlashList can recycle cells
+  // by type rather than treating every cell as interchangeable.
+  const getItemType = useCallback((item: FlatListItem) => item.type, []);
+
+  // Stable unique keys: headers are keyed by their section title, rows by their
+  // underlying auction id (preserving the original SectionList keyExtractor).
+  const keyExtractor = useCallback((item: FlatListItem) => {
+    if (item.type === 'header') return `header-${item.sectionTitle}`;
+    if (item.type === 'empty') return 'empty-state';
+    return item.id;
+  }, []);
+
+  const renderItem: ListRenderItem<FlatListItem> = useCallback(({ item }) => {
+    if (item.type === 'header') {
+      return renderSectionHeader();
+    }
+    if (item.type === 'empty') {
+      return renderEmpty();
+    }
+    return (
+      <SellerAuctionRow
+        item={item}
+        clockMs={secondClock}
+        onPress={() => navigateToDetail(item.id)}
+        formatFromFiat={formatFromFiat}
+        goldRates={goldRates}
+      />
+    );
+  }, [renderSectionHeader, renderEmpty, secondClock, navigateToDetail, formatFromFiat, goldRates]);
+
+  // Row separator — only between two row items. FlashList inserts separators
+  // between every adjacent pair in the flattened array, so suppress the divider
+  // when either neighbour is the header (preserves SectionList behaviour where
+  // no separator sat between the section header and the first row).
+  const renderSeparator = useCallback(
+    ({ leadingItem, trailingItem }: { leadingItem: FlatListItem; trailingItem: FlatListItem }) => {
+      if (leadingItem.type !== 'item' || trailingItem.type !== 'item') return null;
+      return <View style={styles.rowSeparator} />;
+    },
+    [],
+  );
+
   // Summary — scrolls away as ListHeaderComponent
   const listHeader = useMemo(() => {
     if (stats.total === 0) return null;
@@ -664,6 +730,35 @@ export default function SellerAuctionCentreScreen() {
       />
     );
   }, [stats, formatFromFiat, goldRates]);
+
+  // Load-more affordance — previously rendered via SectionList's
+  // renderSectionFooter. With a single flattened section FlashList's
+  // ListFooterComponent occupies the same position (after all rows).
+  const listFooter = useMemo(() => {
+    if (!cursor || loading) return null;
+    return (
+      <View style={styles.loadMoreWrap}>
+        <AnimatedPressable
+          style={styles.loadMoreBtn}
+          onPress={() => void handleLoadMore()}
+          disabled={loadingMore}
+          scaleValue={0.97}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Load more auctions"
+        >
+          {loadingMore ? (
+            <Text style={styles.loadMoreText}>Loading…</Text>
+          ) : (
+            <>
+              <Ionicons name="chevron-down" size={14} color={colors.brand} />
+              <Text style={styles.loadMoreText}>Load more</Text>
+            </>
+          )}
+        </AnimatedPressable>
+      </View>
+    );
+  }, [cursor, loading, loadingMore, handleLoadMore]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -711,25 +806,30 @@ export default function SellerAuctionCentreScreen() {
       {/* Offline banner */}
       <OfflineBanner onRetry={() => void fetchAuctions(false)} />
 
-      {/* Single authoritative virtualised list:
+      {/* Single authoritative virtualised list (FlashList):
           - ListHeaderComponent: summary (scrolls away)
-          - renderSectionHeader: tab rail (sticky beneath header)
-          - items: inventory rows */}
-      <SectionList
+          - data[0] ('header' item): tab rail, kept sticky via stickyHeaderIndices
+          - data[1..] ('item' items): inventory rows
+          - 'empty' item: loading / error / empty-state content when no rows */}
+      <FlashList
         ref={listRef}
-        sections={[{ key: activeTab, data: filteredItems }]}
-        keyExtractor={(item) => item.id}
+        data={flatData}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
-        stickySectionHeadersEnabled
+        getItemType={getItemType}
+        stickyHeaderIndices={[0]}
         ListHeaderComponent={listHeader}
-        ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
-        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={listFooter}
+        ItemSeparatorComponent={renderSeparator}
         contentContainerStyle={[
           styles.listContent,
           stats.total === 0 && !loading && !error && { paddingBottom: 120 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
+        // FlashList v2 has no windowSize/maxToRenderPerBatch (FlatList props).
+        // drawDistance (dp) is the native render-window control; ~2000dp
+        // approximates the requested windowSize={7} (≈7 viewports of coverage).
+        drawDistance={2000}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -738,30 +838,6 @@ export default function SellerAuctionCentreScreen() {
             colors={[colors.brand]}
             progressBackgroundColor={colors.surfaceAlt}
           />
-        }
-        renderSectionFooter={() =>
-          cursor && !loading ? (
-            <View style={styles.loadMoreWrap}>
-              <AnimatedPressable
-                style={styles.loadMoreBtn}
-                onPress={() => void handleLoadMore()}
-                disabled={loadingMore}
-                scaleValue={0.97}
-                activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityLabel="Load more auctions"
-              >
-                {loadingMore ? (
-                  <Text style={styles.loadMoreText}>Loading…</Text>
-                ) : (
-                  <>
-                    <Ionicons name="chevron-down" size={14} color={colors.brand} />
-                    <Text style={styles.loadMoreText}>Load more</Text>
-                  </>
-                )}
-              </AnimatedPressable>
-            </View>
-          ) : null
         }
       />
 

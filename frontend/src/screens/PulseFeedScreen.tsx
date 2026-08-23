@@ -18,6 +18,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCountdown } from '../data/tradeHub';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
@@ -130,7 +132,8 @@ export default function PulseFeedScreen() {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { listings, isSyncing } = useBackendData();
+  const { listings, isSyncing, refreshListings } = useBackendData();
+  const { isOffline } = useConnectivity();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 
@@ -201,6 +204,13 @@ export default function PulseFeedScreen() {
     return items;
   }, [customAuctions, listings, now]);
 
+  const renderEventCard = useCallback(
+    ({ item, index }: { item: FeedEvent; index: number }) => (
+      <EventCard event={item} index={index} />
+    ),
+    [],
+  );
+
   if (isSyncing && listings.length === 0) {
     return (
       <FlagshipScreen
@@ -208,6 +218,7 @@ export default function PulseFeedScreen() {
         header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
       >
         <View style={styles.scrollContent}>
+          {isOffline && <OfflineBanner onRetry={refreshListings} />}
           <PulseFeedSkeleton />
         </View>
       </FlagshipScreen>
@@ -220,6 +231,7 @@ export default function PulseFeedScreen() {
         scrollEnabled={false}
         header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
       >
+        {isOffline && <OfflineBanner onRetry={refreshListings} />}
         <EmptyState
           icon="pulse-outline"
           title="The marketplace is quiet"
@@ -231,18 +243,12 @@ export default function PulseFeedScreen() {
     );
   }
 
-  const renderEventCard = useCallback(
-    ({ item, index }: { item: FeedEvent; index: number }) => (
-      <EventCard event={item} index={index} />
-    ),
-    [],
-  );
-
   return (
     <FlagshipScreen
       scrollEnabled={false}
       header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
     >
+      {isOffline && <OfflineBanner onRetry={refreshListings} />}
       <FlashList
         data={events}
         renderItem={renderEventCard}

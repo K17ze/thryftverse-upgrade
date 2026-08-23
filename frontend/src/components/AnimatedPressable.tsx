@@ -46,7 +46,7 @@ const AnimatedNativePressable = Reanimated.createAnimatedComponent(Pressable);
  * touch target and helps approach the 44×44pt recommended target.
  * Callers can override with a custom `hitSlop` prop.
  */
-const DEFAULT_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+const DEFAULT_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 /**
  * AnimatedPressable — the canonical pressable surface for ThryftVerse.
@@ -69,7 +69,7 @@ export function AnimatedPressable({
   onPressIn,
   onPressOut,
   style,
-  scaleValue = 0.96,
+  scaleValue = 0.98,
   disableAnimation = false,
   disabled = false,
   activeOpacity = 0.65,
@@ -151,9 +151,8 @@ export function AnimatedPressable({
         if (typeof activeOpacity === 'number') {
           opacity.value = withTiming(activeOpacity, { duration: pressOpacityMs });
         }
-        if (!disabled) {
-          triggerHapticFeedback();
-        }
+        // Haptic moved to onPress — firing on press-in triggers haptics
+        // on aborted scroll gestures (AGENTS.md P1-UI-2 fix).
         if (onPressIn) {
           onPressIn(event);
         }
@@ -169,7 +168,12 @@ export function AnimatedPressable({
           onPressOut(event);
         }
       }}
-      onPress={disabled ? undefined : onPress}
+      onPress={disabled ? undefined : (event) => {
+        // Haptic fires on activation, not press-in, so aborted scroll
+        // gestures don't trigger spurious haptics (AGENTS.md P1-UI-2).
+        triggerHapticFeedback();
+        if (onPress) onPress(event);
+      }}
       onLongPress={disabled ? undefined : (event) => {
         // Compound long-press haptic — heavy impact communicates the
         // reveal/peek moment (per AGENTS.md §13 haptic level).

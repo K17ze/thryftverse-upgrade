@@ -2434,11 +2434,13 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
     }
 
     if (order.status !== 'paid' && order.status !== 'shipped') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: `Cannot refund order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
     }

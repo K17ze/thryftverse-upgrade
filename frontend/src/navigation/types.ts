@@ -260,6 +260,10 @@ export type RootStackParamList = {
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
   GlobalSearch: { initialQuery?: string } | undefined;
+  /** Unified discovery surface — combines Galleria editorial, personalised
+   *  listings, looks, mood boards, pulse and curated collections into one
+   *  flagship discovery entry from the Home search button. */
+  UnifiedDiscovery: { initialQuery?: string } | undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens
@@ -291,7 +295,7 @@ export type RootStackParamList = {
   WriteReview: { orderId: string; initialRating?: number };
 
   // ── Support & Help ──
-  Report: { type: 'item' | 'user'; targetId?: string };
+  Report: { type: 'item' | 'user' | 'group'; targetId?: string };
 
   // ── Auctions & Trading ──
   MyBids: undefined;
@@ -529,7 +533,6 @@ export type HomeTabParamList = {
 
 export type ExploreTabParamList = {
   Explore: undefined;
-  GlobalSearch: { initialQuery?: string } | undefined;
   CategoryDetail: RootStackParamList['CategoryDetail'];
   CategoryTree: RootStackParamList['CategoryTree'];
   Browse: RootStackParamList['Browse'];
@@ -544,42 +547,6 @@ export type InboxTabParamList = {
 
 export type ProfileTabParamList = {
   Profile: undefined;
-  EditProfile: RootStackParamList['EditProfile'];
-  Settings: undefined;
-  AccountSettings: undefined;
-  AccountControl: undefined;
-  DeleteAccount: undefined;
-  DataExport: undefined;
-  Personalisation: undefined;
-  SavedAddresses: undefined;
-  Payments: undefined;
-  NotificationsList: undefined;
-  PushNotifications: undefined;
-  ChangePassword: undefined;
-  TwoFactorSetup: undefined;
-  HelpSupport: undefined;
-  ConnectedAccounts: undefined;
-  EmailNotifications: undefined;
-  AccessibilitySettings: undefined;
-  AIPreferences: undefined;
-  SustainabilityPreferences: undefined;
-  DataPrivacy: undefined;
-  NotificationPreferences: undefined;
-  AIAgentIntegration: undefined;
-  AgentActivity: undefined;
-  ChatSettings: undefined;
-  ActiveSessions: undefined;
-  BlockedUsers: undefined;
-  PrivacySettings: undefined;
-  About: undefined;
-  MutedConversations: undefined;
-  ArchivedConversations: undefined;
-  ManageQuickReplies: RootStackParamList['ManageQuickReplies'];
-  Closet: undefined;
-  Verification: undefined;
-  VerificationStatus: undefined;
-  SellerVerification: undefined;
-  KYCVerification: undefined;
 };
 
 // ── Main Tabs ──

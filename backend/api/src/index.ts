@@ -115,6 +115,7 @@ import {
   enqueueReconciliationJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
+  enqueueMediaIngestJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -224,6 +225,7 @@ import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
+import { processMediaAsset } from './lib/media/pipeline.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
@@ -1921,6 +1923,19 @@ interface ChatGroupMembershipRoleRow {
   role: ChatGroupMemberRole;
 }
 
+interface OwnedGroupAvatarReceipt {
+  finalization_id: string;
+  finalization_url: string;
+  finalization_status: string;
+  content_type: string;
+  folder: string;
+  scope: string;
+  owner_id: string;
+  media_asset_id: string | null;
+  media_asset_status: string | null;
+  canonical_url: string | null;
+}
+
 function buildGroupInviteLink(inviteToken: string): string {
   return `thryftverse://group-invite?token=${encodeURIComponent(inviteToken)}`;
 }
@@ -2012,6 +2027,68 @@ async function ensureGroupManagementAccess(
     ownerId: conversation.owner_id,
     membershipRole,
   });
+}
+
+async function ensureOwnedGroupAvatarReceipt(
+  client: DbQueryable,
+  input: {
+    actorUserId: string;
+    finalizationId: string;
+    avatarUrl: string;
+  }
+): Promise<void> {
+  const result = await client.query<OwnedGroupAvatarReceipt>(
+    `
+      SELECT
+        uf.id AS finalization_id,
+        uf.public_url AS finalization_url,
+        uf.status AS finalization_status,
+        uf.content_type,
+        uf.folder,
+        uf.scope,
+        uf.owner_id,
+        ma.id AS media_asset_id,
+        ma.status AS media_asset_status,
+        ma.canonical_url
+      FROM upload_finalizations uf
+      LEFT JOIN media_assets ma ON ma.upload_finalization_id = uf.id
+      WHERE uf.id = $1
+      LIMIT 1
+    `,
+    [input.finalizationId]
+  );
+
+  const receipt = result.rows[0];
+  const invalidAssetStatuses = new Set([
+    'upload_expired',
+    'integrity_failed',
+    'quarantined',
+    'rejected',
+    'revoked',
+    'deleted',
+  ]);
+  const urlMatchesReceipt = Boolean(
+    receipt
+    && (input.avatarUrl === receipt.finalization_url || input.avatarUrl === receipt.canonical_url)
+  );
+
+  if (
+    !receipt
+    || receipt.owner_id !== input.actorUserId
+    || receipt.finalization_status !== 'finalized'
+    || !receipt.content_type.startsWith('image/')
+    || receipt.folder !== 'avatars'
+    || receipt.scope !== 'avatar'
+    || !receipt.media_asset_id
+    || (receipt.media_asset_status !== null && invalidAssetStatuses.has(receipt.media_asset_status))
+    || !urlMatchesReceipt
+  ) {
+    throw createApiError(
+      'CHAT_GROUP_AVATAR_INVALID',
+      'Group photo must be a finalized image uploaded by the current user',
+      { finalizationId: input.finalizationId }
+    );
+  }
 }
 
 async function listChatParticipantIds(client: DbQueryable, conversationId: string): Promise<string[]> {
@@ -6767,7 +6844,7 @@ async function createGatewayRefund(input: {
         reason: input.reason ? 'requested_by_customer' : undefined,
         metadata: toStripeMetadata(refundMetadata),
       },
-      { idempotencyKey: `refund:${input.intentId}` }
+      { idempotencyKey: `refund:${input.intentId}:${input.metadata?.refundOperationId ?? Date.now()}` }
     );
 
     return {
@@ -7624,7 +7701,7 @@ async function upsertPaymentRefund(
     intentId: string;
     gatewayId: string;
     providerRefundRef: string;
-    status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
     money?: Money;
     rawProviderAmount?: string;
     providerAmountUnit?: ProviderAmountUnit;
@@ -7633,6 +7710,7 @@ async function upsertPaymentRefund(
     currency?: string;
     reason?: string;
     metadata?: Record<string, unknown>;
+    idempotencyKey?: string;
   }
 ): Promise<void> {
   const id = `rf_${input.gatewayId}_${input.providerRefundRef}`;
@@ -7660,9 +7738,10 @@ async function upsertPaymentRefund(
         provider_refund_ref,
         reason,
         metadata,
+        idempotency_key,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, $16, NOW())
       ON CONFLICT (gateway_id, provider_refund_ref)
       DO UPDATE
         SET
@@ -7698,6 +7777,7 @@ async function upsertPaymentRefund(
         ...(input.metadata ?? {}),
         canonicalMoney: input.money ?? null,
       }),
+      input.idempotencyKey ?? null,
     ]
   );
 }
@@ -12583,6 +12663,42 @@ app.patch('/users/me/preferences', async (request, reply) => {
     preferences: {
       holidayMode: row.holiday_mode,
       privateProfile: row.private_profile,
+    },
+  };
+});
+
+// GET /users/me/postage — fetch the current user's postage settings
+app.get('/users/me/postage', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    postage_carrier_key: string;
+    postage_free_shipping: boolean;
+    postage_bundle_discount: boolean;
+  }>(
+    `
+      SELECT postage_carrier_key, postage_free_shipping, postage_bundle_discount
+      FROM users
+      WHERE id = $1
+    `,
+    [request.authUser.userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    postage: {
+      carrierKey: row.postage_carrier_key,
+      freeShipping: row.postage_free_shipping,
+      bundleDiscount: row.postage_bundle_discount,
     },
   };
 });
@@ -18925,6 +19041,15 @@ app.post('/chat/groups', async (request, reply) => {
     itemId: z.string().trim().min(2).max(120).optional(),
     description: z.string().trim().max(280).optional(),
     avatar: z.string().trim().max(512).optional(),
+    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+  }).superRefine((value, context) => {
+    if (value.avatar && !value.avatarFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['avatarFinalizationId'],
+        message: 'A finalized upload receipt is required for a group photo',
+      });
+    }
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -18938,6 +19063,14 @@ app.post('/chat/groups', async (request, reply) => {
     .filter((value) => value.length > 0);
 
   await Promise.all(normalizedMemberIds.map((memberId) => ensureUserExists(memberId)));
+
+  if (payload.avatar && payload.avatarFinalizationId) {
+    await ensureOwnedGroupAvatarReceipt(db, {
+      actorUserId,
+      finalizationId: payload.avatarFinalizationId,
+      avatarUrl: payload.avatar,
+    });
+  }
 
   if (payload.itemId) {
     const listingResult = await db.query<{ id: string }>(
@@ -19000,6 +19133,9 @@ app.post('/chat/groups', async (request, reply) => {
           createdVia: 'chat_groups_api',
           ...(payload.description ? { description: payload.description } : {}),
           ...(payload.avatar ? { avatar: payload.avatar } : {}),
+          ...(payload.avatarFinalizationId
+            ? { avatarFinalizationId: payload.avatarFinalizationId }
+            : {}),
         }),
       ]
     );
@@ -19041,7 +19177,15 @@ app.post('/chat/groups', async (request, reply) => {
         title,
         itemId: payload.itemId ?? null,
         ownerId: actorUserId,
+        description: payload.description ?? null,
+        avatar: payload.avatar ?? null,
         participantIds: normalizedMemberIds,
+        memberRoles: Object.fromEntries(
+          normalizedMemberIds.map((memberId) => [
+            memberId,
+            memberId === actorUserId ? 'owner' : 'member',
+          ])
+        ),
         botIds: [] as string[],
         lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
         lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
@@ -19117,7 +19261,15 @@ app.post('/chat/groups', async (request, reply) => {
       conversationId,
       title,
       ownerId: actorUserId,
+      description: payload.description ?? null,
+      avatar: payload.avatar ?? null,
       participantIds: normalizedMemberIds,
+      memberRoles: Object.fromEntries(
+        normalizedMemberIds.map((memberId) => [
+          memberId,
+          memberId === actorUserId ? 'owner' : 'member',
+        ])
+      ),
     },
   });
 
@@ -19130,7 +19282,15 @@ app.post('/chat/groups', async (request, reply) => {
       title,
       itemId: payload.itemId ?? null,
       ownerId: actorUserId,
+      description: payload.description ?? null,
+      avatar: payload.avatar ?? null,
       participantIds: normalizedMemberIds,
+      memberRoles: Object.fromEntries(
+        normalizedMemberIds.map((memberId) => [
+          memberId,
+          memberId === actorUserId ? 'owner' : 'member',
+        ])
+      ),
       botIds: [] as string[],
       lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
       lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
@@ -19167,6 +19327,7 @@ app.get('/chat/conversations', async (request) => {
     title: string | null;
     owner_id: string;
     item_id: string | null;
+    metadata: Record<string, unknown> | null;
     updated_at: string;
     last_message: string | null;
     last_message_created_at: string | null;
@@ -19178,6 +19339,7 @@ app.get('/chat/conversations', async (request) => {
         c.title,
         c.owner_id,
         c.item_id,
+        c.metadata,
         c.updated_at::text,
         lm.body AS last_message,
         lm.created_at::text AS last_message_created_at
@@ -19210,6 +19372,7 @@ app.get('/chat/conversations', async (request) => {
     db.query<{
       conversation_id: string;
       user_id: string;
+      role: ChatGroupMemberRole;
       username: string;
       display_name: string | null;
       avatar: string | null;
@@ -19219,6 +19382,7 @@ app.get('/chat/conversations', async (request) => {
         SELECT
           cm.conversation_id,
           cm.user_id,
+          cm.role,
           u.username,
           u.display_name,
           u.avatar,
@@ -19255,6 +19419,7 @@ app.get('/chat/conversations', async (request) => {
   ]);
 
   const membersByConversation = new Map<string, string[]>();
+  const rolesByConversation = new Map<string, Record<string, ChatGroupMemberRole>>();
   const memberProfilesByConversation = new Map<string, Array<{
     id: string;
     username: string;
@@ -19266,6 +19431,9 @@ app.get('/chat/conversations', async (request) => {
     const current = membersByConversation.get(row.conversation_id) ?? [];
     current.push(row.user_id);
     membersByConversation.set(row.conversation_id, current);
+    const roles = rolesByConversation.get(row.conversation_id) ?? {};
+    roles[row.user_id] = row.role;
+    rolesByConversation.set(row.conversation_id, roles);
     const profiles = memberProfilesByConversation.get(row.conversation_id) ?? [];
     profiles.push({
       id: row.user_id,
@@ -19297,13 +19465,17 @@ app.get('/chat/conversations', async (request) => {
     ok: true,
     items: conversationsResult.rows.map((row) => {
       const state = stateByConversation.get(row.id);
+      const metadata = asObject(row.metadata);
       return {
         id: row.id,
         type: row.type,
         title: row.title,
         ownerId: row.owner_id,
+        description: typeof metadata.description === 'string' ? metadata.description : null,
+        avatar: typeof metadata.avatar === 'string' ? metadata.avatar : null,
         itemId: row.item_id,
         participantIds: membersByConversation.get(row.id) ?? [],
+        memberRoles: rolesByConversation.get(row.id) ?? {},
         participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
         botIds: botsByConversation.get(row.id) ?? [],
         lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
@@ -19398,10 +19570,12 @@ app.post('/chat/conversations/:conversationId/messages', {
     },
     body: {
       type: 'object',
-      required: ['text'],
       properties: {
-        text: { type: 'string', minLength: 1, maxLength: 4000 },
+        type: { type: 'string', enum: ['text', 'image', 'video'] },
+        text: { type: 'string', maxLength: 4000 },
+        mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
+        clientMessageId: { type: 'string', minLength: 1, maxLength: 120 },
       },
       additionalProperties: false,
     },
@@ -19410,17 +19584,98 @@ app.post('/chat/conversations/:conversationId/messages', {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
   });
-  const bodySchema = z.object({
-    text: z.string().trim().min(1).max(4000),
-    metadata: z.record(z.unknown()).optional(),
-  });
+  // P0-MSG-1: Discriminated message payload. Text is required only for
+  // `type: 'text'` (or when `type` is absent for backwards compatibility).
+  // Image/video messages require a `mediaUri` and may omit the caption.
+  const bodySchema = z
+    .object({
+      type: z.enum(['text', 'image', 'video']).optional(),
+      text: z.string().trim().max(4000).optional(),
+      mediaUri: z.string().min(1).max(2048).optional(),
+      metadata: z.record(z.unknown()).optional(),
+      clientMessageId: z.string().trim().min(1).max(120).optional(),
+    })
+    .superRefine((val, ctx) => {
+      const isMedia = val.type === 'image' || val.type === 'video';
+      if (isMedia) {
+        if (!val.mediaUri || val.mediaUri.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'mediaUri is required for image/video messages',
+            path: ['mediaUri'],
+          });
+        }
+      } else {
+        // `type: 'text'` or absent — backwards-compatible text message.
+        if (!val.text || val.text.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'text is required for text messages',
+            path: ['text'],
+          });
+        }
+      }
+    });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
 
+  const isMediaMessage = payload.type === 'image' || payload.type === 'video';
+  // `body` is NOT NULL in chat_messages; media-only messages use an empty
+  // string so the column constraint is satisfied while the media URI lives
+  // in metadata for the read path.
+  const bodyText = payload.text ?? '';
+  const mergedMetadata: Record<string, unknown> = {
+    ...(payload.metadata ?? {}),
+    ...(isMediaMessage
+      ? { mediaUri: payload.mediaUri, mediaType: payload.type }
+      : {}),
+  };
+
   await ensureUserExists(actorUserId);
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // P0-MSG-2: Idempotent replay. If the client retried a send after a dropped
+  // response, the same clientMessageId will be presented. Return the original
+  // message instead of creating a duplicate. The partial unique index on
+  // (conversation_id, sender_user_id, client_message_id) is the race-condition
+  // backstop; this lookup is the fast path.
+  if (payload.clientMessageId) {
+    const existing = await db.query<{
+      id: string;
+      body: string;
+      metadata: Record<string, unknown>;
+      created_at: string;
+    }>(
+      `
+        SELECT id, body, metadata, created_at::text
+        FROM chat_messages
+        WHERE conversation_id = $1
+          AND sender_user_id = $2
+          AND client_message_id = $3
+        LIMIT 1
+      `,
+      [conversationId, actorUserId, payload.clientMessageId]
+    );
+
+    if (existing.rowCount && existing.rowCount > 0) {
+      const row = existing.rows[0];
+      reply.code(201);
+      return {
+        ok: true,
+        message: {
+          id: row.id,
+          senderType: 'user' as const,
+          senderUserId: actorUserId,
+          senderBotId: null,
+          body: row.body,
+          metadata: row.metadata ?? {},
+          createdAt: row.created_at,
+        },
+      };
+    }
+  }
 
   const messageId = createRuntimeId('chatmsg');
   const result = await db.query<{ id: string; created_at: string }>(
@@ -19432,19 +19687,64 @@ app.post('/chat/conversations/:conversationId/messages', {
         sender_user_id,
         sender_bot_id,
         body,
-        metadata
+        metadata,
+        client_message_id
       )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb)
+      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6)
+      ON CONFLICT (conversation_id, sender_user_id, client_message_id)
+        WHERE client_message_id IS NOT NULL
+      DO NOTHING
       RETURNING id, created_at::text
     `,
     [
       messageId,
       conversationId,
       actorUserId,
-      payload.text,
-      toJsonString(payload.metadata ?? {}),
+      bodyText,
+      toJsonString(mergedMetadata),
+      payload.clientMessageId ?? null,
     ]
   );
+
+  // P0-MSG-2: Race-condition backstop. Two concurrent retries with the same
+  // clientMessageId can both pass the SELECT lookup above. The partial unique
+  // index makes the second INSERT a no-op (DO NOTHING); detect that and
+  // replay the winning row so the client still gets a 201 with the message.
+  if (result.rowCount === 0 && payload.clientMessageId) {
+    const existing = await db.query<{
+      id: string;
+      body: string;
+      metadata: Record<string, unknown>;
+      created_at: string;
+    }>(
+      `
+        SELECT id, body, metadata, created_at::text
+        FROM chat_messages
+        WHERE conversation_id = $1
+          AND sender_user_id = $2
+          AND client_message_id = $3
+        LIMIT 1
+      `,
+      [conversationId, actorUserId, payload.clientMessageId]
+    );
+
+    if (existing.rowCount && existing.rowCount > 0) {
+      const row = existing.rows[0];
+      reply.code(201);
+      return {
+        ok: true,
+        message: {
+          id: row.id,
+          senderType: 'user' as const,
+          senderUserId: actorUserId,
+          senderBotId: null,
+          body: row.body,
+          metadata: row.metadata ?? {},
+          createdAt: row.created_at,
+        },
+      };
+    }
+  }
 
   await db.query(
     `
@@ -19499,8 +19799,8 @@ app.post('/chat/conversations/:conversationId/messages', {
       senderType: 'user',
       senderUserId: actorUserId,
       senderBotId: null,
-      body: payload.text,
-      metadata: payload.metadata ?? {},
+      body: bodyText,
+      metadata: mergedMetadata,
       createdAt: result.rows[0].created_at,
     },
   });
@@ -19514,7 +19814,7 @@ app.post('/chat/conversations/:conversationId/messages', {
         conversationTitle: conversation.title ?? null,
         actorUserId,
         actorUserName: null,
-        messageText: payload.text,
+        messageText: bodyText,
       });
     } catch (err) {
       request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
@@ -19548,8 +19848,8 @@ app.post('/chat/conversations/:conversationId/messages', {
       senderType: 'user' as const,
       senderUserId: actorUserId,
       senderBotId: null,
-      body: payload.text,
-      metadata: payload.metadata ?? {},
+      body: bodyText,
+      metadata: mergedMetadata,
       createdAt: result.rows[0].created_at,
     },
   };
@@ -20955,6 +21255,7 @@ app.get('/chat/conversations/:conversationId', async (request) => {
   );
 
   const conversation = result.rows[0];
+  const conversationMetadata = asObject(conversation.metadata);
   const memberResult = await db.query<{ user_id: string; role: string; joined_at: string }>(
     `
       SELECT user_id, role, joined_at
@@ -20988,6 +21289,12 @@ app.get('/chat/conversations/:conversationId', async (request) => {
       title: conversation.title,
       ownerId: conversation.owner_id,
       itemId: conversation.item_id,
+      description: typeof conversationMetadata.description === 'string'
+        ? conversationMetadata.description
+        : null,
+      avatar: typeof conversationMetadata.avatar === 'string'
+        ? conversationMetadata.avatar
+        : null,
       metadata: conversation.metadata,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
@@ -21013,47 +21320,193 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
   const bodySchema = z.object({
     title: z.string().trim().min(2).max(80).optional(),
     description: z.string().trim().max(280).optional(),
-    avatar: z.string().trim().max(512).optional(),
+    avatar: z.string().trim().max(512).nullable().optional(),
+    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+  }).superRefine((value, context) => {
+    if (typeof value.avatar === 'string' && !value.avatarFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['avatarFinalizationId'],
+        message: 'A finalized upload receipt is required for a group photo',
+      });
+    }
+    if (
+      value.title === undefined
+      && value.description === undefined
+      && value.avatar === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one group identity field is required',
+      });
+    }
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
-  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
+  const requestHash = hashGroupCreatePayload({ conversationId, ...payload });
+  const client = await db.connect();
 
-  if (payload.title !== undefined) {
-    await db.query(
-      `UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2`,
-      [payload.title, conversationId]
+  try {
+    await client.query('BEGIN');
+    const conversation = await ensureGroupManagementAccess(
+      client,
+      conversationId,
+      actorUserId,
+      request.authUser?.role
     );
-  }
 
-  if (payload.description !== undefined || payload.avatar !== undefined) {
-    const currentMeta = await db.query<{ metadata: unknown }>(
-      `SELECT metadata FROM chat_conversations WHERE id = $1 LIMIT 1`,
+    if (idempotencyKey) {
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+        [`chat-group-edit:${actorUserId}:${idempotencyKey}`]
+      );
+      const cachedResponse = await getChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+      });
+      if (cachedResponse) {
+        await client.query('COMMIT');
+        return cachedResponse;
+      }
+    }
+
+    if (typeof payload.avatar === 'string' && payload.avatarFinalizationId) {
+      await ensureOwnedGroupAvatarReceipt(client, {
+        actorUserId,
+        finalizationId: payload.avatarFinalizationId,
+        avatarUrl: payload.avatar,
+      });
+    }
+
+    const currentResult = await client.query<{
+      title: string | null;
+      metadata: Record<string, unknown> | null;
+    }>(
+      `SELECT title, metadata FROM chat_conversations WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [conversationId]
     );
-    const existingMeta = (currentMeta.rows[0]?.metadata ?? {}) as Record<string, unknown>;
-    const updatedMeta = {
-      ...existingMeta,
+    const current = currentResult.rows[0];
+    const currentMetadata = asObject(current.metadata);
+    const nextTitle = payload.title ?? current.title ?? 'Group chat';
+    const nextMetadata = {
+      ...currentMetadata,
       ...(payload.description !== undefined ? { description: payload.description } : {}),
       ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+      ...(payload.avatarFinalizationId !== undefined
+        ? { avatarFinalizationId: payload.avatarFinalizationId }
+        : payload.avatar === null
+          ? { avatarFinalizationId: null }
+          : {}),
     };
-    await db.query(
-      `UPDATE chat_conversations SET metadata = $1::jsonb, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(updatedMeta), conversationId]
-    );
-  }
 
-  return {
-    ok: true,
-    conversationId,
-    updated: {
-      ...(payload.title !== undefined ? { title: payload.title } : {}),
-      ...(payload.description !== undefined ? { description: payload.description } : {}),
-      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
-    },
-  };
+    const updatedResult = await client.query<{ updated_at: string }>(
+      `
+        UPDATE chat_conversations
+        SET title = $2, metadata = $3::jsonb, updated_at = NOW()
+        WHERE id = $1
+        RETURNING updated_at::text
+      `,
+      [conversationId, nextTitle, toJsonString(nextMetadata)]
+    );
+
+    const changedFields = [
+      payload.title !== undefined ? 'name' : null,
+      payload.description !== undefined ? 'description' : null,
+      payload.avatar !== undefined ? 'photo' : null,
+    ].filter((value): value is string => Boolean(value));
+    const identityUpdateText = changedFields.length === 1
+      ? `Group ${changedFields[0]} updated.`
+      : 'Group details updated.';
+    const systemMessage = await appendSystemChatMessage(client, {
+      conversationId,
+      text: identityUpdateText,
+      metadata: {
+        event: 'group_identity_updated',
+        actorUserId,
+        changedFields,
+      },
+    });
+
+    const responsePayload = {
+      ok: true,
+      conversation: {
+        id: conversationId,
+        type: 'group' as const,
+        title: nextTitle,
+        ownerId: conversation.owner_id,
+        itemId: conversation.item_id,
+        description: typeof nextMetadata.description === 'string' ? nextMetadata.description : null,
+        avatar: typeof nextMetadata.avatar === 'string' ? nextMetadata.avatar : null,
+        updatedAt: updatedResult.rows[0].updated_at,
+      },
+      systemMessage: {
+        id: systemMessage.id,
+        createdAt: systemMessage.createdAt,
+      },
+    };
+
+    if (idempotencyKey) {
+      await saveChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+        conversationId,
+        responsePayload,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    try {
+      publishRealtimeEvent({
+        topic: `chat.conversation:${conversationId}`,
+        type: 'chat.message.created',
+        payload: {
+          id: systemMessage.id,
+          conversationId,
+          senderType: 'system',
+          senderUserId: null,
+          senderBotId: null,
+          body: identityUpdateText,
+          metadata: {
+            event: 'group_identity_updated',
+            actorUserId,
+            changedFields,
+          },
+          createdAt: systemMessage.createdAt,
+        },
+      });
+      publishRealtimeEvent({
+        topic: `chat.conversation:${conversationId}`,
+        type: 'chat.group.identity.updated',
+        payload: {
+          conversationId,
+          actorUserId,
+          changedFields,
+          title: nextTitle,
+          description: responsePayload.conversation.description,
+          avatar: responsePayload.conversation.avatar,
+          updatedAt: responsePayload.conversation.updatedAt,
+        },
+      });
+    } catch (eventError) {
+      request.log.error(
+        { err: eventError, conversationId, actorUserId },
+        'Failed to publish group identity update after commit'
+      );
+    }
+
+    return responsePayload;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.get('/chat/conversations/:conversationId/members', async (request) => {
@@ -34058,20 +34511,131 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
     }
 
     if (order.status !== 'paid' && order.status !== 'shipped') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: `Cannot refund order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
     }
 
-    await postCommerceOrderRefundLedgerReversal(client, orderId, authUser.userId, Number(order.total_gbp));
-    await client.query(`UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`, [orderId]);
+    // Look up the linked payment intent to issue a real provider refund.
+    // A refund without a provider call is a false refund — the buyer's card
+    // is never credited.  Refuse if no succeeded intent is linked.
+    const intentResult = await client.query<{
+      id: string;
+      gateway_id: string;
+      provider_intent_ref: string | null;
+      amount_gbp: number | string;
+      status: string;
+    }>(
+      `SELECT id, gateway_id, provider_intent_ref, amount_gbp, status
+       FROM payment_intents
+       WHERE order_id = $1 AND status = 'succeeded'
+       ORDER BY created_at DESC LIMIT 1`,
+      [orderId]
+    );
 
-    await client.query('COMMIT');
-    return { ok: true, orderId, status: 'refunded', refunded: true, reason: body.reason ?? null };
+    const linkedIntent = intentResult.rows[0];
+    if (!linkedIntent || !linkedIntent.provider_intent_ref) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Cannot refund: no succeeded provider payment intent is linked to this order. Use the payment refund endpoint with a provider reference.',
+        code: 'NO_PROVIDER_INTENT_FOR_REFUND',
+      };
+    }
+
+    // Calculate remaining-refundable: sum of already-succeeded/pending refunds.
+    const refundedResult = await client.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM payment_refunds
+       WHERE intent_id = $1 AND status IN ('succeeded', 'pending')`,
+      [linkedIntent.id]
+    );
+    const alreadyRefunded = Number(refundedResult.rows[0].total ?? '0');
+    const refundAmount = Number(order.total_gbp) - alreadyRefunded;
+
+    if (refundAmount <= 0) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Order has already been fully refunded', code: 'ALREADY_FULLY_REFUNDED' };
+    }
+
+    // Issue the real provider refund OUTSIDE the transaction lock.
+    // We release the transaction, call the provider, then open a new
+    // transaction to record the result.  This avoids holding a DB lock
+    // across a network call.
+    await client.query('ROLLBACK');
+
+    let providerRefundRef = createRuntimeId(`refund_${linkedIntent.gateway_id}`);
+    let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown' = 'pending';
+
+    try {
+      const gatewayRefund = await createGatewayRefund({
+        gatewayId: linkedIntent.gateway_id,
+        intentId: linkedIntent.id,
+        providerIntentRef: linkedIntent.provider_intent_ref,
+        money: moneyFromMinor('GBP', String(Math.round(refundAmount * 100))),
+        refundAmount,
+        reason: body.reason,
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId, refundOperationId: providerRefundRef },
+      });
+      providerRefundRef = gatewayRefund.providerRefundRef;
+      refundStatus = gatewayRefund.refundStatus;
+    } catch (refundError) {
+      // Provider call failed or timed out — mark as unknown, not failed.
+      // The reconciliation worker will query the provider for the authoritative
+      // status.  Never claim success from a local-only update.
+      refundStatus = 'unknown';
+      request.log.error(
+        { err: refundError, intentId: linkedIntent.id, orderId },
+        'Provider refund call failed; marking as unknown for reconciliation'
+      );
+    }
+
+    // Record the refund and update order status in a new transaction.
+    const recordClient = await db.connect();
+    try {
+      await recordClient.query('BEGIN');
+      await upsertPaymentRefund(recordClient, {
+        intentId: linkedIntent.id,
+        gatewayId: linkedIntent.gateway_id,
+        providerRefundRef,
+        status: refundStatus,
+        amount: refundAmount,
+        currency: 'GBP',
+        reason: body.reason,
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId },
+      });
+      await postCommerceOrderRefundLedgerReversal(recordClient, orderId, authUser.userId, refundAmount);
+      // Only set order to 'refunded' when the provider confirms success.
+      // For 'unknown' or 'pending', set to 'refunding' so the state is honest.
+      const orderStatus = refundStatus === 'succeeded' ? 'refunded' : 'refunding';
+      await recordClient.query(
+        `UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`,
+        [orderId, orderStatus]
+      );
+      await recordClient.query('COMMIT');
+    } catch (recordError) {
+      await recordClient.query('ROLLBACK');
+      throw recordError;
+    } finally {
+      recordClient.release();
+    }
+
+    return {
+      ok: true,
+      orderId,
+      status: refundStatus === 'succeeded' ? 'refunded' : 'refunding',
+      refunded: refundStatus === 'succeeded',
+      refundStatus,
+      reason: body.reason ?? null,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -42033,6 +42597,9 @@ const start = async () => {
             initiatedBy,
             reason,
           });
+        },
+        handleMediaIngestJob: async ({ assetId, reason }) => {
+          await processMediaAsset(assetId, db);
         },
       });
     } else {

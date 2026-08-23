@@ -40,17 +40,19 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useStore((state) => state.currentUser);
+  const currentUserId = currentUser?.id;
 
   const [order, setOrder] = useState<CommerceUserOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser?.id) return;
+    const userId = currentUserId;
+    if (!userId) return;
     let cancelled = false;
 
-    async function fetchOrder() {
+    async function fetchOrder(userId: string) {
       try {
-        const result = await listUserOrders(currentUser!.id, {
+        const result = await listUserOrders(userId, {
           limit: 20,
         });
         if (cancelled) return;
@@ -65,9 +67,9 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
       }
     }
 
-    void fetchOrder();
+    void fetchOrder(userId);
     return () => { cancelled = true; };
-  }, [currentUser?.id, listingId]);
+  }, [currentUserId, listingId]);
 
   // Don't render while loading or if no order exists
   if (isLoading || !order) return null;
@@ -75,7 +77,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const normalised = normaliseOrderStatus(order.status);
   const terminal = isTerminalStatus(normalised);
   const statusLabel = humaniseStatus(order.status);
-  const isSeller = order.sellerId === currentUser?.id;
+  const isSeller = order.sellerId === currentUserId;
   const role = isSeller ? 'seller' : 'buyer';
   const isNeedsAction = needsAction(order.status, role);
 
@@ -94,7 +96,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
     : null;
 
   // Determine the contextual CTA
-  const cta = useMemo(() => {
+  const cta = (() => {
     if (terminal) return null;
     if (isSeller && normalised === 'paid') {
       return { label: 'Dispatch item', icon: 'cube-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
@@ -106,10 +108,10 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
       return { label: 'Check item', icon: 'shield-checkmark-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
     return { label: 'View order', icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
-  }, [terminal, isSeller, normalised, order.id]);
+  })();
 
   // Deadline/ETA label
-  const deadlineLabel = useMemo(() => {
+  const deadlineLabel = (() => {
     if (terminal) return null;
     if (isSeller && normalised === 'paid' && shipByDate) {
       if (shipByOverdue) return 'Overdue — dispatch now';
@@ -121,7 +123,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
       return `ETA ${etaWindow}`;
     }
     return null;
-  }, [terminal, isSeller, normalised, shipByDate, shipByDaysLeft, shipByOverdue, etaWindow]);
+  })();
 
   const handlePress = () => {
     if (cta) {

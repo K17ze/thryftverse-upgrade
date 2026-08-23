@@ -18,7 +18,6 @@
 import React, { useCallback, useRef } from 'react';
 import { StyleSheet, ScrollView, View, type ViewStyle } from 'react-native';
 import { CreatorToolButton } from '../controls/CreatorToolButton';
-import { useHaptic } from '../../hooks/useHaptic';
 
 // ── Effect type ──────────────────────────────────────────────────────
 
@@ -87,17 +86,13 @@ export function CameraEffectBar({
   onSelectEffect,
   disabled = false,
 }: CameraEffectBarProps): React.ReactElement {
-  const haptic = useHaptic();
   const scrollRef = useRef<ScrollView>(null);
 
   const handleSelect = useCallback(
     (effect: CameraEffectId) => {
-      // CreatorToolButton already fires a selection haptic, but we add
-      // an extra light haptic here for the bar-level feedback.
-      haptic.light();
       onSelectEffect(effect);
     },
-    [haptic, onSelectEffect],
+    [onSelectEffect],
   );
 
   return (

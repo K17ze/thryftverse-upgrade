@@ -10,6 +10,7 @@ import {
   processDomainOutboxBatch,
   processQueuedOnezeMintReserveAllocation,
   processQueuedOnezeWithdrawalExecution,
+  processMediaIngestJob,
 } from './handlers/index.js';
 
 /**
@@ -56,6 +57,9 @@ async function main(): Promise<void> {
           initiatedBy,
           reason,
         });
+      },
+      handleMediaIngestJob: async ({ assetId, reason }) => {
+        await processMediaIngestJob({ assetId, reason });
       },
     },
     logger,

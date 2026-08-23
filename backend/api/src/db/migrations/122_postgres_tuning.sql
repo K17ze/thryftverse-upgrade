@@ -1,3 +1,4 @@
+-- @noTransaction
 -- PostgreSQL production tuning.
 --
 -- Sets recommended server parameters for a 1 GB RAM production instance.

@@ -51,6 +51,10 @@ __pycache__/
 frontend/ios/
 frontend/android/
 
+# Kotlin/Gradle build output for local native modules
+frontend/modules/*/android/build/
+frontend/modules/*/ios/build/
+
 # local git metadata backup folder
 .git_disabled/
 

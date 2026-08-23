@@ -57,6 +57,8 @@ import {
 } from '../components/coown';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -95,6 +97,7 @@ export default function AssetDueDiligenceScreen() {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -211,7 +214,7 @@ export default function AssetDueDiligenceScreen() {
   const hasAboutAsset = hasProvenance || hasCondition;
 
   // ── Timeline events — all dated events combined chronologically ──
-  const timelineEvents = React.useMemo(() => {
+  const timelineEvents = (() => {
     const events: { event: string; date: Date; sortKey: number }[] = [];
 
     if (asset.authenticityVerifiedAt) {
@@ -244,10 +247,10 @@ export default function AssetDueDiligenceScreen() {
     }
 
     return events.sort((a, b) => b.sortKey - a.sortKey);
-  }, [asset.authenticityVerifiedAt, asset.appraisalValuedAt, asset.trustAuditEvents, asset.marketAuditEvents]);
+  })();
 
   // ── Document rows — legal/technical documents as flat rows ──
-  const documentRows = React.useMemo(() => {
+  const documentRows = (() => {
     const docs: { icon: string; title: string; subtitle: string | null; url: string | null; isLink: boolean }[] = [];
 
     if (asset.escrowTermsUrl) {
@@ -297,7 +300,7 @@ export default function AssetDueDiligenceScreen() {
     }
 
     return docs;
-  }, [asset]);
+  })();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -331,6 +334,8 @@ export default function AssetDueDiligenceScreen() {
           />
         }
       >
+        {isOffline && <OfflineBanner onRetry={handleRefresh} />}
+
         {/* ── Evidence ──
             Provenance story, condition, category evidence, authentication,
             custody — presented as a dossier gallery, not settings rows. */}
@@ -343,14 +348,9 @@ export default function AssetDueDiligenceScreen() {
                 </Text>
               )}
               {asset.conditionGrade && (
-                <View style={[styles.evidenceBlock, { borderColor: colors.borderSubtle }]}>
-                  <Text style={[styles.evidenceBlockLabel, { color: colors.textMuted }]}>
-                    CONDITION
-                  </Text>
-                  <Text style={[styles.evidenceBlockValue, { color: colors.textPrimary }]}>
-                    {asset.conditionGrade}
-                  </Text>
-                </View>
+                <Text style={[styles.conditionInline, { color: colors.textSecondary }]}>
+                  Condition · {asset.conditionGrade}
+                </Text>
               )}
               {dossierEvidenceGroups.length > 0 && (
                 <CategoryEvidence groups={dossierEvidenceGroups} />
@@ -1043,23 +1043,11 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  evidenceBlock: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    marginTop: Space.sm,
-  },
-  evidenceBlockLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  evidenceBlockValue: {
+  conditionInline: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    marginTop: Space.xs,
   },
   custodyEvidence: {
     borderTopWidth: StyleSheet.hairlineWidth,

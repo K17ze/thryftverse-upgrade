@@ -4,20 +4,36 @@ import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
-import { Caption, Meta } from '../components/ui/Text';
+import { Caption } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Control, Radius, Space, Type, TypeStyles } from '../theme/designTokens';
-import { deleteConversationOnApi, leaveGroupOnApi, createGroupInviteLinkOnApi, type GroupInviteLink } from '../services/chatApi';
+import { Control, Radius, Space, Type, TypeStyles, FontFamily } from '../theme/designTokens';
+import {
+  deleteConversationOnApi,
+  leaveGroupOnApi,
+  createGroupInviteLinkOnApi,
+  archiveConversationOnApi,
+  type GroupInviteLink,
+} from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
+import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
+
+type TabKey = 'members' | 'media' | 'settings';
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'members', label: 'Members' },
+  { key: 'media', label: 'Media' },
+  { key: 'settings', label: 'Settings' },
+];
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
@@ -33,9 +49,12 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
 
+  const [activeTab, setActiveTab] = useState<TabKey>('members');
   const [isLeaving, setIsLeaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isTogglingMute, setIsTogglingMute] = useState(false);
   const [inviteLink, setInviteLink] = useState<GroupInviteLink | null>(null);
 
   const conversation = useMemo(
@@ -45,6 +64,24 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const memberCount = conversation?.participantIds?.length ?? 0;
   const connectedAgentCount = conversation?.botIds?.length ?? 0;
   const isMuted = mutedIds.includes(conversationId);
+  const currentRole = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
+  const canManageIdentity = Boolean(
+    currentUser?.id
+    && (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin'),
+  );
+
+  const memberProfiles = useMemo(
+    () => conversation?.participantProfiles ?? [],
+    [conversation?.participantProfiles],
+  );
+
+  const recentMedia = useMemo(() => {
+    const msgs = conversation?.messages ?? [];
+    return msgs
+      .filter((m) => m.mediaUri && !m.isSystem)
+      .slice(-30)
+      .reverse();
+  }, [conversation?.messages]);
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -59,14 +96,14 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     );
   }
 
-  const initials = (conversation.title || 'Group')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
   const description = conversation?.description;
+  const coverPhoto = conversation?.coverPhoto;
+  const groupAvatar = conversation?.avatar;
+  const avatarMembers = memberProfiles.map((member) => ({
+    id: member.id,
+    displayName: member.displayName ?? member.username,
+    avatar: member.avatar,
+  }));
 
   const leaveGroup = () => {
     Alert.alert(
@@ -124,17 +161,32 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     );
   };
 
-  const archive = () => {
+  const archive = async () => {
     haptic.medium();
-    archiveConversation(conversationId);
-    show('Conversation archived', 'success');
-    navigation.navigate('MainTabs', { screen: 'Inbox' });
+    setIsArchiving(true);
+    try {
+      await archiveConversationOnApi(conversationId);
+      archiveConversation(conversationId);
+      show('Conversation archived', 'success');
+      navigation.navigate('MainTabs', { screen: 'Inbox' });
+    } catch (err) {
+      show(parseApiError(err, 'Could not archive conversation. Try again.').message, 'error');
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
-  const toggleMute = () => {
+  const toggleMute = async () => {
     haptic.light();
-    toggleMuted(conversationId);
-    show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    setIsTogglingMute(true);
+    try {
+      await toggleMuted(conversationId);
+      show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    } catch (err) {
+      show(parseApiError(err, 'Could not update mute status. Try again.').message, 'error');
+    } finally {
+      setIsTogglingMute(false);
+    }
   };
 
   const handleGenerateInviteLink = async () => {
@@ -174,13 +226,19 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
+  const selectTab = (key: TabKey) => {
+    if (key === activeTab) return;
+    haptic.selection();
+    setActiveTab(key);
+  };
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
           title="Group details"
           onBack={() => navigation.goBack()}
-          rightAction={
+          rightAction={canManageIdentity ? (
             <AnimatedPressable
               onPress={() => navigation.navigate('EditGroup', { conversationId })}
               style={styles.headerAction}
@@ -192,7 +250,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             >
               <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
             </AnimatedPressable>
-          }
+          ) : undefined}
         />
       }
       scrollEnabled={false}
@@ -204,10 +262,79 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           { paddingBottom: Math.max(insets.bottom, Space.xl) + Space.lg },
         ]}
       >
-        <View style={styles.identity}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+        {/* Cover photo — full-width banner when a cover photo is set.
+            Falls back to the group avatar as a centered mosaic (120pt)
+            when no cover photo, matching the WhatsApp/Telegram pattern. */}
+        {coverPhoto ? (
+          <View style={styles.coverWrap}>
+            <CachedImage
+              uri={coverPhoto}
+              style={styles.coverImage}
+              contentFit="cover"
+              downscaleWidth={720}
+            />
+            {canManageIdentity && (
+              <AnimatedPressable
+                style={styles.coverEditBadge}
+                onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                activeOpacity={0.7}
+                scaleValue={0.94}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Change cover photo"
+              >
+                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+              </AnimatedPressable>
+            )}
           </View>
+        ) : groupAvatar ? (
+          /* If no cover photo but avatar is set, show avatar as the banner */
+          <View style={styles.coverWrap}>
+            <CachedImage
+              uri={groupAvatar}
+              style={styles.coverImage}
+              contentFit="cover"
+              downscaleWidth={720}
+            />
+            {canManageIdentity && (
+              <AnimatedPressable
+                style={styles.coverEditBadge}
+                onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                activeOpacity={0.7}
+                scaleValue={0.94}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Add cover photo"
+              >
+                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+              </AnimatedPressable>
+            )}
+          </View>
+        ) : (
+          <View style={styles.coverFallback}>
+            <GroupAvatarMosaic
+              members={avatarMembers}
+              groupPhoto={undefined}
+              fallbackInitials={conversation.title || 'Group'}
+              size={120}
+            />
+            {canManageIdentity && (
+              <AnimatedPressable
+                style={styles.coverEditBadge}
+                onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                activeOpacity={0.7}
+                scaleValue={0.94}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Add group photo"
+              >
+                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
+        <View style={styles.identity}>
           <Text style={styles.groupName} numberOfLines={1}>
             {conversation.title || 'Group chat'}
           </Text>
@@ -224,138 +351,426 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        <View style={styles.quickActions}>
-          <QuickAction
-            icon="people-outline"
-            label="Members"
-            onPress={() => navigation.navigate('GroupMembers', { conversationId })}
-          />
-          <QuickAction
-            icon="images-outline"
-            label="Media"
-            onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
-          />
-          <QuickAction
-            icon="chatbox-ellipses-outline"
-            label="Agents"
-            onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
-          />
+        {/* Tab bar — segmented control with underline indicator.
+            Flat, hairline dividers, transparent backgrounds. */}
+        <View style={styles.tabBar}>
+          {TABS.map((tab) => {
+            const active = tab.key === activeTab;
+            return (
+              <Pressable
+                key={tab.key}
+                style={styles.tab}
+                onPress={() => selectTab(tab.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={tab.label}
+              >
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                  {tab.label}
+                </Text>
+                {active ? <View style={styles.tabIndicator} /> : null}
+              </Pressable>
+            );
+          })}
         </View>
 
-        <ChatInfoSection title="Conversation">
-          <ChatInfoRow
-            icon="chatbubble-ellipses-outline"
-            label="Quick replies"
-            subtitle="Reusable message templates"
-            onPress={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
-            showChevron
-          />
-          <ChatInfoRow
-            icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
-            label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
-            onPress={toggleMute}
-          />
-        </ChatInfoSection>
-
-        <ChatInfoSection title="Chat history">
-          <ChatInfoRow
-            icon="archive-outline"
-            label="Archive conversation"
-            subtitle="Move this chat out of your active inbox"
-            onPress={archive}
-          />
-        </ChatInfoSection>
-
-        <ChatInfoSection title="Invite">
-          <ChatInfoRow
-            icon="link-outline"
-            label="Invite via link"
-            subtitle={inviteLink ? 'Link ready · tap to share' : 'Create a shareable invite link'}
-            onPress={handleGenerateInviteLink}
-            showChevron={!inviteLink}
-            trailing={isGeneratingInvite ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
-          />
-          {inviteLink && (
-            <View style={styles.inviteLinkCard}>
-              <Text style={styles.inviteLinkText} numberOfLines={2}>{inviteLink.inviteLink}</Text>
-              <View style={styles.inviteLinkActions}>
-                <Pressable
-                  onPress={handleCopyInviteLink}
-                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy invite link"
-                >
-                  <Ionicons name="copy-outline" size={16} color={colors.brand} />
-                  <Text style={styles.inviteActionText}>Copy</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleShareInviteLink}
-                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share invite link"
-                >
-                  <Ionicons name="share-outline" size={16} color={colors.brand} />
-                  <Text style={styles.inviteActionText}>Share</Text>
-                </Pressable>
-              </View>
-              <Caption color={colors.textMuted} style={styles.inviteExpiry}>
-                Expires in 72 hours
-              </Caption>
-            </View>
+        <View style={styles.tabContent}>
+          {activeTab === 'members' && (
+            <MembersTab
+              memberProfiles={memberProfiles}
+              memberRoles={conversation.memberRoles}
+              currentUserId={currentUser?.id}
+              canManageIdentity={canManageIdentity}
+              memberCount={memberCount}
+              onViewAll={() => navigation.navigate('GroupMembers', { conversationId })}
+              onAddMembers={() => navigation.navigate('GroupMembers', { conversationId })}
+            />
           )}
-        </ChatInfoSection>
 
-        <ChatInfoSection title="Membership" danger>
-          <ChatInfoRow
-            icon="log-out-outline"
-            label={isLeaving ? 'Leaving…' : 'Leave group'}
-            onPress={leaveGroup}
-            danger
-            trailing={isLeaving ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
-          />
-          <ChatInfoRow
-            icon="trash-outline"
-            label={isDeleting ? 'Deleting…' : 'Delete for me'}
-            onPress={deleteForMe}
-            danger
-            trailing={isDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
-          />
-        </ChatInfoSection>
+          {activeTab === 'media' && (
+            <MediaTab
+              mediaItems={recentMedia}
+              onViewAll={() => navigation.navigate('SharedConversationMedia', { conversationId })}
+              onOpenMedia={(uri, mediaType, senderLabel, timestamp, messageId) =>
+                navigation.navigate('ChatMediaPreview', {
+                  mediaUri: uri,
+                  mediaType,
+                  senderLabel,
+                  timestamp,
+                  messageId,
+                })
+              }
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsTab
+              isMuted={isMuted}
+              isTogglingMute={isTogglingMute}
+              onToggleMute={toggleMute}
+              isArchiving={isArchiving}
+              onArchive={archive}
+              inviteLink={inviteLink}
+              isGeneratingInvite={isGeneratingInvite}
+              onGenerateInvite={handleGenerateInviteLink}
+              onCopyInvite={handleCopyInviteLink}
+              onShareInvite={handleShareInviteLink}
+              onQuickReplies={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
+              onReportGroup={() => navigation.navigate('Report', { type: 'group', targetId: conversationId })}
+              isLeaving={isLeaving}
+              onLeaveGroup={leaveGroup}
+              isDeleting={isDeleting}
+              onDeleteForMe={deleteForMe}
+            />
+          )}
+        </View>
       </ScrollView>
     </FlagshipScreen>
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  onPress,
+// ---------------------------------------------------------------------------
+// Members tab — compact member list (top 5) + Add members + View all
+// ---------------------------------------------------------------------------
+function MembersTab({
+  memberProfiles,
+  memberRoles,
+  currentUserId,
+  canManageIdentity,
+  memberCount,
+  onViewAll,
+  onAddMembers,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
+  memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
+  memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
+  currentUserId?: string;
+  canManageIdentity: boolean;
+  memberCount: number;
+  onViewAll: () => void;
+  onAddMembers: () => void;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const topMembers = memberProfiles.slice(0, 5);
+
+  const roleLabel = (role?: 'owner' | 'admin' | 'member'): string | null => {
+    if (role === 'owner') return 'Owner';
+    if (role === 'admin') return 'Admin';
+    return null;
+  };
+
   return (
-    <AnimatedPressable
-      style={styles.quickAction}
-      onPress={onPress}
-      activeOpacity={0.68}
-      scaleValue={0.96}
-      hapticFeedback="light"
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Ionicons name={icon} size={21} color={colors.textPrimary} />
-      <Text style={styles.quickActionLabel}>{label}</Text>
-    </AnimatedPressable>
+    <View style={styles.paddedContent}>
+      {canManageIdentity && (
+        <AnimatedPressable
+          style={styles.addMembersRow}
+          onPress={onAddMembers}
+          activeOpacity={0.68}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Add members"
+        >
+          <View style={styles.addMembersIcon}>
+            <Ionicons name="person-add-outline" size={20} color={colors.brand} />
+          </View>
+          <Text style={styles.addMembersText}>Add members</Text>
+        </AnimatedPressable>
+      )}
+
+      <View style={styles.memberList}>
+        {topMembers.length === 0 ? (
+          <Caption color={colors.textMuted} style={styles.emptyMembers}>
+            Member list unavailable
+          </Caption>
+        ) : (
+          topMembers.map((member, index) => {
+            const role = memberRoles?.[member.id];
+            const isYou = member.id === currentUserId;
+            const badge = roleLabel(role);
+            const isLast = index === topMembers.length - 1;
+            const initials = (member.displayName ?? member.username).slice(0, 2).toUpperCase();
+            return (
+              <View key={member.id} style={[styles.memberRow, !isLast && styles.memberRowDivider]}>
+                <MemberAvatar uri={member.avatar ?? undefined} initials={initials} />
+                <View style={styles.memberCopy}>
+                  <Text style={styles.memberName} numberOfLines={1}>
+                    {member.displayName ?? member.username}
+                    {isYou ? '  (you)' : ''}
+                  </Text>
+                  <Text style={styles.memberHandle} numberOfLines={1}>@{member.username}</Text>
+                </View>
+                {badge ? (
+                  <View style={[styles.roleBadge, role === 'owner' && styles.roleBadgeOwner]}>
+                    <Text style={[styles.roleBadgeText, role === 'owner' && styles.roleBadgeTextOwner]}>
+                      {badge}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      {memberCount > 5 && (
+        <AnimatedPressable
+          style={styles.viewAllRow}
+          onPress={onViewAll}
+          activeOpacity={0.68}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel={`View all ${memberCount} members`}
+        >
+          <Text style={styles.viewAllText}>View all {memberCount} members</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </AnimatedPressable>
+      )}
+    </View>
+  );
+}
+
+function MemberAvatar({ uri, initials }: { uri?: string; initials: string }) {
+  const { colors } = useAppTheme();
+  if (uri) {
+    return <CachedImage uri={uri} style={styles_memberAvatar.avatar} contentFit="cover" />;
+  }
+  return (
+    <View style={[styles_memberAvatar.avatar, { backgroundColor: colors.surfaceAlt }]}>
+      <Text style={styles_memberAvatar.initials}>{initials}</Text>
+    </View>
+  );
+}
+
+const styles_memberAvatar = StyleSheet.create({
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initials: {
+    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Media tab — 3-column grid of recent shared media
+// ---------------------------------------------------------------------------
+function MediaTab({
+  mediaItems,
+  onViewAll,
+  onOpenMedia,
+}: {
+  mediaItems: Array<{ id: string; mediaUri?: string; mediaType?: 'image' | 'video'; senderId?: string; timestamp?: string }>;
+  onViewAll: () => void;
+  onOpenMedia: (uri: string, mediaType?: 'image' | 'video', senderLabel?: string, timestamp?: string, messageId?: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const grid = mediaItems.slice(0, 9);
+
+  if (grid.length === 0) {
+    return (
+      <View style={styles.mediaEmpty}>
+        <Ionicons name="images-outline" size={28} color={colors.textMuted} />
+        <Caption color={colors.textMuted} style={styles.mediaEmptyText}>
+          No shared media yet
+        </Caption>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.paddedContent}>
+      <View style={styles.mediaGrid}>
+        {grid.map((item) => {
+          const isVideo = item.mediaType === 'video';
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onOpenMedia(item.mediaUri!, item.mediaType, undefined, item.timestamp, item.id)}
+              style={styles.mediaTile}
+              accessibilityRole="button"
+              accessibilityLabel={isVideo ? 'Open shared video' : 'Open shared photo'}
+            >
+              <CachedImage
+                uri={item.mediaUri!}
+                style={styles.mediaTileImage}
+                contentFit="cover"
+              />
+              {isVideo && (
+                <View style={styles.mediaVideoBadge}>
+                  <Ionicons name="play" size={14} color="#FFFFFF" />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+      {mediaItems.length > 9 && (
+        <AnimatedPressable
+          style={styles.viewAllRow}
+          onPress={onViewAll}
+          activeOpacity={0.68}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="View all shared media"
+        >
+          <Text style={styles.viewAllText}>View all media</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </AnimatedPressable>
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings tab — Conversation, Chat history, Invite, Membership sections
+// ---------------------------------------------------------------------------
+function SettingsTab({
+  isMuted,
+  isTogglingMute,
+  onToggleMute,
+  isArchiving,
+  onArchive,
+  inviteLink,
+  isGeneratingInvite,
+  onGenerateInvite,
+  onCopyInvite,
+  onShareInvite,
+  onQuickReplies,
+  onReportGroup,
+  isLeaving,
+  onLeaveGroup,
+  isDeleting,
+  onDeleteForMe,
+}: {
+  isMuted: boolean;
+  isTogglingMute: boolean;
+  onToggleMute: () => void;
+  isArchiving: boolean;
+  onArchive: () => void;
+  inviteLink: GroupInviteLink | null;
+  isGeneratingInvite: boolean;
+  onGenerateInvite: () => void;
+  onCopyInvite: () => void;
+  onShareInvite: () => void;
+  onQuickReplies: () => void;
+  onReportGroup: () => void;
+  isLeaving: boolean;
+  onLeaveGroup: () => void;
+  isDeleting: boolean;
+  onDeleteForMe: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={styles.paddedContent}>
+      <ChatInfoSection title="Conversation">
+        <ChatInfoRow
+          icon="chatbubble-ellipses-outline"
+          label="Quick replies"
+          subtitle="Reusable message templates"
+          onPress={onQuickReplies}
+          showChevron
+        />
+        <ChatInfoRow
+          icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
+          label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
+          onPress={onToggleMute}
+          trailing={isTogglingMute ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+        />
+      </ChatInfoSection>
+
+      <ChatInfoSection title="Chat history">
+        <ChatInfoRow
+          icon="archive-outline"
+          label="Archive conversation"
+          subtitle="Move this chat out of your active inbox"
+          onPress={onArchive}
+          trailing={isArchiving ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+        />
+      </ChatInfoSection>
+
+      <ChatInfoSection title="Invite">
+        <ChatInfoRow
+          icon="link-outline"
+          label="Invite via link"
+          subtitle={inviteLink ? 'Link ready · tap to share' : 'Create a shareable invite link'}
+          onPress={onGenerateInvite}
+          showChevron={!inviteLink}
+          trailing={isGeneratingInvite ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+        />
+        {inviteLink && (
+          <View style={styles.inviteLinkCard}>
+            <Text style={styles.inviteLinkText} numberOfLines={2}>{inviteLink.inviteLink}</Text>
+            <View style={styles.inviteLinkActions}>
+              <Pressable
+                onPress={onCopyInvite}
+                style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Copy invite link"
+              >
+                <Ionicons name="copy-outline" size={16} color={colors.brand} />
+                <Text style={styles.inviteActionText}>Copy</Text>
+              </Pressable>
+              <Pressable
+                onPress={onShareInvite}
+                style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Share invite link"
+              >
+                <Ionicons name="share-outline" size={16} color={colors.brand} />
+                <Text style={styles.inviteActionText}>Share</Text>
+              </Pressable>
+            </View>
+            <Caption color={colors.textMuted} style={styles.inviteExpiry}>
+              Expires in 72 hours
+            </Caption>
+          </View>
+        )}
+      </ChatInfoSection>
+
+      <ChatInfoSection title="Membership" danger>
+        <ChatInfoRow
+          icon="flag-outline"
+          label="Report group"
+          subtitle="Spam, abuse or policy violation"
+          onPress={onReportGroup}
+          danger
+          showChevron
+        />
+        <ChatInfoRow
+          icon="log-out-outline"
+          label={isLeaving ? 'Leaving…' : 'Leave group'}
+          onPress={onLeaveGroup}
+          danger
+          trailing={isLeaving ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+        />
+        <ChatInfoRow
+          icon="trash-outline"
+          label={isDeleting ? 'Deleting…' : 'Delete for me'}
+          onPress={onDeleteForMe}
+          danger
+          trailing={isDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+        />
+      </ChatInfoSection>
+    </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
+    gap: Space.lg,
+  },
+  paddedContent: {
     paddingHorizontal: Space.md,
     gap: Space.lg,
   },
@@ -370,25 +785,40 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  coverWrap: {
+    width: '100%',
+    height: 220,
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverFallback: {
+    width: '100%',
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    position: 'relative',
+  },
+  coverEditBadge: {
+    position: 'absolute',
+    bottom: Space.sm + 2,
+    right: Space.md,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   identity: {
     alignItems: 'center',
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
-  },
-  avatar: {
-    width: Space.xxl + Space.xl - Space.xs,
-    height: Space.xxl + Space.xl - Space.xs,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    marginBottom: Space.sm,
-  },
-  avatarText: {
-    color: colors.textPrimary,
-    fontFamily: TypeStyles.title.fontFamily,
-    fontSize: Type.title.size + 1,
-    letterSpacing: -0.5,
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
   },
   groupName: {
     maxWidth: '88%',
@@ -413,25 +843,166 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     marginTop: Space.xs / 2 + 1,
   },
-  quickActions: {
-    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
+  // ── Tab bar ──
+  tabBar: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  quickAction: {
+  tab: {
     flex: 1,
-    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs / 2 + 1,
+    paddingVertical: Space.sm + 2,
+    position: 'relative',
   },
-  quickActionLabel: {
-    color: colors.textSecondary,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  tabLabel: {
+    color: colors.textMuted,
+    fontFamily: FontFamily.medium,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+  },
+  tabLabelActive: {
+    color: colors.textPrimary,
+    fontFamily: FontFamily.semibold,
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '25%',
+    right: '25%',
+    height: 2,
+    backgroundColor: colors.textPrimary,
+    borderRadius: 1,
+  },
+  tabContent: {
+    flex: 1,
+  },
+  // ── Members tab ──
+  addMembersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+  },
+  addMembersIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${colors.brand}14`,
+  },
+  addMembersText: {
+    color: colors.brand,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.body.size,
+  },
+  memberList: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+  },
+  memberRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  memberCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  memberName: {
+    color: colors.textPrimary,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+  },
+  memberHandle: {
+    color: colors.textMuted,
+    fontFamily: FontFamily.regular,
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
+  roleBadge: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
+  },
+  roleBadgeOwner: {
+    backgroundColor: `${colors.brand}14`,
+  },
+  roleBadgeText: {
+    color: colors.textSecondary,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.meta.size,
+    letterSpacing: 0.2,
+  },
+  roleBadgeTextOwner: {
+    color: colors.brand,
+  },
+  emptyMembers: {
+    paddingVertical: Space.md,
+  },
+  viewAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  viewAllText: {
+    color: colors.textSecondary,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.body.size,
+  },
+  // ── Media tab ──
+  mediaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+  },
+  mediaTile: {
+    width: '32.5%',
+    aspectRatio: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mediaTileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaVideoBadge: {
+    position: 'absolute',
+    bottom: Space.xs,
+    right: Space.xs,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xxl * 2,
+    gap: Space.sm,
+  },
+  mediaEmptyText: {
+    textAlign: 'center',
+  },
+  // ── Invite link card ──
   inviteLinkCard: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,

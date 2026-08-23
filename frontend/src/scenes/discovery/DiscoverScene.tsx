@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback, useState } from 'react';
+import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,18 +12,26 @@ import {
 import {
   useSharedValue,
 } from 'react-native-reanimated';
-import { useScrollToTop } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
+import { OfflineBanner } from '../../components/OfflineBanner';
 import { PinterestMasonryGrid } from '../../components/discover/PinterestMasonryGrid';
+import { useConnectivity } from '../../hooks/useConnectivity';
+import { useForYouFeed } from '../../hooks/useForYouFeed';
 import { assembleDiscoveryFeed } from '../../utils/discoveryFeedAssembly';
 import type { Listing } from '../../domain';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
+import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
+import { fetchPosterStories, type PosterStory } from '../../services/postersApi';
+import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardApi';
+import type { RootStackParamList } from '../../navigation/types';
 
 const DISCOVER_NUM_COLUMNS = 2;
+type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
 
 /**
  * Category pill bar categories. Selecting a pill filters the feed client-side
@@ -134,7 +142,7 @@ function createCategoryBarStyles(colors: ThemeColors) {
     pill: {
       paddingVertical: Space.xs + 2,
       paddingHorizontal: Space.smMd,
-      borderRadius: Radius.full,
+      borderRadius: Radius.md,
       backgroundColor: 'transparent',
     },
     pillActive: {
@@ -204,15 +212,61 @@ export function DiscoverScene({
   isSavedListing,
 }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
+  const { isOffline } = useConnectivity();
+  const navigation = useNavigation<DiscoverNavigation>();
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
   // Active category for the pill bar. Drives client-side filtering of the
   // feed via CATEGORY_FILTERS. "All" is the default and shows every listing.
   const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [looks, setLooks] = useState<LookApiItem[]>([]);
+  const [posters, setPosters] = useState<PosterStory[]>([]);
+  const [moodboards, setMoodboards] = useState<Moodboard[]>([]);
+  const [isSupplementalLoading, setIsSupplementalLoading] = useState(true);
+  const [supplementalError, setSupplementalError] = useState(false);
+
+  // Personalised For You feed — when the backend returns recommendations,
+  // they take priority over the unfiltered /listings cursor so the Discover
+  // tab reads as a personalised surface, not a flat catalogue. Falls back
+  // to the parent-provided listings when the endpoint is unavailable or
+  // returns nothing (cold-start, offline, guest).
+  const forYouFeed = useForYouFeed();
 
   useScrollToTop(scrollRef);
+
+  const loadSupplementalContent = useCallback(async () => {
+    setIsSupplementalLoading(true);
+    setSupplementalError(false);
+    const [looksResult, postersResult, moodboardsResult] = await Promise.allSettled([
+      fetchLooksFromApi({ status: 'published', sort: 'foryou', limit: 6 }),
+      fetchPosterStories({ active: true, limit: 4 }),
+      fetchPublicMoodboards(),
+    ]);
+
+    if (looksResult.status === 'fulfilled') {
+      setLooks(looksResult.value.items ?? []);
+    }
+    if (postersResult.status === 'fulfilled') {
+      setPosters(postersResult.value.items ?? []);
+    }
+    if (moodboardsResult.status === 'fulfilled') {
+      // moodboardApi has an explicitly marked development fallback. Discovery
+      // accepts backend rows only and never promotes demo boards as a
+      // personalised recommendation.
+      setMoodboards(moodboardsResult.value.filter((moodboard) => !moodboard.isDemo));
+    }
+    setSupplementalError(
+      looksResult.status === 'rejected'
+      && postersResult.status === 'rejected'
+      && moodboardsResult.status === 'rejected',
+    );
+    setIsSupplementalLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadSupplementalContent();
+  }, [loadSupplementalContent]);
 
   const styles = useMemo(
     () =>
@@ -223,24 +277,39 @@ export function DiscoverScene({
     [colors],
   );
 
+  // Personalised listings: use the For You feed when it has results and the
+  // user is on "All" (the personalised canvas). Category pills fall back to
+  // the full backend cursor because For You recommendations don't carry
+  // category metadata for client-side filtering.
+  const personalisedListings = useMemo(() => {
+    if (activeCategory !== 'All') return listings;
+    if (forYouFeed.listings.length > 0) return forYouFeed.listings;
+    return listings;
+  }, [listings, activeCategory, forYouFeed.listings]);
+
   // Filter listings by the active category pill. "All" passes everything
   // through; any other pill applies the matching predicate from
   // CATEGORY_FILTERS. The filtered set is then assembled into heterogeneous
   // feed units so the grid stays a pure function of DiscoveryFeedUnit[].
   const filteredListings = useMemo(() => {
-    if (activeCategory === 'All') return listings;
+    if (activeCategory === 'All') return personalisedListings;
     const filterFn = CATEGORY_FILTERS[activeCategory];
-    return filterFn ? listings.filter(filterFn) : listings;
-  }, [listings, activeCategory]);
+    return filterFn ? personalisedListings.filter(filterFn) : personalisedListings;
+  }, [personalisedListings, activeCategory]);
 
   // Assemble the heterogeneous feed units from the filtered listings. This is the
   // single place where Discover's feed rhythm + span decisions are made, so
-  // the grid stays a pure function of DiscoveryFeedUnit[]. Stable across
-  // pagination: break positions are index-based and hero eligibility is
-  // per-listing, so appending pages never reshuffles earlier units.
+  // the grid stays a pure function of DiscoveryFeedUnit[]. Supplemental
+  // chapters are present only on the unfiltered canvas; category tabs remain
+  // literal listing filters instead of pretending creator media has category
+  // metadata the backend does not provide.
   const units = useMemo(
-    () => assembleDiscoveryFeed(filteredListings, DISCOVER_NUM_COLUMNS),
-    [filteredListings],
+    () => assembleDiscoveryFeed(
+      filteredListings,
+      DISCOVER_NUM_COLUMNS,
+      activeCategory === 'All' ? { looks, posters, moodboards } : {},
+    ),
+    [activeCategory, filteredListings, looks, moodboards, posters],
   );
 
   // Plain JS scroll handler drives the RefreshIndicator's shared scrollY
@@ -259,29 +328,69 @@ export function DiscoverScene({
     [scrollY],
   );
 
+  const handleRefresh = useCallback(() => {
+    onRefresh();
+    void loadSupplementalContent();
+    void forYouFeed.refresh();
+  }, [loadSupplementalContent, onRefresh, forYouFeed]);
+
   const refreshControl = useMemo(
     () => (
       <RefreshControl
         refreshing={refreshing}
-        onRefresh={onRefresh}
+        onRefresh={handleRefresh}
         tintColor="transparent"
         colors={['transparent']}
         progressBackgroundColor="transparent"
       />
     ),
-    [refreshing, onRefresh],
+    [handleRefresh, refreshing],
   );
 
+  const hasSupplementalContent = looks.length > 0 || posters.length > 0 || moodboards.length > 0;
+  const hasAnyListings = listings.length > 0 || forYouFeed.listings.length > 0;
+
   const showLoadingSkeleton =
-    isSyncing && listings.length === 0 && !lastError;
+    !hasAnyListings
+    && !hasSupplementalContent
+    && ((isSyncing && !lastError) || isSupplementalLoading || forYouFeed.isLoading);
   const showError =
-    lastError && listings.length === 0 && !isSyncing;
+    (Boolean(lastError) || supplementalError)
+    && !hasAnyListings
+    && !hasSupplementalContent
+    && !isSyncing
+    && !isSupplementalLoading
+    && !forYouFeed.isLoading;
   const showEmpty =
-    listings.length === 0 && !isSyncing && !lastError;
+    !hasAnyListings
+    && !hasSupplementalContent
+    && !isSyncing
+    && !lastError
+    && !supplementalError
+    && !isSupplementalLoading
+    && !forYouFeed.isLoading;
   // The active category filter excluded every listing. Distinct from showEmpty
   // (no data at all) — here we have data, just none matching the selected pill.
   const showFilteredEmpty =
     listings.length > 0 && filteredListings.length === 0 && !isSyncing;
+
+  // Category pill bar — scrolls with the feed (ListHeaderComponent, not
+  // sticky-fixed). Keep this memo above every state return so hook ordering
+  // remains stable as loading/error/empty states change.
+  // The OfflineBanner sits below the category bar and above the masonry grid;
+  // it renders null when online so the header is unchanged in the happy path.
+  const categoryBar = useMemo(
+    () => (
+      <>
+        <DiscoverCategoryBar
+          activeCategory={activeCategory}
+          onSelect={setActiveCategory}
+        />
+        {isOffline && <OfflineBanner />}
+      </>
+    ),
+    [activeCategory, isOffline],
+  );
 
   // Error and empty states are authored here (with recovery CTAs) and render
   // as non-scrollable surfaces. The loading skeleton + populated feed are
@@ -294,9 +403,9 @@ export function DiscoverScene({
           icon="cloud-offline-outline"
           iconColor={colors.danger}
           title="Explore unavailable"
-          subtitle="We couldn't load listings. Check your connection and try again."
+          subtitle="We couldn't load discovery right now. Check your connection and try again."
           ctaLabel="Retry"
-          onCtaPress={onRefresh}
+          onCtaPress={handleRefresh}
         />
       </View>
     );
@@ -336,18 +445,6 @@ export function DiscoverScene({
     );
   }
 
-  // Category pill bar — scrolls with the feed (ListHeaderComponent, not
-  // sticky-fixed). Selection filters the feed client-side via CATEGORY_FILTERS.
-  const categoryBar = useMemo(
-    () => (
-      <DiscoverCategoryBar
-        activeCategory={activeCategory}
-        onSelect={setActiveCategory}
-      />
-    ),
-    [activeCategory],
-  );
-
   // Populated (or loading-skeleton) state: the FlashList owns scrolling.
   // The RefreshIndicator is positioned absolutely over the grid and reads
   // the shared scrollY driven by the animated scroll handler above.
@@ -359,6 +456,12 @@ export function DiscoverScene({
         onItemPress={onPressItem}
         onItemSaveToggle={onToggleSave}
         isItemSaved={isSavedListing}
+        onLookPress={(lookId) => navigation.navigate('MainTabs', {
+          screen: 'Home',
+          params: { screen: 'LookDetail', params: { lookId } },
+        })}
+        onPosterPress={(storyId) => navigation.navigate('PosterViewer', { storyId })}
+        onMoodboardPress={(moodboardId) => navigation.navigate('MoodboardEditor', { moodboardId })}
         onEndReached={onLoadMore}
         isLoading={showLoadingSkeleton}
         isLoadingMore={isLoadingMore}

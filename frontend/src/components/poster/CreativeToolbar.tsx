@@ -131,7 +131,6 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
 export default function CreativeToolbar({ activeTool, onToolSelect, visible }: CreativeToolbarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  if (!visible) return null;
 
   // Group tools for rendering with dividers
   const groups = useMemo(() => {
@@ -140,6 +139,8 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
       .map((groupKey) => TOOLS.filter((t) => t.group === groupKey))
       .filter((group) => group.length > 0);
   }, []);
+
+  if (!visible) return null;
 
   return (
     <View style={styles.container} pointerEvents="box-none">

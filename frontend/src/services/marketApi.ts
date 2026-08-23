@@ -469,7 +469,7 @@ interface ListAuctionsResponse {
   serverNow: string;
 }
 
-interface GetAuctionDetailResponse extends AuctionDetailResponse {}
+type GetAuctionDetailResponse = AuctionDetailResponse;
 
 interface GetWatchlistResponse {
   ok: true;

@@ -19,8 +19,6 @@ interface PublicProfileIdentityHeroProps {
   listingCount: number;
   /** Seller trust summary — provides verified badge tier. */
   sellerTrust?: SellerTrustSummary | null;
-  /** Email-verified flag from the user profile (fallback for verified badge). */
-  emailVerified?: boolean;
 }
 
 /**
@@ -45,7 +43,6 @@ export function PublicProfileIdentityHero({
   memberSince,
   listingCount,
   sellerTrust,
-  emailVerified,
 }: PublicProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -53,9 +50,10 @@ export function PublicProfileIdentityHero({
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
 
-  const isVerified = sellerTrust?.verified === true || emailVerified === true;
+  // Verification tier — only from seller trust (authoritative backend source).
+  // Email verification is never used as a proxy for seller/identity verification.
   const verificationTier: VerificationTier | null =
-    sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
+    sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
 
   return (
     <View style={styles.container}>

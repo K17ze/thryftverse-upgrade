@@ -45,11 +45,6 @@ export function StaggeredItem({
   style,
 }: StaggeredItemProps) {
   const reducedMotionEnabled = useReducedMotion();
-
-  if (reducedMotionEnabled || index >= maxStagger) {
-    return <View style={style}>{children}</View>;
-  }
-
   const delay = index * staggerMs;
 
   const enterAnimation = React.useMemo(() => {
@@ -69,6 +64,10 @@ export function StaggeredItem({
         return FadeIn.duration(300).delay(delay);
     }
   }, [animation, delay]);
+
+  if (reducedMotionEnabled || index >= maxStagger) {
+    return <View style={style}>{children}</View>;
+  }
 
   return (
     <Reanimated.View

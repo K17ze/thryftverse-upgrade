@@ -206,6 +206,14 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
   const hasComposableLayers = page.layers.some(
     (l) => !l.hidden && l.id !== mediaLayer.id,
   );
+  const primaryMediaHasAuthoredState = mediaLayer.type === 'media' && (
+    (mediaLayer.payload.effects?.length ?? 0) > 0
+    || mediaLayer.payload.speed !== undefined
+    || mediaLayer.payload.trimStartMs !== undefined
+    || mediaLayer.payload.trimEndMs !== undefined
+    || mediaLayer.payload.reversed === true
+    || mediaLayer.payload.freezeDurationMs !== undefined
+  );
 
   return {
     payload: {
@@ -213,6 +221,12 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       title: doc.metadata.title || 'Untitled Look',
       caption: doc.metadata.caption,
       mediaUrl: mediaLayer.type === 'media' ? mediaLayer.payload.mediaUri : '',
+      mediaFinalizationId: mediaLayer.type === 'media'
+        ? mediaLayer.payload.mediaFinalizationId
+        : undefined,
+      mediaAssetId: mediaLayer.type === 'media'
+        ? mediaLayer.payload.mediaAssetId
+        : undefined,
       mediaType: mediaLayer.type === 'media' && mediaLayer.payload.mediaType === 'video'
         ? 'video'
         : 'image',
@@ -221,7 +235,9 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
         : doc.metadata.visibility,
       tags,
       status: 'published',
-      ...(hasComposableLayers ? { compositionDocument: withMediaAsCanvasBackground(doc) } : {}),
+      ...((hasComposableLayers || primaryMediaHasAuthoredState)
+        ? { compositionDocument: withMediaAsCanvasBackground(doc) }
+        : {}),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,

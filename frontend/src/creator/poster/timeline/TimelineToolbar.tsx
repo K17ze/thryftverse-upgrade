@@ -176,7 +176,11 @@ const ToolButton = React.memo(function ToolButton({
   const tint = danger ? colors.danger : colors.textPrimary;
   return (
     <PressScale
-      onPress={() => { danger ? haptic.heavy() : haptic.light(); onPress(); }}
+      onPress={() => {
+        if (danger) haptic.heavy();
+        else haptic.light();
+        onPress();
+      }}
       style={toolbarStyles.tool}
       accessibilityLabel={a11yLabel ?? label}
       accessibilityRole="button"

@@ -8,8 +8,8 @@ import {
   Dimensions,
   Image,
   Modal,
-  FlatList,
 } from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -513,6 +513,23 @@ export default function SellScreen() {
     setTagSuggestionsVisible(false);
     haptics.tap();
   }, []);
+
+  const renderTagSuggestion: ListRenderItem<AutocompleteSuggestion> = useCallback(
+    ({ item }) => (
+      <Pressable
+        style={({ pressed }) => [styles.tagSuggestionRow, pressed && { opacity: 0.6 }]}
+        onPress={() => handleTagSuggestionPick(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Add tag ${item.query}`}
+      >
+        <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} aria-hidden={true} />
+        <Text style={[styles.tagSuggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
+          {item.query}
+        </Text>
+      </Pressable>
+    ),
+    [handleTagSuggestionPick, colors],
+  );
 
   /* -- photo handling -- */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
@@ -1926,23 +1943,12 @@ export default function SellScreen() {
               </View>
               {tagSuggestionsVisible && tagSuggestions.length > 0 && (
                 <View style={[styles.tagSuggestionDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <FlatList
+                  <FlashList
                     data={tagSuggestions}
                     keyExtractor={(item) => `${item.query}_${item.type}`}
                     scrollEnabled={false}
-                    renderItem={({ item }) => (
-                      <Pressable
-                        style={({ pressed }) => [styles.tagSuggestionRow, pressed && { opacity: 0.6 }]}
-                        onPress={() => handleTagSuggestionPick(item)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Add tag ${item.query}`}
-                      >
-                        <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} aria-hidden={true} />
-                        <Text style={[styles.tagSuggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {item.query}
-                        </Text>
-                      </Pressable>
-                    )}
+                    drawDistance={7}
+                    renderItem={renderTagSuggestion}
                   />
                 </View>
               )}

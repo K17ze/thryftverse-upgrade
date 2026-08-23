@@ -43,8 +43,6 @@ interface ProfileHeroProps {
   memberSince?: string;
   /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
   sellerTrust?: SellerTrustSummary | null;
-  /** Email-verified flag from the user profile (fallback for verified badge). */
-  emailVerified?: boolean;
   followPending: boolean;
   isBlocked: boolean;
   scrollY: SharedValue<number>;
@@ -117,7 +115,6 @@ export function ProfileHero({
   reviewCount,
   memberSince,
   sellerTrust,
-  emailVerified,
   followPending,
   isBlocked,
   scrollY,
@@ -146,8 +143,10 @@ export function ProfileHero({
   const followingCount = stats?.followingCount ?? 0;
   const ratingValue = stats?.ratingAverage;
   const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
-  const isVerified = sellerTrust?.verified === true || emailVerified === true;
-  const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
+  // Verification tier — only from seller trust (authoritative backend source).
+  // Email verification is never used as a proxy for seller/identity verification.
+  const verificationTier: VerificationTier | null =
+    sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
 
   // Trust line: "4.9 · 47 sold · Joined June 2026 · Replies within 2h"
   const trustParts: string[] = [];

@@ -1654,7 +1654,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           avatarUrl={avatarUri}
           initials={topBarInitials}
           variant={isGroup ? "group" : "dm"}
-          isVerified={!isGroup && (partnerProfile?.emailVerified === true || partnerSummary?.emailVerified === true)}
+          isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
           onBack={() => navigation.goBack()}
           onSearch={() => {
             if (isSearchActive) {
@@ -1886,6 +1886,38 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityLiveRegion="polite"
               onScroll={handleMessageListScroll}
               scrollEventThrottle={200}
+              // FlashList v2 rendering tuning (LIST_RENDERING_POLICY.md §2.4).
+              //
+              // `inverted` is intentionally NOT applied here. The scroll
+              // management is split between this screen and the
+              // useConversationMessages hook (out of scope for this change):
+              //   - renderMessage uses messages[index-1]/messages[index+1]
+              //     for cluster detection, dateSeparatorIndices.has(index),
+              //     and unreadDividerIndex === index — all keyed to the
+              //     chronological array order.
+              //   - The hook owns scrollToMessage / search scrollToIndex
+              //     (indices into the chronological array), scrollToEnd /
+              //     scrollToBottom, and handleMessageListScroll's "near
+              //     bottom" detection (contentSize - offset - layout < 150),
+              //     whose coordinate math flips under `inverted`.
+              // Reversing the data array to satisfy `inverted` would desync
+              // every one of those index/coordinate lookups. Per the task's
+              // escape clause for complex scroll management, `inverted` is
+              // skipped and only the tuning props are applied.
+              //
+              // FlashList v2 (2.0.2) does not expose the v1 props
+              // `windowSize` / `maxToRenderPerBatch`. The v2-native
+              // equivalents are used instead:
+              //   - drawDistance (v2 default 250dp) controls how far beyond
+              //     the viewport items are rendered — the v2 counterpart of
+              //     `windowSize`. 1200dp gives a chat-tuned buffer (~1.5
+              //     screens each side) that smooths fast scroll without
+              //     over-allocating.
+              //   - overrideProps.initialDrawBatchSize (v2 default 2) is the
+              //     v2 counterpart of `maxToRenderPerBatch` and caps the
+              //     first render batch.
+              drawDistance={1200}
+              overrideProps={{ initialDrawBatchSize: 6 }}
             />
           ) : (
             <View style={styles.emptyStateWrap}>

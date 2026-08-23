@@ -42,7 +42,7 @@ import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 import { isVideoUri } from "../../utils/media";
-import { makeStableId } from "../../utils/createStableId";
+import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
@@ -365,10 +365,15 @@ export function useConversationMessages({
       try {
         // Canonical server send — exactly once. The agent identity is
         // preserved via metadata so the backend can attribute the message.
+        // P0-MSG-2: reuse the draft's clientMessageId so a retry after a
+        // dropped response replays the original message instead of
+        // duplicating it.
+        const clientMessageId = draftMsg.clientMessageId ?? createStableId('cmsg');
         const serverMsg = await sendConversationMessageOnApi(
           conversationId,
           draftMsg.text ?? "",
           { agentId: draftMsg.senderId },
+          clientMessageId,
         );
 
         // Replace the local draft with the server-confirmed message.
@@ -388,7 +393,8 @@ export function useConversationMessages({
           draftMsg.senderId,
         );
       } catch {
-        // Mark as failed with retry affordance.
+        // Mark as failed with retry affordance. Retry reuses the same
+        // clientMessageId so it is idempotent (P0-MSG-2).
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId ? { ...m, status: "failed" as const } : m,
@@ -428,6 +434,12 @@ export function useConversationMessages({
       setComposerSending(true);
 
       const localId = makeStableId('msg', 7);
+      // P0-MSG-2: stable clientMessageId generated BEFORE the first send and
+      // reused on every retry. The backend deduplicates on
+      // (conversation_id, sender_user_id, client_message_id) and replays the
+      // original message, so a dropped response followed by retry cannot
+      // create a duplicate row.
+      const clientMessageId = createStableId('cmsg');
       const outgoing: Message = {
         id: localId,
         type: "text",
@@ -435,6 +447,7 @@ export function useConversationMessages({
         senderLabel: currentUser?.username ?? "you",
         text: trimmed,
         status: "sending",
+        clientMessageId,
       };
 
       if (replyTo) {
@@ -452,7 +465,7 @@ export function useConversationMessages({
 
       performance.mark("chat:send");
 
-      sendConversationMessageOnApi(conversationId, trimmed)
+      sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId)
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -462,6 +475,11 @@ export function useConversationMessages({
           performance.mark("chat:delivered");
         })
         .catch(() => {
+          // The response was lost (network error or non-2xx). The message may
+          // or may not have been created server-side. Mark as failed so the
+          // user can retry; retry reuses the same clientMessageId, so even if
+          // the original request succeeded, the retry replays the original
+          // message instead of duplicating it (idempotent replay).
           setMessages((prev) =>
             prev.map((m) =>
               m.id === localId ? { ...m, status: "failed" as const } : m,
@@ -499,6 +517,9 @@ export function useConversationMessages({
             status: "draft",
             isAgent: true,
             agentAvatar: deployedChatAgents[0]?.avatar,
+            // P0-MSG-2: assign the clientMessageId up front so confirmAgentDraft
+            // can reuse it on retry for idempotent replay.
+            clientMessageId: createStableId('cmsg'),
           };
           pushMessage(agentMsg);
           setChatAgentSuggestionsExternal(
@@ -528,12 +549,21 @@ export function useConversationMessages({
   );
 
   const sendMediaMessage = useCallback(
-    (msgId: string, uri: string, mediaType: "image" | "video") => {
+    (msgId: string, uri: string, mediaType: "image" | "video", caption?: string) => {
       if (!conversationId) return;
-      sendConversationMessageOnApi(conversationId, "", {
-        mediaUri: uri,
-        mediaType,
-      })
+      // P0-MSG-2: stable clientMessageId for idempotent media send/retry.
+      const clientMessageId = createStableId('cmsg');
+      // P0-MSG-1: send a discriminated media payload so the backend schema
+      // accepts the message. `type` makes text optional; the mediaUri is
+      // forwarded both at the top level (for validation) and inside
+      // metadata (for the read path / realtime mapping).
+      sendConversationMessageOnApi(
+        conversationId,
+        caption ?? "",
+        { mediaUri: uri, mediaType },
+        clientMessageId,
+        { type: mediaType, mediaUri: uri },
+      )
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -564,8 +594,12 @@ export function useConversationMessages({
         const msg = prev.find((m) => m.id === msgId);
         if (!msg?.mediaUri || !msg.mediaType) return prev;
         if (msg.uploadStatus === "uploading") return prev;
-        // Trigger upload after state update
-        setTimeout(() => sendMediaMessage(msgId, msg.mediaUri!, msg.mediaType!), 0);
+        // Trigger upload after state update. Forward any caption text so a
+        // retried media send preserves the user's original caption.
+        setTimeout(
+          () => sendMediaMessage(msgId, msg.mediaUri!, msg.mediaType!, msg.text || undefined),
+          0,
+        );
         return prev.map((m) =>
           m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
         );
@@ -581,9 +615,12 @@ export function useConversationMessages({
       setMessages((prev) => {
         const msg = prev.find((m) => m.id === msgId);
         if (!msg?.text || msg.status === "sending") return prev;
+        // P0-MSG-2: reuse the same clientMessageId so the backend replays the
+        // original message if the previous request actually succeeded.
+        const clientMessageId = msg.clientMessageId ?? createStableId('cmsg');
         // Trigger send after state update
         setTimeout(() => {
-          sendConversationMessageOnApi(conversationId, msg.text!)
+          sendConversationMessageOnApi(conversationId, msg.text!, undefined, clientMessageId)
             .then((serverMsg) => {
               setMessages((p) =>
                 p.map((m) =>
@@ -603,7 +640,9 @@ export function useConversationMessages({
             });
         }, 0);
         return prev.map((m) =>
-          m.id === msgId ? { ...m, status: "sending" as const } : m,
+          m.id === msgId
+            ? { ...m, status: "sending" as const, clientMessageId }
+            : m,
         );
       });
       haptic.light();
@@ -644,7 +683,7 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? "me");
       haptic.success();
       scheduleScrollToEnd();
-      sendMediaMessage(outgoing.id, uri, mediaType);
+      sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],

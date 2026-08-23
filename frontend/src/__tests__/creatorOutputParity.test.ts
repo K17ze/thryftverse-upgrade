@@ -16,6 +16,7 @@ import {
   validateForPublish,
 } from '../creator/compositionContract';
 import { posterStoryToDocument, lookToDocument } from '../creator/viewerAdapters';
+import { evaluateCompositionEffectStack } from '../creator/core/playback/EffectEvaluator';
 
 // ── P0.1: Aspect-ratio semantics ───────────────────────────────────
 
@@ -227,6 +228,31 @@ describe('P0.2 — Look composition persistence', () => {
     const { payload } = serialiseToLookPayload(doc);
     // No non-primary visible layers → no composition document needed
     expect(payload.compositionDocument).toBeUndefined();
+  });
+
+  it('preserves a single-media camera effect in the published composition', () => {
+    const doc = createEmptyDocument('look');
+    doc.pages[0].layers = [{
+      id: 'media_effect', type: 'media',
+      x: 0.5, y: 0.5, width: 1, height: 1, scale: 1, rotation: 0,
+      zIndex: 0, locked: false, hidden: false, opacity: 1,
+      payload: {
+        mediaUri: 'https://cdn.example.com/effect.jpg',
+        mediaType: 'image',
+        contentFit: 'cover',
+        opacity: 1,
+        effects: [{ type: 'filter', id: 'vintage', amount: 1 }],
+      },
+    }];
+    const { payload } = serialiseToLookPayload(doc);
+    expect(payload.compositionDocument).toBeDefined();
+  });
+
+  it('resolves persisted camera filter nodes into a Skia color matrix', () => {
+    const result = evaluateCompositionEffectStack([
+      { type: 'filter', id: 'vintage', amount: 1 },
+    ], 1);
+    expect(result.colorMatrix).toHaveLength(20);
   });
 
   it('serialiseToLookPayload omits compositionDocument when non-primary layers are all hidden', () => {

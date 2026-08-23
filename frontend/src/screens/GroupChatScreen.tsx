@@ -32,7 +32,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
-import { makeStableId } from '../utils/createStableId';
+import { makeStableId, createStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
@@ -46,6 +46,11 @@ import { SuggestedRepliesBar } from '../components/chat/SuggestedRepliesBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Caption, Body, BodyEmphasis, Meta } from '../components/ui/Text';
 import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
+import { TypingIndicator } from '../components/chat/TypingIndicator';
+import { MessageContextMenu, type MessageAction } from '../components/chat/MessageContextMenu';
+import { EmojiReactionsBar, type EmojiReaction } from '../components/chat/EmojiReactionsBar';
+import { ReplyQuote } from '../components/chat/ReplyQuote';
+import * as Clipboard from 'expo-clipboard';
 
 import {
   deployAgent,
@@ -56,13 +61,34 @@ import {
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import { deleteConversationOnApi, leaveGroupOnApi, sendConversationMessageOnApi, fetchConversationMessagesFromApi } from '../services/chatApi';
+import {
+  deleteConversationOnApi,
+  leaveGroupOnApi,
+  sendConversationMessageOnApi,
+  fetchConversationMessagesFromApi,
+  setTypingStatus,
+  deleteConversationMessageOnApi,
+} from '../services/chatApi';
 import { useChatMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import type { Message as ConversationMessage } from '../domain';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+/** Map domain MessageReaction[] to the EmojiReaction shape MessageBubble /
+ *  EmojiReactionsBar consume. `currentUserId` decides reactedByMe. */
+function toEmojiReactions(
+  reactions: { emoji: string; userIds: string[] }[] | undefined,
+  currentUserId: string,
+): EmojiReaction[] | undefined {
+  if (!reactions || reactions.length === 0) return undefined;
+  return reactions.map((r) => ({
+    emoji: r.emoji,
+    count: r.userIds.length,
+    reactedByMe: r.userIds.includes(currentUserId),
+  }));
+}
 
 interface GroupMessage {
   id: string;
@@ -71,6 +97,8 @@ interface GroupMessage {
   senderLabel: string;
   isMe: boolean;
   timestamp: string;
+  reactions?: EmojiReaction[];
+  replyToMessageId?: string;
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
@@ -84,6 +112,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
   const deleteConversation = useStore((state) => state.deleteConversation);
+  const addMessageReaction = useStore((state) => state.addMessageReaction);
+  const removeMessageReaction = useStore((state) => state.removeMessageReaction);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === groupId),
@@ -99,6 +129,21 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  // Long-press context menu, emoji reactions, and reply-to state — mirror
+  // the ChatScreen wiring so group messages behave like DMs.
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<GroupMessage | null>(null);
+  const [reactingToMessage, setReactingToMessage] = useState<GroupMessage | null>(null);
+  const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+
+  // Typing publisher — debounced "started typing" (1s) and auto-clear after
+  // 3s of inactivity. Publishes to the backend via setTypingStatus so other
+  // participants' clients can light up a typing indicator once realtime
+  // push is wired. The local isTyping flag also drives the header subtitle.
+  const [isTyping, setIsTyping] = useState(false);
+  const typingStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const listRef = useRef<FlashListRef<GroupMessage>>(null);
 
@@ -128,6 +173,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               'Member',
             isMe: m.senderId === currentUser?.id,
             timestamp: m.timestamp,
+            reactions: toEmojiReactions(m.reactions, currentUser?.id ?? 'me'),
+            replyToMessageId: m.replyToMessageId,
           }));
         setMessages(mapped);
         setLoadState('ready');
@@ -145,6 +192,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               'Member',
             isMe: m.senderId === currentUser?.id,
             timestamp: m.timestamp,
+            reactions: toEmojiReactions(m.reactions, currentUser?.id ?? 'me'),
+            replyToMessageId: m.replyToMessageId,
           }));
         setMessages(storeMapped);
         setLoadState('ready');
@@ -203,6 +252,59 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     ),
   );
 
+  // Publish typing state to the backend whenever it transitions. The
+  // backend fans the event out to other participants via the conversation's
+  // realtime topic; receiving clients light up a typing indicator.
+  useEffect(() => {
+    setTypingStatus(groupId, isTyping).catch(() => undefined);
+  }, [groupId, isTyping]);
+
+  // Composer input wrapper — debounces "started typing" (1s) and auto-clears
+  // "stopped typing" after 3s of inactivity, matching the DM composer hook.
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (value.length > 0) {
+      if (!typingStartTimerRef.current) {
+        typingStartTimerRef.current = setTimeout(() => {
+          typingStartTimerRef.current = null;
+          setIsTyping(true);
+        }, 1000);
+      }
+    } else {
+      if (typingStartTimerRef.current) {
+        clearTimeout(typingStartTimerRef.current);
+        typingStartTimerRef.current = null;
+      }
+      setIsTyping(false);
+    }
+  }, []);
+
+  // Immediate stop — used by the send path so the indicator clears the
+  // moment a message is sent, not 3s later.
+  const notifyStoppedTyping = useCallback(() => {
+    if (typingStartTimerRef.current) {
+      clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    setIsTyping(false);
+  }, []);
+
+  // Clear typing timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (typingStartTimerRef.current) clearTimeout(typingStartTimerRef.current);
+      if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    };
+  }, []);
+
   const memberCount = conversation?.participantIds?.length ?? 0;
   const memberProfiles = conversation?.participantProfiles ?? [];
 
@@ -234,8 +336,13 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
     setSending(true);
     haptic.light();
+    notifyStoppedTyping();
 
+    const repliedToId = replyTo?.id;
     const localId = makeStableId('g', 7);
+    // P0-MSG-2: stable clientMessageId so a retried send replays the original
+    // server message instead of duplicating it.
+    const clientMessageId = createStableId('cmsg');
     const optimistic: GroupMessage = {
       id: localId,
       text: trimmed,
@@ -243,17 +350,19 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       senderLabel: currentUser?.username ?? 'you',
       isMe: true,
       timestamp: new Date().toISOString(),
+      replyToMessageId: repliedToId,
     };
 
     // Optimistic update — show the message immediately.
     setMessages((prev) => [...prev, optimistic]);
     setInput('');
+    setReplyTo(null);
 
     // Send to backend. On success, replace the optimistic message with
     // the server-confirmed one. On failure, show a toast and remove the
     // optimistic message so the user knows it wasn't sent.
     const conversationId = conversation?.id ?? groupId;
-    sendConversationMessageOnApi(conversationId, trimmed)
+    sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId)
       .then((serverMessage) => {
         setMessages((prev) =>
           prev.map((m) => (m.id === localId ? {
@@ -301,7 +410,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       });
 
     refreshSuggestions(trimmed);
-  }, [input, haptic, currentUser, conversation, appendConversationMessage, deployedAgents, groupId, refreshSuggestions, show]);
+  }, [input, haptic, currentUser, conversation, appendConversationMessage, deployedAgents, groupId, refreshSuggestions, show, notifyStoppedTyping, replyTo]);
 
   const handleSelectSuggestion = useCallback(
     (reply: SuggestedReply) => {
@@ -334,6 +443,85 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     [groupId, haptic, show],
   );
 
+  // Long-press opens the context menu for the tapped message.
+  const handleMessageLongPress = useCallback((msg: GroupMessage) => {
+    haptic.medium();
+    setSelectedMessage(msg);
+    setContextMenuVisible(true);
+  }, [haptic]);
+
+  // Context menu action dispatch — reply, copy, react, delete, report.
+  // Forward is not yet supported by the shared MessageContextMenu component.
+  const handleContextAction = useCallback((action: MessageAction) => {
+    if (!selectedMessage) return;
+    switch (action) {
+      case 'reply':
+        setReplyTo(selectedMessage);
+        break;
+      case 'copy':
+        Clipboard.setStringAsync(selectedMessage.text);
+        show('Copied', 'success');
+        break;
+      case 'react':
+        setReactingToMessage(selectedMessage);
+        break;
+      case 'delete': {
+        const targetId = selectedMessage.id;
+        setMessages((prev) => prev.filter((m) => m.id !== targetId));
+        const conversationId = conversation?.id ?? groupId;
+        deleteConversationMessageOnApi(conversationId, targetId).catch(() => undefined);
+        haptic.warning();
+        show('Message deleted', 'info');
+        break;
+      }
+      case 'report':
+        show('Reported for review', 'info');
+        break;
+      default:
+        break;
+    }
+  }, [selectedMessage, conversation, groupId, haptic, show]);
+
+  // Emoji reaction toggle — add or remove based on reactedByMe. Updates
+  // both the conversation store and local message state so the bubble
+  // reaction chips reflect the change immediately.
+  const handleReact = useCallback((emoji: string) => {
+    const msg = reactingToMessage;
+    if (!msg) return;
+    const conversationId = conversation?.id ?? groupId;
+    const existing = msg.reactions?.find((r) => r.emoji === emoji);
+    if (existing?.reactedByMe) {
+      removeMessageReaction(conversationId, msg.id, emoji);
+    } else {
+      addMessageReaction(conversationId, msg.id, emoji);
+    }
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msg.id) return m;
+        const reactions = [...(m.reactions ?? [])];
+        const idx = reactions.findIndex((r) => r.emoji === emoji);
+        if (idx >= 0) {
+          const r = reactions[idx];
+          if (r.reactedByMe) {
+            const nextCount = r.count - 1;
+            if (nextCount <= 0) {
+              reactions.splice(idx, 1);
+            } else {
+              reactions[idx] = { ...r, count: nextCount, reactedByMe: false };
+            }
+          } else {
+            reactions[idx] = { ...r, count: r.count + 1, reactedByMe: true };
+          }
+        } else {
+          reactions.push({ emoji, count: 1, reactedByMe: true });
+        }
+        return { ...m, reactions };
+      }),
+    );
+    setReactingToMessage(null);
+    haptic.light();
+  }, [reactingToMessage, conversation, groupId, addMessageReaction, removeMessageReaction, haptic]);
+
   const renderMessage: ListRenderItem<GroupMessage> = useCallback(
     ({ item, index }) => {
       const prev = messages[index - 1];
@@ -341,6 +529,10 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       const isFirstInCluster = !prev || prev.senderId !== item.senderId;
       const isLastInCluster = !next || next.senderId !== item.senderId;
       const isAgent = deployedAgents.some((agent) => agent.id === item.senderId);
+      // Resolve the replied-to message for the in-bubble quote.
+      const replyParent = item.replyToMessageId
+        ? messages.find((m) => m.id === item.replyToMessageId)
+        : undefined;
       return (
         <View style={styles.messageRow}>
           <MessageBubble
@@ -351,16 +543,28 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
             showAvatar={!item.isMe && isLastInCluster}
+            reactions={item.reactions}
+            replyTo={
+              replyParent
+                ? { senderName: replyParent.senderLabel, text: replyParent.text }
+                : null
+            }
+            onLongPress={() => handleMessageLongPress(item)}
+            onReactionPress={() => setReactingToMessage(item)}
           />
         </View>
       );
     },
-    [deployedAgents, styles.messageRow],
+    [deployedAgents, styles.messageRow, messages, handleMessageLongPress],
   );
 
   const keyExtractor = useCallback((item: GroupMessage) => item.id, []);
 
-  const headerSubtitle = `${memberCount} members${deployedAgents.length > 0 ? ` · ${deployedAgents.length} AI` : ''}`;
+  // Header subtitle — shows "typing…" while the current user is composing.
+  // Other-members typing will replace this once realtime typing push is wired.
+  const headerSubtitle = isTyping
+    ? 'typing…'
+    : `${memberCount} members${deployedAgents.length > 0 ? ` · ${deployedAgents.length} AI` : ''}`;
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screenRoot}>
@@ -370,8 +574,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           subtitle={headerSubtitle}
           variant="group"
           onBack={() => navigation.goBack()}
-          onInfo={() => setInfoVisible(true)}
-          onTitlePress={() => setInfoVisible(true)}
+          onInfo={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
+          onTitlePress={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
         />
 
         {/* AI agent chips — one per deployed agent, tap to remove.
@@ -470,13 +674,37 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             />
 
             <KeyboardStickyView style={styles.composerWrap}>
+              {replyTo ? (
+                <ReplyQuote
+                  senderName={replyTo.senderLabel}
+                  text={replyTo.text}
+                  onClose={() => setReplyTo(null)}
+                  style={styles.replyQuote}
+                />
+              ) : null}
+
+              {reactingToMessage ? (
+                <EmojiReactionsBar
+                  reactions={reactingToMessage.reactions ?? []}
+                  onReact={handleReact}
+                  style={styles.reactionsBar}
+                />
+              ) : null}
+
+              {isTyping ? (
+                <View style={styles.typingRow}>
+                  <TypingIndicator dotColor={colors.textMuted} dotSize={6} />
+                  <Caption color={colors.textMuted}>typing…</Caption>
+                </View>
+              ) : null}
+
               {deployedAgents.length > 0 && suggestions.length > 0 && input.trim().length === 0 && (
                 <SuggestedRepliesBar suggestions={suggestions} onSelect={handleSelectSuggestion} />
               )}
 
               <ChatComposerBar
                 value={input}
-                onChangeText={setInput}
+                onChangeText={handleInputChange}
                 onSend={handleSend}
                 placeholder="Message the group…"
                 isSending={sending}
@@ -514,6 +742,18 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           deployedAgentIds={deployedAgents.map((agent) => agent.id)}
         />
 
+        <MessageContextMenu
+          visible={contextMenuVisible}
+          onClose={() => setContextMenuVisible(false)}
+          onAction={handleContextAction}
+          messageText={selectedMessage?.text}
+          isOwnMessage={selectedMessage?.isMe}
+        />
+
+        {/* GroupInfoModal retired — group info now lives in the dedicated
+            GroupChatInfoScreen (tabbed Members / Media / Settings surface).
+            The modal component is retained below for reference but no longer rendered. */}
+        {/*
         <GroupInfoModal
           visible={infoVisible}
           onClose={() => setInfoVisible(false)}
@@ -559,6 +799,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             setAgentPickerVisible(true);
           }}
         />
+        */}
       </View>
     </SafeAreaView>
   );
@@ -767,6 +1008,21 @@ const createStyles = (colors: ThemeColors) =>
     composerWrap: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
+    },
+    replyQuote: {
+      marginHorizontal: Space.md,
+      marginTop: Space.sm,
+    },
+    reactionsBar: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    typingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
     },
     addAgentContainer: {
       alignItems: 'center',

@@ -11,6 +11,7 @@ import {
 import { mediaKindForContentType } from '../lib/mediaLifecycle.js';
 import { createModerationProvider } from '../lib/moderation/index.js';
 import { moderateImageAsset } from '../lib/moderation/moderationService.js';
+import { enqueueMediaIngestJob } from '../lib/queues.js';
 
 type UploadRouteDependencies = {
   app: FastifyInstance;
@@ -453,32 +454,50 @@ export const registerUploadRoutes = ({
 
       await client.query('COMMIT');
 
-      if (mediaAsset && mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
-        void moderateImageAsset(mediaAsset.id, row.public_url)
-          .then((outcome) => {
-            if (outcome.status === 'integrity_verified' || outcome.status === 'processing') {
-              return;
-            }
-            db.query(
-              `UPDATE media_assets
-               SET moderation_status = $2,
-                   status = CASE WHEN $3 IN ('publishable', 'quarantined', 'processing_failed') THEN $3 ELSE status END
-               WHERE id = $1
-                 AND status IN ('integrity_verified', 'processing', 'moderation_pending')`,
-              [mediaAsset.id, outcome.moderationStatus, outcome.status],
-            ).catch((dbError) => {
-              app.log.error(
-                { err: dbError, assetId: mediaAsset.id },
-                'Failed to persist background moderation outcome',
-              );
-            });
-          })
-          .catch((moderationError) => {
-            app.log.error(
-              { err: moderationError, assetId: mediaAsset.id },
-              'Background image moderation failed',
-            );
+      // Dispatch media ingest to the durable queue instead of fire-and-forget.
+      // The worker handles probe → derivatives → moderation → status update
+      // with retries and a DLQ.  This ensures moderation always runs and the
+      // asset never stays in an intermediate state if the API process crashes.
+      if (mediaAsset) {
+        try {
+          await enqueueMediaIngestJob({
+            assetId: mediaAsset.id,
+            reason: 'finalize',
           });
+        } catch (queueError) {
+          app.log.error(
+            { err: queueError, assetId: mediaAsset.id },
+            'Failed to enqueue media ingest job — falling back to inline moderation',
+          );
+          // Fallback: inline moderation if the queue is unavailable.
+          if (mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
+            void moderateImageAsset(mediaAsset.id, row.public_url)
+              .then((outcome) => {
+                if (outcome.status === 'integrity_verified' || outcome.status === 'processing') {
+                  return;
+                }
+                db.query(
+                  `UPDATE media_assets
+                   SET moderation_status = $2,
+                       status = CASE WHEN $3 IN ('publishable', 'quarantined', 'processing_failed') THEN $3 ELSE status END
+                   WHERE id = $1
+                     AND status IN ('integrity_verified', 'processing', 'moderation_pending')`,
+                  [mediaAsset.id, outcome.moderationStatus, outcome.status],
+                ).catch((dbError) => {
+                  app.log.error(
+                    { err: dbError, assetId: mediaAsset.id },
+                    'Failed to persist background moderation outcome',
+                  );
+                });
+              })
+              .catch((moderationError) => {
+                app.log.error(
+                  { err: moderationError, assetId: mediaAsset.id },
+                  'Background image moderation failed',
+                );
+              });
+          }
+        }
       }
 
       if (status === 'failed') {

@@ -18,7 +18,8 @@ const tagParamsSchema = z.object({
 
 const createPosterBodySchema = z.object({
   id: z.string().min(2).max(120),
-  mediaUrl: z.string().url().min(3),
+  mediaUrl: z.string().url().min(3).optional(),
+  mediaFinalizationId: z.string().trim().max(120).optional(),
   caption: z.string().max(2200).default(''),
   textOverlay: z.record(z.unknown()).optional(),
   backgroundColor: z.string().max(30).optional(),
@@ -89,6 +90,45 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
     const actorUserId = resolveAuthenticatedUserId(request);
     const payload = createPosterBodySchema.parse(request.body);
 
+    let mediaUrl = payload.mediaUrl;
+
+    if (payload.mediaFinalizationId) {
+      const finalization = await db.query<{
+        owner_id: string;
+        status: string;
+        public_url: string;
+      }>(
+        `SELECT owner_id, status, public_url
+         FROM upload_finalizations
+         WHERE id = $1
+         LIMIT 1`,
+        [payload.mediaFinalizationId]
+      );
+      const receipt = finalization.rows[0];
+      if (
+        !receipt
+        || receipt.owner_id !== actorUserId
+        || receipt.status !== 'finalized'
+      ) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Media finalization receipt could not be verified',
+          code: 'MEDIA_RECEIPT_MISMATCH',
+        };
+      }
+      mediaUrl = receipt.public_url;
+    } else {
+      console.warn(
+        '[posters] DEPRECATION: POST /posters called without mediaFinalizationId — relying on client-supplied mediaUrl'
+      );
+    }
+
+    if (!mediaUrl) {
+      reply.code(400);
+      return { ok: false, error: 'mediaUrl or mediaFinalizationId required' };
+    }
+
     await db.query(
       `
         INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours)
@@ -105,7 +145,7 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
       [
         payload.id,
         actorUserId,
-        payload.mediaUrl,
+        mediaUrl,
         payload.caption,
         payload.textOverlay ? JSON.stringify(payload.textOverlay) : null,
         payload.backgroundColor ?? null,

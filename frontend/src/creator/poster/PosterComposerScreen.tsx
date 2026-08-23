@@ -135,7 +135,7 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
   }
 }
 
-function PosterComposerInner() {
+function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { colors } = useAppTheme();
@@ -201,6 +201,15 @@ function PosterComposerInner() {
   // center is inside the bottom trash zone. Drives the TrashZone overlay
   // highlight.
   const isInTrashZoneSV = useSharedValue(0);
+  // Frame-swipe gesture state. These MUST be shared values, not captured
+  // `let` closure variables: react-native-worklets 0.10 captures closure
+  // variables by value and cannot serialize `let` reassignment inside a
+  // worklet — doing so produces "invalid assignment left-hand side" at
+  // worklet compile time. Shared values are the canonical Reanimated 4
+  // way to read/write mutable state from the UI thread.
+  const frameSwipeStartXSV = useSharedValue(0);
+  const frameSwipeStartYSV = useSharedValue(0);
+  const frameSwipeLockedDirSV = useSharedValue<'horizontal' | 'vertical' | null>(null);
   const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -245,6 +254,13 @@ function PosterComposerInner() {
     return () => { cancelled = true; };
   }, []);
   const [cropMode, setCropMode] = useState(false);
+  // ── Compare-to-original (Lightroom long-press pattern) ─────────────
+  // While the user long-presses the canvas background, the selected media
+  // layer renders without its effect stack — the user sees the original
+  // ungraded image. Release restores the graded view. This is the
+  // recognition-over-recall pattern: the user doesn't need to remember
+  // what the original looked like; they hold to see it.
+  const [compareOriginal, setCompareOriginal] = useState(false);
 
   const page = document.pages[activePageIndex];
   const pageCount = document.pages.length;
@@ -919,16 +935,13 @@ function PosterComposerInner() {
   }, [pageCount, activePageIndex, selectLayer, setActivePageIndex, haptic]);
 
   const frameSwipeGesture = useMemo(() => {
-    let startX = 0;
-    let startY = 0;
-    let lockedDirection: 'horizontal' | 'vertical' | null = null;
     const DIRECTION_LOCK_THRESHOLD = 10;
     return Gesture.Pan()
       .onBegin((e) => {
         'worklet';
-        startX = e.x;
-        startY = e.y;
-        lockedDirection = null;
+        frameSwipeStartXSV.value = e.x;
+        frameSwipeStartYSV.value = e.y;
+        frameSwipeLockedDirSV.value = null;
       })
       .onUpdate((e) => {
         'worklet';
@@ -937,11 +950,11 @@ function PosterComposerInner() {
         // triggering frame swipe when the user is trying to interact
         // with a layer (which starts inside the selected object's bounds
         // and is handled by the canvas gesture, not this one).
-        if (lockedDirection === null) {
-          const dx = Math.abs(e.absoluteX - startX);
-          const dy = Math.abs(e.absoluteY - startY);
+        if (frameSwipeLockedDirSV.value === null) {
+          const dx = Math.abs(e.absoluteX - frameSwipeStartXSV.value);
+          const dy = Math.abs(e.absoluteY - frameSwipeStartYSV.value);
           if (dx > DIRECTION_LOCK_THRESHOLD || dy > DIRECTION_LOCK_THRESHOLD) {
-            lockedDirection = dx > dy ? 'horizontal' : 'vertical';
+            frameSwipeLockedDirSV.value = dx > dy ? 'horizontal' : 'vertical';
           }
         }
       })
@@ -949,8 +962,8 @@ function PosterComposerInner() {
         'worklet';
         // Only trigger frame swipe for horizontal-dominant gestures.
         // Vertical gestures (scroll, layer drag) are ignored.
-        if (lockedDirection !== 'horizontal') return;
-        const dx = e.x - startX;
+        if (frameSwipeLockedDirSV.value !== 'horizontal') return;
+        const dx = e.x - frameSwipeStartXSV.value;
         const threshold = screenWidth * 0.18;
         if (Math.abs(dx) < threshold) return;
         if (dx < 0) {
@@ -961,7 +974,7 @@ function PosterComposerInner() {
           runOnJS(goToFrame)(activePageIndex - 1);
         }
       });
-  }, [screenWidth, activePageIndex, goToFrame]);
+  }, [screenWidth, activePageIndex, goToFrame, frameSwipeStartXSV, frameSwipeStartYSV, frameSwipeLockedDirSV]);
 
   // ── Object action handlers (context toolbar) ───────────────────────
   const handleDeleteLayer = useCallback((id: string) => {
@@ -1678,6 +1691,7 @@ function PosterComposerInner() {
   const entryContent = showEntryScreen ? (
     <CreatorEntryScreen
       documentType="poster"
+      onDocumentTypeChange={onEntryTypeChange}
       onClose={handleEntryClose}
       onMediaSelected={handleEntryMediaSelected}
       onBlankStart={handleEntryBlankStart}
@@ -1751,6 +1765,15 @@ function PosterComposerInner() {
               manipulationActiveSV={manipulationActiveSV}
               onManipulationChange={setIsManipulating}
               isInTrashZoneSV={isInTrashZoneSV}
+              compareOriginal={compareOriginal}
+              onCanvasLongPress={() => {
+                // Only compare when a media layer with effects is selected.
+                if (selectedLayer?.type === 'media' && (selectedLayer.payload.effects?.length ?? 0) > 0) {
+                  setCompareOriginal(true);
+                  haptic.light();
+                }
+              }}
+              onCanvasLongPressEnd={() => setCompareOriginal(false)}
             />
             {/* Drag-to-trash overlay — fades in during layer drag, highlights
                 when the dragged layer enters the bottom zone. Visual-only. */}
@@ -2188,7 +2211,7 @@ function PosterComposerInner() {
 
       {/* ── Frame tray (collapsible filmstrip) ───────────────────────── */}
       {/* Per doc 04: appears when frame change occurs or user adds another
-          frame. Auto-collapses after 3.5s. Sits above the tool rail. */}
+          frame. Auto-collapses after 2.5s. Sits above the tool rail. */}
       {hasMultipleFrames && showFrameTray && (
         <FrameTray
           pages={document.pages}
@@ -2507,12 +2530,17 @@ function PosterComposerInner() {
               </PressScale>
             </View>
             <AudioFadeControls
-              fadeInMs={0}
-              fadeOutMs={0}
+              fadeInMs={selectedLayer.payload.fadeInMs ?? 0}
+              fadeOutMs={selectedLayer.payload.fadeOutMs ?? 0}
               onChange={(fadeInMs, fadeOutMs) => {
                 updateLayer(selectedLayer.id, {
                   type: 'media',
-                  payload: { ...selectedLayer.payload, volume: selectedLayer.payload.volume ?? 1 },
+                  payload: {
+                    ...selectedLayer.payload,
+                    volume: selectedLayer.payload.volume ?? 1,
+                    fadeInMs,
+                    fadeOutMs,
+                  },
                 }, 'Set audio fade');
                 haptic.medium();
               }}
@@ -2653,6 +2681,13 @@ function PosterComposerInner() {
                   values={currentAdjustments}
                   onChange={handleEffectAdjustChange}
                   onReset={handleEffectReset}
+                  onDragStateChange={(dragging) => {
+                    // Lightroom flagship pattern: fade top-bar chrome while
+                    // dragging an adjust slider so the user focuses on the
+                    // image, not the controls. The effects sheet itself
+                    // stays visible — only the top bar recedes.
+                    manipulationActiveSV.value = dragging ? 1 : 0;
+                  }}
                 />
               </View>
             </ScrollView>
@@ -2688,6 +2723,7 @@ export function PosterComposerScreen(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
+  onEntryTypeChange: (type: 'look' | 'poster') => void;
 }) {
   return (
     <PosterComposerScreenWithProvider {...props} />
@@ -2705,6 +2741,7 @@ function PosterComposerScreenWithProvider(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
+  onEntryTypeChange: (type: 'look' | 'poster') => void;
 }) {
   // Lazy import to avoid circular dependency at module load time
   const { CreatorProvider } = require('../CreatorContext');
@@ -2717,7 +2754,7 @@ function PosterComposerScreenWithProvider(props: {
       initialMediaUri={props.initialMediaUri}
       initialMedia={props.initialMedia}
     >
-      <PosterComposerInner />
+      <PosterComposerInner onEntryTypeChange={props.onEntryTypeChange} />
     </CreatorProvider>
   );
 }

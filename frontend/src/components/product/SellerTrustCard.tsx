@@ -127,7 +127,7 @@ export function SellerTrustCard({
                 {seller.username}
               </Text>
               {(() => {
-                const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified ? 'email' : null);
+                const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified ? 'seller' : null);
                 if (!tier) return null;
                 const info = VERIFICATION_TIERS[tier];
                 return (

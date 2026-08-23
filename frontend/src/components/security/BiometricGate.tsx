@@ -123,23 +123,23 @@ export function BiometricGate({
   onBack,
 }: BiometricGateProps) {
   const gate = useBiometricGate();
+  const { colors } = useAppTheme();
+  const { status, isAuthenticating, authenticate } = gate;
 
   useEffect(() => {
-    if (gate.status === 'locked' && !gate.isAuthenticating) {
-      void gate.authenticate(reason);
+    if (status === 'locked' && !isAuthenticating) {
+      void authenticate(reason);
     }
-  }, [gate.status, gate.isAuthenticating, gate.authenticate, reason]);
+  }, [status, isAuthenticating, authenticate, reason]);
 
-  if (gate.status === 'pending' || gate.status === 'locked') {
+  if (status === 'pending' || status === 'locked') {
     return (
       <BiometricGatePrompt gate={gate} reason={reason} header={header} onBack={onBack} />
     );
   }
 
-  const { colors } = useAppTheme();
-
   // Unavailable: reveal content with a truthful warning banner.
-  if (gate.status === 'unavailable') {
+  if (status === 'unavailable') {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {header}

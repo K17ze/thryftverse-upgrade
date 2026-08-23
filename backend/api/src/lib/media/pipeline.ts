@@ -36,7 +36,7 @@ import {
 import { logger } from '../logger.js';
 import { probeMedia, type MediaProbeResult } from './ffprobe.js';
 import { runFfmpeg, FfmpegError } from './ffmpeg.js';
-import { generateImageDerivatives, type ImageDerivative } from './sharpPipeline.js';
+import { generateImageDerivatives, stripImageExif, type ImageDerivative } from './sharpPipeline.js';
 import { buildHlsArgs, HLS_RENDITIONS } from './hlsPackager.js';
 import { generateThumbnails } from './thumbnailGenerator.js';
 import { buildAssetManifest, type MediaAssetManifest, type ManifestAbr, type ManifestThumbnail } from './mediaManifest.js';
@@ -150,6 +150,99 @@ async function postProcessingResults(
 
 function sha256(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
+}
+
+/**
+ * Normalises a Content-Type string for equivalence comparison, collapsing
+ * common aliases (e.g. `image/jpg` -> `image/jpeg`) so that semantically
+ * identical types compare equal regardless of the label used by the client.
+ */
+function normalizeContentTypeForComparison(contentType: string): string {
+  const base = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (base === 'image/jpg') {
+    return 'image/jpeg';
+  }
+  if (base === 'image/heif') {
+    return 'image/heic';
+  }
+  return base;
+}
+
+/**
+ * Detects the media content type from magic bytes (file signature) rather
+ * than trusting the client-declared Content-Type. Returns the canonical MIME
+ * type, or null when the signature is not recognised.
+ */
+function detectContentType(buffer: Buffer): string | null {
+  if (buffer.length < 12) {
+    return null;
+  }
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e &&
+    buffer[3] === 0x47 && buffer[4] === 0x0d && buffer[5] === 0x0a &&
+    buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  // GIF: 47 49 46 38
+  if (
+    buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 &&
+    buffer[3] === 0x38
+  ) {
+    return 'image/gif';
+  }
+
+  // WebP: bytes 8-11 = 57 45 42 50 ("WEBP")
+  if (
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  // PDF: 25 50 44 46 ("%PDF")
+  if (
+    buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 &&
+    buffer[3] === 0x46
+  ) {
+    return 'application/pdf';
+  }
+
+  // ISO BMFF-based formats (MP4, QuickTime, HEIC): bytes 4-7 = "ftyp"
+  if (
+    buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 &&
+    buffer[7] === 0x70
+  ) {
+    const brand = buffer.subarray(8, 12).toString('latin1');
+    // HEIC family
+    if (brand === 'heic' || brand === 'heix' || brand === 'mif1') {
+      return 'image/heic';
+    }
+    // QuickTime
+    if (brand === 'qt  ') {
+      return 'video/quicktime';
+    }
+    // MP4 family
+    if (
+      brand === 'mp41' || brand === 'mp42' || brand === 'isom' ||
+      brand === 'iso2' || brand === 'iso5' || brand === 'iso6' ||
+      brand === 'mmp4' || brand === 'avc1' || brand === 'dash'
+    ) {
+      return 'video/mp4';
+    }
+    // Unrecognised ftyp brand — default to MP4.
+    return 'video/mp4';
+  }
+
+  return null;
 }
 
 function derivativeObjectKey(assetId: string, variant: string, ext: string): string {
@@ -469,6 +562,9 @@ export async function processMediaAsset(
     }
 
     // Moderation — skip if already done (approved/review/rejected).
+    // FAIL-CLOSED: when no external moderation provider has run, default to
+    // 'review' (human approval required) instead of 'approved'.  This
+    // prevents unmoderated content from being published automatically.
     const moderationStatus: InternalProcessingResult['moderationStatus'] =
       asset.moderation_status === 'approved'
         ? 'approved'
@@ -476,9 +572,26 @@ export async function processMediaAsset(
           ? 'review'
           : asset.moderation_status === 'rejected'
             ? 'rejected'
-            : 'approved'; // Default to approved when no external moderation provider is configured.
+            : 'review'; // Fail-closed: require human review when moderation has not run.
 
-    const detectedContentType = asset.declared_content_type;
+    // Detect the content type from magic bytes rather than trusting the
+    // client-declared value. When the signature disagrees with the declared
+    // type (after alias normalisation), surface the detected value so the
+    // existing resolveMediaProcessingOutcome logic flags the mismatch as an
+    // integrity failure.
+    const magicType = detectContentType(sourceBuffer);
+    let detectedContentType: string;
+    if (magicType !== null) {
+      const normalizedDeclared = normalizeContentTypeForComparison(asset.declared_content_type);
+      const normalizedDetected = normalizeContentTypeForComparison(magicType);
+      if (normalizedDeclared === normalizedDetected) {
+        detectedContentType = asset.declared_content_type;
+      } else {
+        detectedContentType = magicType;
+      }
+    } else {
+      detectedContentType = asset.declared_content_type;
+    }
     const detectedSizeBytes = sourceBuffer.length;
 
     // Integrity check — detected size must match declared size.
@@ -498,6 +611,26 @@ export async function processMediaAsset(
       return;
     }
 
+    // Strip EXIF metadata (GPS, device serial, timestamps) from the original
+    // source object to protect uploader privacy. The public URL serves this
+    // cleaned object. Re-encode through sharp (which discards all input
+    // metadata by default) and overwrite the source object in place. This is
+    // a one-time clean-on-first-process operation. Video metadata is stripped
+    // at transcode time via -map_metadata -1 in the HLS packager.
+    let processingBuffer = sourceBuffer;
+    if (probe.mediaKind === 'image') {
+      try {
+        const cleanedBuffer = await stripImageExif(sourceBuffer, detectedContentType);
+        if (cleanedBuffer !== sourceBuffer) {
+          await putBinaryObject(asset.object_key, cleanedBuffer, detectedContentType);
+          processingBuffer = cleanedBuffer;
+          logger.info({ assetId }, '[mediaPipeline] stripped EXIF from original source object');
+        }
+      } catch (exifError) {
+        logger.warn({ err: exifError, assetId }, '[mediaPipeline] EXIF strip failed — proceeding with original');
+      }
+    }
+
     let derivatives: InternalProcessingResult['derivatives'] = [];
     let manifestDerivatives: MediaAssetManifest['derivatives'] = [];
     let abr: ManifestAbr | null = null;
@@ -508,7 +641,7 @@ export async function processMediaAsset(
     let canonicalUrl = '';
 
     if (probe.mediaKind === 'image') {
-      const imageResult = await processImageAsset(asset, sourceBuffer, probe);
+      const imageResult = await processImageAsset(asset, processingBuffer, probe);
       derivatives = imageResult.derivatives;
       manifestDerivatives = imageResult.manifestDerivatives;
       lqip = imageResult.lqip;

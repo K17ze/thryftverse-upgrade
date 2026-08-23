@@ -1,9 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react';
+/**
+ * PostageScreen — shipping preferences for sellers.
+ *
+ * Lets the seller choose a default carrier, toggle free shipping and bundle
+ * postage discounts, and navigate to saved addresses. Carrier availability
+ * is resolved from the user's country capabilities (real backend data).
+ *
+ * Per AGENTS.md §11 (Truthful UI): postage preferences are persisted to the
+ * server via PATCH /users/me/postage and rehydrated on mount via
+ * GET /users/me/postage. A persistence banner makes the sync state clear.
+ *
+ * Design (per AGENTS.md §4):
+ * - Flat composition, hairline separators, no card-on-card
+ * - One flat summary block (no decorative hero card)
+ * - Max two non-avatar radius sizes (Radius.md for banner, no other chrome)
+ * - Max three type sizes per viewport (bodyStrong, body, caption)
+ * - All colors via useAppTheme(), all geometry via design tokens
+ * - Carrier rows answer 4 questions: what, cost, when, conditions (ETA + tracking)
+ *
+ * State coverage (per AGENTS.md §14):
+ * - Loading: skeleton shimmer while capabilities + postage hydrate
+ * - Error: FlagshipState with retry when capabilities fetch fails
+ * - Populated: full carrier list + toggles
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,30 +38,50 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
-import { SettingsCell } from '../components/SettingsCell';
 import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SkeletonLoader } from '../components/SkeletonLoader';
-import { PremiumListSection } from '../components/ui/PremiumListSection';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'Postage'>;
 
-const CARRIERS = [
-  { key: 'evri', label: 'Evri', priceFromGBP: 2.89, selected: true },
-  { key: 'royal', label: 'Royal Mail', priceFromGBP: 3.35, selected: false },
-  { key: 'dpd', label: 'DPD', priceFromGBP: 4.5, selected: false },
-  { key: 'inpost', label: 'InPost', priceFromGBP: 2.99, selected: false },
+// UK fallback carriers — used only when capabilities fetch fails AND user has
+// no cached carrier data. InPost removed (not in any backend cluster template).
+const FALLBACK_CARRIERS: CapabilityCarrier[] = [
+  { id: 'evri', label: 'Evri', priceFromGbp: 2.89, etaMinDays: 2, etaMaxDays: 4, tracking: true },
+  { id: 'royal_mail', label: 'Royal Mail', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 3, tracking: true },
+  { id: 'dpd', label: 'DPD', priceFromGbp: 4.5, etaMinDays: 1, etaMaxDays: 2, tracking: true },
 ];
 
-function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
-  return carriers.map((carrier, index) => ({
-    key: carrier.id,
-    label: carrier.label,
-    priceFromGBP: carrier.priceFromGbp,
-    selected: index === 0,
-  }));
+type LoadState = 'loading' | 'populated' | 'error';
+
+interface CarrierRowData {
+  key: string;
+  label: string;
+  priceFromGbp: number;
+  etaMinDays: number;
+  etaMaxDays: number;
+  tracking: boolean;
+  selected: boolean;
+}
+
+function toCarrierRow(c: CapabilityCarrier, selectedKey: string): CarrierRowData {
+  return {
+    key: c.id,
+    label: c.label,
+    priceFromGbp: c.priceFromGbp,
+    etaMinDays: c.etaMinDays,
+    etaMaxDays: c.etaMaxDays,
+    tracking: c.tracking,
+    selected: c.id === selectedKey,
+  };
+}
+
+function formatEta(min: number, max: number): string {
+  if (min === max) return `${min} day${min === 1 ? '' : 's'}`;
+  return `${min}–${max} days`;
 }
 
 export default function PostageScreen({ navigation }: Props) {
@@ -47,55 +91,71 @@ export default function PostageScreen({ navigation }: Props) {
   const { show } = useToast();
   const postagePreferences = useStore((state) => state.postagePreferences);
   const updatePostagePreferences = useStore((state) => state.updatePostagePreferences);
+  const hydratePostagePreferences = useStore((state) => state.hydratePostagePreferences);
+  const savedAddress = useStore((state) => state.savedAddress);
   const { formatFromFiat } = useFormattedPrice();
-  const [carriers, setCarriers] = useState(CARRIERS);
+
+  const [carriers, setCarriers] = useState<CarrierRowData[]>([]);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
-  const [isHydrating, setIsHydrating] = useState(true);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+
+  const hydrate = useCallback(async () => {
+    if (!currentUser?.id) {
+      setCarriers(FALLBACK_CARRIERS.map((c) => toCarrierRow(c, postagePreferences.carrierKey)));
+      setCarrierScopeLabel(null);
+      setLoadState('populated');
+      return;
+    }
+    setLoadState('loading');
+    try {
+      const [capabilities] = await Promise.all([
+        getUserCountryCapabilities(currentUser.id),
+        hydratePostagePreferences(),
+      ]);
+      const sourceCarriers =
+        capabilities.postage.carriers.length > 0
+          ? capabilities.postage.carriers
+          : FALLBACK_CARRIERS;
+      // Read the freshly-hydrated carrier key from the store
+      const currentKey = useStore.getState().postagePreferences.carrierKey;
+      setCarriers(sourceCarriers.map((c) => toCarrierRow(c, currentKey)));
+      setCarrierScopeLabel(formatCountryPolicyScope(capabilities));
+      setLoadState('populated');
+    } catch {
+      // Fall back to UK carriers with the current persisted key
+      setCarriers(FALLBACK_CARRIERS.map((c) => toCarrierRow(c, postagePreferences.carrierKey)));
+      setCarrierScopeLabel(null);
+      setLoadState('error');
+    }
+  }, [currentUser?.id, hydratePostagePreferences, postagePreferences.carrierKey]);
 
   useEffect(() => {
-    let cancelled = false;
-    const hydrateCountryCarriers = async () => {
-      setIsHydrating(true);
-      if (!currentUser?.id) {
-        setCarriers(CARRIERS);
-        setCarrierScopeLabel(null);
-        setIsHydrating(false);
-        return;
-      }
-      try {
-        const capabilities = await getUserCountryCapabilities(currentUser.id);
-        if (cancelled) return;
-        const nextCarriers =
-          capabilities.postage.carriers.length > 0
-            ? mapCapabilityCarriers(capabilities.postage.carriers)
-            : CARRIERS;
-        setCarriers(nextCarriers.map((c) => ({ ...c, selected: c.key === postagePreferences.carrierKey })));
-        setCarrierScopeLabel(formatCountryPolicyScope(capabilities));
-      } catch {
-        if (!cancelled) {
-          setCarriers(CARRIERS.map((c) => ({ ...c, selected: c.key === postagePreferences.carrierKey })));
-          setCarrierScopeLabel(null);
-        }
-      } finally {
-        if (!cancelled) setIsHydrating(false);
-      }
-    };
-    void hydrateCountryCarriers();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id]);
+    void hydrate();
+  }, [hydrate]);
 
-  const selectCarrier = (key: string) => {
+  const selectCarrier = useCallback((key: string) => {
+    const carrier = carriers.find((c) => c.key === key);
     setCarriers((prev) => prev.map((c) => ({ ...c, selected: c.key === key })));
     updatePostagePreferences({ carrierKey: key });
-  };
+    if (carrier) {
+      show(`${carrier.label} set as default carrier`, 'success');
+    }
+  }, [carriers, updatePostagePreferences, show]);
+
+  const handleFreeShippingToggle = useCallback((v: boolean) => {
+    updatePostagePreferences({ freeShipping: v });
+    show(v ? 'Free shipping enabled' : 'Free shipping disabled', 'success');
+  }, [updatePostagePreferences, show]);
+
+  const handleBundleDiscountToggle = useCallback((v: boolean) => {
+    updatePostagePreferences({ bundleDiscount: v });
+    show(v ? 'Bundle discount enabled' : 'Bundle discount disabled', 'success');
+  }, [updatePostagePreferences, show]);
 
   const freeShipping = postagePreferences.freeShipping;
   const bundleDiscount = postagePreferences.bundleDiscount;
   const selectedCarrier = carriers.find((c) => c.selected);
-
-  const savedAddress = useStore((state) => state.savedAddress);
+  const addressCount = savedAddress ? '1 saved' : 'None saved';
 
   return (
     <FlagshipScreen
@@ -104,227 +164,200 @@ export default function PostageScreen({ navigation }: Props) {
           title="Shipping preferences"
           subtitle="Carrier and postage defaults"
           onBack={() => navigation.goBack()}
-          rightAction={undefined}
         />
       }
     >
-      {/* Hero summary — shipping setup status */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="cube" size={18} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {selectedCarrier ? 'Shipping configured' : 'Set up shipping'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {selectedCarrier ? `${selectedCarrier.label} is your default carrier` : 'Choose a carrier and postage defaults'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-      {/* Link to saved addresses */}
-      <Pressable
-        onPress={() => navigation.navigate('SavedAddresses')}
-        style={({ pressed }) => [
-          styles.addressLinkRow,
-          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Manage saved addresses"
+      {/* ── Honest persistence banner ── */}
+      <View
+        style={[styles.persistenceBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Shipping preferences sync"
       >
-        <View style={styles.addressLinkLeft}>
-          <Ionicons name="location-outline" size={20} color={colors.textPrimary} />
-          <View>
-            <Text style={[styles.addressLinkTitle, { color: colors.textPrimary }]}>Saved addresses</Text>
-            <Text style={[styles.addressLinkSubtitle, { color: colors.textMuted }]}>
-              {savedAddress ? '1 saved' : 'None saved'}
-            </Text>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-      </Pressable>
-
-      {/* Default Carrier */}
-        <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
-          {isHydrating ? (
-            <FlagshipState variant="loading" />
-          ) : (
-            <>
-              {carriers.map((c, idx) => (
-                <AnimatedPressable
-                  key={c.key}
-                  style={[styles.carrierRow, c.selected && { backgroundColor: `${colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
-                  onPress={() => selectCarrier(c.key)}
-                  hapticFeedback="light"
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: c.selected }}
-                  accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}`}
-                >
-                  <View style={styles.carrierText}>
-                    <Text style={[styles.carrierLabel, c.selected && { fontFamily: Typography.family.semibold }]}>{c.label}</Text>
-                    <Text style={styles.carrierPrice}>
-                      from {formatFromFiat(c.priceFromGBP, 'GBP', { displayMode: 'fiat' })}
-                    </Text>
-                  </View>
-                  <RadioButton selected={c.selected} />
-                </AnimatedPressable>
-              ))}
-            </>
-          )}
-        </PremiumListSection>
-
-      {/* Shipping Options */}
-        <PremiumListSection title="Shipping Options">
-          <SettingsCell
-            icon="gift-outline"
-            iconColor={colors.brand}
-            title="Offer free shipping"
-            subtitle="You'll cover the postage cost for buyers"
-            variant="toggle"
-            toggleValue={freeShipping}
-            onToggle={(v) => updatePostagePreferences({ freeShipping: v })}
-            isFirst
-          />
-          <SettingsCell
-            icon="cube-outline"
-            iconColor={colors.brand}
-            title="Bundle discount on postage"
-            subtitle="Buyers save when buying multiple items"
-            variant="toggle"
-            toggleValue={bundleDiscount}
-            onToggle={(v) => updatePostagePreferences({ bundleDiscount: v })}
-            isLast
-          />
-        </PremiumListSection>
-
-      {/* Footer note */}
-        <Text style={styles.footerNote}>
-          These are your default settings. Override postage for individual items when
-          listing.
+        <Ionicons name="sync-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.persistenceBannerText}>
+          Preferences sync to your account and apply to new listings.
         </Text>
+      </View>
+
+      {/* ── Flat summary block ── */}
+      <View style={styles.summaryBlock}>
+        <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+          {selectedCarrier ? selectedCarrier.label : 'Choose a carrier'}
+        </Text>
+        <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+          {selectedCarrier
+            ? `${formatFromFiat(selectedCarrier.priceFromGbp, 'GBP', { displayMode: 'fiat' })} from · ${formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays)}`
+            : 'Set your default carrier and postage options'}
+        </Text>
+      </View>
+
+      {/* ── Default carrier ── */}
+      {loadState === 'error' ? (
+        <FlagshipState
+          variant="error"
+          title="Couldn't load carriers"
+          subtitle="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => void hydrate()}
+        />
+      ) : loadState === 'loading' ? (
+        <SettingsSection title="Default carrier">
+          <FlagshipState variant="loading" />
+        </SettingsSection>
+      ) : (
+        <SettingsSection
+          title="Default carrier"
+          description={carrierScopeLabel ? `Region: ${carrierScopeLabel}` : undefined}
+        >
+          {carriers.map((c, idx) => (
+            <AnimatedPressable
+              key={c.key}
+              style={[
+                styles.carrierRow,
+                idx < carriers.length - 1 && styles.carrierRowBorder,
+              ]}
+              onPress={() => selectCarrier(c.key)}
+              hapticFeedback="light"
+              accessibilityRole="radio"
+              accessibilityState={{ checked: c.selected }}
+              accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' })}, ${formatEta(c.etaMinDays, c.etaMaxDays)}${c.tracking ? ', tracking included' : ''}`}
+            >
+              <View style={styles.carrierText}>
+                <Text
+                  style={[
+                    styles.carrierLabel,
+                    { color: colors.textPrimary },
+                    c.selected && { fontFamily: Typography.family.semibold },
+                  ]}
+                >
+                  {c.label}
+                </Text>
+                <Text style={[styles.carrierMeta, { color: colors.textMuted }]}>
+                  from {formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' })} · {formatEta(c.etaMinDays, c.etaMaxDays)}
+                  {c.tracking ? ' · tracking' : ''}
+                </Text>
+              </View>
+              <RadioButton selected={c.selected} />
+            </AnimatedPressable>
+          ))}
+        </SettingsSection>
+      )}
+
+      {/* ── Shipping options ── */}
+      <SettingsSection title="Shipping options">
+        <SettingsRow
+          icon="gift-outline"
+          iconColor={colors.brand}
+          title="Offer free shipping"
+          subtitle="You'll cover the postage cost for buyers"
+          toggleValue={freeShipping}
+          onToggle={handleFreeShippingToggle}
+          isFirst
+        />
+        <SettingsRow
+          icon="cube-outline"
+          iconColor={colors.brand}
+          title="Bundle discount on postage"
+          subtitle="Buyers save when buying multiple items"
+          toggleValue={bundleDiscount}
+          onToggle={handleBundleDiscountToggle}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── Delivery addresses ── */}
+      <SettingsSection title="Delivery">
+        <SettingsRow
+          icon="location-outline"
+          title="Saved addresses"
+          subtitle="Manage delivery addresses for checkout"
+          value={addressCount}
+          onPress={() => navigation.navigate('SavedAddresses')}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── Footer note ── */}
+      <Text style={[styles.footerNote, { color: colors.textMuted }]}>
+        Override postage for individual items when listing.
+      </Text>
     </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  skeletonWrap: {
-    marginBottom: Space.md,
-  },
-  addressLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
-    minHeight: Space.xxl + Space.sm,
-  },
-  addressLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-  },
-  addressLinkTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
-  addressLinkSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  carrierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md - Space.xs,
-  },
-  carrierRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  carrierText: {
-    flex: 1,
-    marginRight: Space.sm,
-  },
-  carrierLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-    marginBottom: Space.xs / 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  carrierPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  footerNote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-    paddingHorizontal: Space.xs,
-    marginTop: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-    textAlign: 'center',
-  },
-  deliveryTrust: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  deliveryTrustText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xxl - Space.sm,
-    height: Space.xxl - Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
+    persistenceBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      marginBottom: Space.md,
+    },
+    persistenceBannerText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+      color: colors.textSecondary,
+      flex: 1,
+    },
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
+      marginBottom: Space.md,
+    },
+    summaryTitle: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    summarySubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+    },
+    carrierRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + Space.xs,
+      minHeight: 56,
+    },
+    carrierRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    carrierText: {
+      flex: 1,
+      marginRight: Space.sm,
+    },
+    carrierLabel: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.body.letterSpacing,
+      lineHeight: Type.body.lineHeight,
+    },
+    carrierMeta: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+    },
+    footerNote: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      paddingHorizontal: Space.md,
+      marginTop: Space.sm,
+    },
   });
 }

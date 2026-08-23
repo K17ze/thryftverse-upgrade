@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  FlatList,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
@@ -144,18 +143,6 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
 function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
 
-  // If an interactive sticker was selected, route to its configuration picker.
-  if (subMode) {
-    return (
-      <AssetPickerContent
-        mode={subMode}
-        onClose={() => setSubMode(null)}
-        onAddLayer={onAddLayer}
-        editingLayer={null}
-      />
-    );
-  }
-
   const handleStickerSelect = useCallback((sticker: NewStickerDef) => {
     if (sticker.interactive && sticker.pickerMode) {
       // Route to the interactive sticker's configuration picker
@@ -193,6 +180,18 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
     }
     onClose();
   }, [onAddLayer, onClose]);
+
+  // If an interactive sticker was selected, route to its configuration picker.
+  if (subMode) {
+    return (
+      <AssetPickerContent
+        mode={subMode}
+        onClose={() => setSubMode(null)}
+        onAddLayer={onAddLayer}
+        editingLayer={null}
+      />
+    );
+  }
 
   return (
     <StickerBrowserSheet
@@ -1550,7 +1549,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           <ActivityIndicator size="large" color={colors.brand} />
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={activeResults}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
@@ -1566,6 +1565,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
+          drawDistance={250}
           ListEmptyComponent={
             activeTab === 'search'
               ? hasSearched && !isSearchLoading
@@ -1682,7 +1682,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
@@ -1698,6 +1698,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
+          drawDistance={250}
           ListEmptyComponent={hasSearched && !isSearching ? <View style={styles.emptyState}><Text style={styles.emptyText}>No users found</Text></View> : null}
         />
       )}
@@ -1792,7 +1793,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
@@ -1805,6 +1806,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
+          drawDistance={250}
           ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No looks found</Text></View> : null}
         />
       )}
@@ -2697,7 +2699,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={results}
           keyExtractor={(item) => item.id}
           numColumns={2}
@@ -2717,8 +2719,8 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
             </Pressable>
           )}
           style={styles.gifList}
-          columnWrapperStyle={styles.gifRow}
           keyboardShouldPersistTaps="handled"
+          drawDistance={250}
           ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No GIFs found</Text></View> : null}
         />
       )}
@@ -2876,7 +2878,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={results}
           keyExtractor={(item) => item.trackId}
           renderItem={({ item }) => (
@@ -2900,6 +2902,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
+          drawDistance={250}
           ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No tracks found</Text></View> : null}
         />
       )}

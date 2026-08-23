@@ -85,7 +85,7 @@ export interface TypedStorage<T> {
  * accessed via `TypedStorageSchema['some.key']`, which is the desired
  * behaviour — it forces every storage key to be explicitly typed.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface TypedStorageSchema {
   // Consumers extend via declaration merging. See JSDoc above.
 }

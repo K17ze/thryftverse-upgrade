@@ -46,12 +46,14 @@ export interface AdjustPanelProps {
   onCommit?: (parameter: string, value: number) => void;
   /** Reset all adjustments to defaults. */
   onReset: () => void;
+  /** Called when any slider drag state changes (Lightroom chrome-fade pattern). */
+  onDragStateChange?: (dragging: boolean) => void;
 }
 
 /**
  * Render one slider row per adjustment parameter.
  */
-export function AdjustPanel({ values, onChange, onCommit, onReset }: AdjustPanelProps) {
+export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateChange }: AdjustPanelProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -111,6 +113,7 @@ export function AdjustPanel({ values, onChange, onCommit, onReset }: AdjustPanel
             resetColor={colors.textMuted}
             onChange={(v) => onChange(param.id, v)}
             onCommit={onCommit ? (v) => onCommit(param.id, v) : undefined}
+            onDragStateChange={onDragStateChange}
           />
         );
       })}
@@ -131,6 +134,7 @@ interface AdjustSliderRowProps {
   resetColor: string;
   onChange: (value: number) => void;
   onCommit?: (value: number) => void;
+  onDragStateChange?: (dragging: boolean) => void;
 }
 
 function AdjustSliderRow({
@@ -144,6 +148,7 @@ function AdjustSliderRow({
   resetColor,
   onChange,
   onCommit,
+  onDragStateChange,
 }: AdjustSliderRowProps) {
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -194,6 +199,7 @@ function AdjustSliderRow({
         step={0.001}
         onValueChange={onChange}
         onCommit={onCommit}
+        onDragStateChange={onDragStateChange}
         accessibilityLabel={label}
         hapticAtNeutral={min < 0 && max > 0}
       />

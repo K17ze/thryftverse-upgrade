@@ -94,6 +94,14 @@ export interface Message {
 
   /** Ionicon name for the agent avatar glyph (only set for agent messages). */
   agentAvatar?: string;
+
+  /**
+   * Stable client-generated id used for idempotent message creation. Generated
+   * BEFORE the first send and reused on every retry so a dropped response
+   * followed by retry replays the original server message instead of
+   * duplicating it (P0-MSG-2).
+   */
+  clientMessageId?: string;
 }
 
 export const INITIAL_MESSAGES: Message[] = [];

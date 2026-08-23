@@ -15,7 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
-import { deleteConversationOnApi, muteConversationOnApi, unmuteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
 import { blockUser, unblockUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
@@ -95,12 +95,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleMute = async () => {
     haptic.light();
     try {
-      if (isMuted) {
-        await unmuteConversationOnApi(conversationId);
-      } else {
-        await muteConversationOnApi(conversationId);
-      }
-      toggleMuted(conversationId);
+      await toggleMuted(conversationId);
       show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
     } catch {
       show('Could not update mute status. Check your connection and try again.', 'error');

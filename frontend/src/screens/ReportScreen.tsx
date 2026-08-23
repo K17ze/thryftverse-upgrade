@@ -12,6 +12,7 @@ import {
 } from '../components/flagship';
 import { reportUser, blockUser, type ReportReason } from '../services/profileApi';
 import { reportListing, type ListingReportReason } from '../services/listingsApi';
+import { reportConversationOnApi } from '../services/chatApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -208,6 +209,12 @@ export default function ReportScreen({ navigation, route }: Props) {
       let result: { reportId: string };
       if (type === 'user') {
         result = await reportUser(targetId, selectedReason, details.trim() || undefined);
+      } else if (type === 'group') {
+        result = await reportConversationOnApi(
+          targetId,
+          selectedReason,
+          details.trim() || undefined,
+        );
       } else {
         result = await reportListing(
           targetId,
@@ -359,7 +366,10 @@ export default function ReportScreen({ navigation, route }: Props) {
     );
   }
 
-  const reportTitle = type === 'user' ? 'Report account' : 'Report listing';
+  const reportTitle =
+    type === 'user' ? 'Report account'
+      : type === 'group' ? 'Report group'
+      : 'Report listing';
 
   return (
     <FlagshipScreen

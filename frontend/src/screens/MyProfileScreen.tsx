@@ -59,7 +59,10 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const COVER_HEIGHT = 152;
+// A profile cover is identity media, not a thin toolbar backdrop. At 200pt it
+// retains a useful crop on common phone widths while leaving the avatar/stats
+// seam outside the cover-control layer.
+const COVER_HEIGHT = 200;
 
 /**
  * Compact number formatting for social/stats counters.
@@ -460,7 +463,7 @@ export default function MyProfileScreen() {
   const headerOpacityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       scrollY.value,
-      [32, 72],
+      [COVER_HEIGHT - 88, COVER_HEIGHT - 44],
       [0, 1],
       Extrapolation.CLAMP
     );
@@ -703,7 +706,7 @@ export default function MyProfileScreen() {
       <Reanimated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT - 50 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: COVER_HEIGHT }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
@@ -718,7 +721,6 @@ export default function MyProfileScreen() {
             website={user.website ?? null}
             memberSince={memberSince}
             sellerTrust={sellerTrust}
-            emailVerified={user.emailVerified}
             ratingAverage={sellerTrust?.rating ?? null}
             reviewCount={sellerTrust?.reviewCount}
             responseTimeLabel={sellerTrust?.responseTimeLabel ?? null}

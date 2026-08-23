@@ -34,8 +34,6 @@ function TrustChip({ icon, label, tone = 'default', colors, styles }: TrustChipP
 export interface ProfileTrustSignalsProps {
   /** Seller trust summary from /sellers/:id endpoint. */
   sellerTrust?: SellerTrustSummary | null;
-  /** Email-verified flag from the user profile. */
-  emailVerified?: boolean;
   /** Rating average from public profile stats (fallback if sellerTrust has none). */
   ratingAverage?: number | null;
   /** Review count from public profile stats. */
@@ -58,7 +56,6 @@ export interface ProfileTrustSignalsProps {
  */
 export function ProfileTrustSignals({
   sellerTrust,
-  emailVerified,
   ratingAverage,
   reviewCount = 0,
   soldCount = 0,
@@ -69,8 +66,9 @@ export function ProfileTrustSignals({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const chips: TrustChipProps[] = [];
 
-  // Verified — tiered badge from seller trust (authoritative) or email-verified fallback
-  const tier: VerificationTier | null = sellerTrust?.verificationTier ?? (sellerTrust?.verified === true || emailVerified === true ? 'email' : null);
+  // Verified — tiered badge from seller trust only (authoritative backend source).
+  // Email verification is never used as a proxy for seller/identity verification.
+  const tier: VerificationTier | null = sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
   if (tier) {
     const info = VERIFICATION_TIERS[tier];
     chips.push({

@@ -53,9 +53,11 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { Type, Typography, Space, Radius, Control, LetterSpacing, Elevation, Stroke } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
@@ -137,6 +139,7 @@ export default function PosterViewerScreen() {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -1356,6 +1359,12 @@ export default function PosterViewerScreen() {
           </View>
         </View>
 
+        {/* Offline banner — surfaces connectivity loss below the header
+            chrome and above the media content. Returns null when online. */}
+        {isOffline && (
+          <OfflineBanner onRetry={handleRetryMedia} />
+        )}
+
         {/* Stickers overlay — skipped when rendering canonical composition,
             since the composition canvas already includes all layers */}
         {!compositionDoc && activeFrame.stickers.length > 0 && (
@@ -1603,11 +1612,6 @@ const LIFETIME_MS = 2500;
 const FADE_DELAY_MS = 1500;
 
 function HeartBurst({ x, y, reducedMotion }: { x: number; y: number; reducedMotion: boolean }) {
-  // Reduced motion: single heart that fades out — no particle physics.
-  if (reducedMotion) {
-    return <ReducedMotionHeart x={x} y={y} />;
-  }
-
   // Generate 12–22 particles with random initial properties.
   // Configs are generated once per burst (not per render).
   const configs = React.useMemo<ParticleConfig[]>(() => {
@@ -1620,6 +1624,11 @@ function HeartBurst({ x, y, reducedMotion }: { x: number; y: number; reducedMoti
       rotSpeed: -3 + Math.random() * 6, // -3 to 3 rad/sec
     }));
   }, []);
+
+  // Reduced motion: single heart that fades out — no particle physics.
+  if (reducedMotion) {
+    return <ReducedMotionHeart x={x} y={y} />;
+  }
 
   return (
     <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">

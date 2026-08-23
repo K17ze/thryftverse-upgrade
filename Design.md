@@ -612,6 +612,11 @@ The feed may blend:
 
 Modules are data-driven and context-sensitive. Do **not** insert them at a fixed item interval when they damage relevance or masonry rhythm.
 
+- A module heading describes the content that is actually present (`Looks`, `Moodboards`, `Pulse`); it must not claim `For you`, `Inspired by…`, `Because you viewed…`, trending status, or creator affinity unless that reason is supplied by the ranking service.
+- Blend heterogeneous units from one ranked response when the backend supports it. Until then, a client-side blend may use only real endpoint rows and deterministic availability/media-geometry rules; it must not fabricate recommendation breaks to simulate intelligence.
+- A mixed feed does not mean equal quotas. Repetition, fatigue, recent intent and visual continuity determine cadence. Listings remain commerce objects; Looks, Posters and Moodboards retain their own media treatment and destination.
+- Development/demo fallbacks never enter the production discovery blend. A partial feed with honest retry/offline treatment is preferable to a visually complete fabricated feed.
+
 ### Interaction
 
 - Tap opens a closeup/product surface with a visually similar continuation below.
@@ -751,6 +756,11 @@ Use for Inbox, Chat, New Message, Group Info, bots, quick replies.
 - Attachments must be truthful: image/video/file only if supported.
 - Backend-blocked actions must not create ghost local conversations.
 - Commerce state cards should be structured and trusted, not plain text.
+- Group identity is one server-owned object: name, description and group photo/avatar. Creation, group info, chat headers and inbox rows render the same projection and reconcile after a successful edit.
+- A group photo is editable only by a role the backend authorises. Selection shows a local pending preview, but the durable URL becomes visible across the app only after upload finalisation and the group PATCH succeed.
+- Do not invent a wide decorative group cover when the data model supports only an avatar. A larger identity preview may be used in Group Info, but the same crop and asset remain canonical.
+- Leave, report and delete-for-me actions are flat, separated rows near the end of the hierarchy. Do not wrap them in an outlined `DANGER ZONE` card or repeat irreversible copy before the confirmation dialog.
+- Messaging parity is capability-led, not checklist theatre. Search, shared media, member roles, mute, invite links, events, topics, HD media or moderation appear only when their backend state and permission model are real.
 
 ### Component G — Auction / co-own financial surfaces
 
@@ -1316,6 +1326,9 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 - Entry is camera-first. The user opens the camera immediately, captures or selects from gallery, and the media becomes the canvas instantly. There is no "upload" step, no "start blank" button, no intermediate screen.
 - Camera permission is requested only after a user action. The initial surface explains the value and offers a distinct Settings recovery action after permanent denial; opening the camera must not trigger broad media-library permission merely to populate a recent thumbnail.
 - The shutter is disabled until the native camera emits readiness. Capture output is pinned in the viewfinder and transitions into the exact destination geometry of the editor over 220–240ms; reduced motion completes immediately. The transition never fades an empty layer.
+- Grid, brackets, focus point and crop affordances share one safe capture-viewport coordinate space. They are never positioned from full-screen percentages that include system bars, the top tool row, shutter deck or intent selector. The guide aspect ratio must either match the saved crop or be explicitly labelled as advisory.
+- Look / Poster / Search is the only persistent bottom intent rail. Effects, timer, hands-free, grid and multi-capture are progressively disclosed behind Tools and may not occupy the intent rail's interaction band. A tool remains hidden until preview, editor, restored draft, viewer and export can honor the same result.
+- The 44pt accessibility target is independent from visible camera chrome. Close, flash, tools, gallery and flip use transparent hit areas unless media contrast requires a restrained scrim; they do not become five equal floating discs.
 - One-shot capture is the default. Multi Snap is an explicit mode, and its count is announced once in the Done action rather than duplicated in decorative badges.
 - Native video capture controls remain absent until audio permission, recording lifecycle, interruption, duration, foreground/background and recovery contracts are all implemented. Gallery video import remains available when its upload pipeline is valid.
 - A small "Aa" text-mode button in the top-right of the camera view is the only path to a blank text poster (Instagram "Create" pattern). It is never a large "Blank canvas" button.
@@ -1372,7 +1385,8 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 ### Messaging
 
 - Inbox errors are user-safe, not raw backend exceptions.
-- Group info and danger zones respect safe area.
+- Group info and destructive actions respect safe area; destructive rows remain flat and restrained rather than becoming a decorative warning card.
+- Group name, description and photo edits are role-authorised, server-confirmed and propagated to chat, inbox and group-info projections.
 - New Message must not create fake local DMs.
 - Bots/quick replies/files are shown only if real or honestly unavailable without dead controls.
 

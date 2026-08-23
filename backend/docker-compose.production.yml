@@ -122,23 +122,52 @@ services:
     networks:
       - db
 
-  # ── Redis — cache and BullMQ queue broker (production) ──────────────
-  # Only on the internal db network. No host port exposure.
-  redis:
+  # ── Redis — cache instance (production) ─────────────────────────────
+  # Ephemeral cache, rate limiting, and realtime pub/sub.
+  # allkeys-lru eviction is safe here — cache data is disposable.
+  redis-cache:
     image: redis:7-alpine
-    container_name: thryftverse-redis-prod
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    container_name: thryftverse-redis-cache-prod
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
-      - thryftverse_redis_data_prod:/data
+      - thryftverse_redis_cache_data_prod:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     <<: *default-security
-    # Redis alpine image uses UID 999 internally
+    user: "999:999"
+    mem_limit: 512M
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - db
+
+  # ── Redis — queue instance (production) ──────────────────────────────
+  # Dedicated BullMQ queue broker. AOF persistence ensures jobs survive
+  # restarts. noeviction policy prevents job data from being evicted.
+  redis-queue:
+    image: redis:7-alpine
+    container_name: thryftverse-redis-queue-prod
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes --appendfsync everysec
+    ports:
+      - "127.0.0.1:6381:6379"
+    volumes:
+      - thryftverse_redis_queue_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *default-security
     user: "999:999"
     mem_limit: 512M
     deploy:
@@ -258,7 +287,9 @@ services:
       PGBOUNCER_PORT: "6432"
       RUN_BACKGROUND_WORKERS: "false"
       RUN_API_SERVER: "true"
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://redis-cache:6379
+      REDIS_CACHE_URL: redis://redis-cache:6379
+      REDIS_QUEUE_URL: redis://redis-queue:6379
       KEY_SERVICE_URL: http://key-service:4100
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
@@ -368,7 +399,9 @@ services:
       PGBOUNCER_PORT: "6432"
       RUN_BACKGROUND_WORKERS: "true"
       RUN_API_SERVER: "false"
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://redis-cache:6379
+      REDIS_CACHE_URL: redis://redis-cache:6379
+      REDIS_QUEUE_URL: redis://redis-queue:6379
       KEY_SERVICE_URL: http://key-service:4100
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
@@ -566,7 +599,8 @@ services:
 # ── Named volumes ─────────────────────────────────────────────────────
 volumes:
   thryftverse_pg_data_prod:
-  thryftverse_redis_data_prod:
+  thryftverse_redis_cache_data_prod:
+  thryftverse_redis_queue_data_prod:
   thryftverse_meili_data_prod:
   caddy_data:
   caddy_config:

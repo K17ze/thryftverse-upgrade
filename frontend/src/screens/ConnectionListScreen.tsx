@@ -2,13 +2,13 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -56,7 +56,9 @@ export default function ConnectionListScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isFollowers = mode === 'followers';
-  const query = isFollowers ? useFollowersInfinite(userId) : useFollowingInfinite(userId);
+  const followersQuery = useFollowersInfinite(isFollowers ? userId : null);
+  const followingQuery = useFollowingInfinite(isFollowers ? null : userId);
+  const query = isFollowers ? followersQuery : followingQuery;
 
   const items: FollowListUser[] = useMemo(() => {
     const pages = query.data?.pages ?? [];
@@ -200,7 +202,7 @@ export default function ConnectionListScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
-      <FlatList
+      <FlashList
         data={filteredItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -208,6 +210,7 @@ export default function ConnectionListScreen() {
         onEndReachedThreshold={0.4}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        drawDistance={400}
         ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
         refreshControl={
           <RefreshControl

@@ -62,6 +62,10 @@ export interface LookCreateBody {
   title: string;
   caption?: string;
   mediaUrl: string;
+  /** Durable proof that the primary media PUT was verified by the backend. */
+  mediaFinalizationId?: string;
+  /** Authoritative media lifecycle row returned by upload finalization. */
+  mediaAssetId?: string;
   mediaType?: 'image' | 'video';
   visibility?: 'public' | 'followers' | 'private';
   tags?: LookCreateTag[];

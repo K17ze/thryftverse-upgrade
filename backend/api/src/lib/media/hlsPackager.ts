@@ -50,6 +50,9 @@ export function buildHlsArgs(inputPath: string, outputDir: string): string[] {
     '-i', inputPath,
     // Ensure the input is decoded once and reused across all renditions.
     '-threads', '0',
+    // Strip all container/stream metadata (EXIF, GPS, encoder tags, custom
+    // tags) from the HLS outputs to protect uploader privacy.
+    '-map_metadata', '-1',
   ];
 
   // Per-rendition video filter chains and output mappings.

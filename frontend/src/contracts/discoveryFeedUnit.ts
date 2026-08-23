@@ -25,6 +25,8 @@
 import type { DiscoveryListingSummary, ListingLike } from './DiscoveryListingSummary';
 import { mapListingToDiscoverySummary } from './DiscoveryListingSummary';
 import type { PosterStory } from '../services/postersApi';
+import type { LookApiItem } from '../services/looksApi';
+import type { Moodboard } from '../services/moodboardApi';
 
 // ============================================================================
 // FEED UNIT DISCRIMINATED UNION
@@ -34,6 +36,7 @@ export type DiscoveryFeedUnitType =
   | 'listing'
   | 'look'
   | 'poster'
+  | 'moodboard'
   | 'editorial'
   | 'recommendation_break';
 
@@ -83,6 +86,7 @@ export interface ListingFeedUnit extends DiscoveryFeedUnitBase {
  */
 export interface LookFeedUnit extends DiscoveryFeedUnitBase {
   type: 'look';
+  look: LookApiItem;
   title: string;
   coverImageUri: string;
   aspectRatio: number;
@@ -96,6 +100,18 @@ export interface PosterFeedUnit extends DiscoveryFeedUnitBase {
   type: 'poster';
   story: PosterStory;
   /** Cover media URI (first frame or composition thumbnail). */
+  coverUri: string;
+  aspectRatio: number;
+}
+
+/**
+ * A public community moodboard. Demo/fallback moodboards must be filtered at
+ * the data boundary before this unit is constructed; discovery never presents
+ * seeded development content as personalisation.
+ */
+export interface MoodboardFeedUnit extends DiscoveryFeedUnitBase {
+  type: 'moodboard';
+  moodboard: Moodboard;
   coverUri: string;
   aspectRatio: number;
 }
@@ -133,6 +149,7 @@ export type DiscoveryFeedUnit =
   | ListingFeedUnit
   | LookFeedUnit
   | PosterFeedUnit
+  | MoodboardFeedUnit
   | EditorialFeedUnit
   | RecommendationBreakFeedUnit;
 

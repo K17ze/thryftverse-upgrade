@@ -15,7 +15,7 @@ export function getRedisClient(): Redis {
     return sharedClient;
   }
 
-  sharedClient = new Redis(config.redisUrl, {
+  sharedClient = new Redis(config.redisCacheUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy: (times) => Math.min(times * 500, 5000),

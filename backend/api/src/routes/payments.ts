@@ -187,11 +187,12 @@ type PaymentRouteDependencies = {
       intentId: string;
       gatewayId: string;
       providerRefundRef: string;
-      status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+      status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
       amount: number;
       currency: string;
       reason?: string;
       metadata: Record<string, unknown>;
+      idempotencyKey?: string;
     }
   ) => Promise<void>;
   queueCommercePaymentNotifications: (input: {
@@ -1365,6 +1366,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
     amount: z.number().positive().optional(),
     currency: z.string().length(3).optional(),
     reason: z.string().max(240).optional(),
+    idempotencyKey: z.string().min(4).max(255).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -1451,8 +1453,62 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
 
     const amount = roundTo(payload.amount ?? Number(intent.amount_gbp), 2);
     const currency = (payload.currency ?? intent.amount_currency ?? 'GBP').toUpperCase();
+
+    // Remaining-refundable guard: reject if the requested amount exceeds
+    // the unrefunded balance of the intent.
+    const refundedResult = await client.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM payment_refunds
+       WHERE intent_id = $1 AND status IN ('succeeded', 'pending')`,
+      [intentId]
+    );
+    const alreadyRefunded = Number(refundedResult.rows[0].total ?? '0');
+    const remainingRefundable = Number(intent.amount_gbp) - alreadyRefunded;
+    if (amount > remainingRefundable + 0.001) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: `Refund amount ${amount} exceeds remaining refundable ${remainingRefundable.toFixed(2)}`,
+        code: 'REFUND_EXCEEDS_REMAINING',
+      };
+    }
+
+    // Idempotency check: if an idempotency key is provided and a refund
+    // with that key already exists for this intent, replay the cached result.
+    if (payload.idempotencyKey) {
+      const existingRefund = await client.query<{
+        id: string;
+        status: string;
+        amount: number | string;
+        currency: string;
+        provider_refund_ref: string;
+      }>(
+        `SELECT id, status, amount, currency, provider_refund_ref
+         FROM payment_refunds
+         WHERE intent_id = $1 AND idempotency_key = $2
+         LIMIT 1`,
+        [intentId, payload.idempotencyKey]
+      );
+      if (existingRefund.rowCount) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          idempotent: true,
+          refund: {
+            intentId,
+            gatewayId: intent.gateway_id,
+            providerRefundRef: existingRefund.rows[0].provider_refund_ref,
+            status: existingRefund.rows[0].status,
+            amount: Number(existingRefund.rows[0].amount),
+            currency: existingRefund.rows[0].currency,
+          },
+        };
+      }
+    }
+
     let providerRefundRef = createRuntimeId(`refund_${intent.gateway_id}`);
-    let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' = 'pending';
+    let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown' = 'pending';
 
     // Dispatch to the appropriate provider for a backed refund.
     // All configured gateways now return money to the buyer's instrument
@@ -1473,6 +1529,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
         reason: payload.reason,
         metadata: {
           source: 'manual_refund_request',
+          refundOperationId: providerRefundRef,
           ...(payload.metadata ?? {}),
         },
       });
@@ -1488,6 +1545,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
       amount,
       currency,
       reason: payload.reason,
+      idempotencyKey: payload.idempotencyKey,
       metadata: {
         source: 'manual_refund_request',
         ...(payload.metadata ?? {}),

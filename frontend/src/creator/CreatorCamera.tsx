@@ -13,6 +13,8 @@ import {
   AppStateStatus,
 } from 'react-native';
 import {
+  Camera,
+  type CameraRef,
   useCameraDevice,
   useCameraPermission,
   usePhotoOutput,
@@ -53,7 +55,6 @@ import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
 import { CaptureToolsSheet, type TimerOption as SheetTimerOption } from './camera/CaptureToolsSheet';
-import { CameraEffectPreview } from './camera/CameraEffectPreview';
 import { useCameraEffectProcessor } from './camera/useCameraEffectProcessor';
 import type { CameraEffectId } from './camera/CameraEffectBar';
 import { CreatorAnalytics } from './creatorAnalytics';
@@ -116,6 +117,27 @@ const DEFAULT_SPEED = '1';
 type FlashMode = 'off' | 'on' | 'auto';
 type ZoomStepIndex = 0 | 1 | 2;
 type TimerOption = 0 | 3 | 5 | 10;
+type CapturedMediaMetadata = Pick<
+  CreatorInitialMedia,
+  'width' | 'height' | 'durationMs' | 'mimeType'
+>;
+
+function getPhotoMimeType(containerFormat: string): string | undefined {
+  switch (containerFormat.toLowerCase()) {
+    case 'jpeg':
+    case 'jpg':
+      return 'image/jpeg';
+    case 'heif':
+    case 'heic':
+      return 'image/heif';
+    case 'png':
+      return 'image/png';
+    case 'dng':
+      return 'image/x-adobe-dng';
+    default:
+      return undefined;
+  }
+}
 
 export interface CreatorCameraProps {
   /** Camera mode — determines framing guide + labels */
@@ -154,7 +176,7 @@ export default function CreatorCamera({
   const { spring } = useMotionConfig();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
-  const cameraRef = useRef<SkiaCameraRef>(null);
+  const cameraRef = useRef<CameraRef | SkiaCameraRef>(null);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const device = useCameraDevice(facing);
   const { hasPermission, requestPermission, canRequestPermission } = useCameraPermission();
@@ -187,6 +209,7 @@ export default function CreatorCamera({
   // recordings are misclassified as images, breaking playback in the
   // poster/look canvas.
   const [capturedKind, setCapturedKind] = useState<'image' | 'video'>('image');
+  const [capturedMetadata, setCapturedMetadata] = useState<CapturedMediaMetadata>({});
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
@@ -246,14 +269,18 @@ export default function CreatorCamera({
   // ── Press-and-hold video: track long-press state to suppress photo on release ──
   const isLongPressRef = useRef(false);
 
-  // Capture intent is owned by the route/composer. A camera-local Look /
-  // Poster / Search switch previously changed only the framing guide while
-  // still publishing into the original document type, so it was removed as
-  // an untruthful control.
+  // Capture intent is owned by the studio shell. Entry-mode changes remount
+  // the correct canonical composer before media is committed.
   const isPoster = mode === 'poster';
   const isVisualSearch = mode === 'visual-search';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
   const zoomValue = ZOOM_STEPS[zoomIndex].value;
+
+  // Visual search must analyse the unstyled source. If the user changes from
+  // a creation mode with an active effect, fail closed to the identity matrix.
+  useEffect(() => {
+    if (isVisualSearch && cameraEffect !== 'none') setCameraEffect('none');
+  }, [cameraEffect, isVisualSearch]);
 
   const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
 
@@ -376,6 +403,16 @@ export default function CreatorCamera({
     setTimerOption(option);
   }, []);
 
+  const handleEffectChange = useCallback((nextEffect: CameraEffectId) => {
+    // Crossing the native Camera/SkiaCamera boundary reconfigures the camera
+    // session. Block the shutter until the replacement preview reports ready.
+    if ((cameraEffect === 'none') !== (nextEffect === 'none')) {
+      setCameraReady(false);
+    }
+    setCameraEffect(nextEffect);
+    CreatorAnalytics.cameraEffectSelected(nextEffect);
+  }, [cameraEffect]);
+
   // ── Hands-free mode toggle ──
   const toggleHandsFree = useCallback(() => {
     haptic.selection();
@@ -471,6 +508,7 @@ export default function CreatorCamera({
         (filePath) => {
           // onRecordingFinished — filePath is a filesystem path
           const uri = `file://${filePath}`;
+          const durationMs = Math.max(1, Date.now() - startTime);
           haptic.medium();
           // Capture flash — white overlay
           if (!reducedMotion) {
@@ -485,7 +523,12 @@ export default function CreatorCamera({
               id: makeStableId('capture'),
               uri,
               kind: 'video',
+              durationMs,
+              mimeType: 'video/mp4',
             };
+            if (cameraEffect !== 'none') {
+              media.cameraEffect = cameraEffect;
+            }
             if (speedMode !== DEFAULT_SPEED) {
               media.speed = parseFloat(speedMode);
             }
@@ -500,6 +543,7 @@ export default function CreatorCamera({
             setMultiCaptures((prev) => [...prev, media]);
           } else {
             setCapturedKind('video');
+            setCapturedMetadata({ durationMs, mimeType: 'video/mp4' });
             setCapturedUri(uri);
           }
           CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
@@ -533,7 +577,7 @@ export default function CreatorCamera({
       }
       recordingProgress.value = withSpring(0, spring.entrance);
     }
-  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, videoOutput]);
+  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, cameraEffect, videoOutput]);
 
   // ── Hands-free countdown → auto-record ──
   // Starts a 3-second countdown with haptic ticks, then begins recording.
@@ -664,6 +708,11 @@ export default function CreatorCamera({
         { flashMode: flash },
         {},
       );
+      const photoMetadata: CapturedMediaMetadata = {
+        width: photo.width,
+        height: photo.height,
+        mimeType: getPhotoMimeType(photo.containerFormat),
+      };
       const filePath = await photo.saveToTemporaryFileAsync();
       const photoUri = `file://${filePath}`;
       photo.dispose();
@@ -680,6 +729,7 @@ export default function CreatorCamera({
           );
         }
         setCapturedKind('image');
+        setCapturedMetadata(photoMetadata);
         // ── Multi-capture: accumulate directly to the staging tray ──
         // In multi-capture mode (the default), photo captures pile up
         // silently like Snapchat Multi Snap — no per-capture review
@@ -693,7 +743,14 @@ export default function CreatorCamera({
             id: makeStableId('capture'),
             uri: photoUri,
             kind: 'image',
+            ...photoMetadata,
           };
+          if (cameraEffect !== 'none') {
+            media.cameraEffect = cameraEffect;
+          }
+          if (greenScreenSettings) {
+            media.greenScreen = { ...greenScreenSettings };
+          }
           setMultiCaptures((prev) => [...prev, media]);
         } else if (!!onCaptureBatch && !isVisualSearch) {
           // ── Single-capture direct-to-edit (poster/look) ──
@@ -702,7 +759,19 @@ export default function CreatorCamera({
           // overlay — the capture commits and retake/undo lives in the editor,
           // preserving the continuous gesture. This path is reached when the
           // user has explicitly toggled multi-capture OFF in Tools.
-          onCaptureBatch([{ id: makeStableId('capture'), uri: photoUri, kind: 'image' }]);
+          const media: CreatorInitialMedia = {
+            id: makeStableId('capture'),
+            uri: photoUri,
+            kind: 'image',
+            ...photoMetadata,
+          };
+          if (cameraEffect !== 'none') {
+            media.cameraEffect = cameraEffect;
+          }
+          if (greenScreenSettings) {
+            media.greenScreen = { ...greenScreenSettings };
+          }
+          onCaptureBatch([media]);
         } else {
           // Review overlay (visual search, or legacy single capture)
           setCapturedUri(photoUri);
@@ -715,7 +784,7 @@ export default function CreatorCamera({
     } catch {
       show('Failed to capture photo', 'error');
     }
-  }, [photoOutput, flash, cameraReady, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring, onCaptureBatch, isVisualSearch, multiCaptureMode, isPoster]);
+  }, [photoOutput, flash, cameraReady, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring, onCaptureBatch, isVisualSearch, multiCaptureMode, isPoster, cameraEffect, greenScreenSettings]);
 
   // ── Cleanup recording on unmount / interruption ──
   useEffect(() => {
@@ -822,29 +891,41 @@ export default function CreatorCamera({
       reviewOpacity.value = withSpring(0, spring.entrance, () => {
         runOnJS(setCapturedUri)(null);
         runOnJS(setCapturedKind)('image');
+        runOnJS(setCapturedMetadata)({});
       });
     } else {
       reviewOpacity.value = 0;
       setCapturedUri(null);
       setCapturedKind('image');
+      setCapturedMetadata({});
     }
   }, [haptic, reducedMotion, reviewOpacity, spring]);
 
-  // ── Build a CreatorInitialMedia with speed + greenScreen metadata ──
+  // ── Build a CreatorInitialMedia with capture-intent metadata ──
   // Speed: vision-camera supports native fps control; the multiplier is
   //   also stored in metadata so the timeline/export engine can apply it.
   // GreenScreen: chroma key settings are preserved so the timeline can
   //   re-render the composite via Skia.
-  const buildCaptureMedia = useCallback((uri: string, kind: 'image' | 'video'): CreatorInitialMedia => {
+  const buildCaptureMedia = useCallback((
+    uri: string,
+    kind: 'image' | 'video',
+    metadata: CapturedMediaMetadata = {},
+  ): CreatorInitialMedia => {
     const media: CreatorInitialMedia = {
       id: makeStableId('capture'),
       uri,
       kind,
+      ...metadata,
     };
     // Attach speed metadata for video captures (1× is the default and
     // omitted to keep backward-compatible payloads clean)
     if (kind === 'video' && speedMode !== DEFAULT_SPEED) {
       media.speed = parseFloat(speedMode);
+    }
+    // Keep capture WYSIWYG: the Skia preview is non-destructive, so the
+    // editor/export scene must receive the same selected color matrix.
+    if (cameraEffect !== 'none') {
+      media.cameraEffect = cameraEffect;
     }
     // Attach green screen settings if active
     if (greenScreenSettings) {
@@ -856,7 +937,7 @@ export default function CreatorCamera({
       };
     }
     return media;
-  }, [speedMode, greenScreenSettings]);
+  }, [speedMode, greenScreenSettings, cameraEffect]);
 
   const handleConfirmCapture = useCallback(() => {
     if (!capturedUri) return;
@@ -866,11 +947,11 @@ export default function CreatorCamera({
     // only reached by the legacy review path or visual search (which always
     // keeps a confirm step because the intent is search, not creation).
     if (onCaptureBatch && !isVisualSearch) {
-      onCaptureBatch([buildCaptureMedia(capturedUri, capturedKind)]);
+      onCaptureBatch([buildCaptureMedia(capturedUri, capturedKind, capturedMetadata)]);
     } else {
       onCapture(capturedUri);
     }
-  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, isVisualSearch, buildCaptureMedia]);
+  }, [capturedUri, capturedKind, capturedMetadata, haptic, onCapture, onCaptureBatch, isVisualSearch, buildCaptureMedia]);
 
   // ── Multi-capture: finish and send ALL captures ──
   // Every capture is retained and sent as a CreatorInitialMedia[] batch.
@@ -968,21 +1049,40 @@ export default function CreatorCamera({
               accessibilityHint="Tap to show the focus point"
             >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
-                <SkiaCamera
-                  ref={cameraRef}
-                  style={StyleSheet.absoluteFill}
-                  device={device}
-                  isActive={cameraActive}
-                  outputs={[photoOutput, videoOutput]}
-                  torchMode={flash === 'on' ? 'on' : 'off'}
-                  zoom={effectiveZoom}
-                  onFrame={effectFrameProcessor}
-                  onStarted={() => setCameraReady(true)}
-                  onError={() => {
-                    setCameraReady(false);
-                    show('Camera could not start. Try again or use your gallery.', 'error');
-                  }}
-                />
+                {cameraEffect !== 'none' ? (
+                  <SkiaCamera
+                    ref={cameraRef as React.RefObject<SkiaCameraRef>}
+                    style={StyleSheet.absoluteFill}
+                    device={device}
+                    isActive={cameraActive}
+                    outputs={[photoOutput, videoOutput]}
+                    torchMode={flash === 'on' ? 'on' : 'off'}
+                    zoom={effectiveZoom}
+                    orientationSource="interface"
+                    onFrame={effectFrameProcessor}
+                    onStarted={() => setCameraReady(true)}
+                    onError={() => {
+                      setCameraReady(false);
+                      show('Camera could not start. Try again or use your gallery.', 'error');
+                    }}
+                  />
+                ) : (
+                  <Camera
+                    ref={cameraRef as React.RefObject<CameraRef>}
+                    style={StyleSheet.absoluteFill}
+                    device={device}
+                    isActive={cameraActive}
+                    outputs={[photoOutput, videoOutput]}
+                    torchMode={flash === 'on' ? 'on' : 'off'}
+                    zoom={effectiveZoom}
+                    orientationSource="interface"
+                    onStarted={() => setCameraReady(true)}
+                    onError={() => {
+                      setCameraReady(false);
+                      show('Camera could not start. Try again or use your gallery.', 'error');
+                    }}
+                  />
+                )}
                 {/* Camera initialization loading overlay — shown between
                     permission granted and cameraReady=true. A subtle
                     spinner on the dark preview communicates "starting"
@@ -1018,15 +1118,38 @@ export default function CreatorCamera({
         pointerEvents="none"
       />
 
-      {/* Grid overlay (rule-of-thirds) */}
-      {showGrid && (
-        <View style={styles.gridOverlay} pointerEvents="none">
-          <View style={styles.gridLineV1} />
-          <View style={styles.gridLineV2} />
-          <View style={styles.gridLineH1} />
-          <View style={styles.gridLineH2} />
+      {/* One unobscured capture viewport owns every composition guide. The
+          guide frame reacts to safe areas and bottom chrome instead of using
+          full-screen percentages that drift beneath controls. */}
+      <View
+        style={[
+          styles.captureGuideViewport,
+          {
+            top: Math.max(insets.top, 16) + 72,
+            bottom: Math.max(insets.bottom, 16) + (renderBottomOverlay ? 184 : 140),
+            left: isVisualSearch ? 52 : isPoster ? 24 : 36,
+            right: isVisualSearch ? 52 : isPoster ? 24 : 36,
+          },
+        ]}
+        pointerEvents="none"
+      >
+        {showGrid ? (
+          <View style={styles.gridOverlay}>
+            <View style={styles.gridLineV1} />
+            <View style={styles.gridLineV2} />
+            <View style={styles.gridLineH1} />
+            <View style={styles.gridLineH2} />
+          </View>
+        ) : null}
+        <View style={styles.bracketTL} />
+        <View style={styles.bracketTR} />
+        <View style={styles.bracketBL} />
+        <View style={styles.bracketBR} />
+        <View style={styles.crosshair}>
+          <View style={styles.crosshairH} />
+          <View style={styles.crosshairV} />
         </View>
-      )}
+      </View>
 
       {/* Focus reticle — visual tap indicator only (P0.4: no AE/AF lock claim) */}
       <FocusReticle
@@ -1055,31 +1178,6 @@ export default function CreatorCamera({
           </Reanimated.Text>
         </View>
       )}
-
-      {/* Corner brackets — route-intent-specific framing guide. */}
-      <View pointerEvents="none">
-        {(() => {
-          const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
-          const bracketBottom = isVisualSearch ? '32%' : isPoster ? '30%' : '30%';
-          const bracketLeft = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
-          const bracketRight = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
-          const bracketColor = isVisualSearch ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.85)';
-          return (
-            <>
-              <View style={[styles.bracketTL, { top: bracketTop, left: bracketLeft, borderColor: bracketColor }]} />
-              <View style={[styles.bracketTR, { top: bracketTop, right: bracketRight, borderColor: bracketColor }]} />
-              <View style={[styles.bracketBL, { bottom: bracketBottom, left: bracketLeft, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
-              <View style={[styles.bracketBR, { bottom: bracketBottom, right: bracketRight, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
-            </>
-          );
-        })()}
-      </View>
-
-      {/* Center crosshair */}
-      <View style={styles.crosshair} pointerEvents="none">
-        <View style={styles.crosshairH} />
-        <View style={styles.crosshairV} />
-      </View>
 
       {/* Top controls — close (left), flash + tools (right) */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
@@ -1181,23 +1279,6 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Camera effect bar — real-time GPU preview effects.
-          Sits above the bottom controls. Compact horizontal scroll of
-          effect buttons. The selected effect is applied to the live
-          preview via a Skia frame processor (useCameraEffectProcessor). */}
-      {!isRecording && (
-        <View style={[styles.effectBarWrap, { bottom: Math.max(insets.bottom, 16) + 96 }]} pointerEvents="box-none">
-          <CameraEffectPreview
-            selectedEffect={cameraEffect}
-            onEffectChange={(effect) => {
-              setCameraEffect(effect);
-              CreatorAnalytics.cameraEffectSelected(effect);
-            }}
-            disabled={isRecording}
-          />
-        </View>
-      )}
-
       {/* Bottom controls — gallery (left), shutter (center), flip (right) */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
         {/* Gallery thumbnail + recent photos carousel */}
@@ -1213,15 +1294,15 @@ export default function CreatorCamera({
         {/* Shutter — the hero control with recording ring */}
         <ShutterButton
           onPress={handleShutterPress}
-          onLongPress={CAMERA_VIDEO_CAPTURE_ENABLED ? handleShutterLongPress : undefined}
-          onPressOut={CAMERA_VIDEO_CAPTURE_ENABLED ? handleShutterPressOut : undefined}
+          onLongPress={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none' ? handleShutterLongPress : undefined}
+          onPressOut={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none' ? handleShutterPressOut : undefined}
           isRecording={isRecording}
           disabled={!cameraReady || countdown !== null || handsFreeCountdown !== null}
           recordingProgress={recordingProgress}
           recordingRingScale={recordingRingScale}
           handsFreeMode={handsFreeMode}
           speedMode={speedMode}
-          videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED}
+          videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
         />
 
         {/* Flip camera — prominent circular button, bottom-right */}
@@ -1268,8 +1349,8 @@ export default function CreatorCamera({
       {/* ── Capture tools sheet ──────────────────────────────────────── */}
       {/* Bottom sheet containing all secondary camera tools: Timer, Grid,
           Hands-free, Speed, Green Screen, Multi-capture. Opens from the
-          Tools button in the top bar. Camera effects are now on the main
-          camera surface (1 tap away), not in this sheet. Each tool applies
+          Tools button in the top bar. Camera effects live in this sheet so
+          capture intent remains unobstructed. Each supported tool applies
           immediately; the sheet can stay open or be dismissed. */}
       <CaptureToolsSheet
         visible={showToolsSheet}
@@ -1278,6 +1359,8 @@ export default function CreatorCamera({
         onTimerChange={handleTimerChange}
         showGrid={showGrid}
         onToggleGrid={toggleGrid}
+        activeEffect={cameraEffect}
+        onEffectChange={handleEffectChange}
         handsFreeMode={handsFreeMode}
         onToggleHandsFree={toggleHandsFree}
         speedMode={speedMode}
@@ -1298,7 +1381,7 @@ export default function CreatorCamera({
         hasCapturedUri={!!capturedUri}
         isVisualSearch={isVisualSearch}
         isRecording={isRecording}
-        videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED}
+        videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
       />
 
       {/* Green screen active indicator — shows the selected background
@@ -1393,12 +1476,6 @@ export default function CreatorCamera({
 
 const styles = StyleSheet.create({
   // ── Camera initialization loading overlay ──
-  effectBarWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
   cameraInitOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -1443,6 +1520,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 160,
+  },
+  // One geometry owner for rule-of-thirds, framing corners and crosshair.
+  captureGuideViewport: {
+    position: 'absolute',
   },
   // Grid overlay (rule-of-thirds)
   gridOverlay: {
@@ -1517,8 +1598,8 @@ const styles = StyleSheet.create({
   // Corner brackets — refined 2pt stroke, smaller and more elegant
   bracketTL: {
     position: 'absolute',
-    top: '18%',
-    left: '12%',
+    top: 0,
+    left: 0,
     width: CORNER_SIZE,
     height: CORNER_SIZE,
     borderTopWidth: CORNER_STROKE,
@@ -1528,8 +1609,8 @@ const styles = StyleSheet.create({
   },
   bracketTR: {
     position: 'absolute',
-    top: '18%',
-    right: '12%',
+    top: 0,
+    right: 0,
     width: CORNER_SIZE,
     height: CORNER_SIZE,
     borderTopWidth: CORNER_STROKE,
@@ -1539,8 +1620,8 @@ const styles = StyleSheet.create({
   },
   bracketBL: {
     position: 'absolute',
-    bottom: '28%',
-    left: '12%',
+    bottom: 0,
+    left: 0,
     width: CORNER_SIZE,
     height: CORNER_SIZE,
     borderBottomWidth: CORNER_STROKE,
@@ -1550,8 +1631,8 @@ const styles = StyleSheet.create({
   },
   bracketBR: {
     position: 'absolute',
-    bottom: '28%',
-    right: '12%',
+    bottom: 0,
+    right: 0,
     width: CORNER_SIZE,
     height: CORNER_SIZE,
     borderBottomWidth: CORNER_STROKE,
@@ -1559,14 +1640,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
     borderBottomRightRadius: 8,
   },
-  bracketBottomWithDeck: {
-    bottom: '38%',
-  },
   // Crosshair — centered in the framing guide area
   crosshair: {
     position: 'absolute',
     left: '50%',
-    top: '42%',
+    top: '50%',
     width: 24,
     height: 24,
     marginLeft: -12,

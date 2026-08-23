@@ -10,11 +10,13 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import { useToast } from '../context/ToastContext';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MutedConversationsScreen() {
   const navigation = useNavigation<NavT>();
+  const { show } = useToast();
   const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const conversationsLoaded = useStore((s) => s.conversationsLoaded);
@@ -29,7 +31,9 @@ export default function MutedConversationsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleUnmute = (id: string) => {
-    toggleMuted(id);
+    toggleMuted(id).catch(() => {
+      show('Could not unmute this conversation. Check your connection and try again.', 'error');
+    });
   };
 
   return (

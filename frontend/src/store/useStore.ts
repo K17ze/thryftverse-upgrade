@@ -9,7 +9,7 @@ import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
 import { identifyUser, resetIdentity } from '../analytics';
 import { appStorage } from '../storage/mmkv';
-import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
+import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
   fetchSystemBotsFromApi,
@@ -18,7 +18,19 @@ import {
   updateCustomBotOnApi,
   deleteCustomBotOnApi,
 } from '../services/botsApi';
-import { fetchChatBotsFromApi, fetchQuickRepliesFromApi, createQuickReplyOnApi, updateQuickReplyOnApi, deleteQuickReplyOnApi } from '../services/chatApi';
+import {
+  fetchChatBotsFromApi,
+  fetchQuickRepliesFromApi,
+  createQuickReplyOnApi,
+  updateQuickReplyOnApi,
+  deleteQuickReplyOnApi,
+  muteConversationOnApi,
+  unmuteConversationOnApi,
+  archiveConversationOnApi,
+  unarchiveConversationOnApi,
+  acceptMessageRequestOnApi,
+  declineMessageRequestOnApi,
+} from '../services/chatApi';
 import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
@@ -58,6 +70,10 @@ export interface User {
   rating?: number;
   reviewCount?: number;
   isVerified?: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -465,6 +481,7 @@ interface StoreState {
   updatePaymentPreferences: (updates: Partial<PaymentPreferences>) => void;
   postagePreferences: PostagePreferences;
   updatePostagePreferences: (updates: Partial<PostagePreferences>) => void;
+  hydratePostagePreferences: () => Promise<void>;
   personalisationPreferences: PersonalisationPreferences;
   updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => void;
 
@@ -501,19 +518,19 @@ interface StoreState {
   toggleBlockedUser: (userId: string) => void;
   isBlockedUser: (userId: string) => boolean;
   mutedConversationIds: string[];
-  toggleMutedConversation: (id: string) => void;
+  toggleMutedConversation: (id: string) => Promise<void>;
   isMutedConversation: (id: string) => boolean;
   readReceiptsEnabled: boolean;
   setReadReceiptsEnabled: (v: boolean) => void;
   allowMessagesFrom: 'everyone' | 'following' | 'nobody';
   setAllowMessagesFrom: (v: 'everyone' | 'following' | 'nobody') => void;
   archivedConversationIds: string[];
-  toggleArchivedConversation: (id: string) => void;
+  toggleArchivedConversation: (id: string) => Promise<void>;
   isArchivedConversation: (id: string) => boolean;
   // Message requests
   messageRequests: string[]; // conversationIds that are pending requests
-  acceptMessageRequest: (id: string) => void;
-  declineMessageRequest: (id: string) => void;
+  acceptMessageRequest: (id: string) => Promise<void>;
+  declineMessageRequest: (id: string) => Promise<void>;
   isMessageRequest: (id: string) => boolean;
   // Support tickets
   supportTickets: SupportTicket[];
@@ -636,6 +653,8 @@ export const useStore = create<StoreState>()(
               role: profile.role,
               emailVerified: profile.emailVerified,
               twoFactorEnabled: profile.twoFactorEnabled,
+              identityVerified: profile.identityVerified,
+              sellerVerified: profile.sellerVerified,
               createdAt: profile.createdAt,
               updatedAt: profile.updatedAt,
             }
@@ -1311,10 +1330,22 @@ export const useStore = create<StoreState>()(
 
   postagePreferences: { carrierKey: 'evri', freeShipping: false, bundleDiscount: true },
   updatePostagePreferences: (updates) => {
+    const prev = get().postagePreferences;
     set((state) => ({
       postagePreferences: { ...state.postagePreferences, ...updates },
     }));
-    void updateUserPostagePreferences(updates);
+    void updateUserPostagePreferences(updates).catch(() => {
+      // Rollback on failure — restore previous state so UI stays truthful
+      set({ postagePreferences: prev });
+    });
+  },
+  hydratePostagePreferences: async () => {
+    try {
+      const postage = await fetchPostagePreferences();
+      set({ postagePreferences: postage });
+    } catch {
+      // Silently keep cached/local defaults
+    }
   },
 
   personalisationPreferences: {
@@ -1385,6 +1416,11 @@ export const useStore = create<StoreState>()(
   deleteConversation: (id) =>
     set((state) => ({
       conversations: state.conversations.filter((c) => c.id !== id),
+      // Clean up auxiliary per-conversation state so deleted conversations
+      // don't linger in the muted/archived/request lists and inflate badges.
+      mutedConversationIds: state.mutedConversationIds.filter((mid) => mid !== id),
+      archivedConversationIds: state.archivedConversationIds.filter((aid) => aid !== id),
+      messageRequests: state.messageRequests.filter((rid) => rid !== id),
     })),
   toggleConversationPinned: (id) =>
     set((state) => ({
@@ -1566,15 +1602,26 @@ export const useStore = create<StoreState>()(
     }),
   isBlockedUser: (userId) => get().blockedUsers.includes(userId),
   mutedConversationIds: [],
-  toggleMutedConversation: (id) =>
-    set((state) => {
-      const isMuted = state.mutedConversationIds.includes(id);
-      return {
-        mutedConversationIds: isMuted
-          ? state.mutedConversationIds.filter((mid) => mid !== id)
-          : [...state.mutedConversationIds, id],
-      };
-    }),
+  toggleMutedConversation: (id) => {
+    const wasMuted = get().mutedConversationIds.includes(id);
+    // Optimistic update — flip local state immediately for snappy UX.
+    set((state) => ({
+      mutedConversationIds: wasMuted
+        ? state.mutedConversationIds.filter((mid) => mid !== id)
+        : [...state.mutedConversationIds, id],
+    }));
+    return (wasMuted ? unmuteConversationOnApi(id) : muteConversationOnApi(id)).catch(
+      (error) => {
+        // Rollback on failure so the UI tells the truth (§11).
+        set((state) => ({
+          mutedConversationIds: wasMuted
+            ? [...state.mutedConversationIds, id]
+            : state.mutedConversationIds.filter((mid) => mid !== id),
+        }));
+        throw error;
+      }
+    );
+  },
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
   readReceiptsEnabled: true,
   setReadReceiptsEnabled: (v) => {
@@ -1596,26 +1643,65 @@ export const useStore = create<StoreState>()(
     });
   },
   archivedConversationIds: [],
-  toggleArchivedConversation: (id) =>
-    set((state) => {
-      const isArchived = state.archivedConversationIds.includes(id);
-      return {
-        archivedConversationIds: isArchived
-          ? state.archivedConversationIds.filter((aid) => aid !== id)
-          : [...state.archivedConversationIds, id],
-      };
-    }),
+  toggleArchivedConversation: (id) => {
+    const wasArchived = get().archivedConversationIds.includes(id);
+    // Optimistic update — flip local state immediately for snappy UX.
+    set((state) => ({
+      archivedConversationIds: wasArchived
+        ? state.archivedConversationIds.filter((aid) => aid !== id)
+        : [...state.archivedConversationIds, id],
+    }));
+    return (wasArchived ? unarchiveConversationOnApi(id) : archiveConversationOnApi(id)).catch(
+      (error) => {
+        // Rollback on failure so the UI tells the truth (§11).
+        set((state) => ({
+          archivedConversationIds: wasArchived
+            ? [...state.archivedConversationIds, id]
+            : state.archivedConversationIds.filter((aid) => aid !== id),
+        }));
+        throw error;
+      }
+    );
+  },
   isArchivedConversation: (id) => get().archivedConversationIds.includes(id),
   messageRequests: [],
-  acceptMessageRequest: (id) =>
-    set((state) => ({
-      messageRequests: state.messageRequests.filter((rid) => rid !== id),
-    })),
-  declineMessageRequest: (id) =>
+  acceptMessageRequest: (id) => {
+    const wasRequest = get().messageRequests.includes(id);
+    // Optimistic update — remove from the pending requests list immediately.
+    if (wasRequest) {
+      set((state) => ({
+        messageRequests: state.messageRequests.filter((rid) => rid !== id),
+      }));
+    }
+    return acceptMessageRequestOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11).
+      if (wasRequest) {
+        set((state) => ({
+          messageRequests: [...state.messageRequests, id],
+        }));
+      }
+      throw error;
+    });
+  },
+  declineMessageRequest: (id) => {
+    const wasRequest = get().messageRequests.includes(id);
+    const previousConversation = get().conversations.find((c) => c.id === id) ?? null;
+    // Optimistic update — drop the request and the conversation immediately.
     set((state) => ({
       messageRequests: state.messageRequests.filter((rid) => rid !== id),
       conversations: state.conversations.filter((c) => c.id !== id),
-    })),
+    }));
+    return declineMessageRequestOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11).
+      set((state) => ({
+        messageRequests: wasRequest ? [...state.messageRequests, id] : state.messageRequests,
+        conversations: previousConversation
+          ? [previousConversation, ...state.conversations]
+          : state.conversations,
+      }));
+      throw error;
+    });
+  },
   isMessageRequest: (id) => get().messageRequests.includes(id),
   offersInChatEnabled: true,
   setOffersInChatEnabled: (v) => {

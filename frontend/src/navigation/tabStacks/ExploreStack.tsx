@@ -31,7 +31,6 @@ export function ExploreStack() {
   return (
     <Stack.Navigator screenOptions={pushScreenOptions}>
       <Stack.Screen name="Explore" getComponent={() => require('../../screens/SearchScreen').default} />
-      <Stack.Screen name="GlobalSearch" getComponent={() => require('../../screens/GlobalSearchScreen').default} />
       <Stack.Screen name="CategoryDetail" getComponent={() => require('../../screens/CategoryDetailScreen').default} />
       <Stack.Screen name="CategoryTree" getComponent={() => require('../../screens/CategoryTreeScreen').default} />
       <Stack.Screen name="Browse" getComponent={() => require('../../screens/BrowseScreen').default} />

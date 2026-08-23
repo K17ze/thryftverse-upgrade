@@ -167,6 +167,45 @@ export async function generateImageDerivatives(
 }
 
 /**
+ * Strips EXIF metadata (GPS, device serial, timestamps) from the original
+ * source object to protect uploader privacy. The public URL serves this
+ * cleaned object.
+ *
+ * sharp discards all input metadata (EXIF, IPTC, XMP, ICC profiles) by
+ * default when producing a new output buffer, so re-encoding through sharp
+ * yields a clean image. The output format matches the input content type so
+ * the object key extension and S3 Content-Type remain valid. Returns the
+ * original buffer reference unchanged when the format cannot be re-encoded
+ * without changing type (e.g. HEIC when libheif output is unavailable).
+ */
+export async function stripImageExif(
+  sourceBuffer: Buffer,
+  contentType: string,
+): Promise<Buffer> {
+  const normalized = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  const image = sharp(sourceBuffer, { failOn: 'none' });
+
+  if (normalized === 'image/png') {
+    return image.png().toBuffer();
+  }
+  if (normalized === 'image/webp') {
+    return image.webp({ quality: 95 }).toBuffer();
+  }
+  if (normalized === 'image/heic' || normalized === 'image/heif') {
+    try {
+      return await image.heif({ quality: 95 }).toBuffer();
+    } catch {
+      // libheif output may be unavailable in this sharp build — cannot
+      // re-encode without changing the format, so return the original
+      // buffer unchanged.
+      return sourceBuffer;
+    }
+  }
+  // Default: JPEG re-encode (covers image/jpeg and image/jpg).
+  return image.jpeg({ quality: 95 }).toBuffer();
+}
+
+/**
  * Computes a compact perceptual placeholder hash from a downscaled image
  * buffer. This is not a full BlurHash implementation but a stable
  * representation suitable for placeholder rendering and deduplication.

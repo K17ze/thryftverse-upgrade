@@ -59,6 +59,7 @@ interface QueueHandlers {
   handleOnezeMintReserveJob: (job: OnezeMintReserveJobData) => Promise<void>;
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
   handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
+  handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
 }
 
 export interface BackgroundJobLogger {
@@ -88,7 +89,7 @@ function logJobEvent(
   }
 }
 
-const queueConnection = new IORedis(config.redisUrl, {
+const queueConnection = new IORedis(config.redisQueueUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   retryStrategy: (times) => Math.min(times * 500, 5000),
@@ -97,7 +98,7 @@ queueConnection.on('error', (err) => {
   logger.warn({ err: err.message }, '[queues] queueConnection redis error');
 });
 
-const workerConnection = new IORedis(config.redisUrl, {
+const workerConnection = new IORedis(config.redisQueueUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   retryStrategy: (times) => Math.min(times * 500, 5000),
@@ -108,13 +109,16 @@ workerConnection.on('error', (err) => {
 
 const PUSH_QUEUE_NAME = 'push_notifications';
 const INFRA_QUEUE_NAME = 'infra_ops';
+const MEDIA_INGEST_QUEUE_NAME = 'media_ingest';
 const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}:dlq`;
 const INFRA_DLQ_NAME = `${INFRA_QUEUE_NAME}:dlq`;
+const MEDIA_INGEST_DLQ_NAME = `${MEDIA_INGEST_QUEUE_NAME}:dlq`;
 const DLQ_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 
 export const QUEUE_DLQ_MAP: Record<string, string> = {
   [PUSH_QUEUE_NAME]: PUSH_DLQ_NAME,
   [INFRA_QUEUE_NAME]: INFRA_DLQ_NAME,
+  [MEDIA_INGEST_QUEUE_NAME]: MEDIA_INGEST_DLQ_NAME,
 };
 
 const pushQueue = new Queue<PushJobData>(PUSH_QUEUE_NAME, {
@@ -133,14 +137,24 @@ const infraDlq = new Queue<InfraJobData>(INFRA_DLQ_NAME, {
   connection: queueConnection,
 });
 
+const mediaIngestQueue = new Queue<MediaIngestJobData>(MEDIA_INGEST_QUEUE_NAME, {
+  connection: queueConnection,
+});
+
+const mediaIngestDlq = new Queue<MediaIngestJobData>(MEDIA_INGEST_DLQ_NAME, {
+  connection: queueConnection,
+});
+
 export const dlqQueues: Record<string, Queue> = {
   [PUSH_DLQ_NAME]: pushDlq,
   [INFRA_DLQ_NAME]: infraDlq,
+  [MEDIA_INGEST_DLQ_NAME]: mediaIngestDlq,
 };
 
 export const mainQueues: Record<string, Queue> = {
   [PUSH_QUEUE_NAME]: pushQueue,
   [INFRA_QUEUE_NAME]: infraQueue,
+  [MEDIA_INGEST_QUEUE_NAME]: mediaIngestQueue,
 };
 
 function moveToDlq(
@@ -179,6 +193,7 @@ function moveToDlq(
 
 let pushWorker: Worker<PushJobData> | null = null;
 let infraWorker: Worker<InfraJobData> | null = null;
+let mediaIngestWorker: Worker<MediaIngestJobData> | null = null;
 
 export function startBackgroundWorkers(
   handlers: QueueHandlers,
@@ -300,6 +315,57 @@ export function startBackgroundWorkers(
       }
     });
   }
+
+  if (!mediaIngestWorker) {
+    mediaIngestWorker = new Worker<MediaIngestJobData>(
+      MEDIA_INGEST_QUEUE_NAME,
+      async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: MEDIA_INGEST_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
+        try {
+          await handlers.handleMediaIngestJob(job.data);
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: MEDIA_INGEST_QUEUE_NAME,
+            job: job.name,
+            result: 'completed',
+          });
+          recordBackgroundJobDuration({
+            queue: MEDIA_INGEST_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: MEDIA_INGEST_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
+        } catch (error) {
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: MEDIA_INGEST_QUEUE_NAME,
+            job: job.name,
+            result: 'failed',
+          });
+          recordBackgroundJobDuration({
+            queue: MEDIA_INGEST_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: MEDIA_INGEST_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
+          throw error;
+        }
+      },
+      {
+        connection: workerConnection,
+        concurrency: 2,
+      }
+    );
+    mediaIngestWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'mediaIngestWorker error');
+    });
+    mediaIngestWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(mediaIngestDlq, MEDIA_INGEST_QUEUE_NAME, job, err);
+      }
+    });
+  }
 }
 
 export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
@@ -400,6 +466,23 @@ export async function enqueueOutboxDrainJob(
   );
 }
 
+export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<void> {
+  await mediaIngestQueue.add(
+    'media_ingest',
+    input,
+    {
+      jobId: `media_ingest_${input.assetId}`,
+      attempts: 5,
+      backoff: {
+        type: 'exponential',
+        delay: 5_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 200,
+    },
+  );
+}
+
 export async function closeBackgroundQueues(): Promise<void> {
   if (pushWorker) {
     await pushWorker.close();
@@ -411,10 +494,17 @@ export async function closeBackgroundQueues(): Promise<void> {
     infraWorker = null;
   }
 
+  if (mediaIngestWorker) {
+    await mediaIngestWorker.close();
+    mediaIngestWorker = null;
+  }
+
   await pushQueue.close();
   await infraQueue.close();
+  await mediaIngestQueue.close();
   await pushDlq.close();
   await infraDlq.close();
+  await mediaIngestDlq.close();
   await workerConnection.quit();
   await queueConnection.quit();
 }

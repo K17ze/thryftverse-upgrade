@@ -16,6 +16,7 @@ import type { CreatorInitialMedia } from '../navigation/types';
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
   const initialType = route.params?.type === 'poster' ? 'poster' : 'look';
+  const [activeType, setActiveType] = React.useState<'look' | 'poster'>(initialType);
   const draftId = route.params?.draftId as string | undefined;
   const templateId = route.params?.templateId as string | undefined;
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
@@ -24,12 +25,19 @@ export function CreatorStudioScreen() {
   const startBlank = route.params?.startBlank as boolean | undefined;
   const openTemplates = route.params?.openTemplates as boolean | undefined;
 
+  // React Navigation can update params without remounting this shell. Keep
+  // the dispatch owner aligned with an explicit route intent while allowing
+  // the entry switch to change it locally between route updates.
+  React.useEffect(() => {
+    setActiveType(initialType);
+  }, [initialType]);
+
   // ── Look V3: dedicated collage-native workspace ──────────────────
   // Per spec 10 (Look Architecture V3), Look gets its own screen that
   // expresses the spatial collage mental model — not a shared editor
   // with isLook branching. The LookComposerScreen wraps itself in
   // CreatorProvider, so we return it directly for Look documents.
-  if (initialType === 'look') {
+  if (activeType === 'look') {
     const { LookComposerScreen } = require('./look/LookComposerScreen');
     return (
       <LookComposerScreen
@@ -40,6 +48,7 @@ export function CreatorStudioScreen() {
         initialMedia={initialMedia}
         startBlank={startBlank}
         openTemplates={openTemplates}
+        onEntryTypeChange={setActiveType}
       />
     );
   }
@@ -49,7 +58,7 @@ export function CreatorStudioScreen() {
   // that expresses the temporal frame mental model. The
   // PosterComposerScreen wraps itself in CreatorProvider, so we return
   // it directly for Poster documents.
-  if (initialType === 'poster') {
+  if (activeType === 'poster') {
     const { PosterComposerScreen } = require('./poster/PosterComposerScreen');
     return (
       <PosterComposerScreen
@@ -60,6 +69,7 @@ export function CreatorStudioScreen() {
         initialMedia={initialMedia}
         startBlank={startBlank}
         openTemplates={openTemplates}
+        onEntryTypeChange={setActiveType}
       />
     );
   }

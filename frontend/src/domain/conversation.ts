@@ -40,7 +40,10 @@ export interface Conversation {
   type: ConversationType;
   title?: string;
   description?: string;
+  /** Circular group avatar / profile picture (small, 1:1). */
   avatar?: string;
+  /** Wide cover photo banner shown at the top of group info (WhatsApp/Telegram pattern). */
+  coverPhoto?: string;
   sellerId?: string;
   itemId?: string;
   ownerId?: string;
@@ -52,6 +55,8 @@ export interface Conversation {
     displayName?: string | null;
     avatar?: string | null;
     emailVerified?: boolean;
+    /** Identity/KYC verification — drives the verified badge, not email. */
+    identityVerified?: boolean;
   }>;
   botIds?: string[];
   lastMessage: string;

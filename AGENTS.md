@@ -2071,9 +2071,18 @@ For future agents needing to add custom native code, use this decision matrix (f
 
 ---
 
-## 40. FLAGSHIP UPGRADE — GAP CLOSURES (COMPLETE)
+## 40. FLAGSHIP UPGRADE — IMPLEMENTATION LEDGER (VALIDATION PENDING)
 
-All 7 original architecture gaps and 9 additional platform gaps have been closed. This section documents what was implemented, where it lives, and the architecture patterns to follow.
+> **Status correction — 23 August 2026:** Sections 40–44 are a historical
+> implementation inventory, not production or flagship sign-off. File presence
+> is not evidence that a capability is live, reachable, correct, deployable, or
+> visually accepted. Every `Closed`, `Complete`, and `Production` label in these
+> sections means **implemented candidate — validation pending** until it passes
+> `.devin/workflows/flagship-production-readiness-loop.md`. The binding
+> completion rules in §§19, 22, 31, and 37 override the historical labels.
+> See `.devin/reports/flagship-production-readiness-2026-08-23.md`.
+
+This section documents intended implementations and architecture patterns. It does not claim runtime or release closure.
 
 ### 40.1 Original Gaps (1–7)
 
@@ -2141,9 +2150,9 @@ AccessibilityPreferencesProvider
 
 ---
 
-## 41. PRODUCTION SERVICE ACTIVATION (COMPLETE)
+## 41. PRODUCTION SERVICE ACTIVATION LEDGER (VALIDATION PENDING)
 
-All 6 remaining production-service gaps have been closed. Each provider abstraction was already in place; this phase wired them into the application lifecycle, created routes, installed SDKs, and verified end-to-end.
+These production-service candidates require live provider, worker, security, and deployment evidence before activation can be considered complete.
 
 ### 41.1 Content Moderation — AWS Rekognition + Sightengine
 
@@ -2231,9 +2240,9 @@ All 6 remaining production-service gaps have been closed. Each provider abstract
 
 ---
 
-## 42. P1 PARITY GAP CLOSURE (COMPLETE)
+## 42. P1 PARITY IMPLEMENTATION LEDGER (VALIDATION PENDING)
 
-All 25 P1 critical parity gaps from the August 2026 flagship benchmark report have been closed. The work was executed via 6 parallel subagents, each owning a distinct set of files to avoid conflicts.
+These P1 candidates require live, native, migration, security, and release evidence before closure.
 
 ### 42.1 Navigation Architecture (N1, N2, N3, F1)
 
@@ -2318,9 +2327,9 @@ All 25 P1 critical parity gaps from the August 2026 flagship benchmark report ha
 
 ---
 
-## 43. P2 PARITY GAP CLOSURE (COMPLETE)
+## 43. P2 PARITY IMPLEMENTATION LEDGER (VALIDATION PENDING)
 
-All P2 important parity gaps have been closed via 5 parallel subagents. Each gap had its implementation created with graceful degradation and backward compatibility.
+These P2 candidates require live, native, migration, security, and release evidence before closure.
 
 ### 43.1 Frontend Performance + Consolidation
 
@@ -2386,9 +2395,9 @@ All P2 important parity gaps have been closed via 5 parallel subagents. Each gap
 
 ---
 
-## 44. P3 ENHANCEMENT GAP CLOSURE (COMPLETE)
+## 44. P3 ENHANCEMENT IMPLEMENTATION LEDGER (VALIDATION PENDING)
 
-All P3 enhancement gaps have been closed via 5 parallel subagents. These are forward-looking enhancements that bring the codebase to the cutting edge of 2026 platform capabilities.
+These P3 candidates are forward-looking implementations, not evidence that the production system has reached current platform parity.
 
 ### 44.1 Frontend Primitives (P3)
 

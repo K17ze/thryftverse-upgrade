@@ -496,8 +496,10 @@ export default function SettingsScreen({ navigation }: Props) {
             style={{ paddingVertical: Space.sm }}
           />
 
-          {/* ── Verification prompt — genuine account problem, flat row ── */}
-          {!currentUser?.emailVerified ? (
+          {/* ── Verification prompt — shows when identity/seller verification
+              is not yet complete. Email verification alone does not grant
+              a trust badge (P0-UI-3). ── */}
+          {!currentUser?.identityVerified && !currentUser?.sellerVerified ? (
             <FlatRow
               icon="shield-checkmark-outline"
               iconColor={colors.brand}
@@ -519,7 +521,7 @@ export default function SettingsScreen({ navigation }: Props) {
               {currentUser.emailVerified ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>Verified</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Email confirmed</Text>
                 </View>
               ) : null}
               {twoFactorEnabled ? (
@@ -553,10 +555,10 @@ export default function SettingsScreen({ navigation }: Props) {
           <SettingsSection title="Your account">
             <SettingsRow
               icon="shield-checkmark-outline"
-              iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
-              titleStyle={currentUser?.emailVerified ? { color: colors.success } : undefined}
+              iconColor={currentUser?.identityVerified || currentUser?.sellerVerified ? colors.success : colors.textMuted}
+              titleStyle={currentUser?.identityVerified || currentUser?.sellerVerified ? { color: colors.success } : undefined}
               title="Verification"
-              subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
+              subtitle={currentUser?.sellerVerified ? 'Trusted Seller' : currentUser?.identityVerified ? 'ID Verified' : 'Get the verified badge'}
               onPress={() => navigation.navigate('Verification')}
               isFirst
             />

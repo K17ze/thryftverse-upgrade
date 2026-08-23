@@ -173,18 +173,30 @@ export async function updateUserAccountPreferences(input: UpdateAccountPreferenc
   });
 }
 
+export interface PostagePreferences {
+  carrierKey: string;
+  freeShipping: boolean;
+  bundleDiscount: boolean;
+}
+
 export interface UpdatePostagePreferencesInput {
   carrierKey?: string;
   freeShipping?: boolean;
   bundleDiscount?: boolean;
 }
 
-export async function updateUserPostagePreferences(input: UpdatePostagePreferencesInput): Promise<void> {
-  await fetchJson<{ ok: true }>('/users/me/postage', {
+export async function fetchPostagePreferences(): Promise<PostagePreferences> {
+  const payload = await fetchJson<{ ok: true; postage: PostagePreferences }>('/users/me/postage');
+  return payload.postage;
+}
+
+export async function updateUserPostagePreferences(input: UpdatePostagePreferencesInput): Promise<PostagePreferences> {
+  const payload = await fetchJson<{ ok: true; postage: PostagePreferences }>('/users/me/postage', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
+  return payload.postage;
 }
 
 export interface UpdatePersonalisationInput {

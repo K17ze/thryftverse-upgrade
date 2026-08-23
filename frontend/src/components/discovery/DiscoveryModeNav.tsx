@@ -13,16 +13,13 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Type,
   Typography,
-  Radius,
   Stroke,
-  Control,
 } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -52,14 +49,14 @@ const MODES: { value: DiscoveryMode; label: string }[] = [
  *
  * Design intent (AGENTS.md §4, §17, iOS 26 Liquid Glass):
  *   - Content-first, text-only tabs — no icon soup, no decorative chrome.
- *   - Selected state uses a subtle pill background (surfaceAlt) + brand
- *     text colour + semibold weight. Unselected is muted regular weight.
- *   - The pill slides between tabs preserving spatial continuity. Under
+ *   - Selected state uses a restrained hairline indicator + semibold text;
+ *     there is no large grey pill competing with the media canvas.
+ *   - The indicator slides between tabs preserving spatial continuity. Under
  *     Reduce Motion it moves instantly (no spring).
  *   - Compact 44pt touch height per tab (Control.hit).
  *   - Bottom hairline separates the bar from content below.
- *   - The pill uses a flat surfaceAlt fill, not a glass effect — keeping
- *     it readable over any content and consistent with the surface budget.
+ *   - The indicator uses the brand accent only for selection and preserves
+ *     the surface budget for real media.
  *
  * State ownership: this component is presentational. The parent owns
  * `activeMode` and the scroll/data lifecycle of each scene, so switching modes
@@ -147,7 +144,7 @@ export function DiscoveryModeNav({
       <Reanimated.View
         style={[
           styles.indicator,
-          { backgroundColor: colors.surfaceAlt },
+          { backgroundColor: colors.brand },
           indicatorStyle,
         ]}
         pointerEvents="none"
@@ -210,16 +207,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    gap: Space.xs,
   },
   tab: {
     flex: 1,
-    minHeight: 36,
-    paddingVertical: Space.xs,
+    minHeight: 44,
+    paddingVertical: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.md,
   },
   label: {
     fontSize: Type.body.size,
@@ -233,9 +227,8 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    top: Space.xs,
-    bottom: Space.xs,
+    height: 2,
+    bottom: 0,
     left: Space.md,
-    borderRadius: Radius.md,
   },
 });

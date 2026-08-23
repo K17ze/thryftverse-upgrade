@@ -41,8 +41,10 @@ on:
         - typecheck_production
         - build_android_production
         - build_ios_production
+        - approve_store_submission
         - submit_android_production
         - submit_ios_production
+        - approve_production_ota
         - update_production
       develop:
         # Staging pipeline — build preview artifacts and publish OTA update.
@@ -129,6 +131,16 @@ build_ios_production:
     - EXPO_PUBLIC_API_KEY
   timeout: 3600
 
+# --- Step 2c: Approval gate — store submission -------------------------------
+# Requires manual approval before submitting production builds to the app
+# stores.  Prevents an unreviewed commit from reaching Google Play / App Store.
+approve_store_submission:
+  name: "Approve store submission (production)"
+  type: require-approval
+  needs:
+    - build_android_production
+    - build_ios_production
+
 # --- Step 3a: Submit Android to Google Play (production track) ---------------
 # Submits the AAB produced in step 2a to the Google Play Console on the
 # `production` track.  Uses the `production` submit profile which references
@@ -138,6 +150,7 @@ submit_android_production:
   type: submit
   needs:
     - build_android_production
+    - approve_store_submission
   params:
     platform: android
     profile: production
@@ -154,6 +167,7 @@ submit_ios_production:
   type: submit
   needs:
     - build_ios_production
+    - approve_store_submission
   params:
     platform: ios
     profile: production
@@ -161,19 +175,39 @@ submit_ios_production:
     - APPLE_APP_SPECIFIC_PASSWORD
   timeout: 1800
 
+# --- Step 3c: Approval gate — production OTA update --------------------------
+# Requires manual approval before publishing an OTA update to the production
+# channel.  Prevents a broken JS bundle from reaching all production users.
+approve_production_ota:
+  name: "Approve production OTA update rollout"
+  type: require-approval
+  needs:
+    - submit_android_production
+    - submit_ios_production
+
 # --- Step 4: Publish OTA update to production channel ------------------------
 # Publishes a JavaScript bundle + asset update to the `production` channel.
 # Existing production clients with expo-updates will fetch this update on
 # next app launch (checkAutomatically: ON_LOAD per app.json).
+#
+# Staged rollout: the update is published to 10% of users initially.  After
+# monitoring crash-free rate, error spikes, and EAS Observe for at least 24h,
+# manually increase the rollout to 50% and then 100% using:
+#   eas update:edit          # select the update group, set percentage to 50
+#   eas update:edit          # after further monitoring, set percentage to 100
+# Alternatively, use the GitHub Actions `ota-staged-rollout.yml` workflow with
+# the `update-rollout` EAS Workflow job type for automated progression.
 update_production:
   name: "Publish OTA update (production channel)"
   type: update
   needs:
     - submit_android_production
     - submit_ios_production
+    - approve_production_ota
   params:
     platform: both
     channel: production
+    rollout_percentage: 10
   env_vars:
     EXPO_PUBLIC_ENVIRONMENT: production
     EXPO_PUBLIC_API_BASE_URL: https://api.thryftverse.com

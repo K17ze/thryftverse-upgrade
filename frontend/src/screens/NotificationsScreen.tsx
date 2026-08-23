@@ -2,12 +2,12 @@ import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  SectionList,
   StyleSheet,
   RefreshControl,
   Pressable,
   Animated,
 } from 'react-native';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -86,6 +86,15 @@ type NotificationCard = {
   /** V2 structured event — passed to role-specific row presenters. */
   v2Event: NotificationEventV2;
 };
+
+/**
+ * Flattened list item used by FlashList. Each section header becomes a
+ * `'header'` item followed by its `'item'` rows, so FlashList can recycle
+ * cells by type via `getItemType`.
+ */
+type NotificationListItem =
+  | { type: 'header'; sectionTitle: string; unreadCount: number; isAttention: boolean; itemCount: number }
+  | { type: 'item'; card: NotificationCard };
 
 type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
@@ -491,6 +500,36 @@ export default function NotificationsScreen() {
     () => groupNotifications(aggregateNotifications(filteredNotifications)),
     [filteredNotifications]
   );
+
+  // Flatten sections into a single array so FlashList can recycle cells.
+  // Each section becomes a header item followed by its data items.
+  const flattenedData = React.useMemo(() => {
+    const items: NotificationListItem[] = [];
+    for (const section of sections) {
+      items.push({
+        type: 'header',
+        sectionTitle: section.title,
+        unreadCount: section.unreadCount,
+        isAttention: !!section.isAttention,
+        itemCount: section.data.length,
+      });
+      for (const card of section.data) {
+        items.push({ type: 'item', card });
+      }
+    }
+    return items;
+  }, [sections]);
+
+  const getItemType = useCallback(
+    (item: NotificationListItem) => item.type,
+    []
+  );
+
+  const keyExtractor = useCallback(
+    (item: NotificationListItem) =>
+      item.type === 'header' ? `header-${item.sectionTitle}` : item.card.id,
+    []
+  );
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
   const filterCounts = React.useMemo(() => {
@@ -738,6 +777,50 @@ export default function NotificationsScreen() {
     renderNotificationRow,
   ]);
 
+  const renderSectionHeader = useCallback(
+    (item: {
+      sectionTitle: string;
+      unreadCount: number;
+      isAttention: boolean;
+      itemCount: number;
+    }) => {
+      const { sectionTitle, unreadCount, isAttention, itemCount } = item;
+      return (
+        <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
+          {isAttention ? (
+            <View style={styles.sectionAttentionLeading}>
+              <Ionicons name="alert-circle" size={13} color={colors.danger} />
+              <Text style={[styles.sectionTitle, styles.sectionTitleAttention]}>{sectionTitle}</Text>
+            </View>
+          ) : (
+            <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+          )}
+          {isAttention && itemCount > 0 ? (
+            <Text style={styles.sectionAttentionHint}>
+              {itemCount} {itemCount === 1 ? 'item' : 'items'} need{itemCount === 1 ? 's' : ''} your response
+            </Text>
+          ) : null}
+          {unreadCount > 0 ? (
+            <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
+              <Text style={[styles.sectionCountText, isAttention && styles.sectionCountTextAttention]}>{unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+    },
+    [styles, colors.danger]
+  );
+
+  const renderListItem = useCallback<ListRenderItem<NotificationListItem>>(
+    ({ item }) => {
+      if (item.type === 'header') {
+        return renderSectionHeader(item);
+      }
+      return renderNotificationCard({ item: item.card, index: 0 });
+    },
+    [renderSectionHeader, renderNotificationCard]
+  );
+
   return (
     <FlagshipScreen
       header={
@@ -869,12 +952,13 @@ export default function NotificationsScreen() {
         </View>
       ) : null}
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
+      <FlashList
+        data={flattenedData}
+        keyExtractor={keyExtractor}
+        getItemType={getItemType}
+        renderItem={renderListItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -885,35 +969,19 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title, unreadCount, isAttention, data } }) => (
-          <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
-            {isAttention ? (
-              <View style={styles.sectionAttentionLeading}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
-                <Text style={[styles.sectionTitle, styles.sectionTitleAttention]}>{title}</Text>
-              </View>
-            ) : (
-              <Text style={styles.sectionTitle}>{title}</Text>
-            )}
-            {isAttention && data.length > 0 ? (
-              <Text style={styles.sectionAttentionHint}>
-                {data.length} {data.length === 1 ? 'item' : 'items'} need{data.length === 1 ? 's' : ''} your response
-              </Text>
-            ) : null}
-            {unreadCount > 0 ? (
-              <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
-                <Text style={[styles.sectionCountText, isAttention && styles.sectionCountTextAttention]}>{unreadCount}</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
-        // Performance: notification lists can grow long; clip off-screen
-        // items and cap the render batch to keep scroll at 58+ fps.
-        removeClippedSubviews
-        windowSize={7}
-        maxToRenderPerBatch={6}
-        initialNumToRender={8}
-        renderItem={renderNotificationCard}
+        // Performance: notification lists can grow long; cap the render
+        // batch to keep scroll at 58+ fps. FlashList recycles cells by
+        // type via getItemType (header vs item) for efficient pooling.
+        //
+        // FlashList v2 (2.0.2) does not expose the v1 props
+        // `windowSize` / `maxToRenderPerBatch`. The v2-native equivalents:
+        //   - drawDistance controls how far beyond the viewport items are
+        //     rendered — the v2 counterpart of `windowSize`. 2000dp gives
+        //     a generous buffer (~2.5 screens each side) for smooth scroll.
+        //   - overrideProps.initialDrawBatchSize caps the first render
+        //     batch — the v2 counterpart of `maxToRenderPerBatch`.
+        drawDistance={2000}
+        overrideProps={{ initialDrawBatchSize: 6 }}
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">

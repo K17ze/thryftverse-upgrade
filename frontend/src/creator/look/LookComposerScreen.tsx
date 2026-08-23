@@ -142,7 +142,7 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
   return <Reanimated.View style={animStyle}>{children}</Reanimated.View>;
 }
 
-function LookComposerInner() {
+function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { colors } = useAppTheme();
@@ -573,6 +573,7 @@ function LookComposerInner() {
         contentFit: 'cover' as const,
         videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
         opacity: 1,
+        ...(asset.speed ? { speed: asset.speed } : {}),
         // Apply camera effect post-capture: store as a filter node in
         // the effect stack so the renderer applies the color matrix.
         // The effect ID matches the filter system's ImageFilter names.
@@ -1065,6 +1066,7 @@ function LookComposerInner() {
   const entryContent = showEntryScreen ? (
     <CreatorEntryScreen
       documentType="look"
+      onDocumentTypeChange={onEntryTypeChange}
       onClose={handleEntryClose}
       onMediaSelected={handleEntryMediaSelected}
       onBlankStart={handleEntryBlankStart}
@@ -1922,6 +1924,7 @@ export function LookComposerScreen(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
+  onEntryTypeChange: (type: 'look' | 'poster') => void;
 }) {
   return (
     <LookComposerScreenWithProvider {...props} />
@@ -1939,6 +1942,7 @@ function LookComposerScreenWithProvider(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
+  onEntryTypeChange: (type: 'look' | 'poster') => void;
 }) {
   // Lazy import to avoid circular dependency at module load time
   const { CreatorProvider } = require('../CreatorContext');
@@ -1951,7 +1955,7 @@ function LookComposerScreenWithProvider(props: {
       initialMediaUri={props.initialMediaUri}
       initialMedia={props.initialMedia}
     >
-      <LookComposerInner />
+      <LookComposerInner onEntryTypeChange={props.onEntryTypeChange} />
     </CreatorProvider>
   );
 }

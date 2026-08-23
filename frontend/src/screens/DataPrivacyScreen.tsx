@@ -35,7 +35,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
@@ -79,6 +79,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen
+      respectBottomInset
       header={
         <FlagshipHeader
           title="Data & Privacy"
@@ -203,25 +204,29 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         </SettingsSection>
       </View>
 
-      {/* ── Danger zone — separated, destructive action ── */}
-      <View style={[styles.dangerZone, { borderColor: `${colors.danger}30` }]}>
-        <View style={styles.dangerZoneHeader}>
-          <Ionicons name="warning-outline" size={18} color={colors.danger} />
-          <Text style={[styles.dangerZoneTitle, { color: colors.danger }]}>Danger zone</Text>
+      {/* Account deletion is a quiet, deliberate hand-off to the dedicated
+          confirmation flow. It is separated with a hairline rather than a
+          warning card so this utility screen does not visually dramatise or
+          duplicate the irreversible action before the user opts into it. */}
+      <SettingsSection
+        title="Account"
+        description="Deletion is permanent. Open orders, disputes or payouts may need to be resolved first."
+        noCard
+      >
+        <View style={[styles.destructiveDivider, { borderTopColor: `${colors.danger}40` }]}>
+          <SettingsRow
+            icon="trash-outline"
+            title="Delete account"
+            subtitle="Review affected data and verify your identity"
+            danger
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityLabel="Delete account"
+            accessibilityHint="Review what will be removed and verify your identity before permanently deleting your account"
+            isFirst
+            isLast
+          />
         </View>
-        <Text style={[styles.dangerZoneBody, { color: colors.textSecondary }]}>
-          Permanently erase your account and all associated data. This action cannot be undone.
-        </Text>
-        <SettingsRow
-          icon="trash-outline"
-          title="Delete my account"
-          subtitle="Permanently erase your account and data"
-          danger
-          onPress={() => navigation.navigate('DeleteAccount')}
-          isFirst
-          isLast
-        />
-      </View>
+      </SettingsSection>
 
       {/* ── Legal ── */}
       <View>
@@ -285,29 +290,8 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       letterSpacing: Type.caption.letterSpacing,
     },
-    dangerZone: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      padding: Space.md,
-      marginBottom: Space.lg,
-    },
-    dangerZoneHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.xs,
-    },
-    dangerZoneTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
-    dangerZoneBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-      letterSpacing: Type.caption.letterSpacing,
-      marginBottom: Space.md,
+    destructiveDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
   });
 }

@@ -18,17 +18,25 @@
  * @module postgres-backup
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, statSync, unlinkSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, unlinkSync, existsSync, writeFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const BACKUP_DIR = process.env.BACKUP_DIR || join(process.cwd(), 'backups');
 const BACKUP_RETENTION_DAYS = parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10);
 const BACKUP_ENCRYPTION_KEY = process.env.BACKUP_ENCRYPTION_KEY;
+const BACKUP_REQUIRE_ENCRYPTION = process.env.BACKUP_REQUIRE_ENCRYPTION;
+const S3_BACKUP_BUCKET = process.env.S3_BACKUP_BUCKET;
+const S3_BACKUP_PREFIX = process.env.S3_BACKUP_PREFIX || 'db-backups';
 const ALERTING_WEBHOOK_URL = process.env.ALERTING_WEBHOOK_URL;
 
 if (!DATABASE_URL) {
   console.error('FATAL: DATABASE_URL environment variable is required.');
+  process.exit(1);
+}
+
+if ((BACKUP_REQUIRE_ENCRYPTION === 'true' || process.env.NODE_ENV === 'production') && !BACKUP_ENCRYPTION_KEY) {
+  console.error('FATAL: BACKUP_ENCRYPTION_KEY is required when BACKUP_REQUIRE_ENCRYPTION=true or NODE_ENV=production.');
   process.exit(1);
 }
 
@@ -45,6 +53,27 @@ function sendAlert(message) {
   } catch {
     console.error('WARNING: Failed to send alerting webhook notification.');
   }
+}
+
+function uploadToS3(filePath) {
+  if (!S3_BACKUP_BUCKET) return;
+  const fileName = basename(filePath);
+  const s3Key = `${S3_BACKUP_PREFIX}/${fileName}`;
+  console.log(`Uploading to s3://${S3_BACKUP_BUCKET}/${s3Key}...`);
+  execFileSync('aws', [
+    's3', 'cp', filePath, `s3://${S3_BACKUP_BUCKET}/${s3Key}`,
+    '--no-progress', '--sse', 'aws:kms',
+  ], { stdio: 'inherit' });
+
+  const checksum = execFileSync('sha256sum', [filePath], { encoding: 'utf8' }).split(' ')[0];
+  const checksumPath = `${filePath}.sha256`;
+  writeFileSync(checksumPath, `${checksum}\n`);
+  const checksumS3Key = `${S3_BACKUP_PREFIX}/${basename(checksumPath)}`;
+  execFileSync('aws', [
+    's3', 'cp', checksumPath, `s3://${S3_BACKUP_BUCKET}/${checksumS3Key}`,
+    '--no-progress', '--sse', 'aws:kms',
+  ], { stdio: 'inherit' });
+  unlinkSync(checksumPath);
 }
 
 function parseDatabaseUrl(url) {
@@ -132,7 +161,7 @@ function pruneOldBackups() {
 
   const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const files = readdirSync(BACKUP_DIR).filter(
-    (f) => f.startsWith('thryftverse_') && (f.endsWith('.dump') || f.endsWith('.dump.enc'))
+    (f) => f.startsWith('thryftverse_') && (f.endsWith('.dump') || f.endsWith('.dump.enc') || f.endsWith('.dump.sha256') || f.endsWith('.dump.enc.sha256'))
   );
 
   let deleted = 0;
@@ -152,5 +181,6 @@ function pruneOldBackups() {
 }
 
 const backupPath = createBackup();
+uploadToS3(backupPath);
 pruneOldBackups();
 console.log(`Backup complete: ${backupPath}`);

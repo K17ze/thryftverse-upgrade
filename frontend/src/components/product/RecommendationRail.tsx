@@ -124,10 +124,7 @@ export function RecommendationRail({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
 
-  if (section.items.length === 0) return null;
-
   const listingItems = section.items.filter((item): item is Listing => !isRecommendationLook(item));
-  if (listingItems.length === 0) return null;
 
   const isComplementary = section.key === 'complete_the_look';
   const isPersonalised = section.personalised;
@@ -161,6 +158,8 @@ export function RecommendationRail({
     ),
     [section.key, section.reason, section.personalised, listingId, onPressItem, cardWidth, cardHeight, showAccent],
   );
+
+  if (section.items.length === 0 || listingItems.length === 0) return null;
 
   return (
     <View

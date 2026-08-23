@@ -1,7 +1,13 @@
 import type { Pool } from 'pg';
 import { logger } from './logger.js';
 
-const PARTITIONED_TABLES = ['analytics_events', 'notifications', 'audit_logs'] as const;
+// Only tables that are actually created as partitioned parents in the
+// migration chain belong here.  `admin_audit_logs` is created with
+// `PARTITION BY RANGE (created_at)` in migration 124.  Other time-series
+// tables (analytics_events, notifications) do not exist in the schema; if
+// they are added as partitioned parents in a future migration, add them
+// here at that time.
+const PARTITIONED_TABLES = ['admin_audit_logs'] as const;
 
 /**
  * Ensure monthly RANGE partitions exist for `tableName` for the current

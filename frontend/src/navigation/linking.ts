@@ -65,7 +65,6 @@ export const linking: LinkingOptions<RootStackParamList> = {
           Explore: {
             screens: {
               Explore: 'explore',
-              GlobalSearch: 'search',
               CategoryDetail: 'category/:categoryId',
               CollectionDetail: 'collection/:collectionId',
               SavedSearches: 'saved-searches',
@@ -75,15 +74,6 @@ export const linking: LinkingOptions<RootStackParamList> = {
           Profile: {
             screens: {
               Profile: 'me',
-              EditProfile: 'me/edit',
-              Closet: 'closet',
-              NotificationsList: 'notifications',
-              Settings: 'settings',
-              Personalisation: 'personalisation',
-              SavedAddresses: 'addresses',
-              Payments: 'payments',
-              HelpSupport: 'help',
-              Verification: 'verification',
             },
           },
         },
@@ -92,6 +82,20 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Marketplace / product surfaces (root stack — cross-tab)
       ItemDetail: 'product/:itemId',
       Checkout: 'checkout/:itemId',
+
+      // Discovery (root stack — cross-tab)
+      GlobalSearch: 'search',
+
+      // Settings & account (root stack — cross-tab)
+      EditProfile: 'me/edit',
+      Settings: 'settings',
+      Personalisation: 'personalisation',
+      Closet: 'closet',
+      NotificationsList: 'notifications',
+      SavedAddresses: 'addresses',
+      Payments: 'payments',
+      HelpSupport: 'help',
+      Verification: 'verification',
 
       // Auctions
       AuctionHome: 'auctions',

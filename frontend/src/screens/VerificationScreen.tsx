@@ -131,18 +131,21 @@ export default function VerificationScreen({ navigation }: Props) {
   const effectiveDac7Completed = dac7CompletedLocal || backendDac7Info != null;
   const dac7BackendStatus = backendDac7Info?.status ?? null;
 
-  // Derived tier info
-  const hasVerification = emailVerified || effectiveKycVerified;
-  const currentTier: VerificationTier = effectiveKycVerified ? 'id' : 'email';
+  // Derived tier info — identity/seller verification only, NOT email.
+  // Email confirmation is a prerequisite step shown below, but it does not
+  // grant a trust badge (P0-UI-3: trust badges must not be synthesized from
+  // email verification).
+  const hasVerification = effectiveKycVerified;
+  const currentTier: VerificationTier | null = effectiveKycVerified ? 'id' : null;
 
-  const tierInfo = hasVerification
+  const tierInfo = hasVerification && currentTier
     ? VERIFICATION_TIERS[currentTier]
     : {
         tier: 'email' as const,
         label: 'Unverified',
         icon: 'alert-circle-outline',
         color: 'textSecondary',
-        description: 'Verify your email address to get started',
+        description: 'Verify your identity with a government document to get the trust badge',
       };
 
   const iconColor = hasVerification ? colors.brand : colors.textSecondary;

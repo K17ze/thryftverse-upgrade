@@ -6,6 +6,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.os.Trace
 import android.util.Log
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -102,8 +103,9 @@ class ThryftNativeModule : Module() {
 
     AsyncFunction("getNativeBuildInfo") {
       val packageInfo = try {
+        val pkgName = appContext.reactContext?.packageName ?: ""
         appContext.reactContext?.packageManager?.getPackageInfo(
-          appContext.reactContext?.packageName,
+          pkgName,
           0
         )
       } catch (_: Throwable) {
@@ -124,11 +126,11 @@ class ThryftNativeModule : Module() {
       isPlayIntegrityAvailable()
     }
 
-    AsyncFunction("prepareTokenProvider") { promise ->
+    AsyncFunction("prepareTokenProvider") { promise: Promise ->
       prepareIntegrityProvider(promise)
     }
 
-    AsyncFunction("requestIntegrityToken") { requestHash: String, promise ->
+    AsyncFunction("requestIntegrityToken") { requestHash: String, promise: Promise ->
       requestIntegrityToken(requestHash, promise)
     }
 
@@ -137,16 +139,16 @@ class ThryftNativeModule : Module() {
       // the Google Play Integrity API. On-device we return the cached
       // device-integrity signals if available, otherwise an empty list.
       prefs?.getString("thryft.integrity.deviceSignals", null)
-        ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        ?.split(",")?.filter { it.isNotBlank() } ?: emptyList<String>()
     }
 
     // App Attest is iOS-only; return unsupported on Android.
-    AsyncFunction("attest") { _: String, promise ->
-      promise.reject("UNSUPPORTED", "App Attest is not supported on Android.")
+    AsyncFunction("attest") { _: String, promise: Promise ->
+      promise.reject("UNSUPPORTED", "App Attest is not supported on Android.", null)
     }
 
-    AsyncFunction("generateAssertion") { _: String, _: String, promise ->
-      promise.reject("UNSUPPORTED", "App Attest is not supported on Android.")
+    AsyncFunction("generateAssertion") { _: String, _: String, promise: Promise ->
+      promise.reject("UNSUPPORTED", "App Attest is not supported on Android.", null)
     }
 
     AsyncFunction("getTrustState") {
@@ -283,10 +285,10 @@ class ThryftNativeModule : Module() {
     }
   }
 
-  private fun prepareIntegrityProvider(promise: expo.modules.kotlin.Promise) {
+  private fun prepareIntegrityProvider(promise: Promise) {
     val context = appContext.reactContext
     if (context == null) {
-      promise.reject("UNSUPPORTED", "No React context available.")
+      promise.reject("UNSUPPORTED", "No React context available.", null)
       return
     }
     try {
@@ -294,25 +296,25 @@ class ThryftNativeModule : Module() {
       // current API; the token request itself warms the provider. We
       // resolve immediately so the caller can proceed.
       if (!isPlayIntegrityAvailable()) {
-        promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.")
+        promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.", null)
         return
       }
       promise.resolve(Unit)
     } catch (e: Throwable) {
-      promise.reject("INTEGRITY_ERROR", e.message ?: "Failed to prepare Play Integrity.")
+      promise.reject("INTEGRITY_ERROR", e.message ?: "Failed to prepare Play Integrity.", null)
     }
   }
 
-  private fun requestIntegrityToken(requestHash: String, promise: expo.modules.kotlin.Promise) {
+  private fun requestIntegrityToken(requestHash: String, promise: Promise) {
     val context = appContext.reactContext
     if (context == null) {
-      promise.reject("UNSUPPORTED", "No React context available.")
+      promise.reject("UNSUPPORTED", "No React context available.", null)
       return
     }
     try {
       val manager = createIntegrityManager(context)
       if (manager == null) {
-        promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.")
+        promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.", null)
         return
       }
       // Build the IntegrityTokenRequest via reflection so the module
@@ -352,15 +354,15 @@ class ThryftNativeModule : Module() {
         arrayOf(Class.forName("com.google.android.play.core.tasks.OnFailureListener"))
       ) { _, _, args ->
         val err = args?.firstOrNull()
-        promise.reject("INTEGRITY_ERROR", err?.toString() ?: "Play Integrity token request failed.")
+        promise.reject("INTEGRITY_ERROR", err?.toString() ?: "Play Integrity token request failed.", null)
         null
       }
       addOnSuccessListener.invoke(task, successListener)
       addOnFailureListener.invoke(task, failureListener)
     } catch (e: ClassNotFoundException) {
-      promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.")
+      promise.reject("UNSUPPORTED", "Play Integrity is not available on this device.", null)
     } catch (e: Throwable) {
-      promise.reject("INTEGRITY_ERROR", e.message ?: "Failed to request Play Integrity token.")
+      promise.reject("INTEGRITY_ERROR", e.message ?: "Failed to request Play Integrity token.", null)
     }
   }
 

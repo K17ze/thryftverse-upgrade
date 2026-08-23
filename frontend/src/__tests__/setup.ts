@@ -17,6 +17,115 @@ vi.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
+// Store tests exercise real Zustand actions, but analytics is an external
+// observer of those actions. Mock the app-owned analytics boundary so a store
+// import does not eagerly load PostHog and React Navigation's native runtime.
+vi.mock('../analytics', () => ({
+  identifyUser: vi.fn(),
+  resetIdentity: vi.fn(),
+}));
+
+// react-native-mmkv loads React Native's Flow source through CommonJS when
+// externalized by Vitest. Node cannot parse RN's `import typeof` syntax, and
+// vi.mock('react-native') cannot intercept that nested CommonJS require. This
+// in-memory adapter preserves the storage/listener contract used by Zustand.
+vi.mock('react-native-mmkv', () => {
+  type StoredValue = boolean | string | number | ArrayBuffer;
+  const stores = new Map<string, Map<string, StoredValue>>();
+  const listeners = new Map<string, Set<(key: string) => void>>();
+
+  const createMMKV = ({ id = 'default' }: { id?: string } = {}) => {
+    const store = stores.get(id) ?? new Map<string, StoredValue>();
+    const storeListeners = listeners.get(id) ?? new Set<(key: string) => void>();
+    stores.set(id, store);
+    listeners.set(id, storeListeners);
+
+    const notify = (key: string) => storeListeners.forEach((listener) => listener(key));
+    return {
+      id,
+      set: (key: string, value: StoredValue) => {
+        store.set(key, value);
+        notify(key);
+      },
+      getBoolean: (key: string) => {
+        const value = store.get(key);
+        return typeof value === 'boolean' ? value : undefined;
+      },
+      getString: (key: string) => {
+        const value = store.get(key);
+        return typeof value === 'string' ? value : undefined;
+      },
+      getNumber: (key: string) => {
+        const value = store.get(key);
+        return typeof value === 'number' ? value : undefined;
+      },
+      contains: (key: string) => store.has(key),
+      remove: (key: string) => {
+        const removed = store.delete(key);
+        if (removed) notify(key);
+        return removed;
+      },
+      getAllKeys: () => Array.from(store.keys()),
+      clearAll: () => {
+        const keys = Array.from(store.keys());
+        store.clear();
+        keys.forEach(notify);
+      },
+      addOnValueChangedListener: (listener: (key: string) => void) => {
+        storeListeners.add(listener);
+        return { remove: () => storeListeners.delete(listener) };
+      },
+    };
+  };
+
+  return {
+    createMMKV,
+    MMKV: class {
+      private readonly storage;
+
+      constructor(configuration?: { id?: string }) {
+        this.storage = createMMKV(configuration);
+      }
+
+      getString(key: string) {
+        return this.storage.getString(key);
+      }
+
+      getBoolean(key: string) {
+        return this.storage.getBoolean(key);
+      }
+
+      getNumber(key: string) {
+        return this.storage.getNumber(key);
+      }
+
+      contains(key: string) {
+        return this.storage.contains(key);
+      }
+
+      set(key: string, value: StoredValue) {
+        this.storage.set(key, value);
+      }
+
+      remove(key: string) {
+        return this.storage.remove(key);
+      }
+
+      getAllKeys() {
+        return this.storage.getAllKeys();
+      }
+
+      clearAll() {
+        this.storage.clearAll();
+      }
+
+      addOnValueChangedListener(listener: (key: string) => void) {
+        return this.storage.addOnValueChangedListener(listener);
+      }
+    },
+  };
+});
+
 // Minimal react-native mock for node test environment
 vi.mock('react-native', async () => {
   const React = await import('react');

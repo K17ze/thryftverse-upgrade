@@ -320,44 +320,84 @@ export const registerWebhookRoutes = ({
     const event = verification.event;
     const expectedGateway = expectedGatewayIdForProvider(provider);
 
-    // ── Stripe webhook event-ID deduplication ──────────────────────────
-    // The 2026 Stripe Webhook Hardening Checklist requires explicit event-ID
-    // dedup. We insert the Stripe event ID into the webhook_events table
-    // before processing. If the insert returns zero rows (ON CONFLICT DO
-    // NOTHING), the event was already processed — return 200 OK immediately
-    // (idempotent). This is additive to the existing payment_webhook_events
-    // dedup inside the transaction below.
-    if (provider === 'stripe' && event.providerEventId) {
-      const payloadHash = crypto
-        .createHash('sha256')
-        .update(rawBody)
-        .digest('hex');
-      const dedupInsert = await db.query<{ id: number }>(
-        `
-        INSERT INTO webhook_events (event_id, event_type, provider, payload_hash)
-        VALUES ($1, $2, 'stripe', $3)
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING id
-      `,
-        [event.providerEventId, event.eventType, payloadHash]
-      );
-
-      if (!dedupInsert.rowCount) {
-        request.log.info(
-          { providerEventId: event.providerEventId, eventType: event.eventType },
-          'Stripe webhook event already processed (event-ID dedup)'
-        );
-        reply.code(200);
-        return {
-          ok: true,
-          duplicate: true,
-        };
-      }
-    }
+    // ── Durable inbox: event-ID dedup INSIDE the transaction ───────────
+    // The dedup row is inserted in the SAME transaction as the ledger
+    // effects below.  If processing rolls back, the dedup row rolls back
+    // too — so a Stripe retry will not be discarded as a duplicate.
+    // The raw body and signature header are stored for audit and potential
+    // re-verification by the recovery sweep.
+    const signatureHeader =
+      (request.headers['stripe-signature'] as string | string[] | undefined) ??
+      (request.headers['razorpay-signature'] as string | string[] | undefined) ??
+      null;
+    const signatureHeaderValue =
+      typeof signatureHeader === 'string' ? signatureHeader
+      : Array.isArray(signatureHeader) ? signatureHeader[0] ?? null
+      : null;
 
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+
+      // Insert the durable inbox row.  If the event was already fully
+      // processed (status = 'succeeded'), return duplicate.  If it was
+      // received/failed (e.g. a previous attempt rolled back), we proceed
+      // to process it again.
+      if (event.providerEventId) {
+        const payloadHash = crypto
+          .createHash('sha256')
+          .update(rawBody)
+          .digest('hex');
+
+        const inboxInsert = await client.query<{ id: number; status: string }>(
+          `
+          INSERT INTO webhook_events (
+            event_id, event_type, provider, gateway_id, payload_hash,
+            raw_body, signature_header, status, processed_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'received', NULL)
+          ON CONFLICT (event_id) DO NOTHING
+          RETURNING id, status
+          `,
+          [
+            event.providerEventId,
+            event.eventType,
+            provider,
+            expectedGateway,
+            payloadHash,
+            rawBody,
+            signatureHeaderValue,
+          ]
+        );
+
+        if (!inboxInsert.rowCount) {
+          // Row already exists — check if it was already succeeded.
+          const existing = await client.query<{ status: string }>(
+            `SELECT status FROM webhook_events WHERE event_id = $1 LIMIT 1`,
+            [event.providerEventId]
+          );
+          const existingStatus = existing.rows[0]?.status;
+          if (existingStatus === 'succeeded') {
+            await client.query('COMMIT');
+            request.log.info(
+              { providerEventId: event.providerEventId, eventType: event.eventType },
+              'Webhook event already processed (durable inbox)'
+            );
+            reply.code(200);
+            return { ok: true, duplicate: true };
+          }
+          // status is 'received', 'failed', or 'processing' — reprocess.
+          // Update the row to 'received' and reset the lease.
+          await client.query(
+            `UPDATE webhook_events
+             SET status = 'received', lease_owner = NULL, lease_expires_at = NULL,
+                 raw_body = COALESCE(raw_body, $2),
+                 signature_header = COALESCE(signature_header, $3)
+             WHERE event_id = $1`,
+            [event.providerEventId, rawBody, signatureHeaderValue]
+          );
+        }
+      }
 
       const gateway = await client.query<{ id: string }>(
         'SELECT id FROM payment_gateways WHERE id = $1 LIMIT 1',
@@ -742,6 +782,18 @@ export const registerWebhookRoutes = ({
         webhookInsert.rows[0].id,
       ]);
 
+      // Mark the durable inbox row as succeeded — in the same transaction
+      // as the ledger effects, so a rollback undoes both.
+      if (event.providerEventId) {
+        await client.query(
+          `UPDATE webhook_events
+           SET status = 'succeeded', processed_at = NOW(),
+               lease_owner = NULL, lease_expires_at = NULL
+           WHERE event_id = $1`,
+          [event.providerEventId]
+        );
+      }
+
       await client.query('COMMIT');
 
       if (mintReserveEnqueueOperationId) {
@@ -828,6 +880,33 @@ export const registerWebhookRoutes = ({
       };
     } catch (error) {
       await client.query('ROLLBACK');
+
+      // Mark the durable inbox row as 'failed' so the recovery sweep can
+      // retry it.  This is outside the rolled-back transaction, so it
+      // persists.  The raw body and signature are already stored from the
+      // initial insert.
+      if (event?.providerEventId) {
+        try {
+          const backoffSeconds = Math.min(3600, 2 ** 1);
+          await db.query(
+            `UPDATE webhook_events
+             SET status = 'failed',
+                 attempts = attempts + 1,
+                 last_error = $2,
+                 next_retry_at = NOW() + ($3 || ' seconds')::INTERVAL,
+                 lease_owner = NULL,
+                 lease_expires_at = NULL
+             WHERE event_id = $1`,
+            [
+              event.providerEventId,
+              String((error as Error).message ?? 'Unknown error').slice(0, 2000),
+              String(backoffSeconds),
+            ]
+          );
+        } catch {
+          // Best-effort — the outbox insert below is the secondary path.
+        }
+      }
 
       if ((error as Error).message === 'PAYMENT_INTENT_NOT_FOUND') {
         reply.code(404);

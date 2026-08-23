@@ -14,4 +14,10 @@ export interface User {
   listingCount: number;
   bio?: string;
   website?: string;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
+  /** Computed trust level from backend — drives trust badges. */
+  trustLevel?: 'none' | 'email' | 'identity' | 'seller';
 }

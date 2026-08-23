@@ -89,12 +89,35 @@ services:
     networks:
       - db
 
-  # ── Redis — override for production ──────────────────────────────────
+  # ── Redis — cache instance override for production ───────────────────
   redis:
+    image: redis:7-alpine
+    container_name: thryftverse-redis-cache-prod
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     <<: *default-security
-    # Redis alpine image uses UID 999 internally
+    user: "999:999"
+    mem_limit: 512M
+    logging: *default-logging
+    networks:
+      - db
+
+  # ── Redis — queue instance for production ────────────────────────────
+  redis-queue:
+    image: redis:7-alpine
+    container_name: thryftverse-redis-queue-prod
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes --appendfsync everysec
+    ports:
+      - "127.0.0.1:6381:6379"
+    volumes:
+      - thryftverse_redis_queue_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *default-security
     user: "999:999"
     mem_limit: 512M
     logging: *default-logging
@@ -181,6 +204,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      redis-queue:
+        condition: service_healthy
       pgbouncer:
         condition: service_healthy
       key-service:
@@ -195,6 +220,8 @@ services:
       RUN_BACKGROUND_WORKERS: "true"
       RUN_API_SERVER: "false"
       REDIS_URL: redis://redis:6379
+      REDIS_CACHE_URL: redis://redis:6379
+      REDIS_QUEUE_URL: redis://redis-queue:6379
       KEY_SERVICE_URL: http://key-service:4100
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN:?KEY_SERVICE_CLIENT_TOKEN is required}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN:?KEY_SERVICE_ADMIN_TOKEN is required}
@@ -346,6 +373,7 @@ volumes:
   caddy_data:
   caddy_config:
   backup_data:
+  thryftverse_redis_queue_data_prod:
 
 # ── Network segmentation ──────────────────────────────────────────────
 # frontend  — public-facing network (Caddy only, bridges to backend)

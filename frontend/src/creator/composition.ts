@@ -185,6 +185,12 @@ const MediaLayerPayloadSchema = z.object({
   // dramatic emphasis (Snapchat/Instagram Edits parity).
   freezeFrameMs: z.number().min(0).optional(),
   freezeDurationMs: z.number().min(0).max(10000).optional(),
+  // Audio fade in/out (linear ramp) in milliseconds. Applied to the video's
+  // embedded audio track. 0 = no fade. Max 5000ms (5s) matches
+  // AudioFadeControls. These are committed via the AudioFadeControls sheet
+  // and read by the playback pipeline to ramp volume at clip boundaries.
+  fadeInMs: z.number().min(0).max(5000).optional(),
+  fadeOutMs: z.number().min(0).max(5000).optional(),
   // Effect stack — ordered list of adjustments/filters applied to the media
   effects: z.array(EffectNodeSchema).optional(),
 });

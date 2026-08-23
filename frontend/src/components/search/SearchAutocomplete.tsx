@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useConnectivity } from '../../hooks/useConnectivity';
+import { OfflineBanner } from '../../components/OfflineBanner';
 import {
   Space,
-  Radius,
-  Stroke,
   Typography,
   Type,
 } from '../../theme/designTokens';
@@ -154,6 +154,7 @@ export function SearchAutocomplete({
 }: SearchAutocompleteProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // When no explicit suggestions are passed in, fetch from the backend with
@@ -174,8 +175,6 @@ export function SearchAutocomplete({
     [haptic, onSelect],
   );
 
-  if (!visible) return null;
-
   // Build a flat list of renderable rows for FlashList.
   type Row =
     | { kind: 'header'; text: string }
@@ -188,26 +187,22 @@ export function SearchAutocomplete({
 
   const rows: Row[] = useMemo(() => {
     const out: Row[] = [];
-    // Show trending only when the query is empty or very short (<= 2 chars)
-    // so they don't compete with ranked suggestions once the user has typed
-    // enough to get meaningful matches.
-    const showTrending = query.trim().length <= 2;
-    if (showTrending && trending.length > 0) {
+    const normalizedQuery = query.trim();
+    // Idle search shows one memory aid, never two competing catalogues.
+    // Once typing starts, only ranked intents remain in the reading path.
+    if (normalizedQuery.length === 0 && recent.length > 0) {
+      out.push({ kind: 'header', text: 'Recent' });
+      for (const term of recent.slice(0, 4)) {
+        out.push({ kind: 'recent', term });
+      }
+      if (onClearRecent) out.push({ kind: 'clear' });
+    } else if (normalizedQuery.length === 0 && trending.length > 0) {
       out.push({ kind: 'header', text: 'Trending' });
       for (const term of trending.slice(0, 5)) {
         out.push({ kind: 'trending', term });
       }
-    }
-    if (recent.length > 0) {
-      out.push({ kind: 'header', text: 'Recent' });
-      for (const term of recent) {
-        out.push({ kind: 'recent', term });
-      }
-      if (onClearRecent) out.push({ kind: 'clear' });
-    }
-    if (suggestions.length > 0) {
-      out.push({ kind: 'header', text: 'Suggestions' });
-      for (const suggestion of suggestions) {
+    } else if (normalizedQuery.length > 0 && suggestions.length > 0) {
+      for (const suggestion of suggestions.slice(0, 5)) {
         out.push({ kind: 'suggestion', suggestion });
       }
     }
@@ -223,6 +218,7 @@ export function SearchAutocomplete({
   const hasContent = rows.some(
     (r) => r.kind === 'trending' || r.kind === 'recent' || r.kind === 'suggestion' || r.kind === 'loading',
   );
+  if (!visible) return null;
   if (!hasContent && !isDemo) return null;
 
   const renderItem = ({ item }: { item: Row }) => {
@@ -344,6 +340,7 @@ export function SearchAutocomplete({
 
   return (
     <View style={styles.container}>
+      {isOffline ? <OfflineBanner compact /> : null}
       <FlashList
         data={rows}
         renderItem={renderItem}
@@ -357,7 +354,7 @@ export function SearchAutocomplete({
 }
 
 // ---------------------------------------------------------------------------
-// Suggestion row — with matched-portion highlight + confidence dot
+// Suggestion row — matched text is the only ranking chrome users need.
 // ---------------------------------------------------------------------------
 
 interface SuggestionRowProps {
@@ -377,7 +374,6 @@ const SuggestionRow = React.memo(function SuggestionRow({
 }: SuggestionRowProps) {
   const iconName = TYPE_ICON[suggestion.type] ?? 'search-outline';
   const { before, match, after } = splitMatch(suggestion.query, query);
-  const confidenceColor = confidenceDotColor(suggestion.confidence, colors);
 
   return (
     <Pressable
@@ -396,7 +392,6 @@ const SuggestionRow = React.memo(function SuggestionRow({
         ) : null}
         {after ? <Text style={styles.rowTextBase}>{after}</Text> : null}
       </Text>
-      <View style={[styles.confidenceDot, { backgroundColor: confidenceColor }]} />
     </Pressable>
   );
 });
@@ -418,12 +413,6 @@ function splitMatch(term: string, query: string): {
   };
 }
 
-function confidenceDotColor(confidence: number, colors: ThemeColors): string {
-  if (confidence >= 0.75) return colors.success;
-  if (confidence >= 0.5) return colors.warning;
-  return colors.textMuted;
-}
-
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -431,12 +420,7 @@ function confidenceDotColor(confidence: number, colors: ThemeColors): string {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.hairline,
-      borderColor: colors.border,
-      overflow: 'hidden',
-      marginHorizontal: Space.md,
+      backgroundColor: 'transparent',
       marginBottom: Space.sm,
     },
     listContent: {
@@ -445,8 +429,6 @@ function createStyles(colors: ThemeColors) {
     sectionHeader: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
       color: colors.textMuted,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
@@ -477,12 +459,6 @@ function createStyles(colors: ThemeColors) {
     rowTextMatch: {
       fontFamily: Typography.family.semibold,
       color: colors.brand,
-    },
-    confidenceDot: {
-      width: 6,
-      height: 6,
-      borderRadius: Radius.full,
-      marginLeft: Space.xs,
     },
     clearRow: {
       flexDirection: 'row',

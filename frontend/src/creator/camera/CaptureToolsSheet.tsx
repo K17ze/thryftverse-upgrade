@@ -41,6 +41,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { CreatorSegmentControl } from '../controls/CreatorSegmentControl';
 import { useHaptic } from '../../hooks/useHaptic';
+import {
+  CAMERA_EFFECTS,
+  CameraEffectBar,
+  type CameraEffectId,
+} from './CameraEffectBar';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -55,6 +60,9 @@ export interface CaptureToolsSheetProps {
   // ── Grid ──
   showGrid: boolean;
   onToggleGrid: () => void;
+  // ── Live camera effects ──
+  activeEffect: CameraEffectId;
+  onEffectChange: (effect: CameraEffectId) => void;
   // ── Hands-free ──
   handsFreeMode: boolean;
   onToggleHandsFree: () => void;
@@ -107,6 +115,8 @@ export function CaptureToolsSheet({
   onTimerChange,
   showGrid,
   onToggleGrid,
+  activeEffect,
+  onEffectChange,
   handsFreeMode,
   onToggleHandsFree,
   speedMode,
@@ -126,9 +136,8 @@ export function CaptureToolsSheet({
   const styles = useSheetStyles(colors);
 
   const handleClose = useCallback(() => {
-    haptic.light();
     onClose();
-  }, [haptic, onClose]);
+  }, [onClose]);
 
   const handleTimerSelect = useCallback(
     (option: TimerOption) => {
@@ -139,38 +148,37 @@ export function CaptureToolsSheet({
   );
 
   const handleGridToggle = useCallback(() => {
-    haptic.selection();
     onToggleGrid();
-  }, [haptic, onToggleGrid]);
+  }, [onToggleGrid]);
 
   const handleHandsFreeToggle = useCallback(() => {
-    haptic.selection();
     onToggleHandsFree();
-  }, [haptic, onToggleHandsFree]);
+  }, [onToggleHandsFree]);
 
   const handleSpeedChange = useCallback(
     (value: string) => {
-      haptic.selection();
       onSpeedChange(value);
     },
-    [haptic, onSpeedChange],
+    [onSpeedChange],
   );
 
   const handleGreenScreenOpen = useCallback(() => {
-    haptic.selection();
     onOpenGreenScreen();
-  }, [haptic, onOpenGreenScreen]);
+  }, [onOpenGreenScreen]);
 
   const handleMultiCaptureToggle = useCallback(() => {
-    haptic.selection();
     onToggleMultiCapture();
-  }, [haptic, onToggleMultiCapture]);
+  }, [onToggleMultiCapture]);
 
   // Tools that are not applicable in visual-search mode
   const showMultiCapture = !isVisualSearch;
   const showHandsFree = !isVisualSearch && videoCaptureEnabled;
-  const showGreenScreen = !isVisualSearch && videoCaptureEnabled;
-  const showSpeed = !isVisualSearch && videoCaptureEnabled;
+  // The current native Video adapter does not yet render playback rate or
+  // chroma-key nodes. Keep these implementation hooks dormant until the
+  // editor, viewer, and export share a verified output path.
+  const showGreenScreen = false;
+  const showSpeed = false;
+  const activeEffectLabel = CAMERA_EFFECTS.find((effect) => effect.id === activeEffect)?.label ?? 'None';
 
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
@@ -244,6 +252,28 @@ export function CaptureToolsSheet({
           colors={colors}
           styles={styles}
         />
+
+        {/* Effects are powerful but secondary. Keeping the picker in Tools
+            preserves a clean viewfinder and leaves the capture-mode selector
+            as the only persistent text navigation above the shutter. */}
+        {!isVisualSearch ? (
+          <View style={styles.effectSection}>
+            <View style={styles.effectHeader}>
+              <View style={styles.rowLabelWrap}>
+                <Ionicons name="color-filter-outline" size={ROW_ICON_SIZE} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Effects</Text>
+              </View>
+              <Text style={[styles.effectValue, { color: activeEffect === 'none' ? colors.textMuted : colors.brand }]}>
+                {activeEffectLabel}
+              </Text>
+            </View>
+            <CameraEffectBar
+              activeEffect={activeEffect}
+              onSelectEffect={onEffectChange}
+              disabled={isRecording}
+            />
+          </View>
+        ) : null}
 
         {/* ── Hands-free ──────────────────────────────────────────── */}
         {showHandsFree && (
@@ -459,6 +489,20 @@ function useSheetStyles(colors: ThemeColors) {
         // ── Sections ──
         section: {
           paddingVertical: Space.sm,
+        },
+        effectSection: {
+          paddingTop: Space.sm,
+          paddingBottom: Space.xs,
+        },
+        effectHeader: {
+          minHeight: ROW_HEIGHT,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        },
+        effectValue: {
+          fontFamily: FontFamily.medium,
+          fontSize: Type.caption.size,
         },
         // ── Toggle rows ──
         toggleRow: {

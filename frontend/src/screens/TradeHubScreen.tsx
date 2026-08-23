@@ -43,7 +43,6 @@ import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, Stroke, Control, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
@@ -52,6 +51,7 @@ import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -356,25 +356,6 @@ export default function TradeHubScreen() {
     return result;
   }, [activeFilter, assets, openOrders, historyEntries]);
 
-  // ── Loading state ──
-  if (isLoading) {
-    return (
-      <FlagshipScreen
-        header={
-          <FlagshipHeader
-            title="Trade"
-            subtitle="Co-Own markets"
-            onBack={handleBack}
-          />
-        }
-        scrollEnabled={false}
-        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-      >
-        <CoOwnActivitySkeleton />
-      </FlagshipScreen>
-    );
-  }
-
   const renderFilter = useCallback(() => (
     <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
       {FILTERS.map((filter) => {
@@ -640,6 +621,25 @@ export default function TradeHubScreen() {
     return null;
   }, [activeFilter, navigation, renderFilter, renderSectionHeader, renderOpenOrder, renderTradeable, renderHistory]);
 
+  // ── Loading state ──
+  if (isLoading) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Trade"
+            subtitle="Co-Own markets"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <CoOwnActivitySkeleton />
+      </FlagshipScreen>
+    );
+  }
+
   return (
     <FlagshipScreen
       header={
@@ -671,6 +671,7 @@ export default function TradeHubScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={renderItem}
+        ListHeaderComponent={isOffline ? <OfflineBanner onRetry={handleRefresh} /> : null}
         onEndReached={() => { if (activeFilter === 'history') void loadMoreHistory(); }}
         onEndReachedThreshold={0.5}
         refreshControl={
@@ -712,7 +713,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyStrong.lineHeight,
   },
   filterBadge: {
-    borderRadius: Radius.full,
+    borderRadius: Radius.md,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xxs,
     minWidth: 20,
@@ -759,7 +760,7 @@ const styles = StyleSheet.create({
   orderSideIndicator: {
     width: 3,
     alignSelf: 'stretch',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.none,
     marginRight: Space.sm,
   },
   orderInfo: {
@@ -815,12 +816,12 @@ const styles = StyleSheet.create({
   orderFillTrack: {
     flex: 1,
     height: 3,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.none,
     overflow: 'hidden',
   },
   orderFillBar: {
     height: '100%',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.none,
   },
   orderFillText: {
     fontSize: Type.meta.size,
@@ -901,7 +902,7 @@ const styles = StyleSheet.create({
   tradeableAvailabilityDot: {
     width: Space.xs,
     height: Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
   },
   tradeableMeta: {
     fontSize: Type.caption.size,
@@ -918,7 +919,7 @@ const styles = StyleSheet.create({
   tradeActionBtn: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: RadiusRoleValue.compactControl,
+    borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
@@ -941,7 +942,7 @@ const styles = StyleSheet.create({
   historySideIndicator: {
     width: 3,
     alignSelf: 'stretch',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.none,
     marginRight: Space.sm,
   },
   historyBody: {

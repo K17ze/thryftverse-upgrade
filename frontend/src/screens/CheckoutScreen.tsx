@@ -88,7 +88,8 @@ type CheckoutStage =
   | 'awaiting_payment'
   | 'payment_succeeded'
   | 'payment_pending'
-  | 'payment_failed';
+  | 'payment_failed'
+  | 'unknown_outcome';
 
 interface CheckoutPostageOption {
   quoteId: string | null;
@@ -235,6 +236,7 @@ const STAGE_LABELS: Record<CheckoutStage, string> = {
   payment_succeeded: 'Order confirmed',
   payment_pending: 'Payment is pending. We’ll update this order when your bank confirms it.',
   payment_failed: 'Payment didn’t go through',
+  unknown_outcome: 'We’re checking your payment. Please don’t retry yet.',
 };
 
 export default function CheckoutScreen() {
@@ -848,14 +850,52 @@ export default function CheckoutScreen() {
         return;
       }
 
-      setStage('payment_failed');
       const errorCode = (error as { code?: string })?.code;
       const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
-      const message = isNetworkError
-        ? 'You appear to be offline. Check your connection and try again.'
-        : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
-      setOrderError(message);
-      showError('Payment failed', message);
+
+      if (isNetworkError && pendingIntentIdRef.current) {
+        // Lost response during payment — the server may have committed.
+        // Show unknown_outcome and poll for the authoritative status instead
+        // of telling the user the payment failed (which invites unsafe retry).
+        setStage('unknown_outcome');
+        setOrderError('We are checking your payment. Please do not retry yet.');
+        showInfo('Checking payment', 'We are confirming your payment status. Please do not place a new order.');
+        const intentId = pendingIntentIdRef.current;
+        const settlementStatus = await waitForPaymentIntentSettlement(
+          intentId,
+          () => isMountedRef.current && paymentAttemptRef.current === attemptId
+        );
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+        if (settlementStatus === 'succeeded') {
+          setStage('payment_succeeded');
+          pendingIntentIdRef.current = null;
+          track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+          handleSettlementNavigation('succeeded', createdOrderIdRef.current ?? '', attemptId);
+          return;
+        }
+        if (settlementStatus === 'pending') {
+          setStage('payment_pending');
+          handleSettlementNavigation('pending', createdOrderIdRef.current ?? '', attemptId);
+          return;
+        }
+        // Confirmed failed
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        setOrderError('Payment could not be completed. Try again.');
+        showError('Payment failed', 'Payment could not be completed. Try again.');
+      } else {
+        setStage('payment_failed');
+        const message = isNetworkError
+          ? 'You appear to be offline. Check your connection and try again.'
+          : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
+        setOrderError(message);
+        showError('Payment failed', message);
+      }
     } finally {
       isSubmittingRef.current = false;
     }

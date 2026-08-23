@@ -20,7 +20,6 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -211,6 +210,11 @@ export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
+  // Home is nested HomeStack → BottomTabs → RootStack. Global overlays are
+  // owned by RootStack and must not be dispatched into the tab-local stack.
+  const rootNavigation = navigation
+    .getParent()
+    ?.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
@@ -274,17 +278,15 @@ export default function HomeScreen() {
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
 
-      // Spring the header towards the scroll-derived target height. The spring
-      // is triggered from the scroll worklet so a new animation is only created
-      // when the target actually changes — Reanimated coalesces concurrent
-      // springs on the same shared value, so this remains performant.
-      const targetHeight = interpolate(
+      // Direct shared value assignment — continuous scroll motion should
+      // use interpolation, not springs. Springs on continuously changing
+      // values create lag and jank (AGENTS.md P1-UI-3).
+      headerHeightSV.value = interpolate(
         e.contentOffset.y,
         [0, 120],
         [headerExpandedHeight, headerCollapsedHeight],
         Extrapolation.CLAMP,
       );
-      headerHeightSV.value = withSpring(targetHeight, spring.entrance);
 
       if (e.contentOffset.y > lastScrollY.value + 5 && e.contentOffset.y > 80) {
         tabBarVisible.value = false;
@@ -960,10 +962,10 @@ export default function HomeScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('GlobalSearch')}
-              accessibilityLabel="Search listings"
+              onPress={() => rootNavigation?.navigate('UnifiedDiscovery')}
+              accessibilityLabel="Search and discover"
               accessibilityRole="button"
-              accessibilityHint="Opens global search"
+              accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
               <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
