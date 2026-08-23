@@ -51,6 +51,17 @@ const addItemSchema = z.object({
   scale: z.coerce.number().min(0.1).max(10).default(1.0),
 });
 
+const updateItemPositionSchema = z.object({
+  positionX: z.coerce.number().min(0).max(1).optional(),
+  positionY: z.coerce.number().min(0).max(1).optional(),
+  rotation: z.coerce.number().optional(),
+  scale: z.coerce.number().min(0.1).max(10).optional(),
+});
+
+const reorderItemSchema = z.object({
+  direction: z.enum(['front', 'back']),
+});
+
 type MoodboardRow = {
   id: string;
   creator_id: string;
@@ -459,6 +470,122 @@ export function registerMoodboardRoutes({
       if (!result.rowCount) {
         reply.code(404);
         return { ok: false, error: 'Item not found' };
+      }
+
+      await db.query(`UPDATE moodboards SET updated_at = NOW() WHERE id = $1`, [moodboardId]);
+      return { ok: true };
+    }
+  );
+
+  // ── PATCH /moodboards/:moodboardId/items/:itemId — update item position ──
+  app.patch<{ Params: { moodboardId: string; itemId: string } }>(
+    '/moodboards/:moodboardId/items/:itemId',
+    async (request, reply) => {
+      const actorUserId = resolveAuthenticatedUserId(request);
+      const { moodboardId, itemId } = request.params;
+
+      const ownerResult = await db.query<{ creator_id: string }>(
+        `SELECT creator_id FROM moodboards WHERE id = $1`,
+        [moodboardId]
+      );
+
+      if (!ownerResult.rowCount) {
+        reply.code(404);
+        return { ok: false, error: 'Moodboard not found' };
+      }
+
+      if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+        reply.code(403);
+        return { ok: false, error: 'Forbidden: not the moodboard owner' };
+      }
+
+      const parsed = updateItemPositionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { ok: false, error: 'Invalid position', details: parsed.error.flatten() };
+      }
+
+      const data = parsed.data;
+      const sets: string[] = [];
+      const args: (string | number)[] = [];
+      let argIdx = 1;
+
+      if (data.positionX !== undefined) { sets.push(`position_x = $${argIdx++}`); args.push(data.positionX); }
+      if (data.positionY !== undefined) { sets.push(`position_y = $${argIdx++}`); args.push(data.positionY); }
+      if (data.rotation !== undefined) { sets.push(`rotation = $${argIdx++}`); args.push(data.rotation); }
+      if (data.scale !== undefined) { sets.push(`scale = $${argIdx++}`); args.push(data.scale); }
+
+      if (sets.length === 0) {
+        reply.code(400);
+        return { ok: false, error: 'No position fields provided' };
+      }
+
+      args.push(moodboardId, itemId);
+      const result = await db.query(
+        `UPDATE moodboard_items SET ${sets.join(', ')} WHERE moodboard_id = $${argIdx++} AND id = $${argIdx++}`,
+        args
+      );
+
+      if (!result.rowCount) {
+        reply.code(404);
+        return { ok: false, error: 'Item not found' };
+      }
+
+      await db.query(`UPDATE moodboards SET updated_at = NOW() WHERE id = $1`, [moodboardId]);
+      return { ok: true };
+    }
+  );
+
+  // ── PATCH /moodboards/:moodboardId/items/:itemId/reorder — reorder item layer ──
+  app.patch<{ Params: { moodboardId: string; itemId: string } }>(
+    '/moodboards/:moodboardId/items/:itemId/reorder',
+    async (request, reply) => {
+      const actorUserId = resolveAuthenticatedUserId(request);
+      const { moodboardId, itemId } = request.params;
+
+      const ownerResult = await db.query<{ creator_id: string }>(
+        `SELECT creator_id FROM moodboards WHERE id = $1`,
+        [moodboardId]
+      );
+
+      if (!ownerResult.rowCount) {
+        reply.code(404);
+        return { ok: false, error: 'Moodboard not found' };
+      }
+
+      if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+        reply.code(403);
+        return { ok: false, error: 'Forbidden: not the moodboard owner' };
+      }
+
+      const parsed = reorderItemSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { ok: false, error: 'Invalid direction', details: parsed.error.flatten() };
+      }
+
+      const { direction } = parsed.data;
+
+      if (direction === 'front') {
+        const maxResult = await db.query<{ max_sort: string | number | null }>(
+          `SELECT COALESCE(MAX(sort_order), -1) AS max_sort FROM moodboard_items WHERE moodboard_id = $1`,
+          [moodboardId]
+        );
+        const newSort = Number(maxResult.rows[0].max_sort) + 1;
+        await db.query(
+          `UPDATE moodboard_items SET sort_order = $1 WHERE id = $2 AND moodboard_id = $3`,
+          [newSort, itemId, moodboardId]
+        );
+      } else {
+        const minResult = await db.query<{ min_sort: string | number | null }>(
+          `SELECT COALESCE(MIN(sort_order), 0) AS min_sort FROM moodboard_items WHERE moodboard_id = $1`,
+          [moodboardId]
+        );
+        const newSort = Number(minResult.rows[0].min_sort) - 1;
+        await db.query(
+          `UPDATE moodboard_items SET sort_order = $1 WHERE id = $2 AND moodboard_id = $3`,
+          [newSort, itemId, moodboardId]
+        );
       }
 
       await db.query(`UPDATE moodboards SET updated_at = NOW() WHERE id = $1`, [moodboardId]);

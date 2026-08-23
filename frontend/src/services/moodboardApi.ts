@@ -455,14 +455,16 @@ export async function updateItemPosition(
   itemId: string,
   position: MoodboardItemPosition,
 ): Promise<boolean> {
-  // The backend does not have a dedicated PATCH endpoint for item position yet.
-  // We attempt the PATCH on the moodboard (which updates metadata) and fall
-  // back to in-memory mock for position updates.
   try {
-    await fetchJson<ApiMoodboard>(`/moodboards/${moodboardId}`, {
+    await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/items/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        positionX: position.x,
+        positionY: position.y,
+        rotation: position.rotation,
+        scale: position.scale,
+      }),
     });
     return true;
   } catch {
@@ -486,22 +488,28 @@ export async function reorderItem(
   itemId: string,
   direction: 'front' | 'back',
 ): Promise<boolean> {
-  // Position reordering is a client-side concern for now — the backend
-  // stores sort_order but does not expose a reorder endpoint. Fall back
-  // to in-memory mock for layer reordering.
-  await delay(120);
-  const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
-  if (!moodboard) return false;
-  const idx = moodboard.items.findIndex((it) => it.id === itemId);
-  if (idx === -1) return false;
-  const [moved] = moodboard.items.splice(idx, 1);
-  if (direction === 'front') {
-    moodboard.items.push(moved);
-  } else {
-    moodboard.items.unshift(moved);
+  try {
+    await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/items/${itemId}/reorder`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction }),
+    });
+    return true;
+  } catch {
+    await delay(120);
+    const moodboard = demoMoodboards.find((mb) => mb.id === moodboardId);
+    if (!moodboard) return false;
+    const idx = moodboard.items.findIndex((it) => it.id === itemId);
+    if (idx === -1) return false;
+    const [moved] = moodboard.items.splice(idx, 1);
+    if (direction === 'front') {
+      moodboard.items.push(moved);
+    } else {
+      moodboard.items.unshift(moved);
+    }
+    moodboard.updatedAt = new Date().toISOString();
+    return true;
   }
-  moodboard.updatedAt = new Date().toISOString();
-  return true;
 }
 
 /**
