@@ -1,6 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import Reanimated, {
+  SlideInRight,
+  SlideOutLeft,
+  FadeIn,
+  FadeOut,
+} from 'react-native-reanimated';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -42,6 +49,7 @@ export default function CoOwnOnboardingScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const [index, setIndex] = React.useState(0);
 
   const slide = SLIDES[index];
@@ -57,10 +65,26 @@ export default function CoOwnOnboardingScreen() {
     setIndex((prev) => Math.min(prev + 1, SLIDES.length - 1));
   };
 
+  const handleBack = () => {
+    if (index === 0) {
+      navigation.goBack();
+      return;
+    }
+    haptics.selection();
+    setIndex((prev) => Math.max(prev - 1, 0));
+  };
+
   const handleSkip = () => {
     haptics.tap();
     navigation.replace('CoOwnHub');
   };
+
+  const slideEnter = reducedMotion
+    ? FadeIn.duration(0)
+    : SlideInRight.springify().damping(20).stiffness(200);
+  const slideExit = reducedMotion
+    ? FadeOut.duration(0)
+    : SlideOutLeft.springify().damping(20).stiffness(200);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -68,16 +92,30 @@ export default function CoOwnOnboardingScreen() {
 
       {/* Header */}
       <View style={styles.headerRow}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          scaleValue={0.92}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        >
-          <Ionicons name="close" size={22} color={colors.textPrimary} />
-        </AnimatedPressable>
+        {index > 0 ? (
+          <AnimatedPressable
+            onPress={handleBack}
+            style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            scaleValue={0.92}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Previous slide"
+            accessibilityHint="Go back to the previous Co-Own introduction slide"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          </AnimatedPressable>
+        ) : (
+          <AnimatedPressable
+            onPress={() => navigation.goBack()}
+            style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            scaleValue={0.92}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
+          </AnimatedPressable>
+        )}
         <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
           {index + 1} of {SLIDES.length}
         </Text>
@@ -94,8 +132,10 @@ export default function CoOwnOnboardingScreen() {
 
       {/* Hero slide */}
       <View style={styles.hero}>
-        <View
+        <Reanimated.View
           key={slide.title}
+          entering={slideEnter}
+          exiting={slideExit}
           style={styles.heroSlide}
         >
           <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
@@ -128,7 +168,7 @@ export default function CoOwnOnboardingScreen() {
               ))}
             </View>
           )}
-        </View>
+        </Reanimated.View>
       </View>
 
       {/* Footer */}
@@ -176,7 +216,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide + 0.18,
   },

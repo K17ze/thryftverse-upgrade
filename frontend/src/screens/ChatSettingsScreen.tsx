@@ -53,6 +53,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
       {/* Hero summary */}
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -193,7 +194,12 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+    </FlagshipScreen>
 
+      {/* BottomSheetPickers MUST be rendered OUTSIDE FlagshipScreen's
+          ScrollView. When inside the ScrollView, absoluteFill fills the
+          scrollable content container — not the screen viewport — so the
+          sheet renders below the fold and is invisible to the user. */}
       <BottomSheetPicker
         visible={showAllowSheet}
         onClose={() => setShowAllowSheet(false)}
@@ -202,7 +208,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
         selectedValue={allowLabel[allowFrom]}
         onSelect={handleAllowSelect}
       />
-    </FlagshipScreen>
+    </View>
   );
 }
 
@@ -229,7 +235,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },

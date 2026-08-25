@@ -29,6 +29,10 @@ import type {
 } from '../../tools/effects/EffectTypes';
 import { IDENTITY_MATRIX, interpolateMatrix } from '../../tools/effects/EffectTypes';
 import type { EffectNode as CompositionEffectNode } from '../../composition';
+import {
+  resolveColorMatrix,
+  type ImageFilter,
+} from '../../../components/poster/filters/filterConfig';
 
 // ── Result type ─────────────────────────────────────────────────────
 
@@ -364,9 +368,16 @@ export function evaluateCompositionEffectStack(
   for (const node of stack) {
     switch (node.type) {
       case 'filter': {
-        // Filter nodes reference a preset by ID. The preset's matrix is
-        // resolved by the caller. For now, we skip — the preset matrix
-        // is applied separately by the render layer.
+        // Resolve persisted preset IDs here so every image consumer using
+        // the canonical evaluator receives the same Skia matrix as the live
+        // camera preview. Unknown/retired IDs fail closed to identity.
+        const filterMatrix = resolveColorMatrix(
+          node.id as ImageFilter,
+          Math.max(0, Math.min(1, node.amount)),
+        );
+        colorMatrix = colorMatrix
+          ? multiplyMatrix(colorMatrix, filterMatrix)
+          : filterMatrix;
         break;
       }
       case 'adjust': {

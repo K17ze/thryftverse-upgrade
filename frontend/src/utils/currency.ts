@@ -62,10 +62,10 @@ export function formatAuctionIze(izeAmount: number): string {
   return `${izeAmount.toFixed(2)} 1ZE`;
 }
 
-export function formatCoOwnIze(izeAmount: number, fractionDigits: number = 2): string {
+export function formatCoOwnIze(izeAmount: number, fractionDigits: number = 2, locale: string = 'en-GB'): string {
   if (!Number.isFinite(izeAmount)) return `— 1ZE`;
   const sign = izeAmount < 0 ? '−' : '';
-  const value = Math.abs(izeAmount).toLocaleString('en-GB', {
+  const value = Math.abs(izeAmount).toLocaleString(locale, {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });

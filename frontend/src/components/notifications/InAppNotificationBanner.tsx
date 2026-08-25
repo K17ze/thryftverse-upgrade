@@ -54,7 +54,7 @@ const TYPE_CONFIG: Record<NotificationType, TypeConfig> = {
   offer: { icon: 'pricetag', accentKey: 'discovery' },
   message: { icon: 'chatbubble', accentKey: 'social' },
   listing: { icon: 'cube', accentKey: 'commerceTrust' },
-  order: { icon: 'cube', accentKey: 'antiqueGold' },
+  order: { icon: 'cube', accentKey: 'commerceTrust' },
 };
 
 // ---------------------------------------------------------------------------

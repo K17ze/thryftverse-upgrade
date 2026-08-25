@@ -38,6 +38,9 @@ import {
   type CoOwnRecurringOrder,
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnRecurringOrders'>;
 
@@ -62,6 +65,7 @@ const FREQUENCY_SHORT: Record<string, string> = {
 };
 
 export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -230,10 +234,12 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                       <Pressable
                         style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
                         onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: order.assetId }); }}
+                      accessibilityLabel="View order details"
+                      accessibilityRole="link"
                       >
                         <View style={styles.orderHeader}>
                           {/* Frequency badge — visual identity */}
-                          <View style={[styles.freqBadge, { backgroundColor: colors.brand + '18' }]}>
+                          <View style={[styles.freqBadge, { backgroundColor: colors.brandSubtle }]}>
                             <Text style={styles.freqBadgeText}>
                               {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
                             </Text>
@@ -327,7 +333,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           onPress={() => { haptic.light(); setShowCreate(true); }}
           variant="primary"
           size="lg"
-          icon={<Ionicons name="add-circle-outline" size={18} color="#fff" />}
+          icon={<Ionicons name="add-circle-outline" size={18} color={colors.textInverse} />}
           style={{ marginTop: Space.lg }}
         />
 
@@ -459,20 +465,20 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.subtitle.lineHeight,
     },
     heroSubtitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
 
     introText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.md,
     },
@@ -487,12 +493,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     sectionTitle: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
-      lineHeight: Type.metaElevated.lineHeight,
+      letterSpacing: Type.label.letterSpacing,
+      lineHeight: Type.label.lineHeight,
       opacity: 0.7,
     },
     sectionCount: {
@@ -504,11 +510,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     sectionCountText: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
     },
 
     // Order cards
@@ -537,26 +543,26 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     freqBadgeText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.bold,
       color: colors.brand,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
     },
     orderHeaderText: { flex: 1 },
     orderAsset: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     orderDetail: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
     },
@@ -567,27 +573,27 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs + 2,
     },
     orderMaxPrice: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
     },
     orderNext: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.brand,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
     },
     orderExecutions: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
     },
     cancelButton: { padding: Space.sm },
 
@@ -595,7 +601,7 @@ function createStyles(colors: ThemeColors) {
     modalOverlay: {
       flex: 1,
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       padding: Space.lg,
     },
     modalCard: {
@@ -626,19 +632,19 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.subtitle.lineHeight,
     },
     modalSubtitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
     inputLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.sm + 2,
       marginBottom: Space.xs,
     },
@@ -668,11 +674,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     frequencyText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      lineHeight: Type.captionElevated.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
     },
     modalActions: {
       flexDirection: 'row',

@@ -71,6 +71,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -144,7 +145,7 @@ export function Eyedropper({
         accessibilityHint="Extracts dominant colors from your media to pick from"
         accessibilityRole="button"
       >
-        <Ionicons name="color-wand-outline" size={20} color={colors.textSecondary} />
+        <Ionicons name="eyedrop-outline" size={IconGrammar.standard} color={colors.textSecondary} />
       </PressScale>
     );
   }
@@ -159,7 +160,7 @@ export function Eyedropper({
           accessibilityLabel="Close eyedropper"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={18} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
         </Pressable>
       </View>
 

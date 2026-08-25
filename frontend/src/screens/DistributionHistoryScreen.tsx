@@ -28,6 +28,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
 import { AppButton } from '../components/ui/AppButton';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -49,6 +50,7 @@ function formatDate(iso: string | null): string {
 }
 
 export default function DistributionHistoryScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
@@ -145,7 +147,7 @@ export default function DistributionHistoryScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No distributions yet"
-          subtitle="When this position pays a distribution, it will appear here with the amount, record date, and payment date."
+          subtitle="Distributions appear here with amount and dates."
           actionLabel="Back to portfolio"
           onAction={() => { haptics.tap(); handleBack(); }}
         />
@@ -196,7 +198,7 @@ export default function DistributionHistoryScreen() {
                         {assetId.slice(0, 20)}…
                       </Text>
                       {enrolled && (
-                        <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.success + '18' }]}>
+                        <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
                           <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
                         </View>
                       )}
@@ -206,7 +208,7 @@ export default function DistributionHistoryScreen() {
                       onValueChange={(v) => void handleToggleDrip(assetId, v)}
                       disabled={dripToggling === assetId}
                       trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                      thumbColor="#fff"
+                      thumbColor={colors.surfaceElevated}
                       accessibilityRole="switch"
                       accessibilityLabel={`DRIP for ${assetId}`}
                     />
@@ -241,7 +243,7 @@ export default function DistributionHistoryScreen() {
                       {formatDate(dist.settledAt ?? dist.createdAt)}
                     </Text>
                   </View>
-                  <View style={[styles.amountBadge, { backgroundColor: colors.success + '15' }]}>
+                  <View style={[styles.amountBadge, { backgroundColor: colors.successSubtle }]}>
                     <Text style={[styles.amountText, { color: colors.success }]}>
                       +{formatDistributionAmount(dist.amountGbpMinor)}
                     </Text>
@@ -304,9 +306,10 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
   },
   summaryValue: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   summaryCount: {
     fontSize: Type.meta.size,
@@ -353,6 +356,7 @@ function createStyles(colors: ThemeColors) {
   amountText: {
     fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.bodyStrong.letterSpacing,
   },
   distDetails: {
@@ -373,6 +377,7 @@ function createStyles(colors: ThemeColors) {
   detailValue: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
     letterSpacing: Type.caption.letterSpacing,
   },
   dripCard: {
@@ -397,7 +402,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   dripTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -405,7 +410,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginTop: Space.xs - 2,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,

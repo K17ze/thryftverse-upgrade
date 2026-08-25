@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -21,11 +21,12 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import { Motion } from '../theme/motionTokens';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
-import { requestPushPermissionOnce } from '../lib/pushPermission';
+import { requestPushPermissionWithSoftAsk } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
@@ -81,8 +82,10 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { useStore } from '../store/useStore';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { createDmConversationOnApi } from '../services/chatApi';
 import type { Listing } from '../services/listingsApi';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   resolveStateAction,
   resolveDetailPriceLabel,
@@ -111,6 +114,7 @@ export default function AuctionDetailScreen() {
     initialBidAmount,
   } = route.params;
   const { show } = useToast();
+  const { requireAuth } = useSignupWall();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
   const insets = useSafeAreaInsets();
@@ -136,7 +140,8 @@ export default function AuctionDetailScreen() {
   // Per App Store / Google Play 2026 guidelines, push permission is requested
   // only after a meaningful user action — here, after the user watches/favorites
   // an auction for the first time. The ref guards within-session re-prompting;
-  // requestPushPermissionOnce persists an AsyncStorage flag across sessions.
+  // requestPushPermissionWithSoftAsk shows an in-app pre-prompt before the
+  // one-shot OS prompt and persists an AsyncStorage flag across sessions.
   const favoritePushAskedRef = React.useRef(false);
   const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
@@ -272,6 +277,7 @@ export default function AuctionDetailScreen() {
 
   const handleToggleWatch = async () => {
     if (!auction || watchToggling) return;
+    if (!requireAuth('save_item')) return;
     setWatchToggling(true);
     const wasWatching = auction.isWatched;
     setAuction({ ...auction, isWatched: !wasWatching });
@@ -293,7 +299,7 @@ export default function AuctionDetailScreen() {
         // item to their watchlist. Best-effort; never blocks the watch flow.
         if (!favoritePushAskedRef.current) {
           favoritePushAskedRef.current = true;
-          requestPushPermissionOnce('favorite').catch(() => undefined);
+          requestPushPermissionWithSoftAsk('favorite').catch(() => undefined);
         }
       }
     } catch {
@@ -311,6 +317,7 @@ export default function AuctionDetailScreen() {
 
   const openBidSheet = () => {
     if (!auction) return;
+    if (!requireAuth('place_bid')) return;
     setBidSheetVisible(true);
   };
 
@@ -350,6 +357,7 @@ export default function AuctionDetailScreen() {
 
   const openBuyNowSheet = () => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
+    if (!requireAuth('purchase')) return;
     setBuyNowSheetVisible(true);
   };
 
@@ -445,7 +453,7 @@ export default function AuctionDetailScreen() {
 
   const priceText = React.useMemo(() => {
     if (priceLabel === 'No bids') return 'No bids';
-    return formatFromFiat(priceAmount, 'GBP');
+    return formatFromFiat(priceAmount, DEFAULT_CURRENCY_CODE);
   }, [priceLabel, priceAmount, formatFromFiat]);
 
   const countdown = React.useMemo(() => {
@@ -523,6 +531,18 @@ export default function AuctionDetailScreen() {
 
   const social = useProductSocialState(viewModel);
 
+  // Guest gating: wrap save/like actions with the soft signup wall so
+  // guests can browse auctions freely but cannot commit to saving or
+  // liking without an account.
+  const guardedOpenCollectionPicker = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.openCollectionPicker();
+  }, [requireAuth, social]);
+  const guardedToggleLike = React.useCallback(() => {
+    if (!requireAuth('save_item')) return;
+    social.toggleLike();
+  }, [requireAuth, social]);
+
   const { data: sellerTrustData } = useSellerTrust(auction?.seller.id);
   const sellerFollowMutation = useSellerFollow(auction?.seller.id);
 
@@ -547,9 +567,24 @@ export default function AuctionDetailScreen() {
   void recsLoading;
   void railSections;
 
-  const handlePressRecommendation = React.useCallback((recItem: Listing) => {
-    navigation.push('ItemDetail', { itemId: recItem.id });
-  }, [navigation]);
+  const handlePressRecommendation = React.useCallback(
+    (
+      recItem: Listing,
+      sectionKey?: string,
+      position?: number,
+      reasonCode?: string,
+      personalised?: boolean,
+    ) => {
+      navigation.push('ItemDetail', {
+        itemId: recItem.id,
+        sectionKey,
+        position,
+        reasonCode,
+        personalised,
+      });
+    },
+    [navigation],
+  );
   const handlePressLook = React.useCallback((lookItem: RecommendationLook) => {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
   }, [navigation]);
@@ -602,7 +637,7 @@ export default function AuctionDetailScreen() {
       : null;
   const terminalAmountText =
     terminalAmountGbp != null
-      ? formatFromFiat(terminalAmountGbp, 'GBP')
+      ? formatFromFiat(terminalAmountGbp, DEFAULT_CURRENCY_CODE)
       : 'Amount unavailable';
 
   // ── Truthful terminal sale-state labels (audit P0.5) ──
@@ -785,7 +820,10 @@ export default function AuctionDetailScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Reanimated.View
+      entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* ── Collapsed scrolling header ──
@@ -833,11 +871,12 @@ export default function AuctionDetailScreen() {
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={social.openShare}
-          onSave={social.openCollectionPicker}
-          onToggleFav={social.toggleLike}
+          onSave={guardedOpenCollectionPicker}
+          onToggleFav={guardedToggleLike}
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
+          showThumbnailStrip={auctionMediaItems.length > 1}
           heightFraction={isCompact ? 0.54 : 0.58}
           initialIndex={fullscreenMediaIndex}
           onActiveIndexChange={setFullscreenMediaIndex}
@@ -871,13 +910,72 @@ export default function AuctionDetailScreen() {
               icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
               label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
-              onPress: social.openCollectionPicker,
+              onPress: guardedOpenCollectionPicker,
               isActive: social.isSavedToCollection,
             },
           ]}
           onOverflow={() => setOverflowVisible(true)}
           showOverflow
         />
+
+        {/* ── Prominent countdown timer bar ──
+            Sits at the top of the content, immediately below the media
+            stage. Red when < 1 hour remaining (urgency). Shows the
+            server-authoritative countdown so the user always knows the
+            time state without scrolling. */}
+        {isLive && liveMsToEnd > 0 && (
+          <View
+            style={[
+              styles.countdownBar,
+              {
+                backgroundColor: liveMsToEnd < 60 * 60 * 1000
+                  ? colors.danger
+                  : colors.surface,
+                borderBottomColor: colors.border,
+              },
+            ]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`Time remaining: ${formatCountdownSentence(liveMsToEnd)}`}
+          >
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={liveMsToEnd < 60 * 60 * 1000 ? colors.textInverse : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.countdownBarText,
+                {
+                  color: liveMsToEnd < 60 * 60 * 1000
+                    ? colors.textInverse
+                    : colors.textPrimary,
+                  fontVariant: ['tabular-nums'] as any,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {`Ends in ${formatCountdownSentence(liveMsToEnd)}`}
+            </Text>
+            {liveMsToEnd < 60 * 60 * 1000 && (
+              <View style={[styles.countdownBarUrgencyDot, { backgroundColor: colors.textInverse }]} />
+            )}
+          </View>
+        )}
+        {isUpcoming && liveMsToStart > 0 && (
+          <View
+            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`Starts in: ${formatCountdownSentence(liveMsToStart)}`}
+          >
+            <Ionicons name="time-outline" size={16} color={colors.brand} />
+            <Text
+              style={[styles.countdownBarText, { color: colors.textPrimary, fontVariant: ['tabular-nums'] as any }]}
+              numberOfLines={1}
+            >
+              Starts in {formatCountdownSentence(liveMsToStart)}
+            </Text>
+          </View>
+        )}
 
         {/* ── Offline banner ──
             Per spec 05 §14: offline state must be designed, not a blank
@@ -958,7 +1056,7 @@ export default function AuctionDetailScreen() {
                   Minimum to lead
                 </Text>
                 <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
+                  {formatFromFiat(auction.minimumNextBidGbp, DEFAULT_CURRENCY_CODE)}
                 </Text>
               </View>
             )}
@@ -1067,10 +1165,7 @@ export default function AuctionDetailScreen() {
                 ? {
                     label: isResolvingConversation ? 'Starting…' : 'Message',
                     onPress: async () => {
-                      if (!currentUser?.id) {
-                        show('Sign in to message the seller.', 'error');
-                        return;
-                      }
+                      if (!requireAuth('message_seller')) return;
                       if (isResolvingConversation) return;
                       setIsResolvingConversation(true);
                       try {
@@ -1096,10 +1191,7 @@ export default function AuctionDetailScreen() {
                 ? {
                     label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
                     onPress: () => {
-                      if (!currentUser?.id) {
-                        show('Sign in to follow this seller.', 'error');
-                        return;
-                      }
+                      if (!requireAuth('follow_seller')) return;
                       sellerFollowMutation.mutate(undefined, {
                         onSuccess: (data) => {
                           show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
@@ -1235,7 +1327,7 @@ export default function AuctionDetailScreen() {
                 id: rel.id,
                 title: rel.title,
                 imageUrl: rel.imageUrl,
-                priceText: formatFromFiat(relPrice, 'GBP'),
+                priceText: formatFromFiat(relPrice, DEFAULT_CURRENCY_CODE),
                 izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, 'GBP', goldRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
@@ -1262,11 +1354,11 @@ export default function AuctionDetailScreen() {
             <RecommendationRail
               section={seenInLooksSection}
               listingId={auction.listingId}
-              onPressItem={(recItem) => {
+              onPressItem={(recItem, sectionKey, position, reasonCode, personalised) => {
                 if (isRecommendationLook(recItem)) {
                   handlePressLook(recItem);
                 } else {
-                  handlePressRecommendation(recItem as Listing);
+                  handlePressRecommendation(recItem as Listing, sectionKey, position, reasonCode, personalised);
                 }
               }}
             />
@@ -1367,7 +1459,7 @@ export default function AuctionDetailScreen() {
         // Live bidder — current/min next bid + Place bid (+ optional Buy now).
         if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
           const dockValue = isLive && auction.minimumNextBidGbp > 0
-            ? formatFromFiat(auction.minimumNextBidGbp, 'GBP')
+            ? formatFromFiat(auction.minimumNextBidGbp, DEFAULT_CURRENCY_CODE)
             : priceText;
           const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
             ? 'Min next bid'
@@ -1438,7 +1530,7 @@ export default function AuctionDetailScreen() {
                       onPress: () => { haptics.press(); openBuyNowSheet(); },
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
-                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,
+                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, DEFAULT_CURRENCY_CODE)}`,
                     }
                   : undefined
               }
@@ -1494,7 +1586,7 @@ export default function AuctionDetailScreen() {
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {
             setOverflowVisible(false);
-            social.openCollectionPicker();
+            guardedOpenCollectionPicker();
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
@@ -1513,7 +1605,7 @@ export default function AuctionDetailScreen() {
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {
             setOverflowVisible(false);
-            social.toggleLike();
+            guardedToggleLike();
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
@@ -1766,7 +1858,7 @@ export default function AuctionDetailScreen() {
         url={`https://thryftverse.com/auction/${auction.id}`}
         title={auction.title}
       />
-    </View>
+    </Reanimated.View>
   );
 }
 
@@ -1927,6 +2019,30 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
+  },
+  // ── Prominent countdown timer bar ──
+  // Sits at the top of content, immediately below the media stage.
+  // Red background when < 1 hour (urgency), surface otherwise.
+  // Color-dependent values are applied inline in the render section.
+  countdownBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  countdownBarText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    flex: 1,
+  },
+  countdownBarUrgencyDot: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: (Space.xs + 2) / 2,
   },
   // ── Transaction surface internal rows ──
   // Primary state sentence — one dominant line in the headline aside.

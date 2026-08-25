@@ -7,7 +7,13 @@ import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 interface Props {
   /** ISO timestamp of order creation (dispatch window start) */
   createdAt: string;
-  /** Dispatch window in hours (default 24) */
+  /**
+   * Server-derived ship-by deadline (ISO). When present, the countdown is
+   * computed from this deadline instead of a hardcoded 24h window.
+   * Per AGENTS.md §11: "Never fabricate… order or tracking state."
+   */
+  shipByDate?: string | null;
+  /** Dispatch window in hours — used only as a fallback when no shipByDate exists (default 24) */
   windowHours?: number;
   /** Whether the order has been shipped (hides countdown) */
   shipped: boolean;
@@ -35,7 +41,7 @@ function formatDispatchCountdown(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Props) {
+export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shipped }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -50,9 +56,18 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   if (shipped) return null;
 
   const createdMs = new Date(createdAt).getTime();
-  const deadlineMs = createdMs + windowHours * 60 * 60 * 1000;
+
+  // Use the server-derived shipByDate when available; fall back to
+  // createdAt + windowHours only when no server deadline exists.
+  const serverDeadlineMs = shipByDate ? new Date(shipByDate).getTime() : NaN;
+  const deadlineMs = Number.isFinite(serverDeadlineMs)
+    ? serverDeadlineMs
+    : createdMs + windowHours * 60 * 60 * 1000;
+  const totalMs = Number.isFinite(serverDeadlineMs)
+    ? serverDeadlineMs - createdMs
+    : windowHours * 60 * 60 * 1000;
   const msRemaining = deadlineMs - nowMs;
-  const urgency = resolveUrgency(msRemaining, windowHours * 60 * 60 * 1000);
+  const urgency = resolveUrgency(msRemaining, totalMs);
 
   const color =
     urgency === 'overdue' ? colors.danger :
@@ -76,7 +91,6 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
     urgency === 'overdue' ? 'Dispatch overdue' :
     'Dispatch within';
 
-  const totalMs = windowHours * 60 * 60 * 1000;
   const elapsedMs = totalMs - msRemaining;
   const elapsedPercent = (elapsedMs / totalMs) * 100;
 
@@ -129,7 +143,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   progressTrack: {
     height: 3,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(128,128,128,0.15)',
+    backgroundColor: colors.border,
     marginTop: Space.sm,
     overflow: 'hidden',
   },
@@ -139,7 +153,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   label: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   countdown: {

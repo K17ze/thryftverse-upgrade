@@ -164,7 +164,7 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      backgroundColor: colors.textPrimary,
+      backgroundColor: colors.brand,
       borderRadius: Radius.sm,
     },
   });

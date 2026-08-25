@@ -1,0 +1,81 @@
+name: API Health Check
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-health-check
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    name: Probe API health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check API health
+        id: health
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.HEALTH_CHECK_URL }}
+        run: |
+          if [ -z "$HEALTH_CHECK_URL" ]; then
+            echo "HEALTH_CHECK_URL secret not set — skipping health check"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Probing $HEALTH_CHECK_URL ..."
+          HTTP_CODE=$(curl -s -o /tmp/health_response.json -w "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 30 \
+            "$HEALTH_CHECK_URL")
+
+          echo "HTTP status code: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/health_response.json || true
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+            echo "Health check PASSED"
+          else
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+            echo "http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+            echo "Health check FAILED with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          HEALTH_CHECK_URL: ${{ secrets.HEALTH_CHECK_URL }}
+        run: |
+          if [ -z "$ALERT_WEBHOOK_URL" ]; then
+            echo "ALERT_WEBHOOK_URL secret not set — skipping notification"
+            exit 0
+          fi
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "content": "🚨 **API Health Check FAILED**\n\n**Service:** ThryftVerse API\n**URL:** ${HEALTH_CHECK_URL}\n**Time:** ${TIMESTAMP}\n**Run:** ${RUN_URL}\n**Triggered by:** ${GITHUB_EVENT_NAME}"
+          }
+          EOF
+          )
+
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$ALERT_WEBHOOK_URL"
+
+          echo "Failure notification sent to webhook"

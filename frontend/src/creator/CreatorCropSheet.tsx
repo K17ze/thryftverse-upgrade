@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   Image as RNImage,
 } from 'react-native';
@@ -13,11 +13,13 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { PressScale } from './CreatorAnimations';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
@@ -34,7 +36,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 // ── Aspect ratio presets (Instagram/Snapchat-grade) ────────────────
 const ASPECT_PRESETS = [
@@ -66,6 +68,7 @@ export function CreatorCropSheet({
   const { show } = useToast();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [selectedRatio, setSelectedRatio] = useState<number | null>(null);
@@ -83,7 +86,7 @@ export function CreatorCropSheet({
   const zoomSV = useSharedValue(1);
   const rotateSV = useSharedValue(0);
   const gridOpacitySV = useSharedValue(0);
-  const sheetYSV = useSharedValue(SCREEN_W * 1.2);
+  const sheetYSV = useSharedValue(screenWidth * 1.2);
   const backdropOpacitySV = useSharedValue(0);
   const mountedRef = useRef(false);
 
@@ -91,7 +94,6 @@ export function CreatorCropSheet({
   const ratioTabLayouts = useRef<Map<string, { x: number; width: number }>>(new Map());
   const ratioUnderlineXSV = useSharedValue(0);
   const ratioUnderlineWSV = useSharedValue(0);
-  const RATIO_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Load image dimensions on open ────────────────────────────────
   useEffect(() => {
@@ -120,25 +122,25 @@ export function CreatorCropSheet({
         gridOpacitySV.value = 0.3;
       } else {
         sheetYSV.value = withSpring(0, spring.entrance);
-        backdropOpacitySV.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
         // Grid lines fade in after sheet settles
-        gridOpacitySV.value = withDelay(200, withTiming(0.3, { duration: 200 }));
+        gridOpacitySV.value = withDelay(Motion.duration.normal, withTiming(0.3, { duration: Motion.duration.normal }));
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
-        sheetYSV.value = SCREEN_W * 1.2;
+        sheetYSV.value = screenWidth * 1.2;
         backdropOpacitySV.value = 0;
         gridOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacitySV.value = withTiming(0, { duration: 160 });
-        gridOpacitySV.value = withTiming(0, { duration: 120 });
+        sheetYSV.value = withTiming(screenWidth * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
+        gridOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       }
     }
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, gridOpacitySV, spring]);
 
   // ── Calculate display dimensions ─────────────────────────────────
-  const displayW = SCREEN_W - Space.md * 2;
+  const displayW = screenWidth - Space.md * 2;
   const displayH = imageSize.width > 0
     ? displayW * (imageSize.height / imageSize.width)
     : displayW;
@@ -171,8 +173,8 @@ export function CreatorCropSheet({
         ratioUnderlineXSV.value = layout.x;
         ratioUnderlineWSV.value = layout.width;
       } else {
-        ratioUnderlineXSV.value = withSpring(layout.x, RATIO_UNDERLINE_SPRING);
-        ratioUnderlineWSV.value = withSpring(layout.width, RATIO_UNDERLINE_SPRING);
+        ratioUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        ratioUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
       }
     }
 
@@ -392,7 +394,7 @@ export function CreatorCropSheet({
             accessibilityLabel="Close crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -462,7 +464,7 @@ export function CreatorCropSheet({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="refresh-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="refresh-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.rotateLabel, { color: colors.textSecondary }]}>
               {rotation}°
             </Text>
@@ -582,7 +584,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   title: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   closeBtn: {
@@ -697,10 +699,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   ratioText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   // ── Footer — premium Cancel / Done buttons ──
@@ -723,13 +725,13 @@ const styles = StyleSheet.create({
   },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

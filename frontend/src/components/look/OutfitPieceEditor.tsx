@@ -245,7 +245,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   labelInput: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     paddingVertical: Space.xs,
@@ -265,7 +265,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   listingTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -312,7 +312,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   searchResultTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -322,7 +322,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.brand,
   },
   noResults: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'center',

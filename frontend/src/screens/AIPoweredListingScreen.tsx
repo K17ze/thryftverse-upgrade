@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -32,11 +31,12 @@ import Reanimated, {
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useAIListingSuggestion } from '../hooks/useAIListingSuggestion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -61,9 +61,11 @@ import {
   type SmartSellConfig,
 } from '../services/smartSellApi';
 import {
+
   scoreListing,
   type ListingQualityScore,
 } from '../services/listingQualityApi';
+import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -138,9 +140,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     setCategory(suggestion.suggestedCategory);
     setBrand(suggestion.suggestedBrand ?? '');
     setCondition(suggestion.suggestedCondition);
-    setPrice(String(suggestion.suggestedPrice));
+    // Price is NOT auto-filled — the suggested range is shown as guidance so
+    // the seller picks their own price (communicates uncertainty honestly).
     setTags(suggestion.suggestedTags);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [suggestion]);
 
   // -- Auto-analyze whenever the photo set changes --------------------------
@@ -159,7 +162,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   // -- Photo capture / pick ------------------------------------------------
   const handlePickFromLibrary = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
@@ -186,7 +189,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   }, [showError]);
 
   const handlePickFromCamera = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
@@ -211,14 +214,14 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   }, [showError]);
 
   const handleRemovePhoto = useCallback((uri: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     setPhotos((prev) => prev.filter((p) => p.uri !== uri));
   }, []);
 
   // -- Enhance photo (navigate to AI Photo Enhancement) --------------------
   const handleEnhancePhoto = useCallback(
     (uri: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
       navigation.navigate('AIPhotoEnhancement', { imageUri: uri });
     },
     [navigation],
@@ -234,11 +237,11 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     }
     setTags((prev) => [...prev, trimmed]);
     setTagInput('');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [tagInput, tags]);
 
   const handleRemoveTag = useCallback((tag: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     setTags((prev) => prev.filter((t) => t !== tag));
   }, []);
 
@@ -254,7 +257,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       if (pickerMode === 'Category') setCategory(val);
       if (pickerMode === 'Condition') setCondition(val);
       setPickerMode(null);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.selection();
     },
     [pickerMode],
   );
@@ -431,32 +434,20 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* -- Header -- */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <AnimatedPressable
-          style={styles.iconBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          scaleValue={0.92}
-          hapticFeedback="light"
-          activeOpacity={0.62}
-        >
-          <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            AI Quick List
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            Snap photos · review · publish
-          </Text>
-        </View>
-        <View style={styles.iconBtnPlaceholder} />
-      </View>
+      <ScreenHeader
+        title="AI Quick List"
+        subtitle="Snap photos · review · publish"
+        backIcon="arrow-back"
+        onBack={() => navigation.goBack()}
+        style={{
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      />
 
       {SMART_SELL_DEMO_MODE && (
         <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
-          <Ionicons name="flask-outline" size={16} color={colors.warning} />
+          <Ionicons name="flask-outline" size={16} color={colors.warning} aria-hidden={true} />
           <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
             Demo Mode — AI suggestions are illustrative and not sent to a backend.
           </Text>
@@ -533,7 +524,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             <View>
               {/* AI confidence banner — truthful labelling (§11) */}
               <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
-                <Ionicons name="document-text-outline" size={16} color={colors.brand} />
+                <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <View style={styles.confidenceTextWrap}>
                   <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
                     Suggestions — review before publishing
@@ -552,6 +543,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Title */}
               <AIBadgeField
                 label="Title"
+                isAISuggested={title === suggestion.suggestedTitle}
                 colors={colors}
                 styles={styles}
               >
@@ -568,6 +560,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Description */}
               <AIBadgeField
                 label="Description"
+                isAISuggested={description === suggestion.suggestedDescription}
                 colors={colors}
                 styles={styles}
               >
@@ -587,6 +580,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               <View style={styles.fieldRow}>
                 <AIBadgeField
                   label="Category"
+                  isAISuggested={category === suggestion.suggestedCategory}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1, marginRight: Space.sm }}
@@ -606,12 +600,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {category || 'Select category'}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 </AIBadgeField>
 
                 <AIBadgeField
                   label="Brand"
+                  isAISuggested={brand === (suggestion.suggestedBrand ?? '')}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1 }}
@@ -630,6 +625,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               <View style={styles.fieldRow}>
                 <AIBadgeField
                   label="Condition"
+                  isAISuggested={condition === suggestion.suggestedCondition}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1, marginRight: Space.sm }}
@@ -649,12 +645,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {condition || 'Select condition'}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
                 </AIBadgeField>
 
                 <AIBadgeField
                   label="Price (GBP)"
+                  isAISuggested={false}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1 }}
@@ -670,10 +667,11 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </AIBadgeField>
               </View>
 
-              {/* Suggested price range helper */}
+              {/* Suggested price range helper — communicates uncertainty as a
+                  range, not a single number (§3.2 truthfulness) */}
               {suggestion.suggestedPriceRange && (
                 <Text style={[styles.priceRangeHint, { color: colors.textMuted }]}>
-                  Suggested range £{suggestion.suggestedPriceRange.min}–£{suggestion.suggestedPriceRange.max}
+                  Suggested range £{suggestion.suggestedPriceRange.min}–£{suggestion.suggestedPriceRange.max} · pick a price within this range
                 </Text>
               )}
 
@@ -739,7 +737,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={`Remove tag ${tag}`}
                       >
-                        <Ionicons name="close" size={14} color={colors.textMuted} />
+                        <Ionicons name="close" size={14} color={colors.textMuted} aria-hidden={true} />
                       </Pressable>
                     </View>
                   ))}
@@ -761,7 +759,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel="Add tag"
                       >
-                        <Ionicons name="add-circle" size={18} color={colors.brand} />
+                        <Ionicons name="add-circle" size={18} color={colors.brand} aria-hidden={true} />
                       </Pressable>
                     )}
                   </View>
@@ -812,7 +810,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             variant="primary"
             size="lg"
             accessibilityLabel="Publish AI-assisted listing"
-            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
+            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} aria-hidden={true} />}
           />
         </View>
       )}
@@ -881,7 +879,7 @@ function PhotoCaptureSection({
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
               >
-                <Ionicons name="close-circle" size={22} color={colors.textInverse} />
+                <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
               </Pressable>
               {/* Enhance affordance — entry point to AI Photo Enhancement */}
               <Pressable
@@ -891,7 +889,7 @@ function PhotoCaptureSection({
                 accessibilityLabel="Enhance photo"
                 accessibilityHint="Opens AI photo enhancement to improve this listing image"
               >
-                <Ionicons name="color-filter-outline" size={13} color={colors.brand} />
+                <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
               </Pressable>
             </View>
@@ -907,7 +905,7 @@ function PhotoCaptureSection({
           accessibilityRole="button"
           accessibilityLabel="Take a photo with the camera"
         >
-          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Camera</Text>
         </Pressable>
         <Pressable
@@ -916,7 +914,7 @@ function PhotoCaptureSection({
           accessibilityRole="button"
           accessibilityLabel="Pick photos from gallery"
         >
-          <Ionicons name="images-outline" size={22} color={colors.textPrimary} />
+          <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Gallery</Text>
         </Pressable>
       </View>
@@ -942,16 +940,16 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
     if (reducedMotion) return;
     scanY.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       true,
     );
     dotOpacity.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 500 }),
-        withTiming(0.3, { duration: 500 }),
+        withTiming(1, { duration: Motion.duration.slower }),
+        withTiming(0.3, { duration: Motion.duration.slower }),
       ),
       -1,
       true,
@@ -977,7 +975,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
     >
       <View style={styles.analyzingHeader}>
-        <Ionicons name="analytics-outline" size={18} color={colors.brand} />
+        <Ionicons name="analytics-outline" size={18} color={colors.brand} aria-hidden={true} />
         <Text style={[styles.analyzingTitle, { color: colors.textPrimary }]}>Analyzing photos…</Text>
       </View>
 
@@ -1000,7 +998,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       </View>
 
       <Text style={[styles.analyzingHint, { color: colors.textMuted }]}>
-        Detecting brand, category, colour and estimated value
+        Reading photo metadata for brand, category and colour hints
       </Text>
     </View>
   );
@@ -1034,7 +1032,7 @@ function ListingFormSkeleton({
 
       {/* Title field placeholder */}
       <View style={styles.skeletonFieldGroup}>
-        <PremiumSkeletonTile width="30%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+        <PremiumSkeletonTile width="30%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
         <PremiumSkeletonTile
           width="100%"
           height={Type.body.size + Space.sm * 2 + 4}
@@ -1046,7 +1044,7 @@ function ListingFormSkeleton({
       {/* Category + Brand row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1055,7 +1053,7 @@ function ListingFormSkeleton({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1068,7 +1066,7 @@ function ListingFormSkeleton({
       {/* Condition + Price row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1077,7 +1075,7 @@ function ListingFormSkeleton({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1108,14 +1106,14 @@ function EmptyState({
       style={styles.emptyState}
     >
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
+        <Ionicons name="camera-outline" size={28} color={colors.textMuted} aria-hidden={true} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Snap to list
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        Add photos above and AI will suggest a title, description, price and
-        category. Edit everything before publishing.
+        Add photos above and AI will suggest a title, description, category and
+        price range. Review and edit everything before publishing.
       </Text>
     </View>
   );
@@ -1137,7 +1135,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
   return (
     <View style={[styles.errorBanner, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
       <View style={styles.errorHeader}>
-        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} aria-hidden={true} />
         <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
           {message}
         </Text>
@@ -1148,7 +1146,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
           accessibilityRole="button"
           accessibilityLabel="Dismiss error"
         >
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
       </View>
       <Pressable
@@ -1169,21 +1167,27 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
 
 interface AIBadgeFieldProps {
   label: string;
+  /** Whether the field still holds the unedited AI suggestion. When false
+   *  (the seller has edited the field), the "Suggested" badge is hidden —
+   *  the field is now user-authored. */
+  isAISuggested: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
-function AIBadgeField({ label, colors, styles, style, children }: AIBadgeFieldProps) {
+function AIBadgeField({ label, isAISuggested, colors, styles, style, children }: AIBadgeFieldProps) {
   return (
     <View style={[styles.fieldGroup, style]}>
       <View style={styles.fieldLabelRow}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-        <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="bulb-outline" size={10} color={colors.brand} />
-          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
-        </View>
+        {isAISuggested && (
+          <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
+            <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
+            <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
+          </View>
+        )}
       </View>
       {children}
     </View>
@@ -1206,7 +1210,7 @@ interface PickerSheetProps {
 function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors }: PickerSheetProps) {
   const insets = useSafeAreaInsets();
   return (
-    <Pressable style={pickerStyles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker">
+    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker">
       <Pressable
         style={[
           pickerStyles.sheet,
@@ -1217,8 +1221,9 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
           },
         ]}
         onPress={(e) => e.stopPropagation()}
+      accessibilityRole="button"
       >
-        <View style={pickerStyles.handle} />
+        <View style={[pickerStyles.handle, { backgroundColor: colors.border }]} />
         <Text style={[pickerStyles.title, { color: colors.textPrimary }]}>{title}</Text>
         <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
           {options.map((opt) => {
@@ -1243,7 +1248,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 >
                   {opt}
                 </Text>
-                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} aria-hidden={true} />}
               </Pressable>
             );
           })}
@@ -1262,14 +1267,6 @@ function createStyles(colors: ThemeColors) {
     root: {
       flex: 1,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
     demoBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1283,32 +1280,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       lineHeight: Type.caption.lineHeight,
-    },
-    iconBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    iconBtnPlaceholder: {
-      width: Control.hit,
-      height: Control.hit,
-    },
-    headerTitleWrap: {
-      flex: 1,
-      alignItems: 'center',
-      marginHorizontal: Space.sm,
-    },
-    headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    headerSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textSecondary,
-      marginTop: Space.xs,
     },
     scrollContent: {
       paddingHorizontal: Space.md,
@@ -1406,7 +1377,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     analyzingTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -1497,7 +1468,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     confidenceTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -1526,7 +1497,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     fieldLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
     },
@@ -1590,7 +1561,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     attributeLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
       marginBottom: Space.xs,
@@ -1619,7 +1590,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     sectionLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.28,
@@ -1703,7 +1674,7 @@ function createStyles(colors: ThemeColors) {
 const pickerStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -1717,7 +1688,7 @@ const pickerStyles = StyleSheet.create({
     width: Space.xxl + Space.sm,
     height: Stroke.standard * 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(120,120,120,0.4)',
+    backgroundColor: 'transparent',
     alignSelf: 'center',
     marginBottom: Space.sm,
   },
@@ -1736,7 +1707,7 @@ const pickerStyles = StyleSheet.create({
     minHeight: Control.hit,
   },
   rowText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: TypeStyles.body.fontFamily,
   },
 });

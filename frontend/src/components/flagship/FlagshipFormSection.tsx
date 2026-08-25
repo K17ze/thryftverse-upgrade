@@ -50,10 +50,9 @@ export function FlagshipFormSection({
 }: FlagshipFormSectionProps) {
   const { colors } = useAppTheme();
 
-  // Resolve variant: explicit variant wins; noCard=true maps to flat for
-  // backward compat. New default is 'flat' (no card).
+  // Resolve variant: explicit variant wins; default is 'flat' (no card).
   const resolvedVariant: FlagshipFormSectionVariant =
-    variant ?? (noCard ? 'flat' : 'flat');
+    variant ?? 'flat';
 
   const containerStyle = (() => {
     switch (resolvedVariant) {
@@ -95,9 +94,9 @@ function resolveToneColor(colors: ReturnType<typeof useAppTheme>['colors'], tone
 
 function resolveCriticalTint(colors: ReturnType<typeof useAppTheme>['colors'], tone: string): string {
   switch (tone) {
-    case 'warning': return colors.warning + '14'; // ~8% opacity
-    case 'danger': return colors.danger + '14';
-    case 'success': return colors.success + '14';
+    case 'warning': return colors.warningSubtle;
+    case 'danger': return colors.dangerSubtle;
+    case 'success': return colors.successSubtle;
     default: return colors.surfaceAlt;
   }
 }
@@ -107,12 +106,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   sectionTitle: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.3,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
-    lineHeight: Type.metaElevated.lineHeight,
+    lineHeight: Type.label.lineHeight,
   },
   sectionDescription: {
     fontSize: Type.caption.size,

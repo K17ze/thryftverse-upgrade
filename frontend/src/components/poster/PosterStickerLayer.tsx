@@ -826,7 +826,7 @@ function createStyles(colors: any) {
   cornerDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: '#3B82F6',
     borderWidth: Stroke.standard,
     borderColor: '#FFFFFF',
@@ -889,8 +889,8 @@ function createStyles(colors: any) {
   textSticker: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
@@ -1025,8 +1025,8 @@ function createStyles(colors: any) {
   questionText: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     textAlign: 'center',
   },
   // Countdown sticker — tokenized padding/typography per flagship spec
@@ -1052,8 +1052,8 @@ function createStyles(colors: any) {
   countdownTime: {
     color: '#fff',
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
 });
 }

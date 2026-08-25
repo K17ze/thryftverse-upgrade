@@ -1,0 +1,12 @@
+{
+  "name": "thryft-native",
+  "version": "1.0.0",
+  "description": "Local Expo module bridging App Attest / Play Integrity and os_signpost / MetricKit / Trace via the Expo Modules API.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "private": true,
+  "peerDependencies": {
+    "expo": "*"
+  }
+}

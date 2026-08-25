@@ -5,12 +5,11 @@
  * - Selection mode (on/off)
  * - Selected message IDs set
  * - Context menu visibility + selected message
- * - Translated message IDs toggle
  * - Enter/exit/toggle selection
  * - Long press handler (context menu vs selection toggle)
  *
  * Per spec 16: Context menu actions include copy, reply, react, delete, retry,
- * report, translate.
+ * report.
  */
 
 import { useCallback, useState } from "react";
@@ -28,9 +27,6 @@ export function useMessageSelection(_: UseMessageSelectionOptions) {
   );
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(
-    new Set(),
-  );
 
   const toggleMessageSelection = useCallback((msgId: string) => {
     setSelectedMessageIds((prev) => {
@@ -52,18 +48,6 @@ export function useMessageSelection(_: UseMessageSelectionOptions) {
     setSelectedMessageIds(new Set());
   }, []);
 
-  const toggleTranslated = useCallback((msgId: string) => {
-    setTranslatedMessageIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(msgId)) {
-        next.delete(msgId);
-      } else {
-        next.add(msgId);
-      }
-      return next;
-    });
-  }, []);
-
   return {
     selectionMode,
     setSelectionMode,
@@ -73,11 +57,8 @@ export function useMessageSelection(_: UseMessageSelectionOptions) {
     setContextMenuVisible,
     selectedMessage,
     setSelectedMessage,
-    translatedMessageIds,
-    setTranslatedMessageIds,
     toggleMessageSelection,
     enterSelectionMode,
     exitSelectionMode,
-    toggleTranslated,
   };
 }

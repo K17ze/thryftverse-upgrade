@@ -12,7 +12,7 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors, ActiveTheme } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -33,6 +33,8 @@ interface Props {
 }
 
 export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props) {
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,7 +83,7 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
         {/* Bottom gradient scrim */}
         <LinearGradient
           colors={
-            ActiveTheme === 'light'
+            !isDark
               ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.85)']
               : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']
           }
@@ -106,12 +108,12 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
             activeOpacity={0.85}
           >
             <Text style={styles.visitBtnText}>{item.ctaLabel}</Text>
-            <Ionicons name="arrow-forward" size={14} color="#fff" />
+            <Ionicons name="arrow-forward" size={14} color={colors.textInverse} />
           </AnimatedPressable>
         )}
       </View>
     ),
-    []
+    [styles, colors, isDark]
   );
 
   if (items.length === 0) return null;
@@ -151,7 +153,8 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   slide: {
     width: SCREEN_W,
     height: SCREEN_W * 1.05,
@@ -169,20 +172,20 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceLarge.size,
-    color: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
+    fontSize: Type.priceHero.size,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
     lineHeight: 34,
-    textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.4)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   heroSubtitle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: ActiveTheme === 'light' ? Colors.textSecondary : 'rgba(255,255,255,0.85)',
+    color: colors.textSecondary,
     marginTop: Space.xs,
-    textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.3)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -190,7 +193,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 52,
     right: Space.md,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: Radius.full,
@@ -200,8 +203,8 @@ const styles = StyleSheet.create({
   },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
-    color: Colors.background,
+    fontSize: Type.caption.size,
+    color: colors.background,
   },
   dotsRow: {
     flexDirection: 'row',
@@ -215,11 +218,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: Radius.sm,
-    backgroundColor: ActiveTheme === 'light' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.25)',
+    backgroundColor: colors.borderSubtle,
   },
   dotActive: {
     width: 18,
     borderRadius: Radius.sm,
-    backgroundColor: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
+    backgroundColor: colors.textPrimary,
   },
-});
+  });
+}

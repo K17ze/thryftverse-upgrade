@@ -14,6 +14,7 @@ import Reanimated, {
 import { Space } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
@@ -104,7 +105,7 @@ export function PosterProgressSegments({
         completedStepSV.value = prevIndexRef.current;
         if (isEnabled) {
           stepScaleSV.value = withSpring(1.4, spring.success as SpringConfig);
-          stepScaleSV.value = withSpring(1, { ...spring.entrance as SpringConfig, damping: 20 });
+          stepScaleSV.value = withSpring(1, Motion.spring.settle as SpringConfig);
         }
         haptic.medium();
       }
@@ -116,8 +117,8 @@ export function PosterProgressSegments({
     if (isLoading && !reducedMotion) {
       shimmerSV.value = withRepeat(
         withSequence(
-          withTiming(0.7, { duration: 700, easing: ReEasing.inOut(ReEasing.ease) }),
-          withTiming(0.3, { duration: 700, easing: ReEasing.inOut(ReEasing.ease) }),
+          withTiming(0.7, { duration: Motion.duration.slower, easing: ReEasing.inOut(ReEasing.ease) }),
+          withTiming(0.3, { duration: Motion.duration.slower, easing: ReEasing.inOut(ReEasing.ease) }),
         ),
         -1, // infinite
         false,
@@ -140,11 +141,7 @@ export function PosterProgressSegments({
       activeFillSV.value = 0.5;
     } else if (isEnabled) {
       // Use spring for smooth fill transitions
-      activeFillSV.value = withSpring(clampedProgress, {
-        ...spring.tap as SpringConfig,
-        damping: 26,
-        stiffness: 300,
-      });
+      activeFillSV.value = withSpring(clampedProgress, Motion.spring.indicator as SpringConfig);
     } else {
       activeFillSV.value = clampedProgress;
     }
@@ -257,10 +254,5 @@ const styles = StyleSheet.create({
   gradientFill: {
     flex: 1,
     borderRadius: SEGMENT_RADIUS,
-    // Active segment glow — very subtle white shadow for depth on the fill
-    shadowColor: '#fff',
-    shadowOpacity: 0.15,
-    shadowRadius: 1,
-    shadowOffset: { width: 0, height: 0 },
   },
 });

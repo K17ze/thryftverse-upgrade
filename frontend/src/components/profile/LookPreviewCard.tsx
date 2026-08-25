@@ -150,7 +150,7 @@ function createStyles(colors: ThemeColors) {
   },
   coverTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },

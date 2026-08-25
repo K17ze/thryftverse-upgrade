@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import { ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -72,6 +72,7 @@ export function AuctionSegmentRail({
     <View style={styles.container}>
       <ScrollView
         horizontal
+        style={styles.scroll}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.segmentsRow}
       >
@@ -112,8 +113,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   container: {
     position: 'relative',
   },
+  scroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   segmentsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
   },
@@ -126,7 +132,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textSecondary,
     letterSpacing: -0.2,
   },
@@ -148,7 +154,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     bottom: 0,
     left: 0,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
 });

@@ -19,7 +19,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,9 +34,10 @@ import Reanimated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { Motion } from '../../theme/motionTokens';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ const DEFAULT_ASPECT_RATIOS: AspectRatioPreset[] = [
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
 
 /** Visible handle glyph size (the touch target is larger via hitSlop). */
 const HANDLE_VISIBLE = 14;
@@ -83,10 +84,6 @@ const HANDLE_VISIBLE = 14;
 const HANDLE_HIT = Control.hit;
 /** Minimum crop region size in normalized coords — prevents collapse. */
 const MIN_CROP = 0.05;
-/** Spring config for ratio-preset snap. */
-const SNAP_SPRING = { damping: 26, stiffness: 380, mass: 0.8 } as const;
-/** Spring for the underline tab indicator. */
-const UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 const TIMING_FADE = { duration: 180, easing: Easing.out(Easing.ease) } as const;
 
 // ── Handle identifiers ───────────────────────────────────────────────
@@ -108,6 +105,7 @@ export function InCanvasCropOverlay({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // ── Crop region shared values (normalized 0-1) ───────────────────
   const cropX = useSharedValue(layerBounds.x);
@@ -186,8 +184,8 @@ export function InCanvasCropOverlay({
           underlineXSV.value = layout.x;
           underlineWSV.value = layout.width;
         } else {
-          underlineXSV.value = withSpring(layout.x, UNDERLINE_SPRING);
-          underlineWSV.value = withSpring(layout.width, UNDERLINE_SPRING);
+          underlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+          underlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
         }
       }
 
@@ -252,10 +250,10 @@ export function InCanvasCropOverlay({
       cropW.value = w;
       cropH.value = h;
     } else {
-      cropX.value = withSpring(x, SNAP_SPRING);
-      cropY.value = withSpring(y, SNAP_SPRING);
-      cropW.value = withSpring(w, SNAP_SPRING);
-      cropH.value = withSpring(h, SNAP_SPRING);
+      cropX.value = withSpring(x, Motion.spring.glide);
+      cropY.value = withSpring(y, Motion.spring.glide);
+      cropW.value = withSpring(w, Motion.spring.glide);
+      cropH.value = withSpring(h, Motion.spring.glide);
     }
   };
 
@@ -274,8 +272,8 @@ export function InCanvasCropOverlay({
     })
     .onUpdate((e) => {
       'worklet';
-      const nx = moveStartX.value + e.translationX / SCREEN_W;
-      const ny = moveStartY.value + e.translationY / SCREEN_H;
+      const nx = moveStartX.value + e.translationX / screenWidth;
+      const ny = moveStartY.value + e.translationY / screenHeight;
       const clamped = clampCrop(nx, ny, cropW.value, cropH.value);
       cropX.value = clamped.x;
       cropY.value = clamped.y;
@@ -306,8 +304,8 @@ export function InCanvasCropOverlay({
       })
       .onUpdate((e) => {
         'worklet';
-        const dx = e.translationX / SCREEN_W;
-        const dy = e.translationY / SCREEN_H;
+        const dx = e.translationX / screenWidth;
+        const dy = e.translationY / screenHeight;
         let nx = rStartX.value;
         let ny = rStartY.value;
         let nw = rStartW.value;
@@ -377,14 +375,14 @@ export function InCanvasCropOverlay({
       });
   };
 
-  const tlGesture = useMemo(() => makeResizeGesture('tl'), []);
-  const trGesture = useMemo(() => makeResizeGesture('tr'), []);
-  const blGesture = useMemo(() => makeResizeGesture('bl'), []);
-  const brGesture = useMemo(() => makeResizeGesture('br'), []);
-  const topGesture = useMemo(() => makeResizeGesture('top'), []);
-  const bottomGesture = useMemo(() => makeResizeGesture('bottom'), []);
-  const leftGesture = useMemo(() => makeResizeGesture('left'), []);
-  const rightGesture = useMemo(() => makeResizeGesture('right'), []);
+  const tlGesture = useMemo(() => makeResizeGesture('tl'), [screenWidth, screenHeight]);
+  const trGesture = useMemo(() => makeResizeGesture('tr'), [screenWidth, screenHeight]);
+  const blGesture = useMemo(() => makeResizeGesture('bl'), [screenWidth, screenHeight]);
+  const brGesture = useMemo(() => makeResizeGesture('br'), [screenWidth, screenHeight]);
+  const topGesture = useMemo(() => makeResizeGesture('top'), [screenWidth, screenHeight]);
+  const bottomGesture = useMemo(() => makeResizeGesture('bottom'), [screenWidth, screenHeight]);
+  const leftGesture = useMemo(() => makeResizeGesture('left'), [screenWidth, screenHeight]);
+  const rightGesture = useMemo(() => makeResizeGesture('right'), [screenWidth, screenHeight]);
 
   // ── Confirm / Cancel ─────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
@@ -409,28 +407,28 @@ export function InCanvasCropOverlay({
 
   // Crop frame position — normalized → screen pixels
   const frameStyle = useAnimatedStyle(() => ({
-    left: cropX.value * SCREEN_W,
-    top: cropY.value * SCREEN_H,
-    width: cropW.value * SCREEN_W,
-    height: cropH.value * SCREEN_H,
+    left: cropX.value * screenWidth,
+    top: cropY.value * screenHeight,
+    width: cropW.value * screenWidth,
+    height: cropH.value * screenHeight,
   }));
 
   // Mask pieces (4 rectangles around the crop region)
   const maskTopStyle = useAnimatedStyle(() => ({
-    height: cropY.value * SCREEN_H,
+    height: cropY.value * screenHeight,
   }));
   const maskBottomStyle = useAnimatedStyle(() => ({
-    top: (cropY.value + cropH.value) * SCREEN_H,
+    top: (cropY.value + cropH.value) * screenHeight,
   }));
   const maskLeftStyle = useAnimatedStyle(() => ({
-    top: cropY.value * SCREEN_H,
-    height: cropH.value * SCREEN_H,
-    width: cropX.value * SCREEN_W,
+    top: cropY.value * screenHeight,
+    height: cropH.value * screenHeight,
+    width: cropX.value * screenWidth,
   }));
   const maskRightStyle = useAnimatedStyle(() => ({
-    top: cropY.value * SCREEN_H,
-    height: cropH.value * SCREEN_H,
-    left: (cropX.value + cropW.value) * SCREEN_W,
+    top: cropY.value * screenHeight,
+    height: cropH.value * screenHeight,
+    left: (cropX.value + cropW.value) * screenWidth,
   }));
 
   // Underline indicator position/width (spring-animated on tab change).
@@ -597,7 +595,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="close" size={22} color="#fff" />
+            <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
           </Pressable>
           <Pressable
             onPress={handleConfirm}
@@ -606,7 +604,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="checkmark" size={22} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} />
           </Pressable>
         </View>
 
@@ -723,7 +721,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   ratioText: {
     fontSize: Type.caption.size,

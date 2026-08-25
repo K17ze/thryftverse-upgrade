@@ -59,10 +59,12 @@ import {
   Control,
   Stroke,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { Motion } from '../../../theme/motionTokens';
 import {
   captionService,
   CaptionUnsupportedError,
@@ -152,14 +154,14 @@ export function CaptionEditorSheet({
         Animated.spring(fontUnderlineLeft, {
           toValue: layout.x,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
         Animated.spring(fontUnderlineWidth, {
           toValue: layout.width,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
       ]).start();
     },
@@ -328,7 +330,7 @@ export function CaptionEditorSheet({
             accessibilityHint="Closes the caption editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -364,7 +366,7 @@ export function CaptionEditorSheet({
             ) : (
               <Ionicons
                 name="bulb-outline"
-                size={18}
+                size={IconGrammar.metadata}
                 color={sttAvailable ? colors.textInverse : colors.textMuted}
               />
             )}
@@ -381,14 +383,14 @@ export function CaptionEditorSheet({
                   : 'Auto-Generate Unavailable'}
             </Text>
             {sttAvailable && autoStatus !== 'transcribing' && (
-              <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+              <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textInverse} />
             )}
           </Pressable>
 
           {/* Truthful status messaging */}
           {!sttAvailable && (
             <View style={styles.noticeBox}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+              <Ionicons name="information-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <Text style={[styles.noticeText, { color: colors.textMuted }]}>
                 Auto captions require a speech recognition module. You can add
                 captions manually below.
@@ -397,7 +399,7 @@ export function CaptionEditorSheet({
           )}
           {autoStatus === 'error' && (
             <View style={styles.noticeBox}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+              <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.danger} />
               <Text style={[styles.noticeText, { color: colors.danger }]}>
                 {autoError || 'Transcription failed. Please try again.'}
               </Text>
@@ -405,7 +407,7 @@ export function CaptionEditorSheet({
           )}
           {autoStatus === 'ready' && (
             <View style={styles.noticeBox}>
-              <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.success} />
               <Text style={[styles.noticeText, { color: colors.success }]}>
                 Captions generated. Edit them below.
               </Text>
@@ -466,6 +468,7 @@ export function CaptionEditorSheet({
           <Pressable
             onPress={handleAddCaption}
             disabled={!entryText.trim()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[
               styles.addBtn,
               {
@@ -478,7 +481,7 @@ export function CaptionEditorSheet({
           >
             <Ionicons
               name="add"
-              size={18}
+              size={IconGrammar.metadata}
               color={entryText.trim() ? colors.textInverse : colors.textMuted}
             />
             <Text
@@ -490,7 +493,7 @@ export function CaptionEditorSheet({
               Add Caption
             </Text>
             {entryText.trim() && (
-              <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+              <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textInverse} />
             )}
           </Pressable>
         </View>
@@ -689,7 +692,7 @@ export function CaptionEditorSheet({
             accessibilityHint="Applies the captions and closes the sheet"
           >
             <Text style={[styles.doneBtnText, { color: colors.textInverse }]}>Done</Text>
-            <Ionicons name="checkmark" size={18} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.textInverse} />
           </Pressable>
         </View>
       </ScrollView>
@@ -776,7 +779,7 @@ const CaptionRow = React.memo(function CaptionRow({
             accessibilityLabel="Save caption edit"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark" size={16} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.textInverse} />
             <Text style={[styles.editActionText, { color: colors.textInverse }]}>Save</Text>
           </Pressable>
           <Pressable
@@ -829,7 +832,7 @@ const CaptionRow = React.memo(function CaptionRow({
         accessibilityRole="button"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+        <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
       </Pressable>
     </View>
   );
@@ -1009,7 +1012,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
@@ -1031,7 +1034,7 @@ function createStyles(colors: ThemeColors) {
     },
     autoBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     noticeBox: {
       flexDirection: 'row',
@@ -1087,7 +1090,7 @@ function createStyles(colors: ThemeColors) {
     },
     addBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── List ──
     listHeader: {
@@ -1318,7 +1321,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

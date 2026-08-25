@@ -51,6 +51,20 @@ export interface KycSession {
   providerNotConfigured?: boolean;
 }
 
+/**
+ * Create a provider-hosted KYC verification session.
+ *
+ * The backend forwards these details to the identity provider (Stripe) which
+ * runs its own hosted document + selfie capture flow. ThryftVerse does NOT
+ * collect or upload document/selfie media itself.
+ *
+ * @param data.legalName    - User's legal full name.
+ * @param data.dateOfBirth  - ISO 8601 calendar date in `YYYY-MM-DD` format
+ *                            (the backend schema rejects `DD/MM/YYYY`). The
+ *                            caller is responsible for converting the
+ *                            user-facing DD/MM/YYYY mask to ISO before sending.
+ * @param data.countryCode  - ISO 3166-1 alpha-2 country code (e.g. 'GB').
+ */
 export async function createKycSession(data: {
   legalName?: string;
   dateOfBirth?: string;
@@ -79,5 +93,22 @@ export async function fetchKycStatus(
 ): Promise<{ ok: true; kycStatus: KycStatus }> {
   return fetchJson<{ ok: true; kycStatus: KycStatus }>(
     `/compliance/kyc-status/${encodeURIComponent(userId)}`
+  );
+}
+
+/* ─── Age Assurance (ICO/Ofcom waterfall) ─── */
+
+export interface AgeAssurance {
+  level: 'self_declared' | 'pending' | 'kyc_verified';
+  kycStatus: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
+  dateOfBirthVerified: boolean;
+  requiresKycForTrading: boolean;
+}
+
+export async function fetchAgeAssurance(
+  userId: string
+): Promise<{ ok: true; ageAssurance: AgeAssurance }> {
+  return fetchJson<{ ok: true; ageAssurance: AgeAssurance }>(
+    `/compliance/age-assurance/${encodeURIComponent(userId)}`
   );
 }

@@ -29,6 +29,7 @@ import {
   FontFamily,
   FontSize,
   Type,
+  IconGrammar,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -153,7 +154,7 @@ export function AIEffectBrowserSheet({
             accessibilityHint="Closes the effect browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -364,7 +365,7 @@ function useSheetStyles(colors: ThemeColors) {
         } as ViewStyle,
         removeBtnText: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
         } as ViewStyle,
         applyBtn: {
           height: 50,
@@ -374,7 +375,7 @@ function useSheetStyles(colors: ThemeColors) {
         } as ViewStyle,
         applyBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
         } as ViewStyle,
       }),
     [colors],

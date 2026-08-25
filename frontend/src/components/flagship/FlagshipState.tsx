@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle, DimensionValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
@@ -18,6 +18,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 
 export interface FlagshipStateProps {
   variant: 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
@@ -119,7 +120,7 @@ export function FlagshipState({
     onSecondaryAction?.();
   };
 
-  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(220);
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(Motion.transitions.listItem.duration);
 
   return (
     <Reanimated.View
@@ -156,6 +157,7 @@ export function FlagshipState({
             scaleValue={0.97}
             hapticFeedback="none"
             accessibilityRole="button"
+            accessibilityLabel={actionLabel}
             accessibilityHint={isErrorish ? 'Tries loading this again' : undefined}
             style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
           >
@@ -170,6 +172,7 @@ export function FlagshipState({
             scaleValue={0.98}
             hapticFeedback="none"
             accessibilityRole="button"
+            accessibilityLabel={secondaryActionLabel}
             style={styles.secondaryBtn}
           >
             <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
@@ -187,6 +190,55 @@ export function FlagshipState({
 // resemble a loading content block. Replaces the generic ActivityIndicator
 // per AGENTS §14 ("Do not use a generic centred spinner for every state")
 // and §27.4 (flagship loading = skeleton matching final silhouette + shimmer).
+//
+// ShimmerBar is extracted as a memoized component so the inline style objects
+// that the old `bar()` closure created on every render are eliminated
+// (research doc §5: "561 inline style objects … each is a potential re-render
+// trigger on a memoized child").
+const ShimmerBar = React.memo(function ShimmerBar({
+  width,
+  height,
+  borderRadius,
+  marginTop,
+  surfaceColor,
+  reduced,
+  shimmerStyle,
+}: {
+  width: DimensionValue;
+  height: number;
+  borderRadius: number;
+  marginTop: number;
+  surfaceColor: string;
+  reduced: boolean;
+  shimmerStyle: ReturnType<typeof useAnimatedStyle>;
+}) {
+  return (
+    <View
+      style={[
+        shimmerBarStyles.base,
+        {
+          width,
+          height,
+          borderRadius,
+          backgroundColor: surfaceColor,
+          marginTop,
+        },
+      ]}
+    >
+      {reduced ? null : (
+        <Reanimated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
+          <AnimatedLinearGradient
+            colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[StyleSheet.absoluteFill, shimmerBarStyles.gradient]}
+          />
+        </Reanimated.View>
+      )}
+    </View>
+  );
+});
+
 function LoadingShimmer({
   colors,
   reduced,
@@ -204,7 +256,7 @@ function LoadingShimmer({
     }
     shimmerX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.transitions.shimmer.duration, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 })
       ),
       -1,
@@ -216,37 +268,29 @@ function LoadingShimmer({
     transform: [{ translateX: shimmerX.value * 120 }],
   }));
 
-  const bar = (width: number | `${number}%`, height: number, radius: number, mt: number) => (
-    <View
-      style={{
-        width: width as any,
-        height,
-        borderRadius: radius,
-        backgroundColor: colors.surfaceAlt,
-        overflow: 'hidden',
-        marginTop: mt,
-      }}
-    >
-      {reduced ? null : (
-        <Reanimated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
-          <AnimatedLinearGradient
-            colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[StyleSheet.absoluteFill, { width: 240 }]}
-          />
-        </Reanimated.View>
-      )}
-    </View>
-  );
-
   return (
     <View style={styles.shimmerBlock}>
       <View style={[styles.shimmerGlyph, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
       </View>
-      {bar('55%', 12, 6, 12)}
-      {bar('80%', 10, 5, 8)}
+      <ShimmerBar
+        width="55%"
+        height={12}
+        borderRadius={Radius.sm}
+        marginTop={12}
+        surfaceColor={colors.surfaceAlt}
+        reduced={reduced}
+        shimmerStyle={shimmerStyle}
+      />
+      <ShimmerBar
+        width="80%"
+        height={10}
+        borderRadius={Radius.sm}
+        marginTop={8}
+        surfaceColor={colors.surfaceAlt}
+        reduced={reduced}
+        shimmerStyle={shimmerStyle}
+      />
     </View>
   );
 }
@@ -322,8 +366,17 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   secondaryText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+});
+
+const shimmerBarStyles = StyleSheet.create({
+  base: {
+    overflow: 'hidden',
+  },
+  gradient: {
+    width: 240,
   },
 });

@@ -43,7 +43,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import {
   AIProvider,
@@ -344,9 +344,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
       {/* ── Provider list ── */}
       {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+        <FlagshipState variant="loading" style={styles.loadingWrap} />
       ) : (
         <View>
           <View style={styles.sectionLabelWrap}>
@@ -765,7 +763,7 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
     },
     flatRowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -788,9 +786,9 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
     },
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
     },
     providerRow: {
@@ -814,7 +812,7 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
     },
     providerName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -971,7 +969,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     securityTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },

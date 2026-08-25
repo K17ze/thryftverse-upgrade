@@ -1,9 +1,11 @@
 /**
  * OutfitBuilderScreen — Build outfits from saved/owned items
- * Uses StyleGraph for compatibility scoring and AI suggestions.
+ * Uses StyleGraph for heuristic compatibility scoring (color, formality,
+ * season, and style-tag matching rules — not ML) and rule-based
+ * completion suggestions.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +16,7 @@ import {
   Alert,
   Platform,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -30,12 +33,14 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
-import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control } from '../theme/designTokens';
 import {
   OutfitSlot,
   StyleItem,
@@ -189,16 +194,17 @@ function createThumbStyles(colors: ThemeColors) {
   return StyleSheet.create({
   card: {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: Space.sm,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+    paddingBottom: Space.sm,
   },
   cardSelected: {
-    borderColor: colors.brand,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
     borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   image: {
     width: '100%',
@@ -224,15 +230,20 @@ function createThumbStyles(colors: ThemeColors) {
 
 function ScoreBadge({ score }: { score: number }) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const scoreStyles = useMemo(() => createScoreStyles(colors), [colors]);
   const scale = useSharedValue(1);
   React.useEffect(() => {
+    if (reducedMotion) {
+      scale.value = 1;
+      return;
+    }
     scale.value = withTiming(1.12, { duration: 150, easing: Easing.out(Easing.quad) });
     const t = setTimeout(() => {
       scale.value = withTiming(1, { duration: 150, easing: Easing.inOut(Easing.quad) });
     }, 200);
     return () => clearTimeout(t);
-  }, [score]);
+  }, [score, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -267,7 +278,7 @@ function createScoreStyles(colors: ThemeColors) {
 
 export default function OutfitBuilderScreen() {
   const navigation = useNavigation<NavT>();
-  const { listings } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
@@ -284,6 +295,60 @@ export default function OutfitBuilderScreen() {
     accessory: undefined,
   });
   const [backgroundColor, setBackgroundColor] = useState<string | undefined>(undefined);
+
+  // ── Undo / Redo history ──
+  // A snapshot captures the outfit items + background color. We keep a
+  // pointer into the history array; undo moves the pointer back, redo
+  // moves it forward. New changes truncate any redo tail.
+  type OutfitSnapshot = {
+    items: Record<OutfitSlot, StyleItem | undefined>;
+    bg: string | undefined;
+  };
+  const historyRef = useRef<OutfitSnapshot[]>([
+    { items: { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined }, bg: undefined },
+  ]);
+  const historyIndexRef = useRef(0);
+  // Force re-render when history pointers change (refs don't trigger renders).
+  const [, setHistoryTick] = useState(0);
+  const bumpHistory = useCallback(() => setHistoryTick((t) => t + 1), []);
+
+  const canUndo = historyIndexRef.current > 0;
+  const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+
+  const pushHistory = useCallback(
+    (items: Record<OutfitSlot, StyleItem | undefined>, bg: string | undefined) => {
+      const snapshot: OutfitSnapshot = {
+        items: { ...items },
+        bg,
+      };
+      // Truncate any redo tail before pushing.
+      historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+      historyRef.current.push(snapshot);
+      historyIndexRef.current = historyRef.current.length - 1;
+      bumpHistory();
+    },
+    [bumpHistory],
+  );
+
+  const handleUndo = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const snapshot = historyRef.current[historyIndexRef.current];
+    setOutfitItems(snapshot.items);
+    setBackgroundColor(snapshot.bg);
+    haptics.tap();
+    bumpHistory();
+  }, [bumpHistory]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const snapshot = historyRef.current[historyIndexRef.current];
+    setOutfitItems(snapshot.items);
+    setBackgroundColor(snapshot.bg);
+    haptics.tap();
+    bumpHistory();
+  }, [bumpHistory]);
 
   // Convert listings to StyleItems
   const availableItems = useMemo<StyleItem[]>(() => {
@@ -317,13 +382,14 @@ export default function OutfitBuilderScreen() {
     const slot = inferSlot(item);
     setOutfitItems((prev) => {
       const current = prev[slot];
-      if (current?.id === item.id) {
-        return { ...prev, [slot]: undefined };
-      }
-      return { ...prev, [slot]: item };
+      const next = current?.id === item.id
+        ? { ...prev, [slot]: undefined }
+        : { ...prev, [slot]: item };
+      pushHistory(next, backgroundColor);
+      return next;
     });
     haptics.press();
-  }, []);
+  }, [backgroundColor, pushHistory]);
 
   const handleSave = () => {
     if (filledCount < 2) {
@@ -380,8 +446,10 @@ export default function OutfitBuilderScreen() {
         text: 'Clear',
         style: 'destructive',
         onPress: () => {
-          setOutfitItems({ top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined });
+          const cleared = { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined };
+          setOutfitItems(cleared);
           setBackgroundColor(undefined);
+          pushHistory(cleared, undefined);
           haptics.error();
         },
       },
@@ -390,10 +458,24 @@ export default function OutfitBuilderScreen() {
 
   const handleAiSuggest = () => {
     if (!aiSuggestion) return;
-    setOutfitItems((prev) => ({ ...prev, [aiSuggestion.slot]: aiSuggestion.item }));
+    setOutfitItems((prev) => {
+      const next = { ...prev, [aiSuggestion.slot]: aiSuggestion.item };
+      pushHistory(next, backgroundColor);
+      return next;
+    });
     setActiveSlot(aiSuggestion.slot);
     haptics.success();
   };
+
+  // ── Screen-level state coverage (loading / empty / error / offline) ──
+  const showLoading = isSyncing && listings.length === 0;
+  const showError = !isSyncing && !!lastError && listings.length === 0;
+  const showEmpty = !isSyncing && !lastError && listings.length === 0;
+  const showContent = listings.length > 0;
+
+  const handleRetry = useCallback(() => {
+    refreshListings();
+  }, [refreshListings]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -424,6 +506,80 @@ export default function OutfitBuilderScreen() {
         </AnimatedPressable>
       </View>
 
+      {/* Offline banner — non-blocking; cached items may still be visible */}
+      <OfflineBanner onRetry={handleRetry} />
+
+      {/* Undo / Redo toolbar — progressive disclosure: only visible when
+          there is history to traverse. Disabled states are truthful. */}
+      {showContent && (canUndo || canRedo) && (
+        <View style={styles.undoRedoBar}>
+          <AnimatedPressable
+            style={[styles.undoRedoBtn, !canUndo && styles.undoRedoBtnDisabled]}
+            onPress={handleUndo}
+            activeOpacity={0.7}
+            disabled={!canUndo}
+            accessibilityRole="button"
+            accessibilityLabel="Undo last change"
+            accessibilityHint="Reverts the outfit to its previous state"
+            hapticFeedback="light"
+          >
+            <Ionicons name="arrow-undo" size={18} color={canUndo ? colors.textPrimary : colors.textMuted} />
+            <Text style={[styles.undoRedoLabel, !canUndo && styles.undoRedoLabelDisabled]}>Undo</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.undoRedoBtn, !canRedo && styles.undoRedoBtnDisabled]}
+            onPress={handleRedo}
+            activeOpacity={0.7}
+            disabled={!canRedo}
+            accessibilityRole="button"
+            accessibilityLabel="Redo change"
+            accessibilityHint="Re-applies a change that was undone"
+            hapticFeedback="light"
+          >
+            <Text style={[styles.undoRedoLabel, !canRedo && styles.undoRedoLabelDisabled]}>Redo</Text>
+            <Ionicons name="arrow-redo" size={18} color={canRedo ? colors.textPrimary : colors.textMuted} />
+          </AnimatedPressable>
+        </View>
+      )}
+
+      {/* ── Loading state ── */}
+      {showLoading && (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <T.Body color={colors.textMuted} style={{ marginTop: Space.md }}>
+            Loading your closet…
+          </T.Body>
+        </View>
+      )}
+
+      {/* ── Error state ── */}
+      {showError && (
+        <View style={styles.stateContainer}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load items"
+            subtitle={lastError ?? 'Check your connection and try again.'}
+            ctaLabel="Retry"
+            onCtaPress={handleRetry}
+          />
+        </View>
+      )}
+
+      {/* ── Empty state ── */}
+      {showEmpty && (
+        <View style={styles.stateContainer}>
+          <EmptyState
+            icon="shirt-outline"
+            title="Your closet is empty"
+            subtitle="Add listings to your shop to start building outfits from your items."
+            ctaLabel="Go back"
+            onCtaPress={() => navigation.goBack()}
+          />
+        </View>
+      )}
+
+      {/* ── Populated content ── */}
+      {showContent && (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
         <View style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
@@ -492,27 +648,25 @@ export default function OutfitBuilderScreen() {
           </View>
         </View>
 
-        {/* AI Suggestion */}
+        {/* Style suggestion — heuristic, not ML */}
         {aiSuggestion && (
-          <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-            <View style={styles.aiCard}>
-              <View style={styles.aiRow}>
-                <Ionicons name="bulb-outline" size={18} color={colors.brand} />
-                <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
-                  Suggestion
-                </T.Caption>
-              </View>
-              <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
-                Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
-              </T.Body>
-              <AppButton
-                title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
-                variant="secondary"
-                size="sm"
-                onPress={handleAiSuggest}
-                icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
-              />
+          <View style={[styles.aiCard, { marginHorizontal: Space.md, marginBottom: Space.md }]}>
+            <View style={styles.aiRow}>
+              <Ionicons name="bulb-outline" size={18} color={colors.brand} />
+              <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
+                Style suggestion
+              </T.Caption>
             </View>
+            <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
+              Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
+            </T.Body>
+            <AppButton
+              title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
+              variant="secondary"
+              size="sm"
+              onPress={handleAiSuggest}
+              icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
+            />
           </View>
         )}
 
@@ -545,8 +699,10 @@ export default function OutfitBuilderScreen() {
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>
+      )}
 
       {/* Footer CTA */}
+      {showContent && (
       <View style={styles.footer}>
         <View style={styles.footerRow}>
           <AnimatedPressable
@@ -572,6 +728,7 @@ export default function OutfitBuilderScreen() {
           </View>
         </View>
       </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -604,17 +761,50 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: LetterSpacing.caps,
     fontSize: Type.subtitle.size,
   },
+  undoRedoBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.lg,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+  },
+  undoRedoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
+    minHeight: Control.hit,
+  },
+  undoRedoBtnDisabled: {
+    opacity: 0.4,
+  },
+  undoRedoLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: LetterSpacing.wide,
+  },
+  undoRedoLabelDisabled: {
+    color: colors.textMuted,
+  },
   scrollContent: {
     paddingTop: Space.sm,
+  },
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
   },
   previewWrap: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     padding: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
   },
   slotRow: {
     flexDirection: 'row',
@@ -665,11 +855,9 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   aiCard: {
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
+    paddingVertical: Space.md,
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
   },
   aiRow: {
     flexDirection: 'row',

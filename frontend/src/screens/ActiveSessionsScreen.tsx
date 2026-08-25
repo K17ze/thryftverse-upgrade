@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, Platform, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Alert, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -171,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
           </View>
 
         {error && (
-            <View style={[styles.errorBanner, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
+            <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>
@@ -199,17 +199,12 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                     </View>
                   ))
                 ) : (
-                  <View style={styles.sessionRow}>
-                    <View style={styles.deviceIcon}>
-                      <Ionicons name="phone-portrait-outline" size={22} color={colors.brand} />
-                    </View>
-                    <View style={styles.sessionText}>
-                      <Text style={styles.sessionName}>{Platform.OS === 'ios' ? 'iPhone' : 'Android device'}</Text>
-                      <Text style={styles.sessionMeta}>Active now</Text>
-                    </View>
-                    <View style={styles.currentBadge}>
-                      <Text style={styles.currentBadgeText}>Current</Text>
-                    </View>
+                  <View style={styles.emptyGroup}>
+                    <Ionicons name="help-circle-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.emptyTitle}>Could not identify this device</Text>
+                    <Text style={styles.emptyBody}>
+                      Pull to refresh to try again.
+                    </Text>
                   </View>
                 )}
               </SettingsSection>
@@ -314,7 +309,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
   },
   currentBadge: {
-    backgroundColor: colors.success + '20',
+    backgroundColor: colors.successSubtle,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,

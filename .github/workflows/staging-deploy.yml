@@ -45,6 +45,10 @@ jobs:
         run: npx expo-doctor
         working-directory: frontend
 
+      - name: SSL pin validation
+        run: node scripts/validate-ssl-pins.mjs
+        working-directory: frontend
+
   build-and-deploy:
     name: EAS Build + Update (preview channel)
     needs: pre-build-gates
@@ -88,9 +92,58 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+  post-deploy-smoke:
+    name: Post-deploy smoke tests (staging)
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci
+        working-directory: backend/api
+
+      - name: Wait for OTA update propagation
+        run: |
+          echo "Waiting 30s for OTA update to propagate to staging clients..."
+          sleep 30
+
+      - name: Lightweight health + API smoke test
+        run: node scripts/post-deploy-smoke.mjs
+        working-directory: backend
+        env:
+          BASE_URL: ${{ vars.STAGING_API_URL || 'https://api-staging.thryftverse.com' }}
+
+      - name: Commerce flow smoke test
+        run: npm run smoke:commerce
+        working-directory: backend/api
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_URL || 'https://api-staging.thryftverse.com' }}
+
+      - name: Co-own flow smoke test
+        run: npm run smoke:coown
+        working-directory: backend/api
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_URL || 'https://api-staging.thryftverse.com' }}
+
+      - name: Profile flow smoke test
+        run: npm run smoke:profile
+        working-directory: backend/api
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_URL || 'https://api-staging.thryftverse.com' }}
+
   notify-failure:
     name: Notify on failure
-    needs: build-and-deploy
+    needs: [build-and-deploy, post-deploy-smoke]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 5

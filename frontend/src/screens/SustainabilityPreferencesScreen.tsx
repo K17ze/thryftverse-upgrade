@@ -3,11 +3,12 @@
  *
  * Lets the user set carbon-saving targets, a secondhand ratio goal, preferred
  * shipping/packaging, and toggle sustainability badges, impact tracking and
- * local-first prioritisation. A stats summary shows the user's impact.
+ * local-first prioritisation.
  *
- * Per AGENTS.md §11 (Truthful UI): impact stats are illustrative in demo mode,
- * so a "Demo mode" indicator is always shown. We never claim the figures come
- * from a live backend — they are session-local and clearly labelled.
+ * Per AGENTS.md §11 (Truthful UI): impact data is not yet available from a
+ * backend service, so an honest empty state is shown instead of fabricated
+ * figures. User preferences are persisted locally and will be used to
+ * personalize the experience once real impact data exists.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
@@ -17,12 +18,13 @@
  * - All colors via useAppTheme(), all geometry via design tokens
  *
  * State coverage (per AGENTS.md §14):
- * - Populated: full preference set with illustrative impact stats
+ * - Populated: full preference set with honest empty-state for impact
  * - Disabled: master toggle disables dependent rows
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -35,32 +37,91 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SustainabilityPreferences'>;
 
-// Demo mode flag — the sustainability impact service is mock in this build.
-const SUSTAINABILITY_DEMO_MODE = __DEV__;
-
 // Carbon-saving target options (kg CO2 per year).
 const CARBON_TARGETS = [10, 25, 50, 100, 250];
 
 // Secondhand ratio goal options (percentage of purchases that are secondhand).
 const RATIO_TARGETS = [25, 50, 75, 100];
 
+const SUSTAINABILITY_PREFS_KEY = '@thryftverse/sustainability_prefs';
+
+interface SustainabilityPrefs {
+  carbonTarget: number;
+  ratioTarget: number;
+  carbonNeutralShipping: boolean;
+  plasticFreePackaging: boolean;
+  showBadges: boolean;
+  trackImpact: boolean;
+  localFirst: boolean;
+}
+
+const DEFAULT_PREFS: SustainabilityPrefs = {
+  carbonTarget: 50,
+  ratioTarget: 50,
+  carbonNeutralShipping: true,
+  plasticFreePackaging: true,
+  showBadges: true,
+  trackImpact: true,
+  localFirst: false,
+};
+
 export default function SustainabilityPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Local preference state — persisted to AsyncStorage in a real implementation.
-  const [carbonTarget, setCarbonTarget] = React.useState(50);
-  const [ratioTarget, setRatioTarget] = React.useState(50);
-  const [carbonNeutralShipping, setCarbonNeutralShipping] = React.useState(true);
-  const [plasticFreePackaging, setPlasticFreePackaging] = React.useState(true);
-  const [showBadges, setShowBadges] = React.useState(true);
-  const [trackImpact, setTrackImpact] = React.useState(true);
-  const [localFirst, setLocalFirst] = React.useState(false);
+  // Preference state — persisted to AsyncStorage so it survives app restarts.
+  // The backend account-preferences endpoint does not yet support sustainability
+  // fields, so these are device-local (truthful per AGENTS.md §11).
+  const [carbonTarget, setCarbonTarget] = React.useState(DEFAULT_PREFS.carbonTarget);
+  const [ratioTarget, setRatioTarget] = React.useState(DEFAULT_PREFS.ratioTarget);
+  const [carbonNeutralShipping, setCarbonNeutralShipping] = React.useState(DEFAULT_PREFS.carbonNeutralShipping);
+  const [plasticFreePackaging, setPlasticFreePackaging] = React.useState(DEFAULT_PREFS.plasticFreePackaging);
+  const [showBadges, setShowBadges] = React.useState(DEFAULT_PREFS.showBadges);
+  const [trackImpact, setTrackImpact] = React.useState(DEFAULT_PREFS.trackImpact);
+  const [localFirst, setLocalFirst] = React.useState(DEFAULT_PREFS.localFirst);
+  const [hydrated, setHydrated] = React.useState(false);
 
-  // Illustrative impact stats (demo mode).
-  const co2SavedKg = 34;
-  const itemsRescued = 12;
+  // Hydrate from AsyncStorage on mount.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SUSTAINABILITY_PREFS_KEY);
+        if (!mounted || !raw) return;
+        const parsed = JSON.parse(raw) as Partial<SustainabilityPrefs>;
+        if (typeof parsed.carbonTarget === 'number') setCarbonTarget(parsed.carbonTarget);
+        if (typeof parsed.ratioTarget === 'number') setRatioTarget(parsed.ratioTarget);
+        if (typeof parsed.carbonNeutralShipping === 'boolean') setCarbonNeutralShipping(parsed.carbonNeutralShipping);
+        if (typeof parsed.plasticFreePackaging === 'boolean') setPlasticFreePackaging(parsed.plasticFreePackaging);
+        if (typeof parsed.showBadges === 'boolean') setShowBadges(parsed.showBadges);
+        if (typeof parsed.trackImpact === 'boolean') setTrackImpact(parsed.trackImpact);
+        if (typeof parsed.localFirst === 'boolean') setLocalFirst(parsed.localFirst);
+      } catch {
+        // AsyncStorage read failure — keep defaults
+      } finally {
+        if (mounted) setHydrated(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Persist to AsyncStorage whenever preferences change (after hydration).
+  React.useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(
+      SUSTAINABILITY_PREFS_KEY,
+      JSON.stringify({
+        carbonTarget,
+        ratioTarget,
+        carbonNeutralShipping,
+        plasticFreePackaging,
+        showBadges,
+        trackImpact,
+        localFirst,
+      } satisfies SustainabilityPrefs),
+    ).catch(() => {});
+  }, [hydrated, carbonTarget, ratioTarget, carbonNeutralShipping, plasticFreePackaging, showBadges, trackImpact, localFirst]);
 
   const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
     haptic.selection();
@@ -82,47 +143,18 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Sustainability"
-          subtitle="Your goals and preferences"
           onBack={() => navigation.goBack()}
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {SUSTAINABILITY_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Impact figures are illustrative in demo mode.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Impact summary hero ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.success }]}>
-              <Ionicons name="leaf" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Your impact</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {co2SavedKg} kg CO₂ saved · {itemsRescued} items kept from landfill
-              </Text>
-            </View>
-          </View>
-          <View style={styles.statsRow}>
-            <View style={[styles.statCell, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.statValue, { color: colors.success }]}>{co2SavedKg}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>kg CO₂ saved</Text>
-            </View>
-            <View style={[styles.statCell, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.statValue, { color: colors.success }]}>{itemsRescued}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>items rescued</Text>
-            </View>
+      {/* ── Impact summary — honest empty state (fail-closed per AGENTS.md §11) ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Your impact</Text>
+          <View style={[styles.emptyStateWrap, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="leaf-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+              Impact tracking is being calibrated. Your sustainability preferences are saved and will be used to personalize your experience once impact data is available.
+            </Text>
           </View>
         </View>
 
@@ -236,74 +268,31 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
+    summaryBlock: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
       marginBottom: Space.md,
     },
-    demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      color: colors.textSecondary,
-      flex: 1,
-    },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+    summaryTitle: {
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    statsRow: {
+    emptyStateWrap: {
       flexDirection: 'row',
+      alignItems: 'flex-start',
       gap: Space.sm,
-      marginTop: Space.md,
-    },
-    statCell: {
-      flex: 1,
-      borderRadius: Radius.md,
-      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.lg,
+      paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      alignItems: 'center',
+      marginTop: Space.sm,
     },
-    statValue: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyLarge.letterSpacing,
-    },
-    statLabel: {
+    emptyStateText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+      flex: 1,
     },
     goalRow: {
       paddingHorizontal: Space.md,

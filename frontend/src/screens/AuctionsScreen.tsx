@@ -49,6 +49,8 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { createStableId } from '../utils/createStableId';
 import { formatBidActivityRow } from '../utils/auctionDetailLogic';
+import { useBucketedServerClock } from '../hooks/useServerClock';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 
@@ -79,6 +81,9 @@ interface AuctionViewModel {
 }
 
 type StatusFilter = 'all' | 'live' | 'scheduled' | 'ended';
+
+/** Client-side filter chips that augment the server sort modes. */
+type ClientFilter = 'hot' | 'noBids';
 
 function formatCountdown(ms: number) {
   if (ms <= 0) return 'Ended';
@@ -129,6 +134,11 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Ended', value: 'ended' },
 ];
 
+const CLIENT_FILTER_OPTIONS: { label: string; value: ClientFilter }[] = [
+  { label: 'Hot', value: 'hot' },
+  { label: 'No Bids', value: 'noBids' },
+];
+
 export default function AuctionsScreen() {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
@@ -139,7 +149,8 @@ export default function AuctionsScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
-  const [nowTs, setNowTs] = React.useState(Date.now());
+  const [serverNow, setServerNow] = React.useState<string | null>(null);
+  const { secondClock: nowTs, resync } = useBucketedServerClock(serverNow);
   const [refreshing, setRefreshing] = React.useState(false);
   const [bidComposerVisible, setBidComposerVisible] = React.useState(false);
   const [selectedBidAuction, setSelectedBidAuction] = React.useState<AuctionViewModel | null>(null);
@@ -152,6 +163,7 @@ export default function AuctionsScreen() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
   const [sortMode, setSortMode] = React.useState<AuctionSortMode>('endingSoon');
+  const [activeClientFilter, setActiveClientFilter] = React.useState<ClientFilter | null>(null);
   const [watchTogglingIds, setWatchTogglingIds] = React.useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
@@ -172,13 +184,16 @@ export default function AuctionsScreen() {
       });
       setRemoteAuctions(result.items);
       setNextCursor(result.nextCursor);
+      // Resync the server clock so countdowns stay aligned with backend time
+      // instead of drifting on the client's setInterval (audit §Auctions).
+      if (result.serverNow) resync(result.serverNow);
       setSyncError(null);
     } catch (error) {
       setSyncError((error as Error).message || t('auctions.sync.unable'));
     } finally {
       setIsSyncingAuctions(false);
     }
-  }, [statusFilter, sortMode, searchQuery]);
+  }, [statusFilter, sortMode, searchQuery, resync]);
 
   const loadMore = React.useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;
@@ -193,17 +208,13 @@ export default function AuctionsScreen() {
       });
       setRemoteAuctions((prev) => [...prev, ...result.items]);
       setNextCursor(result.nextCursor);
+      if (result.serverNow) resync(result.serverNow);
     } catch {
       // Silent fail on pagination
     } finally {
       setIsLoadingMore(false);
     }
-  }, [nextCursor, isLoadingMore, statusFilter, sortMode, searchQuery]);
-
-  React.useEffect(() => {
-    const intervalId = setInterval(() => setNowTs(Date.now()), 1000);
-    return () => clearInterval(intervalId);
-  }, []);
+  }, [nextCursor, isLoadingMore, statusFilter, sortMode, searchQuery, resync]);
 
   React.useEffect(() => {
     void syncAuctions();
@@ -211,7 +222,6 @@ export default function AuctionsScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    setNowTs(Date.now());
     await syncAuctions();
     setRefreshing(false);
   };
@@ -347,7 +357,7 @@ export default function AuctionsScreen() {
 
     if (amountInGbp < selectedBidAuction.minimumNextBid) {
       show(
-        `Bid must be at least ${formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}`,
+        `Bid must be at least ${formatFromFiat(selectedBidAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`,
         'error'
       );
       return;
@@ -363,9 +373,8 @@ export default function AuctionsScreen() {
         idempotencyKey,
       });
       await syncAuctions();
-      setNowTs(Date.now());
       show(
-        t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }),
+        t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) }),
         'success'
       );
       if (remoteResult.aml?.alertId) show(t('auctions.bid.info.aml'), 'info');
@@ -431,7 +440,12 @@ export default function AuctionsScreen() {
 
   const renderSortBar = () => (
     <View style={styles.sortBar}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScrollContent}>
+      <ScrollView
+        horizontal
+        style={styles.sortScroll}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.sortScrollContent}
+      >
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt.value}
@@ -448,6 +462,34 @@ export default function AuctionsScreen() {
           </AnimatedPressable>
         ))}
       </ScrollView>
+    </View>
+  );
+
+  const renderClientFilterBar = () => (
+    <View style={styles.clientFilterBar}>
+      {CLIENT_FILTER_OPTIONS.map((opt) => {
+        const isActive = activeClientFilter === opt.value;
+        return (
+          <AnimatedPressable
+            key={opt.value}
+            style={[styles.clientFilterChip, isActive && styles.clientFilterChipActive]}
+            activeOpacity={0.85}
+            onPress={() => setActiveClientFilter(isActive ? null : opt.value)}
+            accessibilityRole="tab"
+            accessibilityLabel={`Filter: ${opt.label}`}
+            accessibilityState={{ selected: isActive }}
+          >
+            <Ionicons
+              name={opt.value === 'hot' ? 'flame-outline' : 'pricetag-outline'}
+              size={12}
+              color={isActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Meta style={[styles.clientFilterText, isActive && styles.clientFilterTextActive]}>
+              {opt.label}
+            </Meta>
+          </AnimatedPressable>
+        );
+      })}
     </View>
   );
 
@@ -489,7 +531,7 @@ export default function AuctionsScreen() {
         <View style={styles.upcomingMeta}>
           <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
           <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
-          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
+          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) })}</Meta>
         </View>
       </AnimatedPressable>
     ),
@@ -531,7 +573,7 @@ export default function AuctionsScreen() {
               </View>
               {endingSoon ? (
                 <View style={styles.endingSoonBadge}>
-                  <Ionicons name="time-outline" size={10} color="#fff" />
+                  <Ionicons name="time-outline" size={10} color={colors.textInverse} />
                   <Meta style={styles.endingSoonText}>ENDING SOON</Meta>
                 </View>
               ) : null}
@@ -543,7 +585,7 @@ export default function AuctionsScreen() {
               <View>
                 <Meta style={styles.featuredStatLabel}>Current Bid</Meta>
                 <BodyEmphasis style={styles.featuredStatValue}>
-                  {formatFromFiat(featuredAuction.currentBid, 'GBP', { displayMode: 'fiat' })}
+                  {formatFromFiat(featuredAuction.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                 </BodyEmphasis>
               </View>
               <View>
@@ -605,6 +647,7 @@ export default function AuctionsScreen() {
 
       {renderStatusFilter()}
       {renderSortBar()}
+      {renderClientFilterBar()}
 
       <View style={styles.launchRow}>
         <View>
@@ -664,10 +707,24 @@ export default function AuctionsScreen() {
         </View>
       )}
 
-      {liveAuctions.length > 0 && (statusFilter === 'all' || statusFilter === 'live') && (
+      {liveAuctions.length > 0 && (statusFilter === 'all' || statusFilter === 'live') && !activeClientFilter && (
         <View style={styles.sectionTitleRow}>
           <BodyEmphasis style={styles.sectionTitle}>Live Auctions</BodyEmphasis>
           <SyncStatusPill tone={marketStatus.tone} label={marketStatus.label} compact />
+        </View>
+      )}
+
+      {activeClientFilter === 'hot' && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>Hot Auctions</BodyEmphasis>
+          <Meta style={styles.clientFilterSubtitle}>High engagement · {displayAuctions.length} found</Meta>
+        </View>
+      )}
+
+      {activeClientFilter === 'noBids' && (
+        <View style={styles.sectionTitleRow}>
+          <BodyEmphasis style={styles.sectionTitle}>No Bids Yet</BodyEmphasis>
+          <Meta style={styles.clientFilterSubtitle}>Opportunity · {displayAuctions.length} found</Meta>
         </View>
       )}
 
@@ -683,11 +740,11 @@ export default function AuctionsScreen() {
     <View style={styles.loadingWrap}>
       {[0, 1, 2].map((i) => (
         <View key={i} style={styles.loadingCard}>
-          <SkeletonLoader width="100%" height={172} borderRadius={12} />
+          <SkeletonLoader width="100%" height={172} borderRadius={Radius.lg} />
           <View style={{ padding: Space.sm + Space.xs }}>
-            <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="40%" height={12} borderRadius={6} style={{ marginBottom: Space.sm }} />
-            <SkeletonLoader width="100%" height={40} borderRadius={10} />
+            <SkeletonLoader width="70%" height={16} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
+            <SkeletonLoader width="40%" height={12} borderRadius={Radius.sm} style={{ marginBottom: Space.sm }} />
+            <SkeletonLoader width="100%" height={40} borderRadius={Radius.lg} />
           </View>
         </View>
       ))}
@@ -695,11 +752,23 @@ export default function AuctionsScreen() {
   );
 
   const displayAuctions = React.useMemo(() => {
-    if (statusFilter === 'live') return liveAuctions;
-    if (statusFilter === 'scheduled') return upcomingAuctions;
-    if (statusFilter === 'ended') return endedAuctions;
-    return auctions;
-  }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
+    let base = auctions;
+    if (statusFilter === 'live') base = liveAuctions;
+    else if (statusFilter === 'scheduled') base = upcomingAuctions;
+    else if (statusFilter === 'ended') base = endedAuctions;
+
+    if (activeClientFilter === 'hot') {
+      // "Hot" = high-engagement live auctions with 3+ bids, sorted by bid count desc
+      base = base
+        .filter((a) => a.lifecycle === 'live' && a.bidCount >= 3)
+        .sort((a, b) => b.bidCount - a.bidCount);
+    } else if (activeClientFilter === 'noBids') {
+      // "No Bids" = live or upcoming auctions with zero bids — opportunity finds
+      base = base.filter((a) => a.bidCount === 0 && a.lifecycle !== 'ended');
+    }
+
+    return base;
+  }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter, activeClientFilter]);
 
   const renderAuctionCard = useCallback(({ item }: { item: AuctionViewModel }) => {
     const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
@@ -710,7 +779,7 @@ export default function AuctionsScreen() {
         image={item.image}
         sellerName={sellerLabel}
         sellerId={item.sellerId}
-        currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+        currentBid={formatFromFiat(item.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         bidCount={item.bidCount}
         timeRemaining={formatCountdown(item.msToEnd ?? 0)}
         progress={item.progress ?? 0}
@@ -719,7 +788,7 @@ export default function AuctionsScreen() {
         viewerState={item.viewerState}
         timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
         endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
-        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
         onPress={() => navigateToDetail(item)}
         onBid={() => openBidComposer(item)}
         onBuyNow={() => void handleBuyNow(item)}
@@ -795,8 +864,8 @@ export default function AuctionsScreen() {
       <BidComposer
         visible={bidComposerVisible}
         auctionTitle={selectedBidAuction?.title ?? ''}
-        currentBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }) : undefined}
-        minimumNextBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' }) : undefined}
+        currentBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
+        minimumNextBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
         bidInput={bidInput}
         currencyCode={currencyCode}
         isSubmitting={isSubmittingBid}
@@ -820,7 +889,7 @@ export default function AuctionsScreen() {
           {bidHistoryLoading ? (
             <View style={styles.bidHistoryLoadingWrap}>
               {[0, 1, 2, 3, 5].map((i) => (
-                <SkeletonLoader key={i} width="100%" height={48} borderRadius={8} style={{ marginBottom: Space.sm }} />
+                <SkeletonLoader key={i} width="100%" height={48} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
               ))}
             </View>
           ) : bidHistoryError ? (
@@ -862,7 +931,7 @@ export default function AuctionsScreen() {
                 <View style={styles.bidHistoryMinNextBidRow}>
                   <Meta style={styles.bidHistoryMinNextBidLabel}>Min next bid</Meta>
                   <BodyEmphasis style={styles.bidHistoryMinNextBidValue}>
-                    {formatFromFiat(bidHistoryAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}
+                    {formatFromFiat(bidHistoryAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                   </BodyEmphasis>
                 </View>
               ) : null}
@@ -912,9 +981,14 @@ function createStyles(colors: ThemeColors) {
   sortBar: {
     marginBottom: Space.sm,
   },
+  sortScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   sortScrollContent: {
     paddingHorizontal: Space.md,
     gap: Space.xs + 2,
+    alignItems: 'center',
   },
   sortChip: {
     borderRadius: Radius.full,
@@ -934,6 +1008,35 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
   },
   sortChipTextActive: {
+    color: colors.textInverse,
+  },
+  clientFilterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+    gap: Space.xs + 2,
+  },
+  clientFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
+  },
+  clientFilterChipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  clientFilterText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  clientFilterTextActive: {
     color: colors.textInverse,
   },
   statusFilterBar: {
@@ -1014,10 +1117,10 @@ function createStyles(colors: ThemeColors) {
   },
   featuredLabel: {
     marginBottom: Space.sm,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textSecondary,
     textTransform: 'uppercase',
   },
@@ -1061,7 +1164,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -1076,13 +1179,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(220,38,38,0.9)',
+    backgroundColor: colors.danger,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   endingSoonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 3,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.5,
@@ -1108,10 +1211,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   featuredStatLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     color: colors.textSecondary,
     marginBottom: Space.xs / 2 + 1,
     textTransform: 'uppercase',
@@ -1133,7 +1236,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,68,68,0.1)',
+    backgroundColor: colors.dangerSubtle,
   },
   outbidText: {
     color: colors.danger,
@@ -1146,7 +1249,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: colors.overlay,
   },
   leadingText: {
     color: colors.brand,
@@ -1163,6 +1266,9 @@ function createStyles(colors: ThemeColors) {
   },
   sectionTitle: {
     fontFamily: Typography.family.semibold,
+  },
+  clientFilterSubtitle: {
+    color: colors.textSecondary,
   },
   horizontalListContent: {
     paddingHorizontal: Space.md,
@@ -1273,7 +1379,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,68,68,0.1)',
+    backgroundColor: colors.dangerSubtle,
   },
   bidHistoryOutbidText: {
     color: colors.danger,

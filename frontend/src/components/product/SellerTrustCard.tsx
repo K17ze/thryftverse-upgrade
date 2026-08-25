@@ -127,7 +127,7 @@ export function SellerTrustCard({
                 {seller.username}
               </Text>
               {(() => {
-                const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified ? 'email' : null);
+                const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified ? 'seller' : null);
                 if (!tier) return null;
                 const info = VERIFICATION_TIERS[tier];
                 return (
@@ -154,7 +154,8 @@ export function SellerTrustCard({
                 ))}
               </View>
             ) : null}
-            {/* Seller standards badges — derived from trust metrics */}
+            {/* Seller standards badges — fail-closed: only rendered when the
+                backend provides an explicit, persisted programme decision. */}
             {(() => {
               const earned = deriveSellerBadges(seller);
               if (earned.length === 0) return null;
@@ -232,7 +233,7 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -279,14 +280,14 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   username: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
     minWidth: 0,
   },
   location: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
@@ -383,7 +384,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   metricValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

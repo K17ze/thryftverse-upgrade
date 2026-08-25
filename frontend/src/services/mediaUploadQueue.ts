@@ -1,5 +1,6 @@
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { finalizeUpload, presignUpload, uploadToPresignedUrl } from './mediaUpload';
+import { resizeForUpload } from '../platform/media/mediaTransforms';
 
 export type UploadQueueItemState =
   | 'pending'
@@ -328,11 +329,42 @@ export class MediaUploadQueue {
 
     try {
       const { asset } = item;
-      const blob = await fetch(asset.uri).then((response) => response.blob());
-      const sizeBytes = asset.fileSize ?? blob.size;
+
+      // Resize images before upload to reduce bandwidth. Videos are uploaded as-is.
+      // On any resize failure, fall back to the original asset so uploads never block.
+      let uploadUri = asset.uri;
+      let uploadFileName = asset.fileName;
+      let uploadMimeType = asset.mimeType;
+      const isImage =
+        asset.kind === 'image' || asset.mimeType.toLowerCase().startsWith('image/');
+
+      if (isImage) {
+        try {
+          const resized = await resizeForUpload(asset.uri, 'listing');
+          uploadUri = resized.uri;
+          uploadMimeType = resized.mimeType;
+          const baseName = asset.fileName.replace(/\.[^.]+$/, '') || 'media';
+          uploadFileName = `${baseName}.${resized.fileExtension}`;
+          // Reflect the resized asset on the item so downstream consumers see the
+          // actual bytes that were uploaded.
+          asset.uri = uploadUri;
+          asset.fileName = uploadFileName;
+          asset.mimeType = uploadMimeType;
+          asset.width = resized.width;
+          asset.height = resized.height;
+        } catch {
+          // Resize failed: keep using the original asset verbatim.
+          uploadUri = asset.uri;
+          uploadFileName = asset.fileName;
+          uploadMimeType = asset.mimeType;
+        }
+      }
+
+      const blob = await fetch(uploadUri).then((response) => response.blob());
+      const sizeBytes = blob.size || asset.fileSize || 0;
       const presign = await presignUpload(
-        asset.fileName,
-        asset.mimeType,
+        uploadFileName,
+        uploadMimeType,
         'listings',
         sizeBytes
       );
@@ -350,7 +382,7 @@ export class MediaUploadQueue {
       item.state = 'uploading';
       this.emit();
 
-      await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType, blob);
+      await uploadToPresignedUrl(presign.url, uploadUri, uploadMimeType, blob);
 
       // If cancellation was requested while uploading, transition to cancelled and ignore result
       if (item._cancelRequested) {
@@ -365,7 +397,7 @@ export class MediaUploadQueue {
       const finalization = await finalizeUpload({
         objectKey: presign.key,
         bucket: presign.bucket,
-        fileName: asset.fileName,
+        fileName: uploadFileName,
         contentType: presign.contentType,
         sizeBytes: presign.sizeBytes,
         publicUrl: presign.publicUrl,

@@ -5,11 +5,11 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  SectionList,
 } from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
 import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
@@ -18,6 +18,7 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { OfflineBanner } from '../OfflineBanner';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface WalletTransactionHistoryProps {
   /** Optional filter — 'ALL' shows everything, '1ZE' or 'FIAT' filters by asset */
@@ -52,6 +53,25 @@ function groupByDate(items: WalletLedgerItem[]): { title: string; data: WalletLe
   }
 
   return Object.entries(groups).map(([title, data]) => ({ title, data }));
+}
+
+// Flattened discriminated-union item type for FlashList.
+// Each section becomes a 'header' entry followed by its 'item' entries.
+type FlattenedListItem =
+  | { type: 'header'; sectionTitle: string }
+  | { type: 'item' } & WalletLedgerItem;
+
+function flattenSections(
+  sections: { title: string; data: WalletLedgerItem[] }[]
+): FlattenedListItem[] {
+  const result: FlattenedListItem[] = [];
+  for (const section of sections) {
+    result.push({ type: 'header', sectionTitle: section.title });
+    for (const item of section.data) {
+      result.push({ type: 'item', ...item });
+    }
+  }
+  return result;
 }
 
 export function WalletTransactionHistory({
@@ -94,12 +114,12 @@ export function WalletTransactionHistory({
     void fetchLedger(false);
   }, [fetchLedger]);
 
-  const renderItem = useCallback(({ item }: { item: WalletLedgerItem }) => {
+  const renderTransactionRow = useCallback(({ item }: { item: WalletLedgerItem }) => {
     const kindInfo = KIND_LABELS[item.kind] ?? { label: item.kind, icon: 'ellipse-outline' as const, direction: 'neutral' as const };
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), 'GBP', { displayMode: 'fiat' })}`;
+      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.
@@ -110,7 +130,7 @@ export function WalletTransactionHistory({
     return (
       <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>
         <View style={[styles.txIconWrap, { backgroundColor: iconBg }]}>
-          <Ionicons name={kindInfo.icon} size={18} color={iconColor} />
+          <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
         </View>
         <View style={styles.txContent}>
           <Text style={styles.txLabel} numberOfLines={1}>{kindInfo.label}</Text>
@@ -123,11 +143,27 @@ export function WalletTransactionHistory({
     );
   }, [colors, styles, formatFromFiat]);
 
-  const renderSectionHeader = useCallback(({ section }: { section: { title: string } }) => (
+  const renderSectionHeader = useCallback(({ sectionTitle }: { sectionTitle: string }) => (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{section.title}</Text>
+      <Text style={styles.sectionHeaderText}>{sectionTitle}</Text>
     </View>
   ), [styles]);
+
+  const renderItem: ListRenderItem<FlattenedListItem> = useCallback(({ item }) => {
+    if (item.type === 'header') {
+      return renderSectionHeader({ sectionTitle: item.sectionTitle });
+    }
+    return renderTransactionRow({ item });
+  }, [renderSectionHeader, renderTransactionRow]);
+
+  const keyExtractor = useCallback((item: FlattenedListItem): string => {
+    if (item.type === 'header') {
+      return `header-${item.sectionTitle}`;
+    }
+    return String(item.id);
+  }, []);
+
+  const getItemType = useCallback((item: FlattenedListItem) => item.type, []);
 
   if (isLoading) {
     return (
@@ -173,15 +209,18 @@ export function WalletTransactionHistory({
   }
 
   const sections = groupByDate(items);
+  const flattenedData = flattenSections(sections);
 
   return (
     <View style={styles.container}>
       {isOffline && <OfflineBanner compact />}
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => String(item.id)}
+      <FlashList
+        data={flattenedData}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
+        getItemType={getItemType}
+        drawDistance={2000}
+        overrideProps={{ initialDrawBatchSize: 6 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -227,10 +266,10 @@ function createStyles(colors: ThemeColors) {
     },
     // Labels use captionElevated per spec — clear, scannable metadata
     txLabel: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
       color: colors.textPrimary,
     },
     txTime: {
@@ -255,12 +294,12 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
     },
     sectionHeaderText: {
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
+      fontSize: Type.label.size,
+      lineHeight: Type.label.lineHeight,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
     },
     separator: {
       height: StyleSheet.hairlineWidth,

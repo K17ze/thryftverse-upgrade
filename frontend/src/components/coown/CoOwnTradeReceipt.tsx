@@ -135,7 +135,7 @@ export function CoOwnTradeReceipt({
         <View style={styles.productBody}>
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <View style={styles.productMeta}>
-            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
               <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
                 {isBuy ? 'BUY' : 'SELL'}
               </Text>
@@ -220,7 +220,7 @@ export function CoOwnTradeReceipt({
 
         {/* Max reserved — prominent (full obligation from computeReservation) */}
         {maxReservedLabel && (
-          <View style={[styles.maxReservedRow, { backgroundColor: colors.brand + '12', borderColor: colors.brand + '40' }]}>
+          <View style={[styles.maxReservedRow, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
             <Ionicons name="lock-closed" size={14} color={colors.brand} />
             <Text style={[styles.maxReservedLabel, { color: colors.textMuted }]} numberOfLines={1}>
               {isBuy ? 'MAX 1ZE RESERVED' : 'UNITS RESERVED'}
@@ -258,7 +258,7 @@ export function CoOwnTradeReceipt({
 
       {/* Market & liquidity warning */}
       {marketWarning && (
-        <View style={[styles.warningCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+        <View style={[styles.warningCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
           <View style={styles.warningRow}>
             <Ionicons name="warning-outline" size={14} color={colors.warning} />
             <Text style={[styles.warningTitle, { color: colors.warning }]}>Market & liquidity</Text>
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   statusIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   productTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   receiptValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
     textAlign: 'right',
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     flexShrink: 1,
     minWidth: 0,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalValue: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     flexShrink: 0,
@@ -432,14 +432,14 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   maxReservedValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   // ── Phase 2.5: plain language card ──
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   plainLanguageText: {
@@ -488,10 +488,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   warningTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   warningText: {
     fontSize: Type.body.size,

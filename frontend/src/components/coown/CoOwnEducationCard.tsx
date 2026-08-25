@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   topicTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },

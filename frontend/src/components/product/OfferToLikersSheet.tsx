@@ -8,7 +8,7 @@ import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../../context/CurrencyContext';
-import { CURRENCIES } from '../../constants/currencies';
+import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
 import { haptics } from '../../utils/haptics';
 
@@ -61,6 +61,7 @@ export function OfferToLikersSheet({
     warning: colors.warning,
     background: colors.background,
     textInverse: colors.textInverse,
+    overlay: colors.overlay,
   };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const { formatFromFiat } = useFormattedPrice();
@@ -93,10 +94,10 @@ export function OfferToLikersSheet({
     return askingPrice * (1 - selectedDiscount / 100);
   }, [useCustomPrice, customPrice, askingPrice, selectedDiscount]);
 
-  const formattedOfferPrice = formatFromFiat(computedOfferPrice, 'GBP');
-  const formattedAskingPrice = formatFromFiat(askingPrice, 'GBP');
+  const formattedOfferPrice = formatFromFiat(computedOfferPrice, DEFAULT_CURRENCY_CODE);
+  const formattedAskingPrice = formatFromFiat(askingPrice, DEFAULT_CURRENCY_CODE);
   const savingsAmount = askingPrice - computedOfferPrice;
-  const formattedSavings = formatFromFiat(savingsAmount, 'GBP');
+  const formattedSavings = formatFromFiat(savingsAmount, DEFAULT_CURRENCY_CODE);
 
   const likerCount = listing?.likes ?? 0;
 
@@ -353,12 +354,12 @@ const createStyles = (themed: {
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
   danger: string; success: string; warning: string;
-  background: string; textInverse: string;
+  background: string; textInverse: string; overlay: string;
 }) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: themed.overlay,
   },
   sheet: {
     backgroundColor: themed.background,
@@ -406,13 +407,13 @@ const createStyles = (themed: {
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textSecondary,
     lineHeight: 17,
   },
   closeText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: themed.brand,
     marginTop: Space.xs,
@@ -451,21 +452,21 @@ const createStyles = (themed: {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
     marginBottom: Space.xs,
     lineHeight: 19,
   },
   itemPrice: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
   },
 
   // Section labels
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: themed.textSecondary,
     letterSpacing: 0.2,
@@ -532,12 +533,12 @@ const createStyles = (themed: {
     gap: Space.xs,
   },
   currencySymbol: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.brand,
   },
   customPriceInput: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
     minWidth: 60,
@@ -647,7 +648,7 @@ const createStyles = (themed: {
     color: themed.textSecondary,
   },
   summaryValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
   },

@@ -24,7 +24,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
 const COVER_HEIGHT = 160;
-const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
+const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;
@@ -43,8 +43,6 @@ interface ProfileHeroProps {
   memberSince?: string;
   /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
   sellerTrust?: SellerTrustSummary | null;
-  /** Email-verified flag from the user profile (fallback for verified badge). */
-  emailVerified?: boolean;
   followPending: boolean;
   isBlocked: boolean;
   scrollY: SharedValue<number>;
@@ -66,6 +64,34 @@ function getInitials(name: string): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
+// ── Bio truncation with see-more expansion ──
+// Bios longer than ~125 chars are truncated with a "see more" inline toggle.
+const BIO_TRUNCATE_CHARS = 125;
+
+function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: any; linkStyle: any; seeMoreStyle: any }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const shouldTruncate = bio.length > BIO_TRUNCATE_CHARS;
+  const displayBio = shouldTruncate && !expanded
+    ? bio.slice(0, BIO_TRUNCATE_CHARS).trimEnd() + '…'
+    : bio;
+
+  return (
+    <Text style={style} numberOfLines={expanded ? undefined : 3}>
+      {displayBio}
+      {shouldTruncate ? (
+        <Text
+          style={seeMoreStyle}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Show less bio' : 'Show more bio'}
+        >
+          {expanded ? ' less' : ' more'}
+        </Text>
+      ) : null}
+    </Text>
+  );
+}
+
 /**
  * Authored identity surface — Instagram-density seam row + LinkedIn-clarity identity.
  *
@@ -73,7 +99,7 @@ function getInitials(name: string): string {
  *   cover (edge-to-edge, gradient fades only)
  *   seam row: avatar (left, overlapping cover) + 3 primary stats (right, vertically centred)
  *   identity: full-width, left-aligned — name, @handle, bio, context, website
- *   trust line: 4.9 ★ · 47 sold · Joined June 2026
+ *   trust line: 4.9 star · 47 sold · Joined June 2026
  *   actions: flat 11pt radius, restrained
  */
 export function ProfileHero({
@@ -89,7 +115,6 @@ export function ProfileHero({
   reviewCount,
   memberSince,
   sellerTrust,
-  emailVerified,
   followPending,
   isBlocked,
   scrollY,
@@ -118,16 +143,19 @@ export function ProfileHero({
   const followingCount = stats?.followingCount ?? 0;
   const ratingValue = stats?.ratingAverage;
   const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
-  const isVerified = sellerTrust?.verified === true || emailVerified === true;
-  const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
+  // Verification tier — only from seller trust (authoritative backend source).
+  // Email verification is never used as a proxy for seller/identity verification.
+  const verificationTier: VerificationTier | null =
+    sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
 
-  // Trust line: "4.9 ★ · 47 sold · Joined June 2026"
+  // Trust line: "4.9 · 47 sold · Joined June 2026 · Replies within 2h"
   const trustParts: string[] = [];
   if (hasRating && ratingValue !== null && ratingValue !== undefined) {
-    trustParts.push(`${ratingValue.toFixed(1)} ★`);
+    trustParts.push(`${ratingValue.toFixed(1)}`);
   }
   if (soldCount > 0) trustParts.push(`${soldCount} sold`);
   if (memberSince) trustParts.push(`Joined ${memberSince}`);
+  if (sellerTrust?.responseTimeLabel) trustParts.push(`Replies ${sellerTrust.responseTimeLabel}`);
   const trustLine = trustParts.join(' · ');
 
   return (
@@ -245,9 +273,9 @@ export function ProfileHero({
             @{targetProfile?.username ?? 'thryft'}
           </Text>
 
-          {/* Biography — concise, readable */}
+          {/* Biography — concise, readable, with see-more expansion for long bios */}
           {targetProfile?.bio ? (
-            <Text style={styles.bio} numberOfLines={3}>{targetProfile.bio}</Text>
+            <BioText bio={targetProfile.bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} />
           ) : null}
 
           {/* Context line — no icons */}
@@ -275,9 +303,10 @@ export function ProfileHero({
                   onPress={() => onTabSelect('Reviews')}
                   accessibilityRole="button"
                   accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)} ★</Text>
+                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)}</Text>
+                  <Ionicons name="star" size={12} color={colors.warning} aria-hidden={true} />
                 </Pressable>
               ) : null}
               {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
@@ -293,12 +322,16 @@ export function ProfileHero({
               ) : null}
               {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
               {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+              {(hasRating || soldCount > 0 || memberSince) && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+              {sellerTrust?.responseTimeLabel ? (
+                <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
+              ) : null}
             </View>
           ) : null}
 
-          {/* Trust signal chips removed — the trust line above shows rating/sold/joined,
-              and SellerReputationCard below shows the full metric breakdown (response
-              time, dispatch time, response rate). Chips here duplicated both. */}
+          {/* Trust line is the sole trust surface above the tab rail.
+              Rating, sold count, and join date are shown here.
+              Detailed metrics live in the Reviews tab. */}
         </View>
 
         {/* Actions — flat 11pt radius, restrained, content-first */}
@@ -430,7 +463,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   monogramText: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     letterSpacing: -0.5,
@@ -530,10 +563,18 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.xs,
   },
+  bioLink: {
+    color: colors.brand,
+    fontFamily: Typography.family.medium,
+  },
+  bioSeeMore: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+  },
 
   // Context line — no icons
   contextLine: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.xs,
@@ -545,7 +586,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   websiteText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     textDecorationLine: 'underline',
@@ -560,17 +601,27 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   trustLink: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
+  trustRatingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   trustStatic: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
+  trustResponse: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+  },
   trustDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -597,7 +648,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  followBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  followBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
   followActiveBtnText: { color: colors.textInverse },
   followingBtnText: { color: colors.textPrimary },
   messageBtn: {
@@ -612,7 +663,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  messageBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  messageBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   moreBtn: {
     width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
@@ -635,7 +686,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  editProfileBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  editProfileBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   btnDisabled: { opacity: 0.5 },
   });
 }

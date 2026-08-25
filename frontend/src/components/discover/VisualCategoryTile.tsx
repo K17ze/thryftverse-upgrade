@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors, ActiveTheme } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -24,10 +24,6 @@ const SIZE_MAP = {
   small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: 14, radius: Radius.md },
 };
 
-const GRADIENT_OVERLAYS: readonly [string, string] = ActiveTheme === 'light'
-  ? ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']
-  : ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)'];
-
 export function VisualCategoryTile({
   title,
   subtitle,
@@ -36,7 +32,13 @@ export function VisualCategoryTile({
   onPress,
   size = 'medium',
 }: Props) {
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const dims = SIZE_MAP[size];
+
+  const GRADIENT_OVERLAYS: readonly [string, string] = isDark
+    ? ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)']
+    : ['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)'];
 
   return (
     <AnimatedPressable
@@ -69,7 +71,7 @@ export function VisualCategoryTile({
         ) : null}
         {count !== undefined ? (
           <View style={styles.countRow}>
-            <Ionicons name="shirt-outline" size={10} color="rgba(255,255,255,0.8)" />
+            <Ionicons name="shirt-outline" size={10} color={colors.scrimTextSecondary} />
             <Text style={styles.countText}>{count} items</Text>
           </View>
         ) : null}
@@ -78,11 +80,12 @@ export function VisualCategoryTile({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   textOverlay: {
     position: 'absolute',
@@ -93,18 +96,18 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   subtitle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.scrimTextSecondary,
     marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -117,7 +120,8 @@ const styles = StyleSheet.create({
   countText: {
     fontFamily: Typography.family.medium,
     fontSize: 10,
-    color: 'rgba(255,255,255,0.75)',
+    color: colors.scrimTextSecondary,
     letterSpacing: 0.2,
   },
-});
+  });
+}

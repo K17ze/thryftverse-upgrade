@@ -1,28 +1,157 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Linking, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { AppInput } from '../components/ui/AppInput';
+import { Space, Radius, Type, Typography, Stroke, Control, FontFamily, PressScale } from '../theme/designTokens';
+import {
+  buildSupportEntryContext,
+  type SupportConversation,
+  type SupportCase,
+  type SupportKnowledgeSearchResult,
+  type SupportEntryContext,
+  type CaseOperationalState,
+  type ConversationOwnershipState,
+} from '../contracts/support';
+import {
+  getSupportBootstrap,
+  createSupportConversation,
+  searchSupportKnowledge,
+  requestSupportHandoff,
+} from '../services/supportConversationApi';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
+
+// ── Case operational state → human-readable label ──
+const CASE_STATE_LABEL: Record<CaseOperationalState, string> = {
+  new: 'New',
+  triaged: 'Triaged',
+  awaiting_customer: 'Awaiting your reply',
+  queued: 'In queue',
+  in_review: 'In review',
+  awaiting_external: 'Awaiting external',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
+// ── Conversation ownership state → human-readable label ──
+const CONVERSATION_STATE_LABEL: Record<ConversationOwnershipState, string> = {
+  ai_active: 'Active',
+  human_queued: 'Waiting for agent',
+  human_active: 'Agent responding',
+  awaiting_customer: 'Awaiting your reply',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
+// ── Category shortcuts ──
+interface CategoryShortcut {
+  label: string;
+  context: SupportEntryContext;
+}
+
+const CATEGORY_SHORTCUTS: CategoryShortcut[] = [
+  { label: 'Buying', context: { kind: 'general' } },
+  { label: 'Selling', context: { kind: 'general' } },
+  { label: 'Payments', context: { kind: 'general' } },
+  { label: 'Safety', context: { kind: 'general' } },
+  { label: 'Account', context: { kind: 'general' } },
+];
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [faqSearch, setFaqSearch] = useState('');
 
-  const handleOpenExternal = React.useCallback(async (url: string) => {
+  // ── Search state ──
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SupportKnowledgeSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Bootstrap state ──
+  const [recentConversations, setRecentConversations] = useState<SupportConversation[]>([]);
+  const [recentCases, setRecentCases] = useState<SupportCase[]>([]);
+  const [bootstrapLoading, setBootstrapLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+
+  // ── Conversation creation state ──
+  const [creatingConversation, setCreatingConversation] = useState(false);
+  const [handingOff, setHandingOff] = useState(false);
+
+  const isSearching = query.trim().length > 0;
+
+  // ── Bootstrap on mount ──
+  useEffect(() => {
+    let cancelled = false;
+    setBootstrapLoading(true);
+    setBootstrapError(null);
+    getSupportBootstrap()
+      .then((data) => {
+        if (cancelled) return;
+        setRecentConversations(data.recentConversations);
+        setRecentCases(data.recentCases);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'Unable to load your support history';
+        setBootstrapError(message);
+      })
+      .finally(() => {
+        if (!cancelled) setBootstrapLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ── Debounced search ──
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (trimmed.length === 0) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      setSearchError(null);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(null);
+    debounceRef.current = setTimeout(() => {
+      searchSupportKnowledge(trimmed, 12)
+        .then((results) => {
+          setSearchResults(results);
+          setSearchLoading(false);
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Search failed';
+          setSearchError(message);
+          setSearchLoading(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, [query]);
+
+  // ── Handlers ──
+  const handleOpenExternal = useCallback(async (url: string) => {
     try {
       await Linking.openURL(url);
     } catch {
@@ -30,279 +159,513 @@ export default function HelpSupportScreen({ navigation }: Props) {
     }
   }, [show]);
 
-  const fixedFeeLabel = formatFromFiat(0.7, 'GBP', { displayMode: 'fiat' });
+  const handleClearSearch = useCallback(() => {
+    setQuery('');
+  }, []);
 
-  const allFaqs = useMemo(
-    () => [
-      {
-        q: 'How does the platform charge work?',
-        a: "Thryftverse applies a platform charge to each checkout. It funds secure payments, delivery issue handling, and buyer support if an item doesn't arrive or is significantly misdescribed. File a claim within 2 days of delivery.",
-      },
-      {
-        q: 'How do I withdraw my balance?',
-        a: "Go to Profile -> Balance -> Withdraw. Add a bank account first if you haven't already. Withdrawals typically take 1-3 business days.",
-      },
-      {
-        q: 'What fees does Thryftverse charge?',
-        a: `Thryftverse charges a 5% service fee on each sale, plus a fixed transaction fee of ${fixedFeeLabel}. Buyers also pay a platform charge on top of the item price.`,
-      },
-      {
-        q: 'Can I cancel or return an order?',
-        a: 'Buyers can request a cancellation within 1 hour of purchase. Returns and issue handling are covered under our platform charge support policy when items do not match the description.',
-      },
-      {
-        q: 'How do I report a fake or misleading listing?',
-        a: 'On any item page, tap the three-dot menu and select "Report". Our trust team reviews flagged items within 24 hours.',
-      },
-    ],
-    [fixedFeeLabel]
+  const handleStartConversation = useCallback(
+    async (context: SupportEntryContext) => {
+      if (creatingConversation) return;
+      setCreatingConversation(true);
+      try {
+        const conversation = await createSupportConversation(context);
+        navigation.navigate('SupportConversation', {
+          conversationId: conversation.id,
+          contextKind: context.kind,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unable to start conversation';
+        show(message, 'error');
+      } finally {
+        setCreatingConversation(false);
+      }
+    },
+    [creatingConversation, navigation, show]
   );
 
-  const filteredFaqs = useMemo(() => {
-    if (!faqSearch.trim()) return allFaqs;
-    const query = faqSearch.toLowerCase();
-    return allFaqs.filter((f) => f.q.toLowerCase().includes(query) || f.a.toLowerCase().includes(query));
-  }, [allFaqs, faqSearch]);
+  const handleTalkToPerson = useCallback(async () => {
+    if (handingOff) return;
+    setHandingOff(true);
+    try {
+      const conversation = await createSupportConversation({ kind: 'general' });
+      await requestSupportHandoff(conversation.id, 'User requested human agent from Help & Support');
+      navigation.navigate('SupportConversation', {
+        conversationId: conversation.id,
+        contextKind: 'general',
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to reach an agent right now';
+      show(message, 'error');
+    } finally {
+      setHandingOff(false);
+    }
+  }, [handingOff, navigation, show]);
+
+  const handleOpenConversation = useCallback(
+    (conversation: SupportConversation) => {
+      navigation.navigate('SupportConversation', {
+        conversationId: conversation.id,
+        contextKind: conversation.contextKind,
+        contextId: conversation.contextId ?? undefined,
+      });
+    },
+    [navigation]
+  );
+
+  const handleOpenCase = useCallback(
+    (caseId: string) => {
+      navigation.navigate('SupportCaseDetail', { caseId });
+    },
+    [navigation]
+  );
+
+  const handleCategoryPress = useCallback(
+    (context: SupportEntryContext) => {
+      void handleStartConversation(context);
+    },
+    [handleStartConversation]
+  );
+
+  const handleReportContent = useCallback(() => {
+    void handleStartConversation({ kind: 'report' });
+  }, [handleStartConversation]);
+
+  const handleAppealModeration = useCallback(() => {
+    void handleStartConversation({ kind: 'report' });
+  }, [handleStartConversation]);
+
+  const handleContactSupport = useCallback(() => {
+    void handleStartConversation({ kind: 'general' });
+  }, [handleStartConversation]);
+
+  // ── Header right action: "Talk to a person" ──
+  const headerRight = useMemo(
+    () => (
+      <AnimatedPressable
+        onPress={() => void handleTalkToPerson()}
+        hitSlop={{ top: 10, bottom: 10, left: 12, right: 8 }}
+        hapticFeedback="medium"
+        accessibilityLabel="Talk to a person"
+        accessibilityRole="button"
+        accessibilityHint="Start a conversation with a human support agent"
+        disabled={handingOff}
+      >
+        {handingOff ? (
+          <ActivityIndicator size="small" color={colors.brand} />
+        ) : (
+          <Text style={styles.headerRightText}>Talk to a person</Text>
+        )}
+      </AnimatedPressable>
+    ),
+    [handleTalkToPerson, handingOff, colors.brand, styles.headerRightText]
+  );
+
+  // ── Format conversation subtitle ──
+  const formatConversationSubtitle = useCallback((convo: SupportConversation) => {
+    const stateLabel = CONVERSATION_STATE_LABEL[convo.ownershipState] ?? convo.ownershipState;
+    const date = new Date(convo.updatedAt);
+    const dateLabel = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${stateLabel} · ${dateLabel}`;
+  }, []);
+
+  // ── Format case subtitle ──
+  const formatCaseSubtitle = useCallback((supportCase: SupportCase) => {
+    const stateLabel = CASE_STATE_LABEL[supportCase.operationalState] ?? supportCase.operationalState;
+    const date = new Date(supportCase.updatedAt);
+    const dateLabel = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${supportCase.issueType} · ${stateLabel} · ${dateLabel}`;
+  }, []);
+
+  const hasRecentActivity = recentConversations.length > 0 || recentCases.length > 0;
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
-        {/* Hero summary */}
-        <View>
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="help-circle" size={20} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>We're here to help</Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                  Average response time ~2 hours
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Contact options */}
-        <View>
-          <SettingsSection title="Contact us">
-            <SettingsRow
-              icon="mail-outline"
-              title="Email support"
-              subtitle="support@thryftverse.com"
-              onPress={() => void handleOpenExternal('mailto:support@thryftverse.com?subject=Thryftverse%20Support')}
-              isFirst
-            />
-            <SettingsRow
-              icon="flag-outline"
-              title="Report a problem"
-              subtitle="Something not working right? Let us know"
-              onPress={() => void handleOpenExternal('mailto:support@thryftverse.com?subject=Report%20a%20problem')}
-            />
-            <SettingsRow
-              icon="shield-checkmark-outline"
-              title="Safety and scams"
-              subtitle="Tips to stay safe while buying and selling"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/safety')}
-            />
-            <SettingsRow
-              icon="document-text-outline"
-              title="Legal and privacy help"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-              isLast
-            />
-          </SettingsSection>
-        </View>
-
-        {/* FAQ Banner */}
-        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-          <SettingsInfoBanner
-            text="Search our FAQs below for quick answers to common questions."
-            icon="help-circle-outline"
-            variant="info"
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Help & Support"
+          onBack={() => navigation.goBack()}
+          rightAction={headerRight}
+        />
+      }
+      keyboardAvoiding
+    >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Search bar — primary interaction ── */}
+        <View style={styles.searchWrap}>
+          <AppInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search or describe your issue"
+            accessibilityLabel="Search help articles"
+            prefix={<Ionicons name="search-outline" size={18} color={colors.textMuted} />}
+            suffix={
+              query ? (
+                <AnimatedPressable
+                  onPress={handleClearSearch}
+                  hitSlop={8}
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </AnimatedPressable>
+              ) : undefined
+            }
+            inputContainerStyle={styles.searchInputContainer}
           />
         </View>
 
-        {/* FAQ Search */}
-        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-          <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              value={faqSearch}
-              onChangeText={setFaqSearch}
-              placeholder="Search FAQs..."
-              placeholderTextColor={colors.textMuted}
-            />
-            {faqSearch ? (
-              <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </AnimatedPressable>
-            ) : null}
-          </View>
-        </View>
-
-        {/* FAQ Accordion */}
-        <View>
-          <SettingsSection title="Frequently asked">
-            {filteredFaqs.length === 0 ? (
-              <View style={styles.emptyFaqs}>
-                <Text style={styles.emptyFaqsText}>No FAQs match your search</Text>
+        {/* ── Search results ── */}
+        {isSearching ? (
+          <View style={styles.searchResultsWrap}>
+            {searchLoading ? (
+              <View style={styles.searchLoadingWrap}>
+                <ActivityIndicator size="small" color={colors.brand} />
+                <Text style={styles.searchLoadingText}>Searching articles…</Text>
+              </View>
+            ) : searchError ? (
+              <View style={styles.searchErrorWrap}>
+                <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
+                <Text style={styles.searchErrorText}>{searchError}</Text>
+                <Text style={styles.searchErrorHint}>Try again, or contact us below.</Text>
+              </View>
+            ) : searchResults.length === 0 ? (
+              <View style={styles.searchEmptyWrap}>
+                <Text style={styles.searchEmptyText}>No articles match "{query.trim()}"</Text>
+                <Text style={styles.searchEmptyHint}>Try different words, or talk to a person.</Text>
               </View>
             ) : (
-              filteredFaqs.map((faq, idx) => (
-                <View key={faq.q}>
+              searchResults.map((result, idx) => (
+                <View key={result.articleId} style={[styles.articleRow, idx < searchResults.length - 1 && styles.rowBorder]}>
                   <AnimatedPressable
-                    onPress={() => setExpanded((prev) => (prev === faq.q ? null : faq.q))}
+                    onPress={() => void handleStartConversation({ kind: 'general' })}
                     hapticFeedback="light"
-                    scaleValue={0.995}
+                    scaleValue={PressScale.tap}
+                    accessibilityRole="button"
+                    accessibilityLabel={result.title}
                   >
-                    <View style={[styles.faqRow, idx < filteredFaqs.length - 1 && styles.border]}>
-                      <Text style={styles.faqQ} numberOfLines={expanded === faq.q ? undefined : 2}>
-                        {faq.q}
-                      </Text>
-                      <Ionicons
-                        name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color={colors.textMuted}
-                      />
-                    </View>
-                    {expanded === faq.q && (
-                      <Text style={styles.faqA}>{faq.a}</Text>
-                    )}
+                    <Text style={styles.articleTitle} numberOfLines={2}>
+                      {result.title}
+                    </Text>
+                    <Text style={styles.articleSnippet} numberOfLines={3}>
+                      {result.snippet}
+                    </Text>
                   </AnimatedPressable>
                 </View>
               ))
             )}
-          </SettingsSection>
-        </View>
+          </View>
+        ) : (
+          <>
+            {/* ── Category shortcuts ── */}
+            <View style={styles.categoryRow}>
+              {CATEGORY_SHORTCUTS.map((cat, idx) => (
+                <React.Fragment key={cat.label}>
+                  <AnimatedPressable
+                    onPress={() => handleCategoryPress(cat.context)}
+                    hapticFeedback="light"
+                    scaleValue={0.97}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${cat.label} help`}
+                    disabled={creatingConversation}
+                  >
+                    <Text style={styles.categoryText}>{cat.label}</Text>
+                  </AnimatedPressable>
+                  {idx < CATEGORY_SHORTCUTS.length - 1 && <Text style={styles.categoryDot}>·</Text>}
+                </React.Fragment>
+              ))}
+            </View>
 
-        {/* External links */}
-        <View>
-          <SettingsSection title="Legal">
-            <SettingsRow
-              icon="document-text-outline"
-              title="Terms of Service"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-              isFirst
-            />
-            <SettingsRow
-              icon="shield-checkmark-outline"
-              title="Privacy Policy"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-            />
-            <SettingsRow
-              icon="globe-outline"
-              title="Thryftverse Blog"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/blog')}
-              isLast
-            />
-          </SettingsSection>
-        </View>
+            {/* ── Recent conversations & cases ── */}
+            {bootstrapLoading ? (
+              <View style={styles.bootstrapLoadingWrap}>
+                <ActivityIndicator size="small" color={colors.brand} />
+              </View>
+            ) : bootstrapError ? (
+              <View style={styles.bootstrapErrorWrap}>
+                <Text style={styles.bootstrapErrorText}>{bootstrapError}</Text>
+              </View>
+            ) : hasRecentActivity ? (
+              <>
+                {recentConversations.length > 0 && (
+                  <SettingsSection title="Recent conversations">
+                    {recentConversations.map((convo, idx) => (
+                      <SettingsRow
+                        key={convo.id}
+                        icon="chatbubble-outline"
+                        title={convo.title ?? 'Support conversation'}
+                        subtitle={formatConversationSubtitle(convo)}
+                        onPress={() => handleOpenConversation(convo)}
+                        isFirst={idx === 0}
+                        isLast={idx === recentConversations.length - 1}
+                      />
+                    ))}
+                  </SettingsSection>
+                )}
 
-        {/* Version */}
-        <Text style={styles.version}>Thryftverse v1.0.0 · Response time ~2 hours</Text>
+                {recentCases.length > 0 && (
+                  <SettingsSection title="Recent cases">
+                    {recentCases.map((supportCase, idx) => (
+                      <SettingsRow
+                        key={supportCase.id}
+                        icon="document-text-outline"
+                        title={`#${supportCase.id.slice(-8).toUpperCase()}`}
+                        subtitle={formatCaseSubtitle(supportCase)}
+                        onPress={() => handleOpenCase(supportCase.id)}
+                        isFirst={idx === 0}
+                        isLast={idx === recentCases.length - 1}
+                      />
+                    ))}
+                  </SettingsSection>
+                )}
+              </>
+            ) : null}
+
+            {/* ── Contact support ── */}
+            <View style={styles.contactWrap}>
+              <AnimatedPressable
+                onPress={handleContactSupport}
+                style={styles.contactButton}
+                hapticFeedback="medium"
+                scaleValue={0.985}
+                accessibilityRole="button"
+                accessibilityLabel="Contact support"
+                accessibilityHint="Start a support conversation"
+                disabled={creatingConversation}
+              >
+                {creatingConversation ? (
+                  <ActivityIndicator size="small" color={colors.brand} />
+                ) : (
+                  <>
+                    <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
+                    <Text style={styles.contactButtonText}>Contact support</Text>
+                  </>
+                )}
+              </AnimatedPressable>
+            </View>
+
+            {/* ── Trust & Safety: DSA reporting and appeals ── */}
+            <SettingsSection title="Trust & Safety">
+              <SettingsRow
+                icon="flag-outline"
+                title="Report illegal content"
+                subtitle="DSA report — submit a complaint about specific content"
+                onPress={handleReportContent}
+                isFirst
+              />
+              <SettingsRow
+                icon="shield-outline"
+                title="Appeal a moderation decision"
+                subtitle="Request a review of a decision made on your account"
+                onPress={handleAppealModeration}
+                isLast
+              />
+            </SettingsSection>
+
+            {/* ── Legal ── */}
+            <SettingsSection title="Legal">
+              <SettingsRow
+                icon="document-text-outline"
+                title="Terms of Service"
+                onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+                isFirst
+              />
+              <SettingsRow
+                icon="shield-checkmark-outline"
+                title="Privacy Policy"
+                onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+              />
+              <SettingsRow
+                icon="globe-outline"
+                title="Thryftverse Blog"
+                onPress={() => void handleOpenExternal('https://thryftverse.app/blog')}
+                isLast
+              />
+            </SettingsSection>
+          </>
+        )}
+
+        {/* ── Version ── */}
+        <Text style={styles.version}>Thryftverse v1.0.0</Text>
+      </ScrollView>
     </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs - 2,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.smMd,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: 0,
-  },
-  emptyFaqs: {
-    paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
-  emptyFaqsText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  faqRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md - Space.xs,
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  border: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  faqQ: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-    letterSpacing: Type.body.letterSpacing,
-    paddingRight: Space.sm,
-  },
-  faqA: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  version: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: Space.lg,
-    marginBottom: Space.md,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: Space.xl,
+    },
+    // ── Search ──
+    searchWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.sm,
+    },
+    searchInputContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: Radius.xl,
+    },
+    // ── Search results ──
+    searchResultsWrap: {
+      paddingHorizontal: Space.md,
+    },
+    searchLoadingWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.lg,
+      justifyContent: 'center',
+    },
+    searchLoadingText: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    searchErrorWrap: {
+      paddingVertical: Space.lg,
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    searchErrorText: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.danger,
+      textAlign: 'center',
+      letterSpacing: Type.body.letterSpacing,
+    },
+    searchErrorHint: {
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    searchEmptyWrap: {
+      paddingVertical: Space.lg,
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    searchEmptyText: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      letterSpacing: Type.body.letterSpacing,
+    },
+    searchEmptyHint: {
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    // ── Article rows ──
+    articleRow: {
+      paddingVertical: Space.md - Space.xs,
+    },
+    rowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    articleTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    articleSnippet: {
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      marginTop: Space.xs,
+    },
+    // ── Category shortcuts ──
+    categoryRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs,
+    },
+    categoryText: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.brand,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    categoryDot: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+    },
+    // ── Bootstrap states ──
+    bootstrapLoadingWrap: {
+      paddingVertical: Space.lg,
+      alignItems: 'center',
+    },
+    bootstrapErrorWrap: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+    },
+    bootstrapErrorText: {
+      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    // ── Contact button ──
+    contactWrap: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    contactButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + Space.xs,
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      borderColor: colors.brandBorder,
+      backgroundColor: colors.brandSubtle,
+      minHeight: Control.hit + Space.xs,
+    },
+    contactButtonText: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.brand,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    // ── Header right ──
+    headerRightText: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.brand,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    // ── Version ──
+    version: {
+      fontSize: Type.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: Space.lg,
+      marginBottom: Space.md,
+      letterSpacing: Type.meta.letterSpacing,
+    },
   });
 }

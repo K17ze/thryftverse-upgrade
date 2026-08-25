@@ -54,10 +54,10 @@ export function ChatActionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View
-          style={[styles.sheet, { backgroundColor: colors.surface }]}
+          style={[styles.sheet, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
@@ -149,7 +149,6 @@ export function ChatActionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -159,7 +158,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,

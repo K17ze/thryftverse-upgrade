@@ -217,6 +217,11 @@ interface CreatePayoutRequestResponse {
   };
 }
 
+interface ListPayoutRequestsResponse {
+  ok: true;
+  items: PayoutRequestPayload[];
+}
+
 function buildQuery(params: Record<string, string | number | boolean | undefined>) {
   const search = new URLSearchParams();
 
@@ -411,6 +416,12 @@ export async function createStripeIntentSheet(intentId: string) {
 export async function confirmPaymentIntent(
   intentId: string,
   input: {
+    // simulateStatus is intentionally optional with NO default.
+    // Defaulting to 'succeeded' is a payment-safety hazard: a production
+    // caller that omits it would cause the backend to simulate a successful
+    // payment and release funds/settle orders without a real provider
+    // confirmation. Leave undefined when not explicitly provided so the
+    // backend only processes real provider confirmations.
     simulateStatus?: 'processing' | 'succeeded' | 'failed' | 'cancelled';
     providerFeeGbp?: number;
     providerAttemptRef?: string;
@@ -419,6 +430,9 @@ export async function confirmPaymentIntent(
     scaExpiresAt?: string;
     failureCode?: string;
     failureMessage?: string;
+    // PAY-16: Required for terminal status confirmation in production.
+    // The approver must be a different admin from the one making the request.
+    approverId?: string;
     payload?: Record<string, unknown>;
   } = {}
 ) {
@@ -428,7 +442,9 @@ export async function confirmPaymentIntent(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        simulateStatus: input.simulateStatus ?? 'succeeded',
+        // No default — see comment on simulateStatus above. Passing through
+        // undefined ensures the backend does not simulate any state.
+        simulateStatus: input.simulateStatus,
         providerFeeGbp: input.providerFeeGbp,
         providerAttemptRef: input.providerAttemptRef,
         providerStatus: input.providerStatus,
@@ -436,6 +452,7 @@ export async function confirmPaymentIntent(
         scaExpiresAt: input.scaExpiresAt,
         failureCode: input.failureCode,
         failureMessage: input.failureMessage,
+        approverId: input.approverId,
         payload: input.payload,
       }),
     }
@@ -526,6 +543,17 @@ export async function createPayoutRequest(
   );
 }
 
+export async function listPayoutRequests(
+  userId: string,
+  options?: { limit?: number }
+) {
+  const query = buildQuery({ limit: options?.limit });
+  const payload = await fetchJson<ListPayoutRequestsResponse>(
+    `/users/${encodeURIComponent(userId)}/payout-requests${query}`
+  );
+  return payload.items;
+}
+
 export async function mintIze(input: {
   userId: string;
   fiatAmount: number;
@@ -560,6 +588,12 @@ export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
       `/wallet/1ze/${encodeURIComponent(userId)}/position?fiatCurrency=${encodeURIComponent(fiatCurrency)}`
     );
   } catch (err) {
+    // SAFETY: This mock fallback must NEVER be reachable in production builds.
+    // It fabricates a position with `safeguarded: true`, which could mask a
+    // real custody/funds failure if surfaced to users. The ENABLE_RUNTIME_MOCKS
+    // flag is expected to be false in production; this branch is a defensive
+    // guard only. Verify your build pipeline strips ENABLE_RUNTIME_MOCKS in
+    // release builds.
     if (ENABLE_RUNTIME_MOCKS) {
       console.warn('[walletApi] /wallet/1ze/position failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       const now = new Date();

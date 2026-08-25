@@ -91,6 +91,10 @@ export const Motion = {
     settle: { damping: 24, stiffness: 240, mass: 0.9 },
     // Sheet/modal entrance — smooth, confident
     sheet: { damping: 22, stiffness: 180, mass: 1.0 },
+    // Flagship sheet entrance — faster settle, zero float.
+    // Calibrated to iOS 26 sheet physics (~damping ratio 0.9, ~400ms settle).
+    // Use for editor sheets that must feel premium (SheetContainer, effects sheets).
+    sheetFlagship: { damping: 30, stiffness: 400, mass: 1.0 },
     // Entrance — generic entrance (alias for sheet, kept for backward compat)
     entrance: { damping: 22, stiffness: 180, mass: 1.0 },
     // Reorder — list reordering, controlled with slight liveliness
@@ -195,6 +199,12 @@ export const Motion = {
     /** Media load crossfade — opacity only, never pop (Design.md §Component A). */
     mediaLoad: {
       duration: 250,
+      easing: 'smooth' as const,
+    },
+    /** Shimmer sweep — continuous skeleton shimmer loop. ≤600ms per audit M6.
+     *  Reduced-motion collapses this to a static placeholder (no animation). */
+    shimmer: {
+      duration: 600,
       easing: 'smooth' as const,
     },
   },

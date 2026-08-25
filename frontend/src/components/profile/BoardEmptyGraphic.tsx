@@ -95,14 +95,14 @@ const styles = StyleSheet.create({
   iconRing: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     textAlign: 'center',
   },
   subtitle: {

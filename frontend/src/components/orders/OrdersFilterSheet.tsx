@@ -78,10 +78,11 @@ export function OrdersFilterSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={[styles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close filter">
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
+        accessibilityRole="button"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
@@ -218,7 +219,6 @@ export function OrdersFilterSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -250,10 +250,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   sectionLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
@@ -265,8 +265,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   optionText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.regular,
   },
   footer: {
@@ -285,8 +285,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   clearBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   applyBtn: {
@@ -298,8 +298,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   applyBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
 });

@@ -65,7 +65,7 @@ export function AttachmentReviewSheet({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-      <Reanimated.View style={[styles.overlay, overlayStyle]}>
+      <Reanimated.View style={[styles.overlay, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Reanimated.View>
       <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
@@ -84,7 +84,7 @@ export function AttachmentReviewSheet({
           </Pressable>
         </View>
 
-        <View style={styles.previewWrap}>
+        <View style={[styles.previewWrap, { backgroundColor: colors.background }]}>
           <CachedImage
             uri={uri}
             style={styles.preview}
@@ -126,7 +126,6 @@ export function AttachmentReviewSheet({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
     position: 'absolute',
@@ -155,8 +154,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   previewWrap: {
@@ -164,7 +163,6 @@ const styles = StyleSheet.create({
     marginVertical: Space.sm,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: '#000',
     minHeight: 200,
     maxHeight: 350,
     justifyContent: 'center',

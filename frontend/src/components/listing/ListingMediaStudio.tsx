@@ -175,7 +175,7 @@ function UploadProgressOverlay({
       pointerEvents="none"
     >
       <View style={variant === 'thumb' ? styles.thumbStatusLabel : styles.coverStatusLabel}>
-        <StatusLabel status={status} color={'#fff'} />
+        <StatusLabel status={status} color={colors.scrimTextPrimary} />
         {variant === 'cover' && (
           <Text style={styles.coverProgressPct}>{pct}%</Text>
         )}
@@ -223,6 +223,7 @@ function UploadedCheckBadge({
         name="checkmark-circle"
         size={variant === 'thumb' ? 16 : 22}
         color={colors.success}
+        aria-hidden={true}
       />
     </Reanimated.View>
   );
@@ -314,10 +315,11 @@ export function ListingMediaStudio({
         >
           <View style={styles.emptyDashed}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="camera-outline" size={40} color={colors.textMuted} />
+              <Ionicons name="camera-outline" size={28} color={colors.brand} aria-hidden={true} />
             </View>
-            <Text style={styles.emptyTitle}>Add photos</Text>
-            <Text style={styles.emptySub}>Tap to upload</Text>
+            <Text style={styles.emptyTitle}>Start with a photo</Text>
+            <Text style={styles.emptySub}>Tap to upload from your library</Text>
+            <Text style={styles.emptyHint}>Well-lit photos from multiple angles sell faster</Text>
           </View>
         </Pressable>
 
@@ -328,8 +330,8 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Take photo with camera"
           >
-            <Ionicons name="camera-outline" size={18} color={colors.textPrimary} style={{ marginRight: Space.sm }} />
-            <Text style={styles.emptySecondaryText}>Camera</Text>
+            <Ionicons name="camera" size={18} color={colors.textPrimary} aria-hidden={true} style={{ marginRight: Space.sm }} />
+            <Text style={styles.emptySecondaryText}>Take photo</Text>
           </Pressable>
           <Text style={styles.emptyCount}>0 / {maxCount}</Text>
         </View>
@@ -363,7 +365,7 @@ export function ListingMediaStudio({
       <View style={[styles.thumbContent, isFailed && styles.thumbContentFailed]}>
         {isVideo ? (
           <View style={styles.thumbVideoTile}>
-            <Ionicons name="videocam" size={22} color={colors.textMuted} />
+            <Ionicons name="videocam" size={22} color={colors.textMuted} aria-hidden={true} />
           </View>
         ) : (
           <ExpoImage
@@ -377,7 +379,7 @@ export function ListingMediaStudio({
 
         {isVideo && (
           <View style={styles.thumbVideoBadge}>
-            <Ionicons name="videocam" size={10} color={'#fff'} />
+            <Ionicons name="videocam" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
           </View>
         )}
 
@@ -417,10 +419,10 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`Retry upload for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <Ionicons name="warning" size={14} color={'#fff'} />
+            <Ionicons name="warning" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
             <Text style={styles.thumbRetryText}>Tap to retry</Text>
             <View style={styles.thumbRetryBtn}>
-              <Ionicons name="refresh" size={12} color={'#fff'} />
+              <Ionicons name="refresh" size={12} color={colors.textInverse} aria-hidden={true} />
               <Text style={styles.thumbRetryBtnText}>Retry</Text>
             </View>
           </Pressable>
@@ -428,7 +430,7 @@ export function ListingMediaStudio({
 
         {status === 'cancelled' && (
           <View style={styles.thumbCancelledOverlay}>
-            <Ionicons name="ban" size={14} color={'#fff'} />
+            <Ionicons name="ban" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
             <Text style={styles.thumbCancelledText}>Cancelled</Text>
           </View>
         )}
@@ -441,7 +443,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <Ionicons name="close" size={12} color={'#fff'} />
+            <Ionicons name="close" size={12} color={colors.textInverse} aria-hidden={true} />
           </Pressable>
         )}
 
@@ -459,7 +461,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`Set ${isVideo ? 'video' : 'photo'} ${index + 1} as cover`}
           >
-            <Ionicons name="star-outline" size={10} color={'#fff'} />
+            <Ionicons name="star-outline" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
             <Text style={styles.thumbSetCoverText}>Cover</Text>
           </Pressable>
         )}
@@ -503,7 +505,7 @@ export function ListingMediaStudio({
         {/* Video indicator */}
         {isCoverVideo && (
           <View style={styles.videoIndicator}>
-            <Ionicons name="videocam" size={14} color={'#fff'} />
+            <Ionicons name="videocam" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
             <Text style={styles.videoText}>VIDEO</Text>
           </View>
         )}
@@ -522,7 +524,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} cover ${isCoverVideo ? 'video' : 'photo'}`}
           >
-            <Ionicons name="close-circle" size={22} color={'#fff'} />
+            <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
           </Pressable>
         )}
 
@@ -549,7 +551,7 @@ export function ListingMediaStudio({
         {/* Cover failed overlay with Retry + Remove */}
         {coverStatus === 'failed' && (
           <View style={styles.coverFailedOverlay}>
-            <Ionicons name="warning" size={16} color={'#fff'} />
+            <Ionicons name="warning" size={16} color={colors.textInverse} aria-hidden={true} />
             <Text style={styles.coverFailedText}>Upload failed</Text>
             <Pressable
               style={styles.coverRetryBtn}
@@ -558,7 +560,7 @@ export function ListingMediaStudio({
               accessibilityRole="button"
               accessibilityLabel={`Retry upload for cover ${isCoverVideo ? 'video' : 'photo'}`}
             >
-              <Ionicons name="refresh" size={14} color={'#fff'} />
+              <Ionicons name="refresh" size={14} color={colors.textInverse} aria-hidden={true} />
               <Text style={styles.coverRetryText}>Retry</Text>
             </Pressable>
           </View>
@@ -567,7 +569,7 @@ export function ListingMediaStudio({
         {/* Cover cancelled overlay */}
         {coverStatus === 'cancelled' && (
           <View style={styles.coverCancelledOverlay}>
-            <Ionicons name="ban" size={16} color={'#fff'} />
+            <Ionicons name="ban" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
             <Text style={styles.coverCancelledText}>Cancelled</Text>
           </View>
         )}
@@ -598,7 +600,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Add more photos from library"
           >
-            <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+            <Ionicons name="images-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
             <Text style={styles.studioActionText}>Add more</Text>
           </Pressable>
         )}
@@ -609,7 +611,7 @@ export function ListingMediaStudio({
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
         >
-          <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
+          <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
           <Text style={styles.studioActionText}>Camera</Text>
         </Pressable>
       </View>
@@ -636,32 +638,42 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   emptyDashed: {
     width: '100%',
     height: coverHeight,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.border,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyIconWrap: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: Radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: `${colors.brand}0D`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     marginBottom: Space.xs,
   },
   emptySub: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+  },
+  emptyHint: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: Space.sm,
+    opacity: 0.7,
   },
   emptyActions: {
     flexDirection: 'row',
@@ -713,7 +725,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverBadgeText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.5,
   },
   videoIndicator: {
@@ -731,7 +743,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   videoText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   countBadge: {
     position: 'absolute',
@@ -745,7 +757,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   countText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   coverRemoveBtn: {
     position: 'absolute',
@@ -777,7 +789,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverProgressPct: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   coverProgressBarTrack: {
     position: 'absolute',
@@ -807,7 +819,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverFailedText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   coverRetryBtn: {
     flexDirection: 'row',
@@ -821,7 +833,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverRetryText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   coverCancelledOverlay: {
     position: 'absolute',
@@ -838,7 +850,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverCancelledText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   /* ── thumbnail content (inside SortablePhotoStrip) ── */
   thumbContent: {
@@ -956,7 +968,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   thumbRetryText: {
     fontSize: 9,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   thumbRetryBtn: {
     flexDirection: 'row',
@@ -970,7 +982,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   thumbRetryBtnText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   thumbCancelledOverlay: {
     position: 'absolute',
@@ -986,7 +998,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   thumbCancelledText: {
     fontSize: 9,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   thumbRemoveBtn: {
     position: 'absolute',
@@ -1019,7 +1031,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   thumbSetCoverText: {
     fontSize: 9,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
   },
   /* ── studio actions ── */
@@ -1038,7 +1050,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     minHeight: 44,
   },
   studioActionText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },

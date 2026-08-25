@@ -106,9 +106,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     opacity: 0.6,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.body.fontFamily,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   labelActive: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -143,7 +143,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: Space.xs,
     right: Space.xs,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   indicatorActive: {

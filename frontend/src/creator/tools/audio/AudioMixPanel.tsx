@@ -35,6 +35,7 @@ import {
   FontFamily,
   Control,
   Stroke,
+  IconGrammar,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -309,7 +310,7 @@ export function AudioMixPanel({
             accessibilityHint="Closes the audio mixing panel"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -474,7 +475,7 @@ function TrackRow({
         <View style={styles.trackInfo}>
           <Ionicons
             name={iconName}
-            size={16}
+            size={IconGrammar.metadata}
             color={track.type === 'voiceover' ? colors.brand : colors.textSecondary}
           />
           <View style={styles.trackMeta}>
@@ -645,7 +646,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── Toggle ──
     toggleRow: {
@@ -689,7 +690,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     emptySubtitle: {
       fontFamily: Typography.family.regular,

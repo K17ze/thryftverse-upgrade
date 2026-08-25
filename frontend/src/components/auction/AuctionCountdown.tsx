@@ -191,12 +191,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   progressBar: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: colors.border,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
 });

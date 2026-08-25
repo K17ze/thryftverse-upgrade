@@ -57,19 +57,28 @@ export function FlagshipScreen({
   const scrollY = useSharedValue(0);
 
   // Stable JS callback reference for the worklet → JS bridge.
+  // NOTE: The ref is mutated on the JS thread on every render, but it must
+  // NEVER be read directly inside a Reanimated worklet. Reanimated freezes
+  // objects captured by a worklet closure; mutating `.current` afterwards
+  // triggers a synchronous `Log.w` on the Android UI thread
+  // (`NativeProxy.synchronouslyUpdateUIProps`), which blocks input dispatch
+  // and causes ANRs (input dispatch timeout 5s+).
+  // The worklet below calls a stable `runOnJS` wrapper instead, so the ref
+  // is only ever resolved on the JS thread and is never part of the worklet
+  // closure.
   const jsOnScrollRef = React.useRef(onScroll);
   jsOnScrollRef.current = onScroll;
+
+  const handleScrollY = React.useCallback((y: number) => {
+    jsOnScrollRef.current?.(y);
+  }, []);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
-      // Marshal the JS callback off the UI thread. Calling a raw JS function
-      // inside a worklet would either throw or silently marshal per call;
-      // runOnJS makes the bridge explicit and keeps the UI thread responsive.
-      const cb = jsOnScrollRef.current;
-      if (cb) {
-        runOnJS(cb)(event.contentOffset.y);
-      }
+      // Marshal the JS callback off the UI thread. The ref is resolved on
+      // the JS thread inside `handleScrollY`, never inside the worklet.
+      runOnJS(handleScrollY)(event.contentOffset.y);
     },
   });
 

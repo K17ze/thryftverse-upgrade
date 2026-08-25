@@ -150,7 +150,7 @@ function createStyles(colors: ThemeColors) {
   },
   messageBtnText: {
     color: colors.textPrimary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   });

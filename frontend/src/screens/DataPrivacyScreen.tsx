@@ -39,9 +39,6 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
-// Demo mode flag — privacy controls are persisted locally in this build.
-const DATA_PRIVACY_DEMO_MODE = __DEV__;
-
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
   { icon: 'pricetag-outline', label: 'Listings', description: 'Items you have listed for sale' },
@@ -55,13 +52,17 @@ export default function DataPrivacyScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
+  const {
+    analyticsOptOut,
+    setAnalyticsOptOut,
+    personalizedAds,
+    setPersonalizedAds,
+    recommendationPersonalization,
+    setRecommendationPersonalization,
+    thirdPartySharing,
+    setThirdPartySharing,
+  } = useSettingsPreferences();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-
-  // Local preference state — persisted to AsyncStorage in a real implementation.
-  const [personalizedAds, setPersonalizedAds] = React.useState(false);
-  const [recommendationPersonalization, setRecommendationPersonalization] = React.useState(true);
-  const [thirdPartySharing, setThirdPartySharing] = React.useState(false);
 
   const handleOpenExternal = async (url: string) => {
     try {
@@ -71,66 +72,49 @@ export default function DataPrivacyScreen({ navigation }: Props) {
     }
   };
 
-  const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
+  const toggleWithHaptic = (setter: (v: boolean) => void) => (v: boolean) => {
     haptic.selection();
     setter(v);
   };
 
   return (
     <FlagshipScreen
+      respectBottomInset
       header={
         <FlagshipHeader
           title="Data & Privacy"
-          subtitle="Privacy settings"
           onBack={() => navigation.goBack()}
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {DATA_PRIVACY_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Privacy controls are saved on this device only in demo mode.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Your data — explanation block ── */}
-      <View>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.commerceTrust }]}>
-              <Ionicons name="lock-closed" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Your data</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                What we collect and how it is used
-              </Text>
-            </View>
-          </View>
-          <View style={styles.dataList}>
-            {DATA_CATEGORIES.map((category) => (
-              <View key={category.label} style={styles.dataItem}>
-                <View style={[styles.dataIcon, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name={category.icon} size={16} color={colors.textSecondary} />
-                </View>
-                <View style={styles.dataText}>
-                  <Text style={[styles.dataLabel, { color: colors.textPrimary }]}>{category.label}</Text>
-                  <Text style={[styles.dataDescription, { color: colors.textMuted }]}>{category.description}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
+      {/* ── Device-local indicator (truthful UI per AGENTS.md §11) ── */}
+      <View
+        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Device-local privacy controls"
+      >
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.demoBannerText}>
+          These privacy controls are saved on this device and stay in effect
+          across app restarts.
+        </Text>
       </View>
 
-      {/* ── Data actions — export & delete ── */}
+      {/* ── Your data — flat category rows (no card wrapper) ── */}
+      <SettingsSection title="Your data" noCard>
+        {DATA_CATEGORIES.map((category, i) => (
+          <SettingsRow
+            key={category.label}
+            icon={category.icon}
+            title={category.label}
+            subtitle={category.description}
+            isFirst={i === 0}
+            isLast={i === DATA_CATEGORIES.length - 1}
+          />
+        ))}
+      </SettingsSection>
+
+      {/* ── Data actions — export ── */}
       <View>
         <SettingsSection title="Your data rights" noCard>
           <SettingsRow
@@ -139,13 +123,6 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             subtitle="Export a copy of your account data (GDPR portability)"
             onPress={() => navigation.navigate('DataExport')}
             isFirst
-          />
-          <SettingsRow
-            icon="trash-outline"
-            title="Delete your data"
-            subtitle="Permanently erase your account and data"
-            danger
-            onPress={() => navigation.navigate('DeleteAccount')}
             isLast
           />
         </SettingsSection>
@@ -227,6 +204,30 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         </SettingsSection>
       </View>
 
+      {/* Account deletion is a quiet, deliberate hand-off to the dedicated
+          confirmation flow. It is separated with a hairline rather than a
+          warning card so this utility screen does not visually dramatise or
+          duplicate the irreversible action before the user opts into it. */}
+      <SettingsSection
+        title="Account"
+        description="Deletion is permanent. Open orders, disputes or payouts may need to be resolved first."
+        noCard
+      >
+        <View style={[styles.destructiveDivider, { borderTopColor: `${colors.danger}40` }]}>
+          <SettingsRow
+            icon="trash-outline"
+            title="Delete account"
+            subtitle="Review affected data and verify your identity"
+            danger
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityLabel="Delete account"
+            accessibilityHint="Review what will be removed and verify your identity before permanently deleting your account"
+            isFirst
+            isLast
+          />
+        </View>
+      </SettingsSection>
+
       {/* ── Legal ── */}
       <View>
         <SettingsSection title="Legal" noCard>
@@ -267,65 +268,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    dataList: {
-      marginTop: Space.md,
-      gap: Space.sm,
-    },
-    dataItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    dataIcon: {
-      width: Space.xl,
-      height: Space.xl,
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    dataText: {
-      flex: 1,
-    },
-    dataLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    dataDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
     infoBlock: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
@@ -338,7 +280,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     infoTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -347,6 +289,9 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       lineHeight: Type.caption.lineHeight,
       letterSpacing: Type.caption.letterSpacing,
+    },
+    destructiveDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
   });
 }

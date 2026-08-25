@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -50,12 +50,16 @@ export function AuctionMarketHeader({
   const sellerAction = actions.find((a) => a.key === 'seller');
   const activityAction = actions.find((a) => a.key === 'activity');
 
-  // Overflow actions: filter, seller, activity (when no badge)
-  const overflowActions = actions.filter(
-    (a) => a.key !== 'search' && a.key !== 'create'
-  );
   // Show activity in header only when it has a badge needing attention
   const showActivityBadge = activityAction && (activityAction.badgeCount ?? 0) > 0;
+  // Filter is a first-class auction action, not a one-row overflow menu. Keep
+  // only genuinely secondary destinations in the bounded overflow popover.
+  const overflowActions = actions.filter(
+    (a) => a.key !== 'search'
+      && a.key !== 'create'
+      && a.key !== 'filter'
+      && !(a.key === 'activity' && showActivityBadge)
+  );
 
   // Responsive context
   const displayContext = isVerySmall && compactContext ? compactContext : context;
@@ -96,6 +100,18 @@ export function AuctionMarketHeader({
             </Pressable>
           )}
 
+          {filterAction && (
+            <Pressable
+              onPress={filterAction.onPress}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={filterAction.label}
+              style={styles.iconBtn}
+            >
+              <Ionicons name={filterAction.icon} size={22} color={colors.textPrimary} />
+            </Pressable>
+          )}
+
           {/* Activity badge — only shown when attention is needed */}
           {showActivityBadge && activityAction && (
             <Pressable
@@ -115,7 +131,7 @@ export function AuctionMarketHeader({
           )}
 
           {/* Overflow menu for secondary actions */}
-          {overflowActions.length > 0 && !showActivityBadge && (
+          {overflowActions.length > 0 && (
             <Pressable
               onPress={() => setOverflowOpen(true)}
               hitSlop={6}
@@ -149,29 +165,27 @@ export function AuctionMarketHeader({
         animationType="fade"
         onRequestClose={() => setOverflowOpen(false)}
       >
-        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)}>
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)} accessibilityRole="button">
           <View style={styles.overflowSheet}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {overflowActions.map((action) => (
-                <Pressable
-                  key={action.key}
-                  onPress={() => { setOverflowOpen(false); action.onPress(); }}
-                  style={styles.overflowRow}
-                  accessibilityRole="button"
-                  accessibilityLabel={action.label}
-                >
-                  <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
-                  <Text style={styles.overflowLabel}>{action.label}</Text>
-                  {action.badgeCount != null && action.badgeCount > 0 && (
-                    <View style={styles.overflowBadge}>
-                      <Text style={styles.badgeText}>
-                        {action.badgeCount > 9 ? '9+' : action.badgeCount}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
+            {overflowActions.map((action) => (
+              <Pressable
+                key={action.key}
+                onPress={() => { setOverflowOpen(false); action.onPress(); }}
+                style={styles.overflowRow}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
+                <Text style={styles.overflowLabel}>{action.label}</Text>
+                {action.badgeCount != null && action.badgeCount > 0 && (
+                  <View style={styles.overflowBadge}>
+                    <Text style={styles.badgeText}>
+                      {action.badgeCount > 9 ? '9+' : action.badgeCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -253,7 +267,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   overflowBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
@@ -276,7 +290,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   overflowLabel: {
     flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
   },
   overflowBadge: {

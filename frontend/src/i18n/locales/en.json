@@ -1,0 +1,497 @@
+{
+  "common": {
+    "buttons": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit",
+      "share": "Share",
+      "retry": "Retry",
+      "close": "Close",
+      "done": "Done",
+      "continue": "Continue",
+      "clearAll": "Clear all",
+      "clearFilters": "Clear filters",
+      "browseAll": "Browse all",
+      "refresh": "Refresh",
+      "follow": "Follow",
+      "unfollow": "Unfollow",
+      "message": "Message",
+      "buy": "Buy",
+      "bid": "Bid",
+      "sell": "Sell"
+    },
+    "states": {
+      "loading": "Loading...",
+      "loadingMore": "Loading more...",
+      "noResults": "No results",
+      "somethingWentWrong": "Something went wrong",
+      "youAreOffline": "You're offline",
+      "retry": "Retry",
+      "searching": "Searching..."
+    },
+    "navigation": {
+      "back": "Back",
+      "home": "Home",
+      "search": "Search",
+      "profile": "Profile",
+      "settings": "Settings"
+    },
+    "actions": {
+      "follow": "Follow",
+      "unfollow": "Unfollow",
+      "message": "Message",
+      "buy": "Buy",
+      "bid": "Bid",
+      "sell": "Sell"
+    },
+    "trust": {
+      "verified": "Verified",
+      "responseTime": "Response time",
+      "reviews": "Reviews",
+      "followers": "Followers",
+      "following": "Following"
+    },
+    "misc": {
+      "items": "items",
+      "on": "On",
+      "off": "Off",
+      "none": "None",
+      "notSignedIn": "Not signed in"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "For you",
+      "following": "Following"
+    },
+    "looks": {
+      "shopLabel": "Looks to shop",
+      "itemsCount": "{count} items"
+    },
+    "poster": {
+      "fallback": "Poster"
+    },
+    "newListings": {
+      "bannerSingular": "{count} new drop ready",
+      "bannerPlural": "{count} new drops ready",
+      "badgeNew": "{count} new"
+    },
+    "sync": {
+      "unavailableCached": "Sync is unavailable. Showing cached items."
+    },
+    "empty": {
+      "followingNoNewTitle": "No new drops yet",
+      "followingNoNewSubtitle": "Pull to refresh.",
+      "followingNoSellersTitle": "Follow sellers to see their drops",
+      "followingNoSellersSubtitle": "Tap follow on seller profiles to build your feed.",
+      "followingDiscoverSellers": "Discover sellers",
+      "followingBrowseAll": "Browse all",
+      "forYouNoDropsTitle": "No drops live yet",
+      "forYouNoDropsSubtitle": "Pull to refresh or browse categories."
+    },
+    "footer": {
+      "reachedEnd": "You've reached the end"
+    },
+    "peek": {
+      "closeButton": "Close",
+      "viewListing": "View Listing"
+    }
+  },
+  "search": {
+    "placeholder": "Search items, sellers, styles",
+    "scope": {
+      "items": "Items",
+      "people": "People"
+    },
+    "resultCount": {
+      "singular": "{count} result",
+      "plural": "{count} results"
+    },
+    "sort": {
+      "title": "Sort by",
+      "recommended": "Recommended",
+      "newest": "Newest",
+      "priceLowToHigh": "Price: Low to High",
+      "priceHighToLow": "Price: High to Low",
+      "mostLiked": "Most liked"
+    },
+    "sections": {
+      "discover": "Discover",
+      "recent": "Recent",
+      "recentSearches": "Recent searches",
+      "savedSearches": "Saved searches",
+      "browseCategories": "Browse categories",
+      "categories": "Categories",
+      "trending": "Trending searches"
+    },
+    "suggestion": {
+      "brand": "Brand",
+      "category": "Category",
+      "item": "Item",
+      "search": "Search"
+    },
+    "typeahead": {
+      "searchFor": "Search for \u201c{query}\u201d",
+      "viewAllResults": "View all results for {query}",
+      "suggestionsUnavailable": "Suggestions are unavailable. Press Search to continue.",
+      "noCloseSuggestions": "No close suggestions. Press Search to see all matches.",
+      "showingLocalMatches": "Showing matches available on this device"
+    },
+    "savedSearch": {
+      "alertsOn": "Alerts on",
+      "alertsOff": "Alerts off",
+      "newMatches": "\u00b7 {count} new"
+    },
+    "status": {
+      "refreshingIndex": "Refreshing index",
+      "liveIndex": "Live index",
+      "offlineIndex": "Offline index",
+      "cachedIndex": "Cached index"
+    },
+    "errors": {
+      "searchUnavailable": "Search unavailable",
+      "retrySearch": "Retry search",
+      "peopleSearchUnavailable": "People search unavailable",
+      "searchIndexDelayed": "Search index is delayed. Showing cached results.",
+      "noPeopleFound": "No people found for \u201c{query}\u201d",
+      "tryDifferentName": "Try a different name or username.",
+      "noMatches": "No matches for \u201c{query}\u201d",
+      "noMatchesWithFilters": "No matches for \u201c{query}\u201d with these filters",
+      "searchingIndex": "Searching the index\u2026",
+      "tryClearingFilters": "Try clearing your filters or broadening your search.",
+      "tryBroadened": "Try {suggestions} \u2014 or browse all categories.",
+      "noPicksWithFilters": "No picks match your current filters. Adjust or clear them.",
+      "noPicksNoResults": "No ranked results yet. Try a shorter keyword."
+    },
+    "noResults": {
+      "browseByCategory": "Browse by category"
+    },
+    "follow": {
+      "following": "Following",
+      "follow": "Follow"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "Settings"
+    },
+    "search": {
+      "placeholder": "Search settings",
+      "results": "Results",
+      "allSettings": "All settings",
+      "noMatching": "No matching settings"
+    },
+    "verification": {
+      "promptTitle": "Verify your identity",
+      "promptSubtitle": "Get the verified badge and unlock selling",
+      "verified": "Verified",
+      "getBadge": "Get the verified badge"
+    },
+    "health": {
+      "verified": "Verified",
+      "twoFA": "2FA",
+      "biometric": "Biometric",
+      "payment": "Payment",
+      "address": "Address"
+    },
+    "sections": {
+      "yourAccount": "Your account",
+      "buyingSelling": "Buying & selling",
+      "notifications": "Notifications",
+      "experience": "Experience",
+      "connectedServices": "Connected services",
+      "helpLegal": "Help & legal",
+      "advanced": "Advanced",
+      "account": "Account"
+    },
+    "rows": {
+      "verification": "Verification",
+      "changePassword": "Change password",
+      "twoFAEnabled": "2FA enabled",
+      "passwordOnly": "Password only",
+      "biometricLock": "Biometric lock",
+      "biometricNotAvailable": "Not available on this device",
+      "biometricEnabled": "Face ID, Touch ID & fingerprint for sensitive actions",
+      "biometricDisabled": "Disabled \u2014 sensitive screens use password only",
+      "connectedAccounts": "Connected accounts",
+      "connectedAccountsSubtitle": "Google, Apple sign-in",
+      "devicesSessions": "Devices & sessions",
+      "accountControl": "Account control",
+      "accountControlSubtitle": "Security, sessions, password",
+      "downloadData": "Download my data",
+      "downloadDataSubtitle": "Export your account data",
+      "privacySafety": "Privacy & safety",
+      "privacySafetySubtitle": "Visibility, blocked users",
+      "chatPrivacy": "Chat privacy",
+      "chatPrivacySubtitle": "Who can message you",
+      "dataPrivacy": "Data & privacy",
+      "dataPrivacySubtitle": "Privacy controls and retention",
+      "blockedUsers": "Blocked users",
+      "blockedCount": "{count} blocked",
+      "savedAddresses": "Saved addresses",
+      "oneSaved": "1 saved",
+      "noneSaved": "None saved",
+      "paymentMethods": "Payment methods",
+      "savedCollections": "Saved & collections",
+      "payoutAccount": "Payout account",
+      "payoutAccountSubtitle": "Balance and wallet",
+      "payoutHistory": "Payout history",
+      "shippingPreferences": "Shipping preferences",
+      "priceAlerts": "Price alerts",
+      "priceAlertsSubtitle": "Notify on price thresholds",
+      "autoInvestPlans": "Auto-invest plans",
+      "autoInvestPlansSubtitle": "Recurring buy schedules",
+      "taxDocuments": "Tax documents",
+      "taxDocumentsSubtitle": "Annual statements & P&L",
+      "resolutionCentre": "Resolution Centre",
+      "resolutionCentreSubtitle": "Disputes and resolutions",
+      "enableNotifications": "Enable notifications",
+      "permissionUnknown": "Permission unknown",
+      "permissionAllowed": "Allowed",
+      "permissionNotAllowed": "Not allowed",
+      "notificationPreferences": "Notification preferences",
+      "emailPreferences": "Email preferences",
+      "theme": "Theme",
+      "currencyDisplay": "Currency display",
+      "localCurrency": "Local currency",
+      "language": "Language",
+      "contentPreferences": "Content preferences",
+      "contentPreferencesSubtitle": "Feed and recommendations",
+      "recommendations": "Recommendations",
+      "recommendationsSubtitle": "Photo enhancement, title and price suggestions",
+      "yourFeed": "Your feed",
+      "yourFeedSubtitle": "Recommendations and transparency",
+      "sustainability": "Sustainability",
+      "sustainabilitySubtitle": "Goals, shipping, impact",
+      "accessibility": "Accessibility",
+      "accessibilitySubtitle": "Text size, motion, contrast",
+      "searchHistory": "Search history",
+      "searchHistorySubtitle": "Clear recent searches",
+      "dataSharing": "Data sharing",
+      "dataSharingSubtitle": "Analytics and personalization",
+      "agents": "Agents",
+      "agentsSubtitle": "Browse and manage agent permissions",
+      "connections": "Connections",
+      "connectionsSubtitle": "Provider keys and endpoints",
+      "yourAgents": "Your agents",
+      "yourAgentsSubtitle": "Agents you have created",
+      "helpCentre": "Help Centre",
+      "termsOfService": "Terms of Service",
+      "privacyPolicy": "Privacy Policy",
+      "aboutThryftverse": "About Thryftverse",
+      "runtimeSmokeTest": "Runtime smoke test",
+      "runtimeSmokeTestSubtitle": "Diagnostic checks for local runtime",
+      "deleteAccount": "Delete account",
+      "deleteAccountSubtitle": "Permanently erase your account"
+    },
+    "toast": {
+      "themeApplying": "Applying {theme} theme\u2026",
+      "pushEnabled": "Push notifications enabled",
+      "pushDenied": "Push notifications were denied. Enable them in device settings.",
+      "pushUpdateFailed": "Unable to update push notification permission.",
+      "pushManageDeviceSettings": "Manage push notifications in your device settings.",
+      "searchHistoryCleared": "Search history cleared",
+      "searchHistoryClearFailed": "Unable to clear search history"
+    },
+    "notificationSummary": "{enabled}/{total} categories"
+  },
+  "profile": {
+    "userProfile": "{name}'s profile"
+  },
+  "listing": {
+    "create": {
+      "title": "Sell",
+      "createListing": "Create listing",
+      "editTitle": "Edit listing",
+      "listingTitle": "Title",
+      "description": "Description",
+      "price": "Price",
+      "category": "Category",
+      "condition": "Condition",
+      "size": "Size",
+      "brand": "Brand",
+      "photos": "Photos",
+      "publish": "Publish",
+      "saveDraft": "Save draft",
+      "saved": "Saved",
+      "details": "Details",
+      "priceAndCondition": "Price & condition",
+      "required": "Required",
+      "optional": "Optional",
+      "addPhotosTitle": "Add photos to get started",
+      "addPhotosSubtitle": "Well-lit photos from multiple angles sell faster.",
+      "photoTips": "Photo tips",
+      "photoTipsMin": "Min 3 photos recommended",
+      "photoTipLighting": "Good lighting",
+      "photoTipAngles": "Show all angles",
+      "photoTipBackground": "Natural background",
+      "titlePlaceholder": "e.g. Vintage Levi's 501 Denim Jacket",
+      "descriptionHelper": "Add more detail to help buyers find this item",
+      "suggestedDetails": "Suggested details",
+      "applyToEmptyFields": "Apply to empty fields",
+      "startingBid": "Starting bid",
+      "reservePriceOptional": "Reserve price (optional)",
+      "duration": "Duration",
+      "totalValuation": "Total valuation",
+      "originalPriceHelper": "Add original price to show value",
+      "readyToPublish": "Ready to publish",
+      "bulkList": "Bulk list",
+      "inventory": "Inventory",
+      "hub": "Hub",
+      "tapToSet": "Tap to set"
+    },
+    "detail": {
+      "addToCart": "Add to cart",
+      "buyNow": "Buy now",
+      "makeOffer": "Make offer",
+      "seller": "Seller",
+      "itemCondition": "Condition",
+      "itemSize": "Size",
+      "itemBrand": "Brand",
+      "postedOn": "Posted on {{date}}",
+      "addedToWishlist": "Added to wishlist",
+      "priceDropAlertsEnabled": "Price drop alerts enabled for this item",
+      "priceDropAlertsDisabled": "Price drop alerts disabled",
+      "couldNotUpdatePriceAlert": "Could not update price alert. Try again.",
+      "browseSimilar": "Browse similar",
+      "manageListing": "Manage listing"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "Message...",
+      "send": "Send",
+      "attach": "Attach",
+      "attachPhoto": "Photo",
+      "attachCamera": "Camera"
+    },
+    "conversation": {
+      "title": "Messages",
+      "empty": "No messages yet",
+      "startChatting": "Send a message below to get started.",
+      "startConversation": "Start the conversation",
+      "typing": "{{name}} is typing...",
+      "onlineNow": "Online now",
+      "newMessages": "New messages",
+      "undo": "Undo"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "Checkout",
+      "subtotal": "Subtotal",
+      "shipping": "Shipping",
+      "tax": "Tax",
+      "total": "Total",
+      "payNow": "Pay now",
+      "paymentMethod": "Payment method",
+      "deliveryAddress": "Delivery address",
+      "orderPlaced": "Order placed",
+      "orderFailed": "Order failed",
+      "signInToCheckout": "Sign in to checkout",
+      "signIn": "Sign in",
+      "cannotPurchaseOwnListing": "Cannot purchase your own listing",
+      "cannotBuyOwnItem": "You cannot buy an item you listed for sale.",
+      "itemUnavailable": "Item unavailable",
+      "listingNoLongerPurchasable": "This listing can no longer be purchased.",
+      "goBack": "Go back",
+      "delivery": "Delivery",
+      "noAddress": "No address",
+      "change": "Change",
+      "add": "Add",
+      "noPaymentMethod": "No payment method",
+      "requiredForDelivery": "Required for delivery",
+      "needsSavingBeforePayment": "Needs saving before payment",
+      "shippingNotAvailable": "Shipping not available for your region",
+      "cardsUnavailableRegion": "Cards unavailable in your region",
+      "securePayment": "Secure payment · card details encrypted",
+      "useWalletBalance": "Use wallet balance",
+      "available": "available",
+      "retryPayment": "Retry payment",
+      "tryAgain": "Try again",
+      "addAddress": "Add address",
+      "addPayment": "Add payment",
+      "item": "Item",
+      "buyerProtection": "Buyer protection",
+      "walletApplied": "Wallet applied",
+      "viewFullBreakdown": "View full breakdown",
+      "fullBreakdown": "Full breakdown",
+      "payWithApplePay": "Pay with Apple Pay",
+      "payWithGooglePay": "Pay with Google Pay",
+      "payWithCard": "Pay with card",
+      "processing": "Processing",
+      "waitingForConfirmation": "Waiting for confirmation",
+      "savingWithWallet": "Saving {{amount}} with wallet balance",
+      "shippingQuoteUnavailable": "Shipping quote unavailable — proceeding with standard shipping.",
+      "addDeliveryAddressToContinue": "Add a delivery address to continue.",
+      "addPaymentMethodToContinue": "Add a payment method to continue.",
+      "estimated": "Estimated",
+      "tracking": "Tracking",
+      "closeCheckout": "Close checkout",
+      "paymentInProgress": "Payment in progress",
+      "paymentInProgressBody": "Payment confirmation may still complete after you leave. Check your Orders before trying again.",
+      "stay": "Stay",
+      "leave": "Leave"
+    },
+    "offer": {
+      "makeOffer": "Make an offer",
+      "offerAmount": "Offer amount",
+      "submitOffer": "Submit offer",
+      "offerAccepted": "Offer accepted",
+      "offerDeclined": "Offer declined",
+      "offerExpired": "Offer expired"
+    },
+    "bid": {
+      "placeBid": "Place bid",
+      "currentBid": "Current bid",
+      "yourBid": "Your bid",
+      "bidPlaced": "Bid placed",
+      "outbid": "You've been outbid",
+      "winning": "Winning"
+    },
+    "wallet": {
+      "title": "Wallet",
+      "balance": "Balance",
+      "spendableNow": "Spendable now",
+      "withdraw": "Withdraw",
+      "withdrawAmount": "Withdrawal amount",
+      "withdrawSuccess": "Withdrawal requested",
+      "withdrawFailed": "Withdrawal failed",
+      "addMoney": "Add money",
+      "transactionHistory": "Transaction history",
+      "convert": "Convert",
+      "recentActivity": "Recent activity",
+      "seeAll": "See all",
+      "noBalanceYet": "No 1ZE yet",
+      "addMoneyToStart": "Add money to start trading Co-Own units.",
+      "authenticateToView": "Authenticate to view your wallet",
+      "showBalance": "Show balance",
+      "hideBalance": "Hide balance",
+      "balanceHidden": "Balance hidden",
+      "reservedForOrders": "Reserved for orders",
+      "redemptionPending": "Redemption pending",
+      "otherHolds": "Other holds",
+      "pendingDeposit": "Pending deposit",
+      "unsettledSaleProceeds": "Unsettled sale proceeds",
+      "withdrawable": "Withdrawable",
+      "sellerEarnings": "Seller earnings",
+      "safeguarded": "Safeguarded",
+      "safeguardingPending": "Safeguarding pending",
+      "evidence": "Evidence",
+      "terms": "Terms",
+      "activity": "Activity"
+    },
+    "order": {
+      "title": "Order",
+      "orderNumber": "Order #{{number}}",
+      "statusPending": "Pending",
+      "statusProcessing": "Processing",
+      "statusShipped": "Shipped",
+      "statusDelivered": "Delivered",
+      "statusCancelled": "Cancelled",
+      "statusRefunded": "Refunded"
+    }
+  }
+}

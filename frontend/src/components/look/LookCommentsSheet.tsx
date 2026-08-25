@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TextInput,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
+import { FlagshipState } from '../flagship/FlagshipState';
 import {
   fetchLookCommentsFromApi,
   createLookCommentOnApi,
@@ -54,7 +55,7 @@ export function LookCommentsSheet({
   const [isLoading, setIsLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const flatListRef = useRef<FlatList<LookCommentApiItem>>(null);
+  const flatListRef = useRef<FlashListRef<LookCommentApiItem>>(null);
 
   const loadComments = useCallback(async () => {
     setIsLoading(true);
@@ -179,7 +180,7 @@ export function LookCommentsSheet({
           </AnimatedPressable>
         </View>
 
-        <FlatList
+        <FlashList
           ref={flatListRef}
           data={comments}
           keyExtractor={(c) => c.id}
@@ -187,7 +188,7 @@ export function LookCommentsSheet({
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             isLoading ? (
-              <ActivityIndicator size="large" color={colors.brand} style={{ marginTop: 40 }} />
+              <FlagshipState variant="loading" style={{ marginTop: 40 }} />
             ) : (
               <View style={styles.emptyWrap}>
                 <Ionicons name="chatbubble-outline" size={32} color={colors.textMuted} />
@@ -226,9 +227,9 @@ export function LookCommentsSheet({
               accessibilityLabel="Send comment"
             >
               {isSending ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Ionicons name="send" size={18} color="#fff" />
+                <Ionicons name="send" size={18} color={colors.textInverse} />
               )}
             </AnimatedPressable>
           </KeyboardStickyView>
@@ -305,7 +306,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   commentAuthor: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -327,7 +328,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -354,7 +355,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },

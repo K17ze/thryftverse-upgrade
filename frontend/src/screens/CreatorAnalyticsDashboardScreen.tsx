@@ -257,6 +257,15 @@ export default function CreatorAnalyticsDashboardScreen() {
     }));
   }, [timeline]);
 
+  const timelineChartSummary = useMemo(() => {
+    if (timeline.length === 0) return 'Views over time chart. No data for this period.';
+    const views = timeline.map((p) => p.views);
+    const max = Math.max(...views);
+    const min = Math.min(...views);
+    const total = views.reduce((sum, v) => sum + v, 0);
+    return `Views over time chart, ${timeline.length} days. Total ${total} views. Highest: ${max}, lowest: ${min}.`;
+  }, [timeline]);
+
   // ── Empty detection (honest: all zeros) ─────────────────────────────
   const isEmpty = useMemo(() => {
     if (!summary) return false;
@@ -372,9 +381,9 @@ export default function CreatorAnalyticsDashboardScreen() {
         <EmptyState
           icon="bar-chart-outline"
           title="No analytics data yet"
-          subtitle="Publish content to see insights. Views, engagement and profile visits will appear here once your content is live."
+          subtitle="Publish content to see insights."
           ctaLabel="Create content"
-          onCtaPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+          onCtaPress={() => { haptic.light(); navigation.navigate('CreatorStudio', { type: 'poster', openEntry: true }); }}
         />
       </FlagshipScreen>
     );
@@ -461,6 +470,7 @@ export default function CreatorAnalyticsDashboardScreen() {
             points={timeline}
             colors={colors}
             reducedMotion={reducedMotionEnabled}
+            accessibilitySummary={timelineChartSummary}
           />
         </View>
 
@@ -614,10 +624,12 @@ function TimelineChart({
   points,
   colors,
   reducedMotion,
+  accessibilitySummary,
 }: {
   points: CreatorAnalyticsTimelinePoint[];
   colors: ThemeColors;
   reducedMotion: boolean;
+  accessibilitySummary: string;
 }) {
   const styles = useMemo(() => createTimelineStyles(colors), [colors]);
   const progress = useSharedValue(0);
@@ -653,6 +665,11 @@ function TimelineChart({
 
   return (
     <View style={styles.chartWrap}>
+      <Text
+        accessibilityLabel={accessibilitySummary}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       <View style={styles.chartBars}>
         {points.map((p, i) => {
           const heightPct = maxViews > 0 ? (p.views / maxViews) * 100 : 0;
@@ -894,14 +911,14 @@ function createMetricTileStyles(colors: ThemeColors) {
     deltaText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
       fontVariant: ['tabular-nums'] as any,
     },
     tileValue: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
-      lineHeight: Type.priceLarge.lineHeight,
-      letterSpacing: Type.priceLarge.letterSpacing,
+      lineHeight: Type.priceHero.lineHeight,
+      letterSpacing: Type.priceHero.letterSpacing,
       fontVariant: ['tabular-nums'] as any,
     },
     tileLabel: {
@@ -933,7 +950,7 @@ function createEngagementStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     barCount: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'] as any,
     },
@@ -1022,7 +1039,7 @@ function createTopContentStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     rankText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'] as any,
     },
@@ -1043,7 +1060,7 @@ function createTopContentStyles(colors: ThemeColors) {
     rowMetaText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
     },
     rowDot: {
       fontSize: Type.meta.size - 1,

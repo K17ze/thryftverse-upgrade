@@ -173,18 +173,30 @@ export async function updateUserAccountPreferences(input: UpdateAccountPreferenc
   });
 }
 
+export interface PostagePreferences {
+  carrierKey: string;
+  freeShipping: boolean;
+  bundleDiscount: boolean;
+}
+
 export interface UpdatePostagePreferencesInput {
   carrierKey?: string;
   freeShipping?: boolean;
   bundleDiscount?: boolean;
 }
 
-export async function updateUserPostagePreferences(input: UpdatePostagePreferencesInput): Promise<void> {
-  await fetchJson<{ ok: true }>('/users/me/postage', {
+export async function fetchPostagePreferences(): Promise<PostagePreferences> {
+  const payload = await fetchJson<{ ok: true; postage: PostagePreferences }>('/users/me/postage');
+  return payload.postage;
+}
+
+export async function updateUserPostagePreferences(input: UpdatePostagePreferencesInput): Promise<PostagePreferences> {
+  const payload = await fetchJson<{ ok: true; postage: PostagePreferences }>('/users/me/postage', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
+  return payload.postage;
 }
 
 export interface UpdatePersonalisationInput {
@@ -241,6 +253,8 @@ export async function revokeOtherSessions(): Promise<number> {
 export interface ChatPrivacySettings {
   readReceiptsEnabled: boolean;
   allowMessagesFrom: 'everyone' | 'following' | 'nobody';
+  offersInChatEnabled: boolean;
+  orderUpdatesInChatEnabled: boolean;
 }
 
 export async function fetchChatPrivacy(): Promise<ChatPrivacySettings> {
@@ -255,6 +269,18 @@ export async function updateChatPrivacy(updates: Partial<ChatPrivacySettings>): 
     body: JSON.stringify(updates),
   });
   return payload.chatPrivacy;
+}
+
+/* ─── Privacy Preferences ─── */
+
+export interface PrivacyPreferences {
+  activityStatusVisible: boolean;
+  searchVisibility: 'visible' | 'hidden';
+}
+
+export async function fetchPrivacyPreferences(): Promise<PrivacyPreferences> {
+  const payload = await fetchJson<{ ok: true; privacyPreferences: PrivacyPreferences }>('/users/me/privacy-preferences');
+  return payload.privacyPreferences;
 }
 
 /* ─── Activity Status ─── */
@@ -332,6 +358,7 @@ export interface EmailPreferences {
   securityAlerts: boolean;
   distributionNotices: boolean;
   corporateActionNotices: boolean;
+  auctionAlerts: boolean;
 }
 
 export async function fetchEmailPreferences(): Promise<EmailPreferences> {

@@ -60,7 +60,6 @@ export default function CategoryTreeScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.editorialTitle}>{resolvedPrefix}</Text>
-          <Text style={styles.editorialSubtitle}>Curated categories, handpicked for you</Text>
         </View>
 
         {/* Premium full-width View All */}
@@ -100,7 +99,6 @@ export default function CategoryTreeScreen() {
             style={styles.section}
           >
             <DiscoverySectionHeader
-              kicker="SHOP BY"
               title={section.title}
               actionLabel="Explore"
               onAction={() => navigation.navigate('Browse', {
@@ -156,13 +154,6 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.display.letterSpacing - 0.3,
       lineHeight: Type.display.lineHeight + 2,
     },
-    editorialSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      marginTop: Space.xs,
-      letterSpacing: LetterSpacing.wide + 0.08,
-    },
 
     viewAllRow: {
       flexDirection: 'row',
@@ -176,7 +167,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
     },
     viewAllText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
       color: colors.background,
       letterSpacing: LetterSpacing.wide + 0.18,
@@ -212,7 +203,7 @@ function createStyles(colors: ThemeColors) {
     },
     subPillText: {
       color: colors.textPrimary,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
     },
   });

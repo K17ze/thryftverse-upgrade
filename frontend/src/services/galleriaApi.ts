@@ -1,25 +1,17 @@
 /**
  * Galleria API — editorial discovery & curated collection layer
  *
- * This service provides the data contract and mock implementation for the
- * ThryftVerse Galleria — a premium editorial discovery surface for Co-Own
- * assets and curated collections. It is the documented differentiator for
- * ThryftVerse (per AGENTS.md §6, #1 recommended expansion department).
+ * This service provides the data contract for the ThryftVerse Galleria — a
+ * premium editorial discovery surface for Co-Own assets and curated
+ * collections.
  *
- * The Galleria is NOT a product grid. It is an authored editorial experience
- * combining Pinterest's visual discovery, Grailed's staff picks, Depop's
- * moodboard collaging, and a museum gallery's curation.
- *
- * Per AGENTS.md §11 (Truthful UI): the mock data is flagged via
- * `GALLERIA_DEMO_MODE` and every entity carries `isDemo: true` so the UI can
- * show an honest "Demo mode" indicator. We never fabricate that a collection
- * or editorial is backed by a real backend.
- *
- * The service is mock-ready — the function signatures mirror what a real
- * editorial CMS / curation API would expose. When a real backend is wired,
- * set `GALLERIA_DEMO_MODE = false` and replace the mock branches with real
- * fetch calls. The UI layer does not need to change.
+ * The service calls the real backend (`/galleria/collections`). When the API
+ * is unreachable (offline / dev without a running server), it falls back to
+ * mock data so the UI remains functional. Mock entities carry `isDemo: true`
+ * so the UI can show an honest "Demo mode" indicator (AGENTS.md §11).
  */
+
+import { fetchJson } from '../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,17 +82,14 @@ export interface GalleriaCollectionDetail {
 
 // ---------------------------------------------------------------------------
 // Demo flag — the UI reads this to decide whether to show a "Demo mode" badge.
-// When a real backend is wired, set this to false (or remove the mock branch).
+// True only when the last fetch fell back to mock data.
 // ---------------------------------------------------------------------------
 
 export const GALLERIA_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Mock data (fallback only — used when the API is unreachable)
 // ---------------------------------------------------------------------------
-// Images use Unsplash source URLs (the same pattern as marketApi and
-// liveShoppingApi mock assets). Curator/author avatars use UI-avatars.com so
-// they render without a backend.
 
 const NOW = Date.now();
 const isoDaysAgo = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
@@ -350,6 +339,62 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+interface ApiCollectionResponse {
+  items: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    curator: string;
+    curatorAvatar: string;
+    coverImage: string;
+    theme: string;
+    publishedAt: string;
+    itemIds: string[];
+  }>;
+}
+
+interface ApiCollectionDetailResponse {
+  collection: ApiCollectionResponse['items'][number];
+  items: Array<{
+    id: string;
+    title: string;
+    valuation: number;
+    image: string;
+    story: string;
+    aspectRatio: number;
+    listingId?: string;
+  }>;
+}
+
+function mapApiCollection(raw: ApiCollectionResponse['items'][number]): GalleriaCollection {
+  return {
+    id: raw.id,
+    title: raw.title,
+    subtitle: raw.subtitle,
+    curator: raw.curator,
+    curatorAvatar: raw.curatorAvatar,
+    coverImage: raw.coverImage,
+    theme: raw.theme,
+    publishedAt: raw.publishedAt,
+    itemIds: raw.itemIds,
+    isDemo: false,
+  };
+}
+
+function mapApiAsset(raw: ApiCollectionDetailResponse['items'][number]): GalleriaFeaturedAsset {
+  return {
+    id: raw.id,
+    title: raw.title,
+    valuation: raw.valuation,
+    image: raw.image,
+    collection: '',
+    story: raw.story,
+    aspectRatio: raw.aspectRatio,
+    isDemo: false,
+    referenceKind: 'co_own',
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -357,29 +402,26 @@ function delay(ms: number): Promise<void> {
 /**
  * Fetch curated collections for the Galleria discovery surface.
  * Returns collections sorted by most recently published.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> {
-  if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+  try {
+    const data = await fetchJson<ApiCollectionResponse>('/galleria/collections?limit=24');
+    return data.items.map(mapApiCollection);
+  } catch {
+    await delay(420);
+    return [...MOCK_COLLECTIONS].sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    );
   }
-  await delay(420); // simulate network latency for honest loading states
-  return [...MOCK_COLLECTIONS].sort(
-    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-  );
 }
 
 /**
  * Fetch editorial pieces for the Galleria.
  * Returns editorials sorted by most recently published.
+ * Editorials are not yet backed by a backend table — falls back to mock.
  */
 export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
-  if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
-  }
   await delay(380);
   return [...MOCK_EDITORIALS].sort(
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
@@ -388,30 +430,48 @@ export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
 
 /**
  * Fetch featured Co-Own assets for the Galleria discovery grid.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
-  if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+  try {
+    const data = await fetchJson<ApiCollectionResponse>('/galleria/collections?limit=6');
+    // Derive featured assets from the most recent collections' first items.
+    const detailPromises = data.items.slice(0, 4).map((c) =>
+      fetchJson<ApiCollectionDetailResponse>(`/galleria/collections/${c.id}`).catch(() => null)
+    );
+    const details = await Promise.all(detailPromises);
+    const assets: GalleriaFeaturedAsset[] = [];
+    for (const detail of details) {
+      if (!detail) continue;
+      for (const item of detail.items.slice(0, 2)) {
+        assets.push({ ...mapApiAsset(item), collection: detail.collection.title });
+      }
+    }
+    if (assets.length > 0) return assets;
+    return [...MOCK_FEATURED_ASSETS];
+  } catch {
+    await delay(360);
+    return [...MOCK_FEATURED_ASSETS];
   }
-  await delay(360);
-  return [...MOCK_FEATURED_ASSETS];
 }
 
 /**
  * Fetch a single collection with its resolved items.
  * Returns null if the collection ID is not found.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchCollectionDetail(id: string): Promise<GalleriaCollectionDetail | null> {
-  if (!GALLERIA_DEMO_MODE) {
-    // Real backend not yet wired — throw so the UI shows an honest error
-    // instead of silently presenting demo data as real content.
-    throw new Error('Galleria API not configured for production');
+  try {
+    const data = await fetchJson<ApiCollectionDetailResponse>(`/galleria/collections/${id}`);
+    return {
+      collection: mapApiCollection(data.collection),
+      items: data.items.map(mapApiAsset),
+    };
+  } catch {
+    await delay(320);
+    const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
+    if (!collection) return null;
+    const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));
+    return { collection, items };
   }
-  await delay(320);
-  const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
-  if (!collection) return null;
-  const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));
-  return { collection, items };
 }

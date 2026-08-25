@@ -1,4 +1,4 @@
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
 
 import type { Ionicons } from '@expo/vector-icons';
 
@@ -14,8 +14,6 @@ export interface MessageContextCapabilities {
   isOwnMessage: boolean;
   isFailed: boolean;
   messageText?: string;
-  /** When true, the message has already been translated and "Show original" is offered */
-  isTranslated?: boolean;
 }
 
 export function deriveMessageActions(caps: MessageContextCapabilities): ActionDef[] {
@@ -30,12 +28,6 @@ export function deriveMessageActions(caps: MessageContextCapabilities): ActionDe
 
   if (caps.messageText && caps.messageText.trim().length > 0) {
     list.push({ id: 'copy', label: 'Copy text', icon: 'copy-outline' });
-    // Translate action — only for text messages, offered on both own and incoming messages
-    list.push({
-      id: 'translate',
-      label: caps.isTranslated ? 'Show original' : 'Translate',
-      icon: 'language-outline',
-    });
     // Ask agent about this message — spec 16 agent invocation path
     list.push({
       id: 'askAgent',

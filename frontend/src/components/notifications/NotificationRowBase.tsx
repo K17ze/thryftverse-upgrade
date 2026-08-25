@@ -29,6 +29,29 @@ import type { NotificationEventV2 } from '../../services/notificationsApi';
 // and action button.
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve a timestamp color based on recency.
+ *
+ * The color desaturates as time passes, drawing the eye to fresh activity:
+ *   < 1 hour   → colors.brand         (fresh / active — the "spark")
+ *   1–24 hours → colors.textSecondary (slightly elevated)
+ *   1–7 days   → colors.textMuted     (neutral — current behaviour)
+ *   7+ days    → colors.textMuted     (stays neutral)
+ *
+ * Edge cases:
+ *   - Missing/invalid timestamp → textMuted (safe default)
+ *   - Future timestamp          → brand (treat as fresh)
+ */
+function resolveTimestampColor(createdAt: string | null | undefined, colors: ThemeColors): string {
+  if (!createdAt) return colors.textMuted;
+  const then = new Date(createdAt).getTime();
+  if (Number.isNaN(then)) return colors.textMuted;
+  const hours = (Date.now() - then) / 36e5;
+  if (hours < 1) return colors.brand;            // fresh (also covers future)
+  if (hours < 24) return colors.textSecondary;   // recent
+  return colors.textMuted;                       // 1–7 days and 7+ days
+}
+
 export interface NotificationRowBaseProps {
   /** The V2 notification event. */
   event: NotificationEventV2;
@@ -70,8 +93,8 @@ export function NotificationRowBase({
 }: NotificationRowBaseProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
   const isUnread = !event.readAt;
+  const timeColor = resolveTimestampColor(event.createdAt, colors);
 
   return (
     <AnimatedPressable
@@ -87,22 +110,30 @@ export function NotificationRowBase({
       accessibilityLabel={accessibilityLabel}
       hapticFeedback="light"
     >
-      {/* Unread indicator — subtle dot, not a giant badge */}
-      {isUnread ? <View style={styles.unreadDot} /> : null}
+      {/* Leading visual slot — avatar/icon with unread dot at bottom-right */}
+      <View style={styles.leadingWrap}>
+        {leading}
+        {isUnread ? <View style={styles.unreadDot} /> : null}
+      </View>
 
-      {/* Leading visual slot */}
-      <View style={styles.leading}>{leading}</View>
-
-      {/* Body — title + description + meta */}
+      {/* Body — title + description + aggregated badge */}
       <View style={styles.body}>
-        {children}
+        <View style={styles.headerRow}>
+          {children}
+          {/* Timestamp — right-aligned, top-right of the body column */}
+          <Text
+            style={[styles.time, { color: timeColor }]}
+            accessibilityLabel={`Time: ${time}`}
+          >
+            {time}
+          </Text>
+        </View>
         <View style={styles.metaRow}>
           {aggregatedCount && aggregatedCount > 1 ? (
             <View style={styles.aggregatedBadge}>
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
           ) : null}
-          <Text style={styles.time}>{time}</Text>
         </View>
       </View>
 
@@ -148,19 +179,28 @@ export function NotificationThumbnail({
   );
 }
 
-/** Status icon chip — small rounded square with an accent-tinted background. */
+/**
+ * Status icon chip — small rounded square with an accent-tinted background.
+ *
+ * The subtle tint lets the row's type be scanned at a glance before any text
+ * is read (Instagram/TikTok 2026 pattern). The tint uses the semantic
+ * `*Subtle` tokens so it stays restrained and theme-correct in light/dark.
+ */
 export function NotificationStatusIcon({
   icon,
   accentColor,
+  accentSubtle,
   colors,
   size = 44,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   accentColor: string;
+  /** Subtle background tint — pass the matching `*Subtle` token (e.g. successSubtle). */
+  accentSubtle?: string;
   colors: ThemeColors;
   size?: number;
 }) {
-  const styles = useMemo(() => createStatusIconStyles(colors, size), [colors, size]);
+  const styles = useMemo(() => createStatusIconStyles(colors, size, accentSubtle), [colors, size, accentSubtle]);
   return (
     <View style={styles.container}>
       <Ionicons name={icon} size={size * 0.42} color={accentColor} />
@@ -207,37 +247,49 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      paddingVertical: Space.sm + 2,
+      paddingVertical: Space.sm + 4,
       paddingHorizontal: Space.md,
-      minHeight: Control.hit + Space.sm,
+      minHeight: 72,
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
+    // Unread rows get a single quiet brand tint — the scannable signal.
+    // Paired with the semibold title, this is enough (Courier/Instagram
+    // pattern: one tint + one weight delta, not a dot + tint + border + bold).
     rowUnread: {
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: colors.brandSubtle,
     },
     rowAttention: {
       // Subtle accent — left border tint, not a giant card.
       borderLeftWidth: Stroke.emphasis,
       borderLeftColor: colors.brand,
     },
-    unreadDot: {
-      position: 'absolute',
-      top: Space.sm + 2,
-      left: Space.xs,
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
-    leading: {
+    leadingWrap: {
+      position: 'relative',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    unreadDot: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: Space.xs + 4,
+      height: Space.xs + 4,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      borderWidth: Stroke.standard,
+      borderColor: colors.background,
     },
     body: {
       flex: 1,
       gap: Space.xs / 2,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm,
     },
     metaRow: {
       flexDirection: 'row',
@@ -249,6 +301,8 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
+      flexShrink: 0,
+      marginTop: 2,
     },
     aggregatedBadge: {
       minWidth: Space.md + 4,
@@ -301,7 +355,7 @@ function createThumbnailStyles(colors: ThemeColors, size: number) {
   });
 }
 
-function createStatusIconStyles(colors: ThemeColors, size: number) {
+function createStatusIconStyles(colors: ThemeColors, size: number, accentSubtle?: string) {
   return StyleSheet.create({
     container: {
       width: size,
@@ -309,6 +363,7 @@ function createStatusIconStyles(colors: ThemeColors, size: number) {
       borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: accentSubtle ?? 'transparent',
     },
   });
 }

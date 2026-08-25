@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing, Stroke } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -26,34 +26,37 @@ import {
 import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddressForm'>;
 
 type CountryOption = {
   code: string;
   name: string;
+  flag: string;
 };
 
 const COUNTRY_OPTIONS: CountryOption[] = [
-  { code: 'US', name: 'United States' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'IN', name: 'India' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'FR', name: 'France' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'NL', name: 'Netherlands' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'BR', name: 'Brazil' },
-  { code: 'MX', name: 'Mexico' },
-  { code: 'CN', name: 'China' },
-  { code: 'SG', name: 'Singapore' },
-  { code: 'AE', name: 'UAE' },
+  { code: 'US', name: 'United States', flag: '🇺🇸' },
+  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦' },
+  { code: 'AU', name: 'Australia', flag: '🇦🇺' },
+  { code: 'IN', name: 'India', flag: '🇮🇳' },
+  { code: 'DE', name: 'Germany', flag: '🇩🇪' },
+  { code: 'FR', name: 'France', flag: '🇫🇷' },
+  { code: 'IT', name: 'Italy', flag: '🇮🇹' },
+  { code: 'ES', name: 'Spain', flag: '🇪🇸' },
+  { code: 'NL', name: 'Netherlands', flag: '🇳🇱' },
+  { code: 'JP', name: 'Japan', flag: '🇯🇵' },
+  { code: 'BR', name: 'Brazil', flag: '🇧🇷' },
+  { code: 'MX', name: 'Mexico', flag: '🇲🇽' },
+  { code: 'CN', name: 'China', flag: '🇨🇳' },
+  { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
+  { code: 'AE', name: 'UAE', flag: '🇦🇪' },
 ];
 
-const COUNTRY_NAMES = COUNTRY_OPTIONS.map((c) => c.name);
+const COUNTRY_NAMES = COUNTRY_OPTIONS.map((c) => `${c.flag}  ${c.name}`);
 
 interface FormState {
   name: string;
@@ -234,7 +237,9 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
   const handleCountrySelect = useCallback(
     (value: string) => {
-      const option = COUNTRY_OPTIONS.find((c) => c.name === value);
+      // The picker returns "🇬🇧  United Kingdom" — strip the flag prefix
+      const strippedName = value.replace(/^[^\s]+\s+/, '');
+      const option = COUNTRY_OPTIONS.find((c) => c.name === strippedName);
       if (option) {
         updateField('countryCode', option.code);
         updateField('country', option.name);
@@ -326,7 +331,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       postalCode: normalised.postalCode,
       countryCode: normalised.countryCode,
       country: normalised.country,
-      isDefault: true,
+      isDefault: normalised.isDefault,
     };
 
     try {
@@ -665,13 +670,47 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             )}
           </View>
 
-          {/* 6. Default-address note */}
-          <View style={styles.defaultNote}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.defaultNoteText}>
-              This will be used as your default delivery address.
-            </Text>
-          </View>
+          {/* 6. Save as default toggle — lets the user choose whether this
+              address becomes their default for checkout. Per 2026 UX research:
+              "Save as default toggle" is a must-have for address forms. */}
+          <Pressable
+            style={styles.defaultToggleRow}
+            onPress={() => {
+              haptic.selection();
+              updateField('isDefault', !form.isDefault);
+            }}
+            accessibilityRole="switch"
+            accessibilityLabel="Save as default delivery address"
+            accessibilityState={{ checked: form.isDefault }}
+            accessibilityHint="When enabled, this address is selected automatically at checkout"
+          >
+            <View style={styles.defaultToggleLeft}>
+              <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
+              <View style={styles.defaultToggleTextCol}>
+                <Text style={[styles.defaultToggleTitle, { color: colors.textPrimary }]}>
+                  Save as default
+                </Text>
+                <Text style={[styles.defaultToggleSub, { color: colors.textMuted }]}>
+                  Use this address automatically at checkout
+                </Text>
+              </View>
+            </View>
+            <View style={[
+              styles.defaultSwitch,
+              {
+                backgroundColor: form.isDefault ? colors.brand : colors.surfaceAlt,
+                borderColor: form.isDefault ? colors.brand : colors.border,
+              },
+            ]}>
+              <View style={[
+                styles.defaultSwitchKnob,
+                {
+                  backgroundColor: form.isDefault ? colors.textInverse : colors.textMuted,
+                  alignSelf: form.isDefault ? 'flex-end' : 'flex-start',
+                },
+              ]} />
+            </View>
+          </Pressable>
 
           {/* Remove address (edit mode only) */}
           {isEditing && (
@@ -722,7 +761,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         onClose={() => setShowCountryPicker(false)}
         title="Country"
         options={COUNTRY_NAMES}
-        selectedValue={form.country || undefined}
+        selectedValue={form.country ? `${COUNTRY_OPTIONS.find((c) => c.name === form.country)?.flag ?? ''}  ${form.country}` : undefined}
         onSelect={handleCountrySelect}
       />
     </FlagshipScreen>
@@ -752,7 +791,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerCancelText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -785,10 +824,10 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },
   introBody: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
 
   // Section
@@ -796,13 +835,13 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginBottom: Space.xs + 2,
   },
   input: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     paddingVertical: Space.sm + 2,
@@ -822,7 +861,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   errorText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.danger,
   },
@@ -840,7 +879,7 @@ function createStyles(colors: ThemeColors) {
   },
   postcodeSuggestionText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -857,7 +896,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveErrorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
   },
@@ -871,7 +910,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
   },
   countryText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -879,19 +918,48 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
 
-  // Default note
-  defaultNote: {
+  // Default toggle
+  defaultToggleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs,
-    marginTop: Space.md,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.md,
+    marginTop: Space.sm,
+    minHeight: Control.hit + Space.xs,
   },
-  defaultNoteText: {
+  defaultToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     flex: 1,
-    fontSize: Type.captionElevated.size,
+  },
+  defaultToggleTextCol: {
+    flex: 1,
+    gap: Space.xs - 2,
+  },
+  defaultToggleTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  defaultToggleSub: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  defaultSwitch: {
+    width: Space.xxl - Space.sm,
+    height: Space.lg,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    justifyContent: 'center',
+    padding: Space.xs,
+  },
+  defaultSwitchKnob: {
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.full,
   },
 
   // Remove
@@ -930,7 +998,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.7,
   },
   saveBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -950,11 +1018,11 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
   },
   signedOutBody: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.md,
@@ -966,7 +1034,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   signedOutBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

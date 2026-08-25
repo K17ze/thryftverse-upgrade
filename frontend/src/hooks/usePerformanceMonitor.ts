@@ -1,7 +1,7 @@
 /**
  * usePerformanceMonitor — August 2026 React Native performance instrumentation.
  *
- * Tracks two flagship-critical metrics in __DEV__ only:
+ * Tracks two flagship-critical metrics:
  *   1. Screen render time — wall-clock from navigation focus to first
  *      meaningful paint (component mount + first layout effect).
  *   2. JS-thread FPS during scroll — sampled via Reanimated 4's
@@ -9,11 +9,10 @@
  *      measurement itself does not perturb the JS thread.
  *
  * Production behaviour:
- *   - No data is collected. The hook early-returns inert refs/states so
- *     callers keep the same API without paying any runtime cost.
- *   - If telemetry wiring is desired later, route through the existing
- *     Sentry breadcrumb or a dedicated performance endpoint — never
- *     console.log in production (babel strips console in prod builds).
+ *   - Instrumentation is gated by `isPerformanceSamplingEnabled()` — only
+ *     1% of production sessions collect data, keeping overhead negligible
+ *     for the remaining 99%. In __DEV__ every session is instrumented.
+ *   - Metrics are logged to the console in __DEV__ for immediate feedback.
  *
  * Performance targets (mid-tier Android / iPhone 13):
  *   - Cold start TTI:        < 2.0s Android, < 1.2s iPhone 13
@@ -36,6 +35,8 @@ import {
   useSharedValue,
   runOnJS,
 } from 'react-native-reanimated';
+import { useReducedMotion } from './useReducedMotion';
+import { isPerformanceSamplingEnabled } from '../platform/monitoring/performanceMonitor';
 
 export interface PerformanceMonitorOptions {
   /** Screen name used in dev warnings for attribution. */
@@ -83,6 +84,9 @@ function logPerfWarning(screenName: string, message: string) {
   }
 }
 
+/** Whether this session should collect performance instrumentation. */
+const shouldInstrument = __DEV__ || isPerformanceSamplingEnabled();
+
 export function usePerformanceMonitor(
   options: PerformanceMonitorOptions,
 ): PerformanceMonitorResult {
@@ -93,6 +97,7 @@ export function usePerformanceMonitor(
     fpsWarningConsecutiveFrames = DEFAULT_FPS_CONSECUTIVE,
   } = options;
 
+  const reducedMotion = useReducedMotion();
   const [renderMs, setRenderMs] = React.useState(0);
   const [scrollFps, setScrollFps] = React.useState(0);
   const [isScrolling, setIsScrolling] = React.useState(false);
@@ -109,7 +114,7 @@ export function usePerformanceMonitor(
   // after the first commit, giving us first-meaningful-paint timing.
   useFocusEffect(
     React.useCallback(() => {
-      if (!__DEV__) return;
+      if (!shouldInstrument) return;
       focusStartRef.current = performance.now();
 
       // requestAnimationFrame ensures we measure after the first paint
@@ -146,7 +151,7 @@ export function usePerformanceMonitor(
 
   const reportFps = React.useCallback(
     (fps: number, scrollingNow: boolean) => {
-      if (!__DEV__) return;
+      if (!shouldInstrument) return;
       setScrollFps(fps);
       setIsScrolling(scrollingNow);
     },
@@ -154,7 +159,7 @@ export function usePerformanceMonitor(
   );
 
   const reportStreakWarning = React.useCallback(() => {
-    if (!__DEV__) return;
+    if (!shouldInstrument) return;
     logPerfWarning(
       screenName,
       `Scroll FPS below ${fpsWarningThreshold} for ${fpsWarningConsecutiveFrames} consecutive frames.`,

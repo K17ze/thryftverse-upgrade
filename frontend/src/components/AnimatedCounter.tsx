@@ -6,6 +6,7 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const AnimatedText = Reanimated.createAnimatedComponent(Text);
 
@@ -26,18 +27,30 @@ export function AnimatedCounter({
   suffix = '',
   decimals = 0,
 }: AnimatedCounterProps) {
+  const reducedMotion = useReducedMotion();
   const animatedValue = useSharedValue(0);
   const [display, setDisplay] = React.useState(`${prefix}0${suffix}`);
 
   useEffect(() => {
     animatedValue.value = withTiming(value, {
-      duration,
+      duration: reducedMotion ? 0 : duration,
       easing: Easing.out(Easing.cubic),
     });
-  }, [value, duration, animatedValue]);
+  }, [value, duration, animatedValue, reducedMotion]);
 
   // Use a JS-side running update via requestAnimationFrame for simplicity and reliability
   useEffect(() => {
+    // Reduced motion: collapse travel to zero — set the final value instantly
+    // (§2.5). State-change communication via the displayed value is kept; the
+    // animated count-up (decorative motion) is removed.
+    if (reducedMotion) {
+      const finalDisplay = decimals > 0
+        ? `${prefix}${value.toFixed(decimals)}${suffix}`
+        : `${prefix}${Math.round(value)}${suffix}`;
+      setDisplay(finalDisplay);
+      return;
+    }
+
     let frame: number;
     const startTime = Date.now();
     const startVal = 0;

@@ -24,35 +24,35 @@ const SEED_PASSWORD = 'seed12345';
 // ── Real product images from Unsplash CDN ──────────────────────────────────
 // These are stable, high-quality fashion product photos with known dimensions.
 const IMG = {
-  yslSweater:    'https://images.unsplash.com/photo-1551488831-00ddcb6c9975?w=1200&q=80',
-  yslSweater2:   'https://images.unsplash.com/photo-1539109236116-2fa3b3a4b070?w=1200&q=80',
+  yslSweater:    'https://images.unsplash.com/photo-1621198059871-0d5f9b449233?w=1200&q=80',
+  yslSweater2:   'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=1200&q=80',
   yslSweater3:   'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=1200&q=80',
-  amiShirt:      'https://images.unsplash.com/photo-1602810318383-e386cc2a3cc6?w=1200&q=80',
-  amiShirt2:     'https://images.unsplash.com/photo-1598033129183-4f895bac41ad?w=1200&q=80',
-  ralphHarring:  'https://images.unsplash.com/photo-1591047139825-d91f6f4c0c4e?w=1200&q=80',
-  stussyTee:     'https://images.unsplash.com/photo-1583743814966-2fa3b3a4b070?w=1200&q=80',
-  stussyTee2:    'https://images.unsplash.com/photo-1556905055-8f358a7a5b1d?w=1200&q=80',
+  amiShirt:      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1200&q=80',
+  amiShirt2:     'https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=1200&q=80',
+  ralphHarring:  'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1200&q=80',
+  stussyTee:     'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=1200&q=80',
+  stussyTee2:    'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1200&q=80',
   offwhiteHood:  'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80',
   nikeAirMax:   'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1200&q=80',
-  zaraCargo:    'https://images.unsplash.com/photo-1585386953535-9aed58b55591?w=1200&q=80',
+  zaraCargo:    'https://images.unsplash.com/photo-1445205170230-053b83016050?w=1200&q=80',
   jacquemusBag: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=1200&q=80',
-  representHood:'https://images.unsplash.com/photo-1556821833-cb4bea8d3e8c?w=1200&q=80',
-  converseHigh: 'https://images.unsplash.com/photo-1606107557193-32dd8ff4f8e5?w=1200&q=80',
+  representHood:'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80',
+  converseHigh: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=1200&q=80',
   // Luxury watches — for the Watches category world
-  rolexDatejust: 'https://images.unsplash.com/photo-1587836374828-4b2a6f0b6b5e?w=1200&q=80',
+  rolexDatejust: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=1200&q=80',
   omegaSpeedmaster: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1200&q=80',
-  patekCalatrava: 'https://images.unsplash.com/photo-1639038278291-12d0e0b5e8b0?w=1200&q=80',
+  patekCalatrava: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=1200&q=80',
   // Luxury bags — for the Bags category world
-  hermesBirkin: 'https://images.unsplash.com/photo-1591561954557-2694118b5e1b?w=1200&q=80',
-  chanelFlap: 'https://images.unsplash.com/photo-1584917827109-9c1f5b5e5e5e?w=1200&q=80',
+  hermesBirkin: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=1200&q=80',
+  chanelFlap: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=1200&q=80',
   // Sneakers — for the Sneakers category world
-  nikeDunkPanda: 'https://images.unsplash.com/photo-1600269453801-1e1a1a1a1a1a?w=1200&q=80',
+  nikeDunkPanda: 'https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=1200&q=80',
   // Cameras — for the Cameras category world
-  leicaM6: 'https://images.unsplash.com/photo-1500634245200-6a6afdb8e1c2?w=1200&q=80',
+  leicaM6: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=1200&q=80',
   // Avatars
   avatar1: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
-  avatar2: 'https://images.unsplash.com/photo-1500648767731-6c6f9e7e2644?w=200&q=80',
-  avatar3: 'https://images.unsplash.com/photo-1507003211169-0d1da7fc4eac?w=200&q=80',
+  avatar2: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80',
+  avatar3: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&q=80',
   avatar4: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&q=80',
 };
 
@@ -112,9 +112,9 @@ const LISTINGS: SeedListing[] = [
     description: 'Beautiful YSL sweater in great condition. Barely worn, no signs of wear.',
     shippingMethod: 'tracked', shippingPayer: 'buyer',
     images: [
-      { url: IMG.yslSweater, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
-      { url: IMG.yslSweater2, width: 1200, height: 1600, focalX: 0.5, focalY: 0.45 },
-      { url: IMG.yslSweater3, width: 1200, height: 1600, focalX: 0.5, focalY: 0.5 },
+      { url: IMG.yslSweater, width: 1200, height: 732, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.yslSweater2, width: 1200, height: 798, focalX: 0.5, focalY: 0.45 },
+      { url: IMG.yslSweater3, width: 1200, height: 1500, focalX: 0.5, focalY: 0.5 },
     ],
   },
   {
@@ -125,8 +125,8 @@ const LISTINGS: SeedListing[] = [
     description: 'Pit to pit 20 in. Simple striped shirt from AMI Paris. Very good condition.',
     shippingMethod: 'tracked', shippingPayer: 'buyer',
     images: [
-      { url: IMG.amiShirt, width: 1200, height: 1600, focalX: 0.5, focalY: 0.35 },
-      { url: IMG.amiShirt2, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.amiShirt, width: 1200, height: 1200, focalX: 0.5, focalY: 0.35 },
+      { url: IMG.amiShirt2, width: 1200, height: 1800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -137,7 +137,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Classic Ralph Lauren Harrington jacket in excellent condition.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.ralphHarring, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.ralphHarring, width: 1200, height: 1800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -148,8 +148,8 @@ const LISTINGS: SeedListing[] = [
     description: 'Rare Stüssy graphic tee from the New York collection.',
     shippingMethod: 'standard', shippingPayer: 'buyer',
     images: [
-      { url: IMG.stussyTee, width: 1200, height: 1600, focalX: 0.5, focalY: 0.35 },
-      { url: IMG.stussyTee2, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.stussyTee, width: 1200, height: 1500, focalX: 0.5, focalY: 0.35 },
+      { url: IMG.stussyTee2, width: 1200, height: 800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -160,7 +160,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Iconic Off-White arrow hoodie. Authentic, with tags.',
     shippingMethod: 'tracked', shippingPayer: 'buyer',
     images: [
-      { url: IMG.offwhiteHood, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.offwhiteHood, width: 1200, height: 1800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -171,7 +171,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Classic Air Max 90 in white. Light signs of wear on soles.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.nikeAirMax, width: 1200, height: 1600, focalX: 0.5, focalY: 0.3 },
+      { url: IMG.nikeAirMax, width: 1200, height: 800, focalX: 0.5, focalY: 0.3 },
     ],
   },
   {
@@ -182,7 +182,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Brand new with tags cargo trousers from Zara. Never worn.',
     shippingMethod: 'standard', shippingPayer: 'buyer',
     images: [
-      { url: IMG.zaraCargo, width: 1200, height: 1600, focalX: 0.5, focalY: 0.45 },
+      { url: IMG.zaraCargo, width: 1200, height: 800, focalX: 0.5, focalY: 0.45 },
     ],
   },
   {
@@ -204,7 +204,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Premium Represent Clo. hoodie in large. Great condition.',
     shippingMethod: 'tracked', shippingPayer: 'buyer',
     images: [
-      { url: IMG.representHood, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.representHood, width: 1200, height: 1800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -215,7 +215,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Classic black and white Chuck Taylors.',
     shippingMethod: 'standard', shippingPayer: 'buyer',
     images: [
-      { url: IMG.converseHigh, width: 1200, height: 1600, focalX: 0.5, focalY: 0.3 },
+      { url: IMG.converseHigh, width: 1200, height: 857, focalX: 0.5, focalY: 0.3 },
     ],
   },
   // ── Luxury listings for diverse category worlds ──
@@ -227,7 +227,7 @@ const LISTINGS: SeedListing[] = [
     description: '1985 Rolex Datejust 36mm in stainless steel with original dial. Recently serviced.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.rolexDatejust, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.rolexDatejust, width: 1200, height: 1798, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -238,7 +238,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Speedmaster Pro Moonwatch with box and papers. Calibre 1861.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.omegaSpeedmaster, width: 1200, height: 1600, focalX: 0.5, focalY: 0.35 },
+      { url: IMG.omegaSpeedmaster, width: 1200, height: 872, focalX: 0.5, focalY: 0.35 },
     ],
   },
   {
@@ -249,7 +249,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Calatrava 5196G in white gold. Full set, purchased 2023.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.patekCalatrava, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.patekCalatrava, width: 1200, height: 1798, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -260,7 +260,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Birkin 30 in Togo leather, gold hardware. Stamp from 2021.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.hermesBirkin, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.hermesBirkin, width: 1200, height: 1800, focalX: 0.5, focalY: 0.4 },
     ],
   },
   {
@@ -282,7 +282,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Deadstock Dunk Low Panda. Never worn, original box.',
     shippingMethod: 'tracked', shippingPayer: 'buyer',
     images: [
-      { url: IMG.nikeDunkPanda, width: 1200, height: 1600, focalX: 0.5, focalY: 0.3 },
+      { url: IMG.nikeDunkPanda, width: 1200, height: 900, focalX: 0.5, focalY: 0.3 },
     ],
   },
   {
@@ -293,7 +293,7 @@ const LISTINGS: SeedListing[] = [
     description: 'Leica M6 classic black paint. Light brassing, fully functional. Includes finder.',
     shippingMethod: 'tracked', shippingPayer: 'seller',
     images: [
-      { url: IMG.leicaM6, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+      { url: IMG.leicaM6, width: 1200, height: 1500, focalX: 0.5, focalY: 0.4 },
     ],
   },
 ];

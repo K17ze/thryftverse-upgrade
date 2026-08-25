@@ -32,6 +32,7 @@ import { AnimatedHeart } from '../AnimatedHeart';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 import { SharedTransitionImage } from '../SharedTransitionImage';
 import { Video, ResizeMode } from '../compat/Video';
 
@@ -84,9 +85,9 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withTiming(MIN_ZOOM, { duration: Motion.duration.normal });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -110,8 +111,8 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
-        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -120,23 +121,23 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withTiming(tx, { duration: 220, easing: Easing.out(Easing.cubic) });
-      translateY.value = withTiming(ty, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateX.value = withTiming(tx, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(ty, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withTiming(1, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withTiming(1, { duration: Motion.duration.normal });
+        translateX.value = withTiming(0, { duration: Motion.duration.normal });
+        translateY.value = withTiming(0, { duration: Motion.duration.normal });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withTiming(target, { duration: 200, easing: Easing.out(Easing.cubic) });
+        scale.value = withTiming(target, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
         savedScale.value = target;
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
@@ -371,6 +372,7 @@ export function ProductMediaGallery({
           style={styles.indexBadge}
           onPress={() => onOpenFullscreen(activeIndex)}
           accessibilityLabel={`Image ${activeIndex + 1} of ${images.length}. Tap for fullscreen.`}
+        accessibilityRole="button"
         >
           <Text style={styles.indexText}>
             {activeIndex + 1} / {images.length}
@@ -406,6 +408,7 @@ export function ProductMediaGallery({
                   }}
                   accessibilityLabel={`View image ${index + 1}`}
                   style={[styles.thumbnail, isActive && styles.thumbnailActive]}
+                accessibilityRole="button"
                 >
                   <CachedImage
                     uri={item}
@@ -465,7 +468,7 @@ function createStyles(colors: ThemeColors) {
   },
   soldText: {
     color: colors.background,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },

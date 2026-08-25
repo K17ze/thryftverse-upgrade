@@ -68,6 +68,112 @@ export function setTelemetryHandler(handler: TelemetryHandler | null) {
   telemetryHandler = handler;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Session ID — generated once per app launch, stored module-level.
+// ──────────────────────────────────────────────────────────────────────────
+
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex: string[] = [];
+    for (let i = 0; i < bytes.length; i++) {
+      hex.push(bytes[i].toString(16).padStart(2, '0'));
+    }
+    return (
+      hex.slice(0, 4).join('') + '-' +
+      hex.slice(4, 6).join('') + '-' +
+      hex.slice(6, 8).join('') + '-' +
+      hex.slice(8, 10).join('') + '-' +
+      hex.slice(10, 16).join('')
+    );
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+let sessionId: string = generateSessionId();
+
+// ──────────────────────────────────────────────────────────────────────────
+// Event buffer — batches events for flush every 10s or when 20 events
+// are collected. If the POST fails, events remain in the buffer and are
+// retried on the next flush.
+//
+// Limitation: events in the buffer are lost if the app is killed before
+// a flush completes. This is an acceptable trade-off for analytics — the
+// PostHog SDK has its own offline queue for events routed through the
+// handler, and the backend endpoint is best-effort.
+// ──────────────────────────────────────────────────────────────────────────
+
+interface BufferedEvent {
+  event: string;
+  session_id: string;
+  timestamp: string;
+  payload: TelemetryPayload;
+}
+
+const FLUSH_INTERVAL_MS = 10_000;
+const FLUSH_BATCH_SIZE = 20;
+const DEDUP_WINDOW_MS = 500;
+
+let eventBuffer: BufferedEvent[] = [];
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+const recentEventKeys: Map<string, number> = new Map();
+
+function hashPayload(payload: TelemetryPayload): string {
+  try {
+    return JSON.stringify(payload, Object.keys(payload).sort());
+  } catch {
+    return JSON.stringify(payload);
+  }
+}
+
+function isDuplicate(eventName: string, payload: TelemetryPayload): boolean {
+  const now = Date.now();
+  const dedupKey = `${eventName}:${hashPayload(payload)}`;
+
+  for (const [key, timestamp] of recentEventKeys) {
+    if (now - timestamp > DEDUP_WINDOW_MS) {
+      recentEventKeys.delete(key);
+    }
+  }
+
+  if (recentEventKeys.has(dedupKey)) {
+    return true;
+  }
+
+  recentEventKeys.set(dedupKey, now);
+  return false;
+}
+
+function ensureFlushTimer(): void {
+  if (flushTimer !== null) return;
+  flushTimer = setInterval(() => {
+    void flushTelemetryBuffer();
+  }, FLUSH_INTERVAL_MS);
+}
+
+async function flushTelemetryBuffer(): Promise<void> {
+  if (eventBuffer.length === 0) return;
+
+  const batch = eventBuffer.splice(0, FLUSH_BATCH_SIZE);
+
+  try {
+    await fetchJson('/analytics/events/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: batch }),
+    });
+  } catch {
+    // POST failed — requeue the batch for the next flush (offline queue).
+    eventBuffer.unshift(...batch);
+  }
+}
+
 export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload = {}) {
   // Respect the user's analytics opt-out preference — no event is
   // dispatched or transmitted when opt-out is active.
@@ -77,9 +183,20 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
 
   const safePayload = scrubPII(payload);
 
+  // Dedup: drop duplicate events within a 500ms window.
+  if (isDuplicate(eventName, safePayload)) {
+    return;
+  }
+
+  const enrichedPayload: TelemetryPayload = {
+    ...safePayload,
+    session_id: sessionId,
+    timestamp: new Date().toISOString(),
+  };
+
   if (telemetryHandler) {
     try {
-      telemetryHandler(eventName, safePayload);
+      telemetryHandler(eventName, enrichedPayload);
     } catch (error) {
       if (__DEV__) {
         console.warn('[telemetry] handler_failed', { eventName, error });
@@ -88,16 +205,37 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
   }
 
   if (__DEV__) {
-    console.info(`[telemetry] ${eventName}`, safePayload);
+    console.info(`[telemetry] ${eventName}`, enrichedPayload);
   }
 
-  fetchJson('/analytics/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event: eventName, ...safePayload }),
-  }).catch(() => {
-    // Best-effort — analytics must not crash the app
+  eventBuffer.push({
+    event: eventName,
+    session_id: sessionId,
+    timestamp: new Date().toISOString(),
+    payload: safePayload,
   });
+
+  ensureFlushTimer();
+
+  if (eventBuffer.length >= FLUSH_BATCH_SIZE) {
+    void flushTelemetryBuffer();
+  }
+}
+
+/**
+ * Flushes any pending buffered events immediately. Call this on app
+ * backgrounding or before a deliberate shutdown to minimise event loss.
+ */
+export async function flushTelemetry(): Promise<void> {
+  await flushTelemetryBuffer();
+}
+
+/**
+ * Resets the session ID — call on logout so the next session gets a
+ * fresh identifier.
+ */
+export function resetTelemetrySession(): void {
+  sessionId = generateSessionId();
 }
 
 // ──────────────────────────────────────────────────────────────────────────

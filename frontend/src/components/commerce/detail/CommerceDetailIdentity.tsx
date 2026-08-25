@@ -1,27 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
-import { useAppTheme } from '../../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
 import type {
   CommerceDetailFamily,
   CommerceDetailIdentityDensity,
 } from './types';
-
-// ── Media overlay text constants ──
-// Text rendered on top of media (images) is always white regardless of
-// theme mode — both light and dark apps use white text on image overlays
-// (Instagram, Depop, Vinted pattern). These are media-specific constants,
-// not theme colours, because no ThemeColors entry maps to "always white
-// on media" in both modes.
-const MEDIA_TEXT_PRIMARY = '#FFFFFF';
-const MEDIA_TEXT_SECONDARY = 'rgba(255,255,255,0.76)';
-const MEDIA_TEXT_MUTED = 'rgba(255,255,255,0.6)';
-const MEDIA_TEXT_TERTIARY = 'rgba(255,255,255,0.72)';
-const MEDIA_TEXT_BODY = 'rgba(255,255,255,0.8)';
-const MEDIA_SHADOW = 'rgba(0,0,0,0.55)';
-const MEDIA_SHADOW_SOFT = 'rgba(0,0,0,0.5)';
-const MEDIA_SHADOW_LIGHT = 'rgba(0,0,0,0.45)';
-const MEDIA_SHADOW_SUBTLE = 'rgba(0,0,0,0.4)';
 
 /**
  * Identity seam — one compact identity composition immediately after
@@ -96,6 +80,7 @@ export function CommerceDetailIdentity({
   tone = 'canvas',
 }: CommerceDetailIdentityProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isMedia = tone === 'media';
 
   // Per spec 05 §3: only Direct may show price in identity.
@@ -113,7 +98,7 @@ export function CommerceDetailIdentity({
     family === 'co_own' && styles.titleCoOwn,
     density === 'compact' && styles.titleCompact,
     isMedia && styles.titleMedia,
-    { color: isMedia ? MEDIA_TEXT_PRIMARY : colors.textPrimary },
+    { color: isMedia ? colors.scrimTextPrimary : colors.textPrimary },
   ];
 
   return (
@@ -132,7 +117,7 @@ export function CommerceDetailIdentity({
               style={[
                 styles.eyebrow,
                 isMedia && styles.eyebrowMedia,
-                { color: isMedia ? MEDIA_TEXT_SECONDARY : colors.textSecondary },
+                { color: isMedia ? colors.scrimTextSecondary : colors.textSecondary },
               ]}
               numberOfLines={1}
             >
@@ -151,14 +136,14 @@ export function CommerceDetailIdentity({
         {title}
       </Text>
 
-      {(showPrimaryValue || showOriginalValue || showDiscountBadge || secondaryLine || interestSignal) && (
+      {(showPrimaryValue || showOriginalValue || showDiscountBadge) && (
         <View style={styles.valueRow}>
           {showPrimaryValue ? (
             <Text
               style={[
                 styles.primaryValue,
                 isMedia && styles.primaryValueMedia,
-                { color: isMedia ? MEDIA_TEXT_PRIMARY : colors.textPrimary },
+                { color: isMedia ? colors.scrimTextPrimary : colors.textPrimary },
               ]}
               accessibilityRole="text"
             >
@@ -169,7 +154,7 @@ export function CommerceDetailIdentity({
             <Text
               style={[
                 styles.originalValue,
-                { color: isMedia ? MEDIA_TEXT_MUTED : colors.textMuted },
+                { color: isMedia ? colors.scrimTextTertiary : colors.textMuted },
               ]}
               accessibilityRole="text"
             >
@@ -183,27 +168,32 @@ export function CommerceDetailIdentity({
               </Text>
             </View>
           ) : null}
-          {secondaryLine ? (
-            <Text
-              style={[
-                styles.secondaryLine,
-                isMedia && styles.secondaryLineMedia,
-                { color: isMedia ? MEDIA_TEXT_BODY : colors.textSecondary },
-              ]}
-              numberOfLines={1}
-            >
-              {secondaryLine}
-            </Text>
-          ) : null}
         </View>
       )}
+
+      {/* Secondary truth line — sits on its own line below the price
+          row so the price dominates without competition. Per 2026 PDP
+          research: "Price first, CTA immediately after." The secondary
+          line is a quiet truth partner, not a co-equal on the baseline. */}
+      {secondaryLine ? (
+        <Text
+          style={[
+            styles.secondaryLine,
+            isMedia && styles.secondaryLineMedia,
+            { color: isMedia ? colors.scrimTextSecondary : colors.textSecondary },
+          ]}
+          numberOfLines={1}
+        >
+          {secondaryLine}
+        </Text>
+      ) : null}
 
       {interestSignal ? (
         <Text
           style={[
             styles.interest,
             isMedia && styles.interestMedia,
-            { color: isMedia ? MEDIA_TEXT_TERTIARY : colors.textMuted },
+            { color: isMedia ? colors.scrimTextSecondary : colors.textMuted },
           ]}
           numberOfLines={1}
         >
@@ -214,7 +204,7 @@ export function CommerceDetailIdentity({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -233,46 +223,46 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   eyebrow: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   eyebrowMedia: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
-    textShadowColor: MEDIA_SHADOW_SOFT,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   title: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight + 2,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight + 2,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
   titleDirect: {
-    fontSize: Type.priceLarge.size + 2,
-    lineHeight: Type.priceLarge.lineHeight + 3,
+    fontSize: Type.priceHero.size + 2,
+    lineHeight: Type.priceHero.lineHeight + 3,
     letterSpacing: -0.65,
   },
   titleAuction: {
-    fontSize: Type.priceLarge.size - 2,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 2,
+    lineHeight: Type.priceHero.lineHeight - 1,
     letterSpacing: -0.4,
   },
   titleCoOwn: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight + 1,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight + 1,
     letterSpacing: -0.45,
   },
   titleMedia: {
-    fontSize: Type.priceLarge.size - 1,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 1,
+    lineHeight: Type.priceHero.lineHeight - 1,
     letterSpacing: -0.6,
-    textShadowColor: MEDIA_SHADOW,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 12,
   },
@@ -285,8 +275,8 @@ const styles = StyleSheet.create({
   // Per spec 05 §3: compact width uses 26pt title with tighter line
   // height so long titles do not crowd the first viewport.
   titleCompact: {
-    fontSize: Type.priceLarge.size - 2,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 2,
+    lineHeight: Type.priceHero.lineHeight - 1,
   },
   // Value row: price + secondary line sit on one baseline row. The
   // price is dominant; the secondary line is a quiet truth partner.
@@ -314,7 +304,7 @@ const styles = StyleSheet.create({
     fontSize: Type.priceList.size + 2,
     lineHeight: Type.priceList.lineHeight + 3,
     letterSpacing: -0.3,
-    textShadowColor: MEDIA_SHADOW_SOFT,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
   },
@@ -343,15 +333,19 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
+  // Secondary truth line — now on its own line below the price row.
+  // marginTop Space.xs keeps it close to the price so it reads as a
+  // truth partner, not a disconnected metadata fragment.
   secondaryLine: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
+    marginTop: Space.xs,
   },
   secondaryLineMedia: {
     fontFamily: Typography.family.medium,
-    textShadowColor: MEDIA_SHADOW_LIGHT,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
@@ -365,7 +359,7 @@ const styles = StyleSheet.create({
   },
   interestMedia: {
     fontFamily: Typography.family.medium,
-    textShadowColor: MEDIA_SHADOW_SUBTLE,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },

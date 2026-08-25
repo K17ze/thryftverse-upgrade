@@ -78,7 +78,7 @@ function SectionHeader({
       <Ionicons name={icon} size={15} color={colors.textMuted} />
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
       {badge && (
-        <View style={[styles.badge, { backgroundColor: colors.warning + '22' }]}>
+        <View style={[styles.badge, { backgroundColor: colors.warningSubtle }]}>
           <Text style={[styles.badgeText, { color: colors.warning }]} numberOfLines={1}>
             {badge}
           </Text>
@@ -264,10 +264,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   sectionTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     flex: 1,
   },
   badge: {

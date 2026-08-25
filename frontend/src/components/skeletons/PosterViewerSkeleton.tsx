@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Space } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -24,14 +24,14 @@ export function PosterViewerSkeleton() {
         <SkeletonLoader
           width={SCREEN_W * 0.7}
           height={SCREEN_H * 0.5}
-          borderRadius={16}
+          borderRadius={Radius.xl}
           style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
         />
       </View>
 
       {/* Bottom reply bar placeholder */}
       <View style={styles.replyBar}>
-        <SkeletonLoader width={SCREEN_W * 0.6} height={40} borderRadius={20} style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+        <SkeletonLoader width={SCREEN_W * 0.6} height={40} borderRadius={Radius.xxl} style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
       </View>
     </View>
   );
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     flex: 1,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.2)',
     overflow: 'hidden',
   },

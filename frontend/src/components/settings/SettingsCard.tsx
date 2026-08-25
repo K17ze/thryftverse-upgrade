@@ -51,6 +51,7 @@ export function SettingsCard({
 }: SettingsCardProps) {
   const { colors } = useAppTheme();
   const tone = resolveVariantStyle(variant, colors);
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
     <View
@@ -69,14 +70,14 @@ export function SettingsCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
     borderWidth: 1,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,

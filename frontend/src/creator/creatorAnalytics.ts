@@ -16,7 +16,11 @@ type CreatorAnalyticsEvent =
   | 'creator_page_remove'
   | 'creator_capture_photo'
   | 'creator_capture_video'
-  | 'creator_capture_boomerang';
+  | 'creator_capture_boomerang'
+  | 'creator_visual_search'
+  | 'creator_mode_switch'
+  | 'creator_camera_flip'
+  | 'creator_camera_effect';
 
 interface CreatorAnalyticsPayload {
   documentType?: 'look' | 'poster';
@@ -120,4 +124,16 @@ export const CreatorAnalytics = {
 
   captureBoomerang: (documentType: 'look' | 'poster', captureLatencyMs: number) =>
     trackCreatorEvent('creator_capture_boomerang', { documentType, captureLatencyMs }),
+
+  visualSearch: (captureLatencyMs: number) =>
+    trackCreatorEvent('creator_visual_search', { captureLatencyMs }),
+
+  modeSwitch: (documentType: 'look' | 'poster', mode: string) =>
+    trackCreatorEvent('creator_mode_switch', { documentType, layerType: mode }),
+
+  cameraFlip: (documentType: 'look' | 'poster') =>
+    trackCreatorEvent('creator_camera_flip', { documentType }),
+
+  cameraEffectSelected: (effectId: string) =>
+    trackCreatorEvent('creator_camera_effect', { layerType: effectId }),
 };

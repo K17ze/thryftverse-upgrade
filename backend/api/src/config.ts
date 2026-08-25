@@ -120,6 +120,10 @@ export const config = {
     360_000
   ),
   redisUrl: required('REDIS_URL', 'redis://localhost:6379'),
+  redisQueueUrl: required('REDIS_QUEUE_URL', required('REDIS_URL', 'redis://localhost:6379')),
+  redisCacheUrl: required('REDIS_CACHE_URL', required('REDIS_URL', 'redis://localhost:6379')),
+  pgbouncerEnabled: asBoolean(process.env.PGBOUNCER_ENABLED, false),
+  pgbouncerPort: asIntegerInRange('PGBOUNCER_PORT', process.env.PGBOUNCER_PORT, 6432, 1, 65_535),
   keyServiceUrl: required('KEY_SERVICE_URL', 'http://localhost:4100'),
   keyServiceClientToken: requiredSecret('KEY_SERVICE_CLIENT_TOKEN', 'local-key-client-token'),
   keyServiceAdminToken: requiredSecret('KEY_SERVICE_ADMIN_TOKEN', 'local-key-admin-token'),
@@ -200,8 +204,61 @@ export const config = {
     'DECISION_SERVICE_TOKEN',
     'local-decision-service-token'
   ),
+  /**
+   * Fraud shadow scoring (Phase 6). When enabled, every fraud check also
+   * scores the event with the shadow ML model (via the ml-service) and logs
+   * both scores to fraud_scoring_ledger for offline comparison. The shadow
+   * score NEVER affects the user-facing fraud decision — the rule engine
+   * remains the champion until the shadow model is promoted via the model
+   * artifact registry (migration 144).
+   */
+  fraudShadowEnabled: asBoolean(
+    process.env.FRAUD_SHADOW_ENABLED,
+    false,
+  ),
+  fraudShadowTimeoutMs: asIntegerInRange(
+    'FRAUD_SHADOW_TIMEOUT_MS',
+    process.env.FRAUD_SHADOW_TIMEOUT_MS,
+    1_500,
+    100,
+    10_000,
+  ),
+  /**
+   * FR-09: Governed IP reputation provider selection.
+   *
+   * - 'noop'      — no provider; returns `unknown` for every IP (default,
+   *                  never fabricates a clean verdict).
+   * - 'spur'      — Spur context API (requires SPUR_API_KEY).
+   * - 'maxmind'   — local MaxMind GeoIP2/GeoLite2 database lookup
+   *                  (requires MAXMIND_DB_PATH and the `maxmind` npm pkg).
+   * - 'composite' — query both Spur and MaxMind in parallel and merge.
+   *
+   * When set to 'noop' (the default) the system is honest about not having
+   * threat-intel data rather than fabricating reputation. See
+   * `src/lib/ipReputationProviders.ts` for the concrete implementations.
+   */
+  ipReputationProvider:
+    (process.env.IP_REPUTATION_PROVIDER?.trim().toLowerCase() || 'noop') as
+      | 'spur' | 'maxmind' | 'composite' | 'noop',
+  /** Spur API key. Required when ipReputationProvider is 'spur' or 'composite'. */
+  spurApiKey: process.env.SPUR_API_KEY?.trim() || null,
+  /**
+   * Filesystem path to a MaxMind GeoLite2-City / GeoIP2 database file.
+   * Required when ipReputationProvider is 'maxmind' or 'composite'.
+   * The `maxmind` npm package must be installed separately.
+   */
+  maxmindDbPath: process.env.MAXMIND_DB_PATH?.trim() || null,
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
+  /**
+   * JWT signing algorithm. Defaults to HS256 for backward compatibility.
+   * Set to 'EdDSA' in production to use Ed25519 asymmetric keys.
+   * Generate a key pair with:
+   *   node -e "const { generateKeyPairSync } = require('crypto'); const { privateKey, publicKey } = generateKeyPairSync('ed25519'); console.log(privateKey.export({ type: 'pkcs8', format: 'pem' })); console.log(publicKey.export({ type: 'spki', format: 'pem' }));"
+   */
+  jwtAlgorithm: (process.env.JWT_ALGORITHM?.trim() || 'HS256') as 'HS256' | 'EdDSA',
+  jwtEd25519PrivateKey: process.env.JWT_ED25519_PRIVATE_KEY?.trim() || '',
+  jwtEd25519PublicKey: process.env.JWT_ED25519_PUBLIC_KEY?.trim() || '',
   authAccessTokenTtlSeconds: asNumber(process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS, 15 * 60),
   authRefreshTokenTtlSeconds: asNumber(process.env.AUTH_REFRESH_TOKEN_TTL_SECONDS, 30 * 24 * 60 * 60),
   authPasswordHashCost: asNumber(process.env.AUTH_PASSWORD_HASH_COST, 12),
@@ -209,8 +266,23 @@ export const config = {
   authMagicLinkTtlSeconds: asNumber(process.env.AUTH_MAGIC_LINK_TTL_SECONDS, 15 * 60),
   authMagicLinkBaseUrl:
     process.env.AUTH_MAGIC_LINK_BASE_URL?.trim() || 'thryftverse://auth/magic-link',
+  authPasswordResetBaseUrl:
+    process.env.AUTH_PASSWORD_RESET_BASE_URL?.trim() || 'thryftverse://auth/reset-password',
   authOtpTtlSeconds: asNumber(process.env.AUTH_OTP_TTL_SECONDS, 5 * 60),
   authOtpMaxAttempts: asNumber(process.env.AUTH_OTP_MAX_ATTEMPTS, 5),
+  // ── WebAuthn / Passkeys (AUTH-017) ────────────────────────────────────
+  // The RP name shown to users in the passkey prompt. The RP ID is derived
+  // from the app URL's hostname. In production, set WEBAUTHN_RP_ID to the
+  // naked domain (e.g. "thryftverse.app") and WEBAUTHN_ORIGINS to the
+  // allowed origins (comma-separated, including the mobile app's origin
+  // if using app links).
+  webauthnRpName: process.env.WEBAUTHN_RP_NAME?.trim() || 'ThryftVerse',
+  webauthnRpId:
+    process.env.WEBAUTHN_RP_ID?.trim()
+    || new URL(process.env.APP_URL?.trim() || 'http://localhost:4000').hostname,
+  webauthnOrigins: asCsvList(process.env.WEBAUTHN_ORIGINS).length > 0
+    ? asCsvList(process.env.WEBAUTHN_ORIGINS)
+    : [process.env.APP_URL?.trim() || 'http://localhost:4000'],
   authEmailProvider:
     process.env.AUTH_EMAIL_PROVIDER?.trim().toLowerCase()
     || (nodeEnv === 'production' ? 'resend' : 'log'),
@@ -416,6 +488,7 @@ export const config = {
     false
   ),
   platformRevenueSweepIntervalMs: asNumber(process.env.PLATFORM_REVENUE_SWEEP_INTERVAL_MS, 6 * 60 * 60 * 1000),
+  retentionSweepIntervalMs: asNumber(process.env.RETENTION_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
   opsAlertIntervalMs: asNumber(process.env.OPS_ALERT_INTERVAL_MS, 60_000),
   alertingWebhookUrls: asCsvList(process.env.ALERTING_WEBHOOK_URLS ?? process.env.ALERTING_WEBHOOK_URL),
   alertingAdminUserIds: asCsvList(process.env.ALERTING_ADMIN_USER_IDS),
@@ -461,6 +534,61 @@ export const config = {
   onezeAttestationSigningSecret: requiredSecret(
     'ONEZE_ATTESTATION_SIGNING_SECRET',
     'dev-only-oneze-attestation-signing-secret'
+  ),
+  // ── Meilisearch — full-text search ─────────────────────────────────
+  meilisearchUrl: process.env.MEILISEARCH_URL?.trim() || 'http://localhost:7700',
+  meilisearchApiKey: process.env.MEILISEARCH_API_KEY?.trim() || '',
+  meilisearchIndexPrefix: process.env.MEILISEARCH_INDEX_PREFIX?.trim() || 'thryftverse_',
+  // ── Content moderation ─────────────────────────────────────────────
+  moderationProvider: process.env.MODERATION_PROVIDER?.trim() || 'mock',
+  moderationThreshold: parseFloat(process.env.MODERATION_THRESHOLD || '0.8'),
+  moderationReviewThreshold: parseFloat(process.env.MODERATION_REVIEW_THRESHOLD || '0.5'),
+  // ── SMS (Twilio) ───────────────────────────────────────────────────
+  smsProvider: process.env.SMS_PROVIDER?.trim() || 'log',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || '',
+  twilioFromNumber: process.env.TWILIO_FROM_NUMBER?.trim() || '',
+  twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID?.trim() || '',
+  // ── Live streaming (LiveKit) ───────────────────────────────────────
+  liveStreamProvider: process.env.LIVE_STREAM_PROVIDER?.trim() || 'mock',
+  livekitUrl: process.env.LIVEKIT_URL?.trim() || '',
+  livekitApiKey: process.env.LIVEKIT_API_KEY?.trim() || '',
+  livekitApiSecret: process.env.LIVEKIT_API_SECRET?.trim() || '',
+  presenceHeartbeatIntervalMs: asNumber(process.env.PRESENCE_HEARTBEAT_INTERVAL_MS, 15_000),
+  presenceTtlSeconds: asNumber(process.env.PRESENCE_TTL_SECONDS, 30),
+  // ── Workforce / Ops Console ─────────────────────────────────────────
+  // Separate identity plane for the operations console. Consumer JWTs
+  // (audience "thryftverse-app") are cryptographically rejected by ops
+  // routes. Workforce tokens use audience "thryftverse-ops".
+  opsConsoleEnabled: asBoolean(process.env.OPS_CONSOLE_ENABLED, nodeEnv !== 'production'),
+  opsConsoleCorsOrigins: asCsvList(process.env.OPS_CONSOLE_CORS_ORIGINS),
+  workforceSessionIdleTtlSeconds: asIntegerInRange(
+    'WORKFORCE_SESSION_IDLE_TTL_SECONDS',
+    process.env.WORKFORCE_SESSION_IDLE_TTL_SECONDS,
+    1800,
+    60,
+    86_400
+  ),
+  workforceSessionAbsoluteTtlSeconds: asIntegerInRange(
+    'WORKFORCE_SESSION_ABSOLUTE_TTL_SECONDS',
+    process.env.WORKFORCE_SESSION_ABSOLUTE_TTL_SECONDS,
+    28800,
+    900,
+    604_800
+  ),
+  workforceStepUpMaxAgeSeconds: asIntegerInRange(
+    'WORKFORCE_STEP_UP_MAX_AGE_SECONDS',
+    process.env.WORKFORCE_STEP_UP_MAX_AGE_SECONDS,
+    300,
+    30,
+    3600
+  ),
+  opsPiiRevealTtlSeconds: asIntegerInRange(
+    'OPS_PII_REVEAL_TTL_SECONDS',
+    process.env.OPS_PII_REVEAL_TTL_SECONDS,
+    300,
+    30,
+    3600
   ),
 };
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import {
   AddressCollectionMode,
   CollectionMode,
@@ -30,6 +29,7 @@ import {
 } from '../../platform/payments/stripeMobile';
 import { Radius, Space, Typography, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useHaptic } from '../../hooks/useHaptic';
 
 interface Props {
   visible: boolean;
@@ -39,6 +39,7 @@ interface Props {
 
 export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
   const [isOpeningProvider, setIsOpeningProvider] = useState(false);
   const [countryCapabilities, setCountryCapabilities] =
@@ -102,7 +103,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     }
 
     setIsOpeningProvider(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.light();
     try {
       const configuration = await createStripeSetupSheet(
         setupIdempotencyKeyRef.current
@@ -134,9 +135,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         throw new Error(presentationError.message);
       }
 
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success
-      );
+      haptic.success();
       show('Payment method added', 'success');
       setupIdempotencyKeyRef.current = createStableId('setup_method');
       onDismiss();
@@ -146,9 +145,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         error,
         'Unable to open card entry right now. Try again.'
       );
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Error
-      );
+      haptic.error();
       show(parsed.message, 'error');
     } finally {
       setIsOpeningProvider(false);
@@ -358,6 +355,6 @@ const createStyles = (themed: {
   primaryActionText: {
     color: themed.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
   },
 });

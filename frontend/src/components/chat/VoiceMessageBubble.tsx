@@ -139,6 +139,7 @@ export function VoiceMessageBubble({
     <Pressable
       onPress={handlePress}
       style={styles.container}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityLabel={
         accessibilityLabel ??
         `Voice message, ${formatDuration(durationMs)} long${isPlaying ? ', playing' : ''}`

@@ -338,7 +338,7 @@ function createStyles(colors: ThemeColors) {
   skeletonIcon: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   skeletonCopy: {
@@ -347,7 +347,7 @@ function createStyles(colors: ThemeColors) {
   },
   skeletonLine: {
     height: 12,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   iconWrap: {
@@ -395,8 +395,8 @@ function createStyles(colors: ThemeColors) {
   emptyText: {
     textAlign: 'center',
     maxWidth: Space.xxl * 6 + Space.lg - 2,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   createEmptyBtn: {
     backgroundColor: colors.brand,

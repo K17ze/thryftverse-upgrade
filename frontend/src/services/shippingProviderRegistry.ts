@@ -14,6 +14,7 @@
 // ── Typed provider error codes ────────────────────────────────────────
 
 export type ShippingProviderErrorCode =
+  | 'LABEL_GENERATION_UNAVAILABLE'
   | 'LABEL_PROVIDER_UNAVAILABLE'
   | 'INVALID_DESTINATION'
   | 'PARCEL_OUT_OF_BOUNDS'
@@ -29,12 +30,30 @@ export type ShippingProviderErrorCode =
  * Replaces free-text `message.includes("carrier")` classification.
  */
 export function classifyShippingError(error: unknown): ShippingProviderErrorCode {
+  const details = (error as { details?: unknown })?.details;
+  const codeFromDetails =
+    typeof details === 'object' && details !== null
+      ? (details as { code?: string })?.code
+      : undefined;
+  if (typeof codeFromDetails === 'string') {
+    const upper = codeFromDetails.toUpperCase();
+    if (upper === 'LABEL_GENERATION_UNAVAILABLE') return 'LABEL_GENERATION_UNAVAILABLE';
+    if (upper === 'LABEL_PROVIDER_UNAVAILABLE') return 'LABEL_PROVIDER_UNAVAILABLE';
+    if (upper === 'CARRIER_AUTH_FAILURE') return 'CARRIER_AUTH_FAILURE';
+    if (upper === 'INVALID_DESTINATION') return 'INVALID_DESTINATION';
+    if (upper === 'PARCEL_OUT_OF_BOUNDS') return 'PARCEL_OUT_OF_BOUNDS';
+    if (upper === 'SERVICE_NO_LONGER_AVAILABLE') return 'SERVICE_NO_LONGER_AVAILABLE';
+    if (upper === 'LABEL_ALREADY_CREATED') return 'LABEL_ALREADY_CREATED';
+    if (upper === 'RATE_LIMITED') return 'RATE_LIMITED';
+  }
+
   const message = String(
     (error as { message?: string; error?: string })?.message ??
     (error as { error?: string })?.error ??
     error
   ).toLowerCase();
 
+  if (message.includes('label') && message.includes('generation') && message.includes('unavailable')) return 'LABEL_GENERATION_UNAVAILABLE';
   if (message.includes('carrier') && message.includes('unavailable')) return 'LABEL_PROVIDER_UNAVAILABLE';
   if (message.includes('carrier') && message.includes('auth')) return 'CARRIER_AUTH_FAILURE';
   if (message.includes('address') || message.includes('destination')) return 'INVALID_DESTINATION';
@@ -51,6 +70,7 @@ export function classifyShippingError(error: unknown): ShippingProviderErrorCode
  * Screen code uses this instead of inventing error messages.
  */
 export const SHIPPING_ERROR_RECOVERY: Record<ShippingProviderErrorCode, string> = {
+  LABEL_GENERATION_UNAVAILABLE: "Label generation isn't available for this carrier yet. Use manual shipping with a tracking number instead.",
   LABEL_PROVIDER_UNAVAILABLE: "This carrier's label service is unavailable right now. Try again, or enter tracking manually below.",
   INVALID_DESTINATION: "The buyer's address needs updating before a label can be generated. Message the buyer to resolve.",
   PARCEL_OUT_OF_BOUNDS: 'The parcel details don\'t match the carrier\'s limits. Check the size and weight above.',

@@ -119,16 +119,19 @@ export const MOCK_CO_OWN_ASSETS: CoOwnAsset[] = [];
 
 export function getAuctionMarket(
   now = Date.now(),
-  runtimeAuctions: AuctionMarketItem[] = []
+  runtimeAuctions: AuctionMarketItem[] = [],
+  runtimeState?: Record<string, { extendedEndMs?: number; closedAtMs?: number }>,
 ): AuctionViewModel[] {
   const seedAuctions = ENABLE_RUNTIME_MOCKS ? MOCK_AUCTIONS : [];
 
   return [...runtimeAuctions, ...seedAuctions]
     .map((auction) => {
       const startsAtMs = new Date(auction.startsAt).getTime();
-      const endsAtMs = new Date(auction.endsAt).getTime();
+      const originalEndMs = new Date(auction.endsAt).getTime();
+      // Anti-sniping: use the extended end time if the runtime state has one.
+      const effectiveEndMs = runtimeState?.[auction.id]?.extendedEndMs ?? originalEndMs;
       const msToStart = startsAtMs - now;
-      const msToEnd = endsAtMs - now;
+      const msToEnd = effectiveEndMs - now;
 
       let lifecycle: AuctionLifecycle = 'upcoming';
       if (msToStart <= 0 && msToEnd > 0) {

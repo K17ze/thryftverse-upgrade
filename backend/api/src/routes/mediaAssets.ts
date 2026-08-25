@@ -10,6 +10,8 @@ import {
   type MediaAssetStatus,
 } from '../lib/mediaLifecycle.js';
 import { deleteObject } from '../lib/s3.js';
+import { createModerationProvider } from '../lib/moderation/index.js';
+import { moderateImageAsset } from '../lib/moderation/moderationService.js';
 
 type MediaAssetRouteDependencies = {
   app: FastifyInstance;
@@ -530,7 +532,49 @@ export const registerMediaAssetRoutes = ({
         ],
       );
       await client.query('COMMIT');
-      return { ok: true, asset: serializeAsset(updatedResult.rows[0]) };
+
+      const committedAsset = updatedResult.rows[0];
+      if (
+        payload.moderationStatus === 'approved'
+        && createModerationProvider().name !== 'mock'
+        && committedAsset.media_kind === 'image'
+      ) {
+        const imageUrl = committedAsset.canonical_url ?? committedAsset.original_object_url;
+        void moderateImageAsset(assetId, imageUrl)
+          .then((moderationOutcome) => {
+            if (moderationOutcome.status === committedAsset.status) {
+              return;
+            }
+            db.query(
+              `UPDATE media_assets
+               SET moderation_status = $2,
+                   status = $3,
+                   publishable_at = CASE WHEN $3 = 'publishable' THEN COALESCE(publishable_at, NOW()) ELSE publishable_at END,
+                   quarantined_at = CASE WHEN $3 = 'quarantined' THEN NOW() ELSE quarantined_at END
+               WHERE id = $1
+                 AND status = $4`,
+              [
+                assetId,
+                moderationOutcome.moderationStatus,
+                moderationOutcome.status,
+                committedAsset.status,
+              ],
+            ).catch((dbError) => {
+              app.log.error(
+                { err: dbError, assetId },
+                'Failed to persist re-moderation outcome',
+              );
+            });
+          })
+          .catch((moderationError) => {
+            app.log.error(
+              { err: moderationError, assetId },
+              'Re-moderation double-check failed',
+            );
+          });
+      }
+
+      return { ok: true, asset: serializeAsset(committedAsset) };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

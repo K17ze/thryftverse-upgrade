@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -22,6 +21,8 @@ import {
   type SellerVerificationDemand,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
+import { t } from '../i18n';
+
 
 const DEMAND_TYPE_LABELS: Record<string, string> = {
   authenticity: 'Authenticity proof',
@@ -345,9 +346,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     summaryNumber: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
-      lineHeight: Type.priceLarge.lineHeight,
+      lineHeight: Type.priceHero.lineHeight,
     },
     summaryLabel: {
       fontSize: Type.caption.size,
@@ -393,9 +394,9 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs - 2,
     },
     assetTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     demandType: {
       fontSize: Type.caption.size,

@@ -46,7 +46,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const statusLabel = humaniseStatus(order.status);
-  const statusColor = getStatusColor(order.status, colors.textMuted);
+  const statusColor = getStatusColor(order.status, colors);
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatShortDate(order.createdAt);
@@ -214,7 +214,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    minHeight: 44,
+    minHeight: 76,
     gap: Space.md,
   },
   rowPressed: {
@@ -262,10 +262,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   // Order number — monospace-feel reference, muted
   orderNumber: {
@@ -277,7 +277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
@@ -300,17 +300,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   context: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   tracking: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     marginTop: 1,
   },
@@ -347,10 +347,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.xs,
   },
   nextActionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   // Deadline badge — urgent ship-by indicator for seller needs-action rows

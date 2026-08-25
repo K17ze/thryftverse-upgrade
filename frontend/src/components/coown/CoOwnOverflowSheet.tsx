@@ -109,7 +109,7 @@ export function CoOwnOverflowSheet({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
         <Pressable style={styles.backdropPress} onPress={onClose} accessibilityLabel="Close more actions" />
         <View
           style={[
@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   backdropPress: {
     flex: 1,

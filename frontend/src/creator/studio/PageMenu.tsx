@@ -12,6 +12,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -61,7 +62,7 @@ export function PageMenu({
       <View style={styles.pageSheetHeader}>
         <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Frame {pageIndex + 1}</Text>
         <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close frame options">
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </View>
       <View style={styles.pageSheetBody}>
@@ -100,7 +101,7 @@ export function PageMenu({
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveLeft }}
           >
-            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Left</Text>
           </Pressable>
           <Pressable
@@ -112,7 +113,7 @@ export function PageMenu({
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveRight }}
           >
-            <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
+            <Ionicons name="arrow-forward" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Right</Text>
           </Pressable>
         </View>
@@ -126,7 +127,7 @@ export function PageMenu({
             accessibilityLabel="Duplicate frame"
             accessibilityRole="button"
           >
-            <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="copy-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Duplicate</Text>
           </Pressable>
           <Pressable
@@ -138,7 +139,7 @@ export function PageMenu({
             accessibilityRole="button"
             accessibilityState={{ disabled: !canDelete }}
           >
-            <Ionicons name="trash-outline" size={20} color={canDelete ? colors.danger : colors.textMuted} />
+            <Ionicons name="trash-outline" size={IconGrammar.standard} color={canDelete ? colors.danger : colors.textMuted} />
             <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
           </Pressable>
         </View>

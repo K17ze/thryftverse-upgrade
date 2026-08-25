@@ -302,7 +302,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     emptyTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -311,7 +311,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
       paddingHorizontal: Space.lg,
     },
 
@@ -342,7 +342,7 @@ function createStyles(colors: ThemeColors) {
     },
     accountInfo: { flex: 1 },
     providerName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -379,7 +379,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.chrome,
       height: Control.chrome,
       borderRadius: Radius.full,
-      backgroundColor: colors.success + '15',
+      backgroundColor: colors.successSubtle,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -387,7 +387,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     securityTitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       marginBottom: Space.xs / 2,

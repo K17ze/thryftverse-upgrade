@@ -16,16 +16,24 @@ interface Props {
  * Crossfades between skeleton and content states.
  * Opacities always sum to 1 (skeletonOpacity + contentOpacity = 1)
  * so the container never dims mid-transition.
+ *
+ * Uses `Motion.transitions.mediaLoad` (250ms opacity-only) per the research
+ * doc §2.4: "the skeleton-to-content transition must be a crossfade
+ * (Motion.transitions.mediaLoad, 250ms opacity-only), never a pop, slide,
+ * or layout shift." Under reduced motion the duration collapses to 0
+ * (instant opacity swap — state-change communication via opacity is kept,
+ * travel is removed per §2.5).
  */
 export function StateTransition({ loading, skeleton, children }: Props) {
   const reducedMotion = useReducedMotion();
+  const fadeDuration = reducedMotion ? 0 : Motion.transitions.mediaLoad.duration;
 
   const skeletonStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(loading ? 1 : 0, { duration: reducedMotion ? 0 : Motion.duration.normal }),
+    opacity: withTiming(loading ? 1 : 0, { duration: fadeDuration }),
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(loading ? 0 : 1, { duration: reducedMotion ? 0 : Motion.duration.normal }),
+    opacity: withTiming(loading ? 0 : 1, { duration: fadeDuration }),
   }));
 
   return (

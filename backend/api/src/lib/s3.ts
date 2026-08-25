@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -154,4 +155,36 @@ export async function deleteObject(key: string): Promise<void> {
       Key: key,
     })
   );
+}
+
+export async function getObject(key: string): Promise<Buffer> {
+  const result = await internalS3.send(
+    new GetObjectCommand({
+      Bucket: config.s3Bucket,
+      Key: key,
+    })
+  );
+  if (!result.Body) {
+    throw new Error(`S3 object not found: ${key}`);
+  }
+  return Buffer.from(await result.Body.transformToByteArray());
+}
+
+export async function putBinaryObject(
+  key: string,
+  buffer: Buffer,
+  contentType: string,
+  options?: { cacheControl?: string; metadata?: Record<string, string> },
+): Promise<string> {
+  await internalS3.send(
+    new PutObjectCommand({
+      Bucket: config.s3Bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      CacheControl: options?.cacheControl ?? 'public, max-age=31536000, immutable',
+      Metadata: options?.metadata,
+    })
+  );
+  return publicObjectUrl(key);
 }

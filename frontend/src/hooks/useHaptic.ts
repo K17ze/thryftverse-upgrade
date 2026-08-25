@@ -23,8 +23,12 @@ import { HapticPatterns } from '../utils/hapticPatterns';
  *      non-essential haptics so motion + haptics degrade together (AGENTS §18).
  *      Notification haptics (success/error/warning) still fire because they
  *      communicate outcome, not decoration.
+ *
+ * Android impact haptics are enabled via react-native-haptic-feedback v3,
+ * which maps impact styles to VibrationEffect compositions (API 26+). The
+ * system vibrator setting is respected unless explicitly overridden.
  */
-const ANDROID_IMPACT_ENABLED = false;
+const ANDROID_IMPACT_ENABLED = true;
 const isIOS = Platform.OS === 'ios';
 const isAndroid = Platform.OS === 'android';
 const impactSupported = isIOS || (isAndroid && ANDROID_IMPACT_ENABLED);

@@ -13,19 +13,17 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Type,
   Typography,
-  Radius,
   Stroke,
-  Control,
 } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
+import { Motion } from '../../theme/motionTokens';
 
 export type DiscoveryMode = 'discover' | 'pulse' | 'looks';
 
@@ -49,14 +47,16 @@ const MODES: { value: DiscoveryMode; label: string }[] = [
  * DiscoveryModeNav — the flagship semantic mode navigation for the Explore
  * surface (Discover / Pulse / Looks).
  *
- * Design intent (AGENTS.md §4, §17):
+ * Design intent (AGENTS.md §4, §17, iOS 26 Liquid Glass):
  *   - Content-first, text-only tabs — no icon soup, no decorative chrome.
- *   - Selected state is evident without colour alone: an underline indicator
- *     + weight change (semibold vs regular).
- *   - The underline slides between tabs preserving spatial continuity. Under
+ *   - Selected state uses a restrained hairline indicator + semibold text;
+ *     there is no large grey pill competing with the media canvas.
+ *   - The indicator slides between tabs preserving spatial continuity. Under
  *     Reduce Motion it moves instantly (no spring).
  *   - Compact 44pt touch height per tab (Control.hit).
  *   - Bottom hairline separates the bar from content below.
+ *   - The indicator uses the brand accent only for selection and preserves
+ *     the surface budget for real media.
  *
  * State ownership: this component is presentational. The parent owns
  * `activeMode` and the scroll/data lifecycle of each scene, so switching modes
@@ -90,16 +90,8 @@ export function DiscoveryModeNav({
         indicatorX.value = withTiming(layout.x, { duration: 0 });
         indicatorWidth.value = withTiming(layout.width, { duration: 0 });
       } else {
-        indicatorX.value = withSpring(layout.x, {
-          damping: 24,
-          stiffness: 240,
-          mass: 0.9,
-        });
-        indicatorWidth.value = withSpring(layout.width, {
-          damping: 24,
-          stiffness: 240,
-          mass: 0.9,
-        });
+        indicatorX.value = withSpring(layout.x, Motion.spring.indicator);
+        indicatorWidth.value = withSpring(layout.width, Motion.spring.indicator);
       }
     },
     [reducedMotion, indicatorX, indicatorWidth]
@@ -144,7 +136,7 @@ export function DiscoveryModeNav({
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        { backgroundColor: colors.background, borderBottomColor: colors.border },
         style,
       ]}
       accessibilityRole="tablist"
@@ -160,7 +152,7 @@ export function DiscoveryModeNav({
       {MODES.map((mode, index) => {
         const isActive = mode.value === activeMode;
         const status = modeStatus?.[mode.value];
-        const labelColor = isActive ? colors.textPrimary : colors.textSecondary;
+        const labelColor = isActive ? colors.textPrimary : colors.textMuted;
         const fontFamily = isActive
           ? Typography.family.semibold
           : Typography.family.regular;
@@ -195,7 +187,7 @@ export function DiscoveryModeNav({
               <Text
                 style={[
                   styles.status,
-                  { color: colors.textMuted },
+                  { color: isActive ? colors.brand : colors.textMuted },
                 ]}
                 maxFontSizeMultiplier={1.3}
                 numberOfLines={1}
@@ -214,11 +206,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     borderBottomWidth: Stroke.hairline,
+    paddingHorizontal: Space.md,
   },
   tab: {
     flex: 1,
-    minHeight: Control.hit,
-    paddingVertical: Space.xs,
+    minHeight: 44,
+    paddingVertical: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -234,9 +227,8 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
+    height: 2,
     bottom: 0,
-    left: 0,
-    height: Stroke.emphasis,
-    borderRadius: Radius.full,
+    left: Space.md,
   },
 });

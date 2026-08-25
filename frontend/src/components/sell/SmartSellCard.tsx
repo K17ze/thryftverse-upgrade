@@ -171,7 +171,7 @@ export function SmartSellCard({
             <Text style={styles.title}>Smart Sell</Text>
           </View>
           <Text style={styles.subtitle}>
-            Auto-accept offers above your threshold. 60% more likely to sell in 7 days.
+            Auto-accept offers at or above your threshold. Auto-decline offers below your floor.
           </Text>
         </View>
         <PremiumToggle
@@ -232,16 +232,16 @@ export function SmartSellCard({
             </View>
           </View>
 
-          {/* Stats preview */}
+          {/* Manual review zone note — truthful, no fabricated stats */}
           <View style={styles.statsPreview}>
             <Ionicons
-              name="trending-up-outline"
+              name="information-circle-outline"
               size={14}
-              color={colors.success}
+              color={colors.textMuted}
               style={styles.statsIcon}
             />
             <Text style={styles.statsText}>
-              Based on similar listings, expect ~3–5 offers/week
+              Offers between your floor and accept threshold stay manual for you to review.
             </Text>
           </View>
         </Reanimated.View>
@@ -257,7 +257,7 @@ export function SmartSellCard({
             style={styles.demoIcon}
           />
           <Text style={styles.demoText}>
-            Demo mode — Smart Sell settings are illustrative.
+            Demo mode — Smart Sell settings are illustrative and not sent to a backend.
           </Text>
         </View>
       )}
@@ -449,7 +449,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     fieldLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       marginBottom: Space.xs + 2,
@@ -463,14 +463,14 @@ function createStyles(colors: ThemeColors) {
       minHeight: 52,
     },
     fieldPrefix: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textSecondary,
       marginRight: Space.xs,
     },
     fieldInput: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
       paddingVertical: Space.sm,
     },

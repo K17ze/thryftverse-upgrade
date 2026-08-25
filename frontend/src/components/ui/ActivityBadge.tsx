@@ -58,8 +58,8 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
     },
     trending: {
       icon: 'flame-outline',
-      iconColor: '#FF6B35',
-      glowColor: '#FF6B35',
+      iconColor: colors.warning,
+      glowColor: colors.warning,
       defaultLabel: 'trending',
       accent: true,
     },
@@ -86,8 +86,8 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
     },
     fastSelling: {
       icon: 'timer-outline',
-      iconColor: '#FF6B35',
-      glowColor: '#FF6B35',
+      iconColor: colors.warning,
+      glowColor: colors.warning,
       defaultLabel: 'selling fast',
       accent: true,
     },

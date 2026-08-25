@@ -934,6 +934,48 @@ export async function verifyAndNormalizeWebhook(
   };
 }
 
+/**
+ * Normalize a webhook payload WITHOUT signature verification.
+ *
+ * This is used by the webhook retry sweep, which re-processes events that
+ * were already signature-verified at receipt time.  The durable inbox row's
+ * existence proves the event was verified when first received — re-verifying
+ * with a re-serialized payload and no original signature header would always
+ * fail (Stripe generates a new signature on each delivery).
+ *
+ * NEVER use this for initial webhook receipt — always use
+ * `verifyAndNormalizeWebhook` for that.
+ */
+export async function normalizeWebhookEvent(
+  provider: ProviderSlug,
+  parsedBody: unknown
+): Promise<NormalizedWebhookEvent | null> {
+  const payload = asRecord(parsedBody);
+  const rawBody = typeof parsedBody === 'string' ? parsedBody : JSON.stringify(parsedBody ?? {});
+
+  if (provider === 'stripe') {
+    // The stored payload is the parsed Stripe Event object.  Cast it back
+    // to Stripe.Event for the normalizer — the structure is preserved.
+    return normalizeStripeEvent(payload as unknown as Stripe.Event, rawBody);
+  }
+  if (provider === 'razorpay') {
+    return normalizeRazorpayEvent(payload, rawBody);
+  }
+  if (provider === 'mollie') {
+    return await normalizeMollieEvent(payload, rawBody);
+  }
+  if (provider === 'flutterwave') {
+    return normalizeFlutterwaveEvent(payload, rawBody);
+  }
+  if (provider === 'tap') {
+    return normalizeTapEvent(payload, rawBody);
+  }
+  if (provider === 'wise') {
+    return normalizeWiseEvent(payload, rawBody);
+  }
+  return null;
+}
+
 export function resolveProviderFromPathSegment(providerSegment: string): ProviderSlug | null {
   const normalized = providerSegment.trim().toLowerCase();
   if (normalized === 'stripe') {

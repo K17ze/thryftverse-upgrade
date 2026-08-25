@@ -419,10 +419,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
     },
     errorTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
       marginTop: Space.md,
       marginBottom: Space.xs,
     },
@@ -451,10 +451,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center',
     },
     itemTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     itemCaption: {
       fontSize: Type.caption.size,
@@ -478,19 +478,19 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.sm,
     },
     confidenceLabel: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     confidenceBar: {
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.full,
       overflow: 'hidden',
     },
     confidenceFill: {
       height: '100%',
-      borderRadius: 2,
+      borderRadius: Radius.full,
     },
 
     // Reasons
@@ -529,13 +529,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     reasonWeightBar: {
       height: 3,
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
       backgroundColor: colors.border,
       overflow: 'hidden',
     },
     reasonWeightFill: {
       height: '100%',
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
     },
 
     // Actions
@@ -554,17 +554,17 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       // backgroundColor set inline
     },
     actionPrimaryText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     actionSecondary: {
       borderWidth: Stroke.standard,
     },
     actionSecondaryText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     removeAction: {
       flexDirection: 'row',

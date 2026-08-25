@@ -51,6 +51,10 @@ __pycache__/
 frontend/ios/
 frontend/android/
 
+# Kotlin/Gradle build output for local native modules
+frontend/modules/*/android/build/
+frontend/modules/*/ios/build/
+
 # local git metadata backup folder
 .git_disabled/
 
@@ -59,6 +63,7 @@ trash/
 
 # IDE
 .idea/
+.windsurf/
 
 # EAS Update code signing private keys (generated outside the repo)
 frontend/keys/
@@ -69,3 +74,12 @@ bugreport-*/
 
 # Flagship elevation planning docs (all .md)
 thryftverse_flagship_elevation_phase_2_*/
+
+# reg-suit visual regression output (actual + diff are ephemeral)
+frontend/.reg/
+frontend/report.html
+frontend/src/__tests__/__screenshots__/actual/
+frontend/src/__tests__/__screenshots__/diff/
+
+# Maestro screenshot capture output
+frontend/.maestro/screenshots/

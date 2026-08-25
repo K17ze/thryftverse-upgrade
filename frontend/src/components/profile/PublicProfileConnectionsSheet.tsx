@@ -5,9 +5,10 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  FlatList,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+// FlashList v2 measures actual item heights — no estimatedItemSize needed.
 import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
@@ -116,6 +117,15 @@ export function PublicProfileConnectionsSheet({
     );
   };
 
+  // FlashList does not support ItemSeparatorComponent — render the divider
+  // as part of each item so recycling stays correct.
+  const renderItemWithDivider = ({ item }: { item: FollowListUser }) => (
+    <View>
+      {renderItem({ item })}
+      <View style={styles.rowDivider} />
+    </View>
+  );
+
   const renderSkeletonRow = ({ index }: { index: number }) => (
     <View style={styles.skeletonRow} key={`skel-${index}`}>
       <View style={styles.skeletonAvatar} />
@@ -147,7 +157,7 @@ export function PublicProfileConnectionsSheet({
         />
 
         {isLoading ? (
-          <FlatList
+          <FlashList
             data={Array.from({ length: 8 })}
             keyExtractor={(_, i) => `skel-${i}`}
             renderItem={renderSkeletonRow}
@@ -183,10 +193,10 @@ export function PublicProfileConnectionsSheet({
             </Text>
           </View>
         ) : (
-          <FlatList
+          <FlashList
             data={items}
             keyExtractor={(item) => item.id}
-            renderItem={renderItem}
+            renderItem={renderItemWithDivider}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -199,7 +209,6 @@ export function PublicProfileConnectionsSheet({
             contentContainerStyle={{ paddingBottom: Space.xl, paddingTop: Space.sm }}
             showsVerticalScrollIndicator={false}
             key={`conn-${segment}`}
-            ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
           />
         )}
       </View>
@@ -218,10 +227,10 @@ function createStyles(colors: ThemeColors) {
   avatarWrap: {},
   avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
   avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   identityCol: { flex: 1 },
-  displayName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+  displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   skeletonAvatar: { width: Space.xl + Space.smMd, height: Space.xl + Space.smMd, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
@@ -230,8 +239,8 @@ function createStyles(colors: ThemeColors) {
   skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
   // States
   stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: Space.sm, paddingHorizontal: Space.md },
-  stateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  stateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
+  stateTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  stateSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
   footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   });
 }

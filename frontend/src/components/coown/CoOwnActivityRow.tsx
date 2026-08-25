@@ -113,7 +113,7 @@ export function CoOwnActivityRow({
           <Text style={[styles.amount, { color: colors.textPrimary }]}>{amountLabel}</Text>
         </View>
         <View style={styles.metaRow}>
-          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '18' : colors.coownDown + '18' }]}>
+          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
             <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]}>
               {isBuy ? 'BUY' : 'SELL'}
             </Text>
@@ -153,7 +153,7 @@ export function CoOwnActivityRow({
             Equity-market pattern: failed trades must disclose the cause
             and the user's recovery path — not just a badge. */}
         {(settlementState === 'failed' || settlementState === 'reversed') && failureReason && (
-          <View style={[styles.failureRow, { backgroundColor: colors.danger + '08' }]}>
+          <View style={[styles.failureRow, { backgroundColor: colors.dangerSubtle }]}>
             <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
             <Text style={[styles.failureText, { color: colors.danger }]} numberOfLines={2}>
               {failureReason}{recoveryAction ? ` · ${recoveryAction}` : ''}
@@ -196,12 +196,12 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
   amount: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     fontVariant: ['tabular-nums'],

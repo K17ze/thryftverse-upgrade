@@ -3,8 +3,8 @@
  * Geometry is reserved before media loads to prevent masonry reflow.
  */
 
-import React, { useState } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -15,17 +15,20 @@ import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { Listing } from '../domain';
-import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
+import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT, getListingCoverUri } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
 import { computeSustainabilityScore } from '../utils/sustainabilityScore';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
+import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
 import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 import { synthesizeListingIdentity } from '../services/listingMapper';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -82,6 +85,7 @@ function ProductCardV2Base({
   const toggleSaved = useStore((state) => state.toggleSavedProduct);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
@@ -111,7 +115,7 @@ function ProductCardV2Base({
   );
 
   // Sustainability — only surface A/B grades on the card to avoid visual
-  // noise on lower-impact items. Computed client-side from listing data.
+  // noise on lower-impact items. Returns null in production (fail-closed).
   const sustainabilityScore = React.useMemo(
     () =>
       computeSustainabilityScore({
@@ -124,9 +128,12 @@ function ProductCardV2Base({
     [item.condition, item.category, item.subcategory, item.brand, item.seller?.location],
   );
   const showSustainabilityChip =
-    !item.isSold && (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
+    !item.isSold &&
+    sustainabilityScore !== null &&
+    (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
 
   const handleToggleFav = () => {
+    if (!requireAuth('save_item')) return;
     haptic.light();
     toggleFav(item.id);
     if (!isFav) {
@@ -136,6 +143,7 @@ function ProductCardV2Base({
   };
 
   const handleToggleSave = () => {
+    if (!requireAuth('save_item')) return;
     haptic.light();
     toggleSaved(item.id);
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
@@ -155,13 +163,13 @@ function ProductCardV2Base({
   // in dark mode). Width is auto so longer conditions still fit at 20pt.
   const conditionBadge = (() => {
     if (item.isSold) {
-      return { label: 'Sold', bg: 'rgba(0,0,0,0.6)' };
+      return { label: 'Sold', bg: colors.overlay };
     }
     if (!item.condition) return null;
     const isNew = item.condition === 'New with tags';
     return {
       label: isNew ? 'New' : item.condition,
-      bg: isNew ? colors.success : 'rgba(0,0,0,0.55)',
+      bg: isNew ? colors.success : colors.overlay,
     };
   })();
 
@@ -173,7 +181,7 @@ function ProductCardV2Base({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -241,11 +249,11 @@ function ProductCardV2Base({
             existing stack icon. Only one indicator ever shows. */}
         {hasVideo ? (
           <View style={styles.videoIndicator}>
-            <Ionicons name="play" size={16} color="#FFFFFF" />
+            <Ionicons name="play" size={16} color={colors.scrimTextPrimary} />
           </View>
         ) : hasMultiple ? (
           <View style={styles.mediaBadge}>
-            <Ionicons name="images" size={13} color="#FFFFFF" />
+            <Ionicons name="images" size={13} color={colors.scrimTextPrimary} />
           </View>
         ) : null}
 
@@ -267,7 +275,7 @@ function ProductCardV2Base({
               <Ionicons
                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
                 size={20}
-                color={isSaved ? colors.brand : colors.textInverse}
+                color={isSaved ? colors.brand : colors.scrimTextPrimary}
                 style={styles.actionGlyph}
               />
             </AnimatedPressable>
@@ -278,7 +286,7 @@ function ProductCardV2Base({
               onToggle={handleToggleFav}
               size={21}
               activeColor={colors.danger}
-              inactiveColor={colors.textInverse}
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -302,7 +310,7 @@ function ProductCardV2Base({
           ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           </View>
           {sellerUsername ? (
             <View style={styles.sellerRow}>
@@ -326,7 +334,7 @@ function ProductCardV2Base({
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={10} color={colors.textMuted} />
+                  <Ionicons name="person" size={14} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
@@ -474,17 +482,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // the image remains visible behind the scrim.
   soldOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
   soldLabelCenter: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     // Fixed white ink — the scrim is always dark, so a theme text token
     // (black in dark mode) would render invisible.
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -498,7 +506,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 24,
     height: 24,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -506,7 +514,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     width: 28,
     height: 28,
     borderRadius: Radius.full,
@@ -523,7 +531,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // visible containment must have meaning. These controls don't need
   // containment; they need legibility. Shadow replaces circular chrome.
   actionGlyph: {
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -572,11 +580,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   // This is the Vestiaire/StockX move: price is the visual anchor.
   priceHero: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   sellerRow: {
@@ -594,14 +602,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 5,
   },
   sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.md,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
   },
   sellerAvatarPlaceholder: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.md,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -624,7 +632,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(200,50,50,0.65)',
+    backgroundColor: colors.danger,
     paddingHorizontal: Space.sm,
     paddingVertical: 5,
     borderRadius: Radius.md,
@@ -648,7 +656,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     // Fixed white ink — condition/price-drop badges always sit on a dark
     // or saturated background, so a theme text token (black in dark mode)
     // would be invisible.
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],
@@ -677,7 +685,10 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
 // tile metadata budget (audit §02): media + title + price + one state marker.
 
 interface ProductDiscoveryTileProps {
-  item: Listing;
+  /** Accepts the mock-data `Listing` or the production `DiscoveryListingSummary`
+   *  carried by a `ListingFeedUnit` — both expose the fields the tile reads
+   *  (id, images, title, price, condition, isSold, category). */
+  item: Listing | DiscoveryListingSummary;
   onPress: () => void;
   /** Width divided by height for the media frame. Defaults to the listing's
    *  real media geometry, falling back to the 3:4 portrait standard. */
@@ -685,6 +696,12 @@ interface ProductDiscoveryTileProps {
   /** Target display width in dp for CDN downscaling (optional). */
   downscaleWidth?: number;
   testID?: string;
+  /** Whether this item is currently saved. Drives the bookmark glyph state. */
+  isSaved?: boolean;
+  /** Toggle the saved state. When provided, a bookmark button renders over
+   *  the media (top-right) — the Pinterest/Depop quick-save pattern that
+   *  turns passive browsing into engagement. */
+  onSaveToggle?: () => void;
 }
 
 function ProductDiscoveryTileBase({
@@ -693,12 +710,26 @@ function ProductDiscoveryTileBase({
   aspectRatio,
   downscaleWidth,
   testID,
+  isSaved,
+  onSaveToggle,
 }: ProductDiscoveryTileProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
+  const haptic = useHaptic();
   const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
   const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
-  const primaryImage = (item.images ?? [])[0] ?? '';
+  // Use getListingCoverUri to always pick an image (not a video) — ExpoImage
+  // cannot render video URIs, and the discovery tile is image-only.
+  const primaryImage = getListingCoverUri(item.images ?? [], '');
+  const showSaveButton = !!onSaveToggle;
+  // Category-sensitive focal point for art-directed crops (AGENTS.md §15:
+  // "Do not rely on cover blindly"). Converted to ExpoImage's
+  // `contentPosition` format — the same mechanism CachedImage uses.
+  const focalPoint = getCategoryFocalPoint(item.category);
+  const contentPosition = {
+    top: `${Math.round(focalPoint.y * 100)}%`,
+    left: `${Math.round(focalPoint.x * 100)}%`,
+  };
 
   // Condition badge — single state marker only (sold > condition). Sits over
   // the media on the semantic `overlay` scrim; "New with tags" uses the
@@ -714,13 +745,25 @@ function ProductDiscoveryTileBase({
         }
       : null;
 
+  const handleSavePress = useCallback(
+    (e: { stopPropagation?: () => void; preventDefault?: () => void }) => {
+      // Prevent the press from bubbling to the tile's onPress (which would
+      // open the detail page when the user just wanted to save).
+      e.stopPropagation?.();
+      e.preventDefault?.();
+      haptic.light();
+      onSaveToggle?.();
+    },
+    [haptic, onSaveToggle],
+  );
+
   return (
     <AnimatedPressable
       onPress={onPress}
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -730,6 +773,7 @@ function ProductDiscoveryTileBase({
             source={{ uri: primaryImage }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            contentPosition={contentPosition}
             recyclingKey={item.id}
             placeholder={colors.surfaceAlt}
             transition={200}
@@ -743,10 +787,28 @@ function ProductDiscoveryTileBase({
             <Text style={tileStyles.conditionText}>{conditionBadge.label}</Text>
           </View>
         ) : null}
+        {showSaveButton ? (
+          <Pressable
+            onPress={handleSavePress}
+            style={tileStyles.saveHitTarget}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
+            accessibilityHint="Toggles this product in your saved items"
+            accessibilityState={{ checked: isSaved }}
+          >
+            <Ionicons
+              name={isSaved ? 'bookmark' : 'bookmark-outline'}
+              size={18}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
+              style={[tileStyles.saveGlyph, { textShadowColor: colors.shadow }]}
+            />
+          </Pressable>
+        ) : null}
       </View>
       <View style={tileStyles.info}>
-        <Text style={tileStyles.title} numberOfLines={2}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+        <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
   );
@@ -780,29 +842,52 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],
   },
-  info: {
-    paddingTop: Space.sm,
-    paddingHorizontal: Space.xs,
-    gap: Space.xxs,
+  // Save button — transparent 36pt hit target (AGENTS.md §4: separate hit
+  // area from visible shape) with a glyph that legibility comes from the
+  // shadow, not from decorative circular chrome. Top-right over the media.
+  saveHitTarget: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  // textShadowColor is set inline from `colors.shadow` — the static style
+  // sheet cannot reference theme tokens, so only the geometry lives here.
+  saveGlyph: {
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  info: {
+    paddingTop: Space.xs,
+    paddingHorizontal: Space.xxs,
+    gap: 0,
+  },
+  // Title — 1 line, caption size, muted. The image is the dominant object;
+  // the title is a quiet label, not a competing headline. Pinterest pattern:
+  // media dominates, text recedes.
   title: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  // Price — body size, bold, primary. The price is the actionable metadata
+  // for a marketplace tile; it carries more weight than the title.
+  price: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  price: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
 });

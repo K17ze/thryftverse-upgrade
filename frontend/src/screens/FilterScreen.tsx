@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   AnimatedPressable,
 } from '../components/AnimatedPressable';
@@ -40,11 +40,11 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
+import { useFeatureFlag } from '../analytics';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
-const OVERLAY_BG = 'rgba(0,0,0,0.45)';
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
@@ -56,8 +56,16 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string; accessibilityLabel
   { value: 'Price: Low to High', label: 'Price: Low to High', accessibilityLabel: 'Sort by price low to high' },
   { value: 'Price: High to Low', label: 'Price: High to Low', accessibilityLabel: 'Sort by price high to low' },
   { value: 'Most liked', label: 'Most liked', accessibilityLabel: 'Sort by most liked items' },
-  { value: 'Ending soon', label: 'Ending soon', accessibilityLabel: 'Sort by ending soon' },
 ];
+
+// "Ending soon" only applies to auction listings — it is meaningless for
+// fixed-price browse/search, so it is excluded unless the filter context is
+// an auction category (mirrors BrowseScreen.getSortOptions).
+const AUCTION_SORT_OPTION: { value: SortOption; label: string; accessibilityLabel: string } = {
+  value: 'Ending soon',
+  label: 'Ending soon',
+  accessibilityLabel: 'Sort by ending soon',
+};
 
 const CONDITION_OPTIONS: Array<{ value: ConditionOption; label: string; accessibilityLabel: string }> = [
   { value: 'Any', label: 'Any', accessibilityLabel: 'Filter any condition' },
@@ -106,9 +114,23 @@ export default function FilterScreen() {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Feature flag — gates the advanced filter section (quick price presets).
+  // Additive enhancement; absent when the flag is off (current behaviour).
+  // When enabled, an "Advanced" collapsible section surfaces quick price
+  // range presets that set the existing priceMin/priceMax fields.
+  const advancedFiltersEnabled = useFeatureFlag('advanced_filters');
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
+
+  // "Ending soon" is only meaningful for auction listings. Include it solely
+  // when the filter context is an auction category (mirrors BrowseScreen).
+  const isAuctionContext = categoryId.toLowerCase().includes('auction');
+  const sortOptions = React.useMemo(
+    () => (isAuctionContext ? [...SORT_OPTIONS, AUCTION_SORT_OPTION] : SORT_OPTIONS),
+    [isAuctionContext],
+  );
 
   const [activeSort, setActiveSort] = useState<SortOption>(browseFilters.sort);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(browseFilters.brands);
@@ -120,6 +142,20 @@ export default function FilterScreen() {
   const [sustainableOnly, setSustainableOnly] = useState<boolean>(browseFilters.sustainableOnly);
   const [priceMin, setPriceMin] = useState<string>(browseFilters.priceMin != null ? String(browseFilters.priceMin) : '');
   const [priceMax, setPriceMax] = useState<string>(browseFilters.priceMax != null ? String(browseFilters.priceMax) : '');
+
+  // Collapsible section state — progressive disclosure per 2026 mobile filter UX
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['sort', 'price']));
+  const toggleSection = useCallback((section: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  }, []);
 
   const translateY = useSharedValue(height);
   const contextY = useSharedValue(0);
@@ -164,19 +200,14 @@ export default function FilterScreen() {
     return { opacity };
   });
 
-  const MOCK_BRANDS = ['Nike', 'Adidas', 'Stussy', 'Carhartt', 'Arc\'teryx', 'Levi\'s', 'Off-White', 'Zara'];
-  const MOCK_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-
   const brandOptions = React.useMemo(() => {
-    const derived = Array.from(
+    return Array.from(
       new Set(
         listings
           .map((listing) => listing.brand?.trim())
           .filter((brand): brand is string => Boolean(brand)),
       ),
     );
-
-    return derived.length > 0 ? derived : MOCK_BRANDS;
   }, [listings]);
 
   const visibleBrandOptions = React.useMemo(() => {
@@ -188,15 +219,13 @@ export default function FilterScreen() {
   }, [brandOptions, showAllBrands]);
 
   const sizeOptions = React.useMemo(() => {
-    const derived = Array.from(
+    return Array.from(
       new Set(
         listings
           .map((listing) => listing.size?.trim())
           .filter((size): size is string => Boolean(size)),
       ),
     );
-
-    return derived.length > 0 ? derived : MOCK_SIZES;
   }, [listings]);
 
   const filterStatus = React.useMemo(
@@ -297,7 +326,9 @@ export default function FilterScreen() {
       if (minVal != null && !Number.isNaN(minVal) && listing.price < minVal) return false;
       if (maxVal != null && !Number.isNaN(maxVal) && listing.price > maxVal) return false;
 
-      // Sustainable — client-side heuristic: only A/B graded items.
+      // Sustainable — filters by seller-applied tags / heuristic grade.
+      // Returns false in production (no real data), so the filter yields no
+      // results until a backend impact service or seller tags exist.
       if (
         sustainableOnly &&
         !isSustainableGrade({
@@ -366,12 +397,21 @@ export default function FilterScreen() {
   const hasActiveSelection =
     selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || sustainableOnly || priceMin.trim() !== '' || priceMax.trim() !== '';
 
+  const activeFilterCount =
+    selectedBrands.length
+    + selectedSizes.length
+    + (selectedCondition !== 'Any' ? 1 : 0)
+    + (activeSort !== 'Recommended' ? 1 : 0)
+    + (sustainableOnly ? 1 : 0)
+    + (priceMin.trim() !== '' ? 1 : 0)
+    + (priceMax.trim() !== '' ? 1 : 0);
+
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
 
   return (
     <View style={styles.container}>
-      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: OVERLAY_BG }, overlayStyle]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={closeBottomSheet} />
       </Reanimated.View>
 
@@ -383,7 +423,14 @@ export default function FilterScreen() {
           </View>
 
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Filter & Sort</Text>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle}>Filter & Sort</Text>
+              {activeFilterCount > 0 && (
+                <View style={styles.activeCountBadge}>
+                  <Text style={styles.activeCountBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </View>
             <AppButton
               title="Clear"
               onPress={handleClear}
@@ -409,7 +456,7 @@ export default function FilterScreen() {
               accessibilityLabel="Open category tree"
               accessibilityHint="Shows the full category tree for this filter context"
             >
-              <Ionicons name="funnel-outline" size={14} color={colors.textPrimary} />
+              <Ionicons name="funnel-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
               <Text style={styles.contextText} numberOfLines={1}>
                 {title ?? categoryId}
               </Text>
@@ -452,7 +499,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Save preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="checkmark" size={18} color={colors.surface} />
+                    <Ionicons name="checkmark" size={18} color={colors.surface} aria-hidden={true} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.presetCancelBtn}
@@ -460,7 +507,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Cancel saving preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                    <Ionicons name="close" size={18} color={colors.textMuted} aria-hidden={true} />
                   </AnimatedPressable>
                 </View>
               ) : (
@@ -473,7 +520,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Apply filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="bookmark" size={12} color={colors.brand} />
+                        <Ionicons name="bookmark" size={12} color={colors.brand} aria-hidden={true} />
                         <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
                       </AnimatedPressable>
                       <AnimatedPressable
@@ -482,7 +529,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Remove filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                        <Ionicons name="close-circle" size={16} color={colors.textMuted} aria-hidden={true} />
                       </AnimatedPressable>
                     </View>
                   ))}
@@ -499,7 +546,7 @@ export default function FilterScreen() {
               accessibilityLabel="Save current filters as a preset"
               accessibilityRole="button"
             >
-              <Ionicons name="bookmark-outline" size={14} color={colors.brand} />
+              <Ionicons name="bookmark-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
             </AnimatedPressable>
           )}
@@ -520,243 +567,413 @@ export default function FilterScreen() {
               renderLoadingState()
             ) : (
               <>
-                {/* Sort Section */}
-                <Text style={styles.sectionHeading}>Sort By</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-                  <AppSegmentControl
-                    options={SORT_OPTIONS}
-                    value={activeSort}
-                    onChange={setActiveSort}
-                    optionStyle={styles.chip}
-                    optionActiveStyle={styles.chipActive}
-                    optionTextStyle={styles.chipText}
-                    optionTextActiveStyle={styles.chipTextActive}
-                  />
-                </ScrollView>
-
-                <View style={styles.sectionDivider} />
-
-                {/* Brand Section */}
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeading}>Brand</Text>
-                  {brandOptions.length > 8 ? (
-                    <AppButton
-                      title={showAllBrands ? 'Show less' : 'See all'}
-                      onPress={() => setShowAllBrands((current) => !current)}
-                      variant="secondary"
-                      size="sm"
-                      style={styles.seeAllBtn}
-                      titleStyle={styles.seeAllText}
-                      accessibilityLabel={showAllBrands ? 'Show fewer brand options' : 'Show all brand options'}
+                {/* Sort Section — collapsible */}
+                <Pressable
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('sort')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('sort') ? 'Collapse sort section' : 'Expand sort section'}
+                  accessibilityState={{ expanded: expandedSections.has('sort') }}
+                >
+                  <Text style={styles.sectionHeading}>Sort By</Text>
+                  <Ionicons name={expandedSections.has('sort') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('sort') && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+                    <AppSegmentControl
+                      options={sortOptions}
+                      value={activeSort}
+                      onChange={setActiveSort}
+                      optionStyle={styles.chip}
+                      optionActiveStyle={styles.chipActive}
+                      optionTextStyle={styles.chipText}
+                      optionTextActiveStyle={styles.chipTextActive}
                     />
-                  ) : null}
-                </View>
-                <View style={styles.wrapContainer}>
-                  {visibleBrandOptions.map(b => {
-                    const isActive = selectedBrands.includes(b);
-                    return (
-                      <AppButton
-                        key={b}
-                        title={b}
-                        variant="secondary"
-                        size="sm"
-                        style={[styles.chip, isActive && styles.chipActive]}
-                        titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                        onPress={() => toggleBrand(b)}
-                        accessibilityLabel={`Toggle brand filter ${b}`}
-                      />
-                    );
-                  })}
-                </View>
+                  </ScrollView>
+                )}
 
                 <View style={styles.sectionDivider} />
 
-                {/* Size Section */}
-                <Text style={styles.sectionHeading}>Size</Text>
-
-                {/* My Sizes — saved size profile for quick application */}
-                {mySizes.length > 0 ? (
-                  <View style={styles.mySizesRow}>
-                    <Text style={styles.mySizesLabel}>My sizes:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mySizesScroll}>
-                      {mySizes.map(s => {
-                        const isActive = selectedSizes.includes(s);
-                        return (
-                          <AppButton
-                            key={s}
-                            title={s}
-                            variant="secondary"
-                            size="sm"
-                            style={[styles.chip, styles.sizeChip, styles.mySizeChip, isActive && styles.chipActive]}
-                            titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                            onPress={() => toggleSize(s)}
-                            accessibilityLabel={`Toggle your saved size ${s}`}
-                          />
-                        );
-                      })}
-                    </ScrollView>
+                {/* Brand Section — collapsible */}
+                <Pressable
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('brand')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('brand') ? 'Collapse brand section' : 'Expand brand section'}
+                  accessibilityState={{ expanded: expandedSections.has('brand') }}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeading}>Brand</Text>
+                    {selectedBrands.length > 0 && (
+                      <View style={styles.sectionCountBadge}>
+                        <Text style={styles.sectionCountBadgeText}>{selectedBrands.length}</Text>
+                      </View>
+                    )}
                   </View>
-                ) : null}
-
-                <View style={styles.wrapContainer}>
-                  {sizeOptions.map(s => {
-                    const isActive = selectedSizes.includes(s);
-                    const isMySize = mySizes.includes(s);
-                    return (
-                      <Pressable
-                        key={s}
-                        onLongPress={() => {
-                          toggleMySize(s);
-                          haptics.press();
-                          show(
-                            mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
-                            'success'
-                          );
-                        }}
-                        delayLongPress={400}
-                      >
+                  <Ionicons name={expandedSections.has('brand') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('brand') && (
+                  <>
+                    {brandOptions.length > 8 ? (
+                      <View style={styles.seeAllRow}>
                         <AppButton
-                          title={s}
-                          icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
+                          title={showAllBrands ? 'Show less' : 'See all'}
+                          onPress={() => setShowAllBrands((current) => !current)}
+                          variant="secondary"
+                          size="sm"
+                          style={styles.seeAllBtn}
+                          titleStyle={styles.seeAllText}
+                          accessibilityLabel={showAllBrands ? 'Show fewer brand options' : 'Show all brand options'}
+                        />
+                      </View>
+                    ) : null}
+                    <View style={styles.wrapContainer}>
+                      {visibleBrandOptions.length > 0 ? (
+                        visibleBrandOptions.map(b => {
+                          const isActive = selectedBrands.includes(b);
+                          return (
+                            <AppButton
+                              key={b}
+                              title={b}
+                              variant="secondary"
+                              size="sm"
+                              style={[styles.chip, isActive && styles.chipActive]}
+                              titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                              onPress={() => toggleBrand(b)}
+                              accessibilityLabel={`Toggle brand filter ${b}`}
+                            />
+                          );
+                        })
+                      ) : (
+                        <Text style={styles.emptySectionText}>No brands in this category yet.</Text>
+                      )}
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.sectionDivider} />
+
+                {/* Size Section — collapsible */}
+                <Pressable
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('size')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('size') ? 'Collapse size section' : 'Expand size section'}
+                  accessibilityState={{ expanded: expandedSections.has('size') }}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeading}>Size</Text>
+                    {selectedSizes.length > 0 && (
+                      <View style={styles.sectionCountBadge}>
+                        <Text style={styles.sectionCountBadgeText}>{selectedSizes.length}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Ionicons name={expandedSections.has('size') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('size') && (
+                  <>
+                    {/* My Sizes — saved size profile for quick application */}
+                    {mySizes.length > 0 ? (
+                      <View style={styles.mySizesRow}>
+                        <Text style={styles.mySizesLabel}>My sizes:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mySizesScroll}>
+                          {mySizes.map(s => {
+                            const isActive = selectedSizes.includes(s);
+                            return (
+                              <AppButton
+                                key={s}
+                                title={s}
+                                variant="secondary"
+                                size="sm"
+                                style={[styles.chip, styles.sizeChip, styles.mySizeChip, isActive && styles.chipActive]}
+                                titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                                onPress={() => toggleSize(s)}
+                                accessibilityLabel={`Toggle your saved size ${s}`}
+                              />
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.wrapContainer}>
+                      {sizeOptions.length > 0 ? (
+                        sizeOptions.map(s => {
+                          const isActive = selectedSizes.includes(s);
+                          const isMySize = mySizes.includes(s);
+                          return (
+                            <Pressable
+                              key={s}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              onLongPress={() => {
+                                toggleMySize(s);
+                                haptics.press();
+                                show(
+                                  mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
+                                  'success'
+                                );
+                              }}
+                              delayLongPress={400}
+                            accessibilityRole="switch" accessibilityLabel="Rate"
+                            >
+                              <AppButton
+                                title={s}
+                                icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
+                                iconContainerStyle={styles.chipIconWrap}
+                                variant="secondary"
+                                size="sm"
+                                style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
+                                titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                                onPress={() => toggleSize(s)}
+                                accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
+                              />
+                            </Pressable>
+                          );
+                        })
+                      ) : (
+                        <Text style={styles.emptySectionText}>No sizes in this category yet.</Text>
+                      )}
+                    </View>
+
+                    {/* Save current sizes as my sizes */}
+                    {selectedSizes.length > 0 ? (
+                      <View style={styles.saveSizesRow}>
+                        <AppButton
+                          title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
+                          icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={16} color={colors.brand} aria-hidden={true} /> : undefined}
                           iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
-                          style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
-                          titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                          onPress={() => toggleSize(s)}
-                          accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
+                          style={styles.saveSizesBtn}
+                          titleStyle={styles.saveSizesBtnText}
+                          onPress={() => {
+                            // Merge current selection into my sizes
+                            const merged = [...new Set([...mySizes, ...selectedSizes])];
+                            setMySizes(merged);
+                            show(`Saved ${selectedSizes.length} size${selectedSizes.length === 1 ? '' : 's'} to your profile`, 'success');
+                          }}
+                          accessibilityLabel="Save current size selection to your profile"
                         />
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Save current sizes as my sizes */}
-                {selectedSizes.length > 0 ? (
-                  <View style={styles.saveSizesRow}>
-                    <AppButton
-                      title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={colors.brand} /> : undefined}
-                      iconContainerStyle={styles.chipIconWrap}
-                      variant="secondary"
-                      size="sm"
-                      style={styles.saveSizesBtn}
-                      titleStyle={styles.saveSizesBtnText}
-                      onPress={() => {
-                        // Merge current selection into my sizes
-                        const merged = [...new Set([...mySizes, ...selectedSizes])];
-                        setMySizes(merged);
-                        show(`Saved ${selectedSizes.length} size${selectedSizes.length === 1 ? '' : 's'} to your profile`, 'success');
-                      }}
-                      accessibilityLabel="Save current size selection to your profile"
-                    />
-                  </View>
-                ) : null}
+                      </View>
+                    ) : null}
+                  </>
+                )}
 
                 <View style={styles.sectionDivider} />
 
-                {/* Condition Section */}
-                <Text style={styles.sectionHeading}>Condition</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-                  <AppSegmentControl
-                    options={CONDITION_OPTIONS}
-                    value={selectedCondition}
-                    onChange={setSelectedCondition}
-                    optionStyle={styles.chip}
-                    optionActiveStyle={styles.chipActive}
-                    optionTextStyle={styles.chipText}
-                    optionTextActiveStyle={styles.chipTextActive}
-                  />
-                </ScrollView>
-
-                <View style={styles.sectionDivider} />
-
-                {/* Sustainability Section — client-side heuristic toggle */}
-                <Text style={styles.sectionHeading}>Sustainability</Text>
+                {/* Condition Section — collapsible */}
                 <Pressable
-                  onPress={() => {
-                    haptics.press();
-                    setSustainableOnly((prev) => !prev);
-                  }}
-                  style={styles.sustainableRow}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: sustainableOnly }}
-                  accessibilityLabel="Toggle sustainable items only"
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('condition')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('condition') ? 'Collapse condition section' : 'Expand condition section'}
+                  accessibilityState={{ expanded: expandedSections.has('condition') }}
                 >
-                  <View style={styles.sustainableLabelWrap}>
-                    <Ionicons
-                      name="leaf"
-                      size={16}
-                      color={sustainableOnly ? colors.success : colors.textSecondary}
-                    />
-                    <View style={styles.sustainableTextWrap}>
-                      <Text style={[styles.sustainableTitle, { color: colors.textPrimary }]}>
-                        Sustainable only
-                      </Text>
-                      <Text style={[styles.sustainableCaption, { color: colors.textMuted }]}>
-                        Estimated grade A or B items
-                      </Text>
-                    </View>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeading}>Condition</Text>
+                    {selectedCondition !== 'Any' && (
+                      <View style={styles.sectionCountBadge}>
+                        <Text style={styles.sectionCountBadgeText}>1</Text>
+                      </View>
+                    )}
                   </View>
-                  <View
-                    style={[
-                      styles.sustainableToggle,
-                      {
-                        borderColor: sustainableOnly ? colors.success : colors.border,
-                        backgroundColor: sustainableOnly ? `${colors.success}22` : colors.surfaceAlt,
-                      },
-                    ]}
+                  <Ionicons name={expandedSections.has('condition') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('condition') && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+                    <AppSegmentControl
+                      options={CONDITION_OPTIONS}
+                      value={selectedCondition}
+                      onChange={setSelectedCondition}
+                      optionStyle={styles.chip}
+                      optionActiveStyle={styles.chipActive}
+                      optionTextStyle={styles.chipText}
+                      optionTextActiveStyle={styles.chipTextActive}
+                    />
+                  </ScrollView>
+                )}
+
+                <View style={styles.sectionDivider} />
+
+                {/* Sustainability Section — collapsible toggle */}
+                <Pressable
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('sustainability')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('sustainability') ? 'Collapse sustainability section' : 'Expand sustainability section'}
+                  accessibilityState={{ expanded: expandedSections.has('sustainability') }}
+                >
+                  <Text style={styles.sectionHeading}>Sustainability</Text>
+                  <Ionicons name={expandedSections.has('sustainability') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('sustainability') && (
+                  <Pressable
+                    onPress={() => {
+                      haptics.press();
+                      setSustainableOnly((prev) => !prev);
+                    }}
+                    style={styles.sustainableRow}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: sustainableOnly }}
+                    accessibilityLabel="Toggle sustainable items only"
                   >
+                    <View style={styles.sustainableLabelWrap}>
+                      <Ionicons
+                        name="leaf"
+                        size={16}
+                        color={sustainableOnly ? colors.success : colors.textSecondary}
+                        aria-hidden={true}
+                      />
+                      <View style={styles.sustainableTextWrap}>
+                        <Text style={[styles.sustainableTitle, { color: colors.textPrimary }]}>
+                          Sustainable only
+                        </Text>
+                        <Text style={[styles.sustainableCaption, { color: colors.textMuted }]}>
+                          Items tagged sustainable by sellers
+                        </Text>
+                      </View>
+                    </View>
                     <View
                       style={[
-                        styles.sustainableToggleThumb,
+                        styles.sustainableToggle,
                         {
-                          backgroundColor: sustainableOnly ? colors.success : colors.textMuted,
-                          alignSelf: sustainableOnly ? 'flex-end' : 'flex-start',
+                          borderColor: sustainableOnly ? colors.success : colors.border,
+                          backgroundColor: sustainableOnly ? `${colors.success}22` : colors.surfaceAlt,
                         },
                       ]}
-                    />
-                  </View>
-                </Pressable>
+                    >
+                      <View
+                        style={[
+                          styles.sustainableToggleThumb,
+                          {
+                            backgroundColor: sustainableOnly ? colors.success : colors.textMuted,
+                            alignSelf: sustainableOnly ? 'flex-end' : 'flex-start',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </Pressable>
+                )}
 
                 <View style={styles.sectionDivider} />
 
-                {/* Price Range Section */}
-                <Text style={styles.sectionHeading}>Price Range</Text>
-                <View style={styles.priceRangeRow}>
-                  <View style={styles.priceInputWrap}>
-                    <Text style={styles.priceInputLabel}>Min</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="£0"
-                      placeholderTextColor={colors.textMuted}
-                      value={priceMin}
-                      onChangeText={setPriceMin}
-                      keyboardType="numeric"
-                      returnKeyType="done"
-                      accessibilityLabel="Minimum price in pounds"
-                    />
+                {/* Price Range Section — collapsible */}
+                <Pressable
+                  style={styles.collapsibleHeader}
+                  onPress={() => toggleSection('price')}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandedSections.has('price') ? 'Collapse price section' : 'Expand price section'}
+                  accessibilityState={{ expanded: expandedSections.has('price') }}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeading}>Price Range</Text>
+                    {(priceMin.trim() !== '' || priceMax.trim() !== '') && (
+                      <View style={styles.sectionCountBadge}>
+                        <Text style={styles.sectionCountBadgeText}>
+                          {[priceMin.trim() !== '', priceMax.trim() !== ''].filter(Boolean).length}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.priceRangeDash}>—</Text>
-                  <View style={styles.priceInputWrap}>
-                    <Text style={styles.priceInputLabel}>Max</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="No limit"
-                      placeholderTextColor={colors.textMuted}
-                      value={priceMax}
-                      onChangeText={setPriceMax}
-                      keyboardType="numeric"
-                      returnKeyType="done"
-                      accessibilityLabel="Maximum price in pounds"
-                    />
+                  <Ionicons name={expandedSections.has('price') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+                {expandedSections.has('price') && (
+                  <View style={styles.priceRangeRow}>
+                    <View style={styles.priceInputWrap}>
+                      <Text style={styles.priceInputLabel}>Min</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        placeholder="£0"
+                        placeholderTextColor={colors.textMuted}
+                        value={priceMin}
+                        onChangeText={setPriceMin}
+                        keyboardType="numeric"
+                        returnKeyType="done"
+                        accessibilityLabel="Minimum price in pounds"
+                      />
+                    </View>
+                    <Text style={styles.priceRangeDash}>—</Text>
+                    <View style={styles.priceInputWrap}>
+                      <Text style={styles.priceInputLabel}>Max</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        placeholder="No limit"
+                        placeholderTextColor={colors.textMuted}
+                        value={priceMax}
+                        onChangeText={setPriceMax}
+                        keyboardType="numeric"
+                        returnKeyType="done"
+                        accessibilityLabel="Maximum price in pounds"
+                      />
+                    </View>
                   </View>
-                </View>
+                )}
+
+                {/* Advanced Section — collapsible, gated by the
+                    advanced_filters feature flag. Additive; absent when the
+                    flag is off (current behaviour). Surfaces quick price
+                    range presets that set the existing priceMin/priceMax
+                    fields — a progressive-disclosure shortcut for power
+                    users. */}
+                {advancedFiltersEnabled ? (
+                  <>
+                    <View style={styles.sectionDivider} />
+                    <Pressable
+                      style={styles.collapsibleHeader}
+                      onPress={() => toggleSection('advanced')}
+                      accessibilityRole="button"
+                      accessibilityLabel={expandedSections.has('advanced') ? 'Collapse advanced section' : 'Expand advanced section'}
+                      accessibilityState={{ expanded: expandedSections.has('advanced') }}
+                    >
+                      <Text style={styles.sectionHeading}>Advanced</Text>
+                      <Ionicons name={expandedSections.has('advanced') ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+                    </Pressable>
+                    {expandedSections.has('advanced') && (
+                      <View style={styles.wrapContainer}>
+                        {[
+                          { label: 'Under £20', min: '', max: '20' },
+                          { label: '£20 – £50', min: '20', max: '50' },
+                          { label: '£50 – £100', min: '50', max: '100' },
+                          { label: '£100+', min: '100', max: '' },
+                        ].map((preset) => {
+                          const isActive = priceMin === preset.min && priceMax === preset.max;
+                          return (
+                            <AppButton
+                              key={preset.label}
+                              title={preset.label}
+                              variant="secondary"
+                              size="sm"
+                              style={[styles.chip, isActive && styles.chipActive]}
+                              titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                              onPress={() => {
+                                haptics.press();
+                                setPriceMin(preset.min);
+                                setPriceMax(preset.max);
+                              }}
+                              accessibilityLabel={`Apply price preset: ${preset.label}`}
+                            />
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                ) : null}
               </>
             )}
 
-            {/* Sticky Bottom Action */}
+            {/* Sticky Bottom Action — Apply + Reset side by side */}
             <View style={styles.footer}>
+              <AppButton
+                style={[styles.resetBtn, !hasActiveSelection && styles.resetBtnDisabled]}
+                title="Reset"
+                titleStyle={[styles.resetBtnText, !hasActiveSelection && styles.resetBtnTextDisabled]}
+                onPress={handleClear}
+                disabled={!hasActiveSelection}
+                variant="secondary"
+                size="lg"
+                accessibilityLabel="Reset all filters"
+              />
               <AppButton
                 style={[styles.applyBtn, showFilterLoadingState && styles.applyBtnDisabled]}
                 title={applyLabel}
@@ -787,7 +1004,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -(Space.sm - 2) },
     shadowOpacity: 0.18,
     shadowRadius: Space.md,
@@ -811,7 +1028,26 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.md,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
   headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceList.letterSpacing },
+  activeCountBadge: {
+    minWidth: Space.lg + 2,
+    height: Space.lg + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xs + 2,
+  },
+  activeCountBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: colors.textInverse,
+  },
   clearBtn: {
     minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
@@ -819,7 +1055,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: colors.brand, fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  clearText: { color: colors.brand, fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.sm,
@@ -830,7 +1066,7 @@ function createStyles(colors: ThemeColors) {
   },
   statusMeta: {
     color: colors.textMuted,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   contextActionRow: {
@@ -885,7 +1121,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   presetsSaveLink: {
@@ -900,21 +1136,19 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'transparent',
-    borderRadius: Radius.xl,
+    borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
-    paddingLeft: Space.sm + 2,
-    paddingRight: Space.xs,
-    paddingVertical: Space.xs - 1,
+    minHeight: Control.chrome,
+    paddingHorizontal: Space.sm + 2,
   },
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs + 2,
   },
   presetChipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     maxWidth: Space.xxl + Space.xxl + Space.lg,
@@ -925,6 +1159,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: Space.xs,
   },
   presetInputWrap: {
     flexDirection: 'row',
@@ -975,7 +1210,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: 'transparent',
   },
   presetsEmptyCtaText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.brand,
   },
@@ -1008,19 +1243,45 @@ function createStyles(colors: ThemeColors) {
   },
 
   sectionHeading: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     paddingHorizontal: Space.xl,
-    marginBottom: Space.md,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    marginBottom: 0,
+    letterSpacing: Type.body.letterSpacing,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: Space.md + Space.xs,
-    marginBottom: Space.sm + Space.xs,
+    gap: Space.xs + 2,
+    flex: 1,
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: Space.xl,
+    paddingVertical: Space.md,
+    minHeight: Control.hit,
+  },
+  sectionCountBadge: {
+    minWidth: Space.md + 2,
+    height: Space.md + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xs,
+  },
+  sectionCountBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    color: colors.textSecondary,
+  },
+  seeAllRow: {
+    paddingHorizontal: Space.xl,
+    marginBottom: Space.sm,
   },
   seeAllBtn: {
     minHeight: Control.chromeCompact,
@@ -1038,6 +1299,14 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     paddingHorizontal: Space.xl,
     gap: Space.sm,
+  },
+
+  emptySectionText: {
+    paddingHorizontal: Space.xl,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
 
   chip: {
@@ -1065,7 +1334,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   mySizesLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -1087,7 +1356,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveSizesBtnText: {
     color: colors.brand,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
@@ -1120,7 +1389,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'column',
   },
   sustainableTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1153,6 +1422,9 @@ function createStyles(colors: ThemeColors) {
   footer: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     paddingHorizontal: Space.md + Space.xs,
     paddingTop: Space.md - 2,
     paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg - 2,
@@ -1160,8 +1432,28 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border,
   },
+  resetBtn: {
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+    minHeight: Space.xxl + Space.xs,
+    paddingHorizontal: Space.lg,
+  },
+  resetBtnDisabled: {
+    opacity: 0.4,
+  },
+  resetBtnText: {
+    color: colors.textSecondary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.wide,
+  },
+  resetBtnTextDisabled: {
+    color: colors.textMuted,
+  },
   applyBtn: {
-    width: '100%',
+    flex: 1,
     minHeight: Space.xxl + Space.xs,
     borderRadius: Radius.xl,
   },
@@ -1170,7 +1462,7 @@ function createStyles(colors: ThemeColors) {
   },
   applyBtnText: {
     color: colors.textPrimary,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.wide,
   },
@@ -1206,7 +1498,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
   },
   priceRangeDash: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.md + Space.xs,

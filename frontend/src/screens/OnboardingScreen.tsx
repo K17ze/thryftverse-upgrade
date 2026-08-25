@@ -20,7 +20,9 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
+import { track, trackFunnelStep } from '../analytics/track';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 
@@ -48,32 +50,40 @@ interface OnboardingSlide {
   iconBackground: string;
   title: string;
   body: string;
+  /** Honest qualitative proof — no fabricated metrics. Per §11, we never
+   *  invent seller counts or transaction volumes. This is a real, verifiable
+   *  claim about how the surface works, not a number. */
+  proof: string;
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
     icon: 'compass-outline',
     iconBackground: 'discovery',
-    title: 'Discover unique pieces',
-    body: 'Browse curated fashion from independent sellers and creators. Every piece is hand-listed — no mass-market noise, just the good stuff.',
+    title: 'Find pieces no one else has',
+    body: 'Curated fashion from independent sellers — hand-listed, never mass-market.',
+    proof: 'Every piece is listed by a real seller, not a warehouse.',
   },
   {
     icon: 'people-outline',
     iconBackground: 'commerceTrust',
-    title: 'Co-Own what you love',
-    body: 'Fractional ownership for high-value items. Buy units in pieces you believe in, trade them on the open market, and build a portfolio of things you genuinely love.',
+    title: 'Own a piece of what you love',
+    body: 'Buy units in high-value pieces. Trade them when you are ready — 1% platform fee.',
+    proof: 'Start with one unit. Build a portfolio of things you believe in.',
   },
   {
     icon: 'trophy-outline',
     iconBackground: 'antiqueGold',
-    title: 'Bid on live auctions',
-    body: 'Real-time auction excitement. Place bids as the clock counts down, get notified the moment you are outbid, and win pieces at the price you set.',
+    title: 'Win at the price you set',
+    body: 'Real-time auctions with live countdowns. You set your max — we bid for you.',
+    proof: 'Get notified the moment you are outbid.',
   },
   {
     icon: 'leaf-outline',
     iconBackground: 'success',
-    title: 'Sell sustainably',
-    body: 'Give pre-loved items a second life. List in minutes, reach buyers who care, and keep great fashion out of landfill — one piece at a time.',
+    title: 'Turn your closet into credit',
+    body: 'List in minutes, reach buyers who care. Give pre-loved items a second life.',
+    proof: 'Keep great fashion out of landfill — one piece at a time.',
   },
 ];
 
@@ -86,8 +96,8 @@ function OnboardingDot({ index, activeIndex }: OnboardingDotProps) {
   const { colors } = useAppTheme();
   const animatedStyle = useAnimatedStyle(() => {
     const isActive = index === activeIndex;
-    const width = withTiming(isActive ? 28 : 8, { duration: 280 });
-    const opacity = withTiming(isActive ? 1 : 0.32, { duration: 280 });
+    const width = withTiming(isActive ? 28 : 8, { duration: Motion.duration.slow });
+    const opacity = withTiming(isActive ? 1 : 0.32, { duration: Motion.duration.slow });
     return { width, opacity };
   });
 
@@ -114,8 +124,9 @@ export default function OnboardingScreen() {
   const finishOnboarding = useCallback(async () => {
     await markOnboardingComplete();
     setHasCompletedOnboarding(true);
-    // Navigate to the auth entry point — the app's normal first-run destination.
-    navigation.replace('AuthLanding');
+    track('onboarding_completed');
+    trackFunnelStep('signup', 'onboarding_completed');
+    navigation.replace('Personalisation', { fromOnboarding: true });
   }, [navigation, setHasCompletedOnboarding]);
 
   const goNext = useCallback(() => {
@@ -209,16 +220,15 @@ export default function OnboardingScreen() {
           exiting={reducedMotion ? FadeOutDown.duration(0) : FadeOutDown.duration(220)}
           style={styles.slideContent}
         >
-          {/* Icon — the dominant visual anchor for each slide.
+          {/* Icon — a crafted accent, not the dominant visual anchor.
               Rendered inside a subtle tinted panel that uses the slide's
-              semantic color. Color-coded
-              icon panels create immediate visual differentiation between
-              slides, aiding recall and orientation. The panel is
-              restrained — a soft tint, not a heavy container. */}
+              semantic color. The panel is restrained — a soft tint, not a
+              heavy container — so the headline and proof point carry the
+              reading weight, not the icon box. */}
           <View style={[styles.iconPanel, { backgroundColor: resolveAccent(slide.iconBackground) + '15' }]}>
             <Ionicons
               name={slide.icon}
-              size={56}
+              size={40}
               color={resolveAccent(slide.iconBackground)}
               style={styles.icon}
             />
@@ -234,6 +244,23 @@ export default function OnboardingScreen() {
           >
             {slide.body}
           </Text>
+
+          {/* Proof point — honest qualitative evidence, not a fabricated
+              metric. Per §11, no invented seller counts or transaction
+              volumes. This is a real, verifiable claim about the surface. */}
+          <View style={[styles.proofRow, { borderColor: resolveAccent(slide.iconBackground) + '30' }]}>
+            <Ionicons
+              name="checkmark"
+              size={14}
+              color={resolveAccent(slide.iconBackground)}
+            />
+            <Text
+              style={[styles.proofText, { color: colors.textPrimary }]}
+              maxFontSizeMultiplier={1.3}
+            >
+              {slide.proof}
+            </Text>
+          </View>
         </Reanimated.View>
       </View>
 
@@ -307,10 +334,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
   },
   skipText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   contentWrap: {
     flex: 1,
@@ -323,12 +350,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   iconPanel: {
-    width: Space.xxl + Space.xxl + Space.lg,
-    height: Space.xxl + Space.xxl + Space.lg,
-    borderRadius: Radius.xxl,
+    width: Space.xxl + Space.lg,
+    height: Space.xxl + Space.lg,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xl,
+    marginBottom: Space.lg,
   },
   icon: {
     marginBottom: 0,
@@ -348,6 +375,24 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     textAlign: 'center',
     maxWidth: 320,
+    marginBottom: Space.lg,
+  },
+  proofRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    maxWidth: 320,
+  },
+  proofText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
   },
   footer: {
     paddingHorizontal: Space.lg,

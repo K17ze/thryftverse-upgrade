@@ -1,0 +1,2734 @@
+import crypto from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
+import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { enqueueOutboxDrainJob } from '../lib/queues.js';
+import { recordGmv, recordOrderCompleted } from '../lib/metrics.js';
+import type { AuthenticatedUser } from '../lib/auth.js';
+
+// ── Local helpers (mirrored from index.ts) ──
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function computeRequestHash(payload: Record<string, unknown>): string {
+  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+function createRuntimeId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+function toJsonString(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+// ── Local types ──
+
+interface ApiError extends Error {
+  code: string;
+  details?: Record<string, unknown>;
+  statusCode?: number;
+}
+
+type DbQueryable = Pick<PoolClient, 'query'>;
+
+const COMMERCE_ORDER_STATUSES = [
+  'created',
+  'paid',
+  'shipped',
+  'delivered',
+  'cancelled',
+] as const;
+type CommerceOrderStatus = (typeof COMMERCE_ORDER_STATUSES)[number];
+
+const PARCEL_EVENT_TYPES = [
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'collection_confirmed',
+  'delivery_failed',
+  'returned',
+] as const;
+type ParcelEventType = (typeof PARCEL_EVENT_TYPES)[number];
+
+// ── Dependency injection ──
+
+type OrderRouteDependencies = {
+  app: FastifyInstance;
+  db: Pool;
+  resolveAuthenticatedUserId: (request: { authUser?: AuthenticatedUser }, requestedUserId?: string) => string;
+  createApiError: (code: string, message: string, details?: Record<string, unknown>) => ApiError;
+  getApiError: (error: unknown) => ApiError | null;
+  ensureUserExists: (userId: string) => Promise<void>;
+  calculateCommercePlatformChargeGbp: (subtotalGbp: number) => number;
+  ensureSecurityAdminAccess: (
+    request: { headers: Record<string, string | string[] | undefined>; authUser?: AuthenticatedUser },
+    reply: { code: (statusCode: number) => unknown }
+  ) => { ok: false; error: string } | null;
+  orderParcelEventsTableAvailable: (client: DbQueryable) => Promise<boolean>;
+  ledgerTablesAvailable: (client: DbQueryable) => Promise<boolean>;
+  postCommerceOrderLedgerEntries: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      buyerId: string;
+      sellerId: string;
+      subtotalGbp: number;
+      platformChargeGbp: number;
+      postageFeeGbp?: number;
+      totalGbp: number;
+    }
+  ) => Promise<void>;
+  provisionOrderShipmentIfMissing: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      buyerId: string;
+      sellerId: string;
+      addressId: number | null;
+      listingId: string;
+      preferredCarrierId?: string | null;
+      postageFeeGbp?: number;
+    }
+  ) => Promise<
+    | {
+      provisioned: true;
+      shippingProvider: string;
+      trackingNumber: string;
+      shippingLabelUrl: string | null;
+      quoteGbp: number;
+    }
+    | {
+      provisioned: false;
+      reason: string;
+      shippingProvider?: string | null;
+      trackingNumber?: string | null;
+      shippingLabelUrl?: string | null;
+      quoteGbp?: number | null;
+    }
+  >;
+  applyOrderParcelEvent: (
+    client: PoolClient,
+    input: {
+      orderId: string;
+      provider: string;
+      eventType: ParcelEventType;
+      providerEventId?: string;
+      trackingId?: string;
+      occurredAt?: string;
+      payload?: Record<string, unknown>;
+      source: 'admin' | 'shipping_webhook';
+    }
+  ) => Promise<{
+    idempotent: boolean;
+    parcelEvent: {
+      provider: string;
+      eventType: ParcelEventType;
+      providerEventId: string | null;
+      trackingId: string | null;
+      occurredAt: string | null;
+      recorded: boolean;
+      duplicate: boolean;
+    };
+    order: {
+      id: string;
+      buyerId: string;
+      sellerId: string;
+      listingId: string;
+      subtotalGbp: number;
+      buyerProtectionFeeGbp: number;
+      platformChargeGbp: number;
+      postageFeeGbp: number;
+      totalGbp: number;
+      status: string;
+      addressId: number | null;
+      paymentMethodId: number | null;
+      shippingCarrierId: string | null;
+      shippingProvider: string | null;
+      trackingNumber: string | null;
+      shippingLabelUrl: string | null;
+      shippingQuoteGbp: number | null;
+      shippedAt: string | null;
+      deliveredAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+    settlement: {
+      releasePolicy: 'parcel_delivery_confirmation' | 'buyer_protection_hold';
+      sellerEscrowHeldGbp: number;
+      sellerPayableReleasedGbp: number;
+      sellerCashoutEligible: boolean;
+      alreadyReleased: boolean;
+      escrowReleaseScheduledAt: string | null;
+    };
+  }>;
+  releaseCommerceOrderEscrowToSeller: (
+    client: DbQueryable,
+    input: {
+      orderId: string;
+      sellerId: string;
+      subtotalGbp: number;
+      parcelProvider: string;
+      parcelEventType: ParcelEventType;
+      trackingId?: string;
+      providerEventId?: string;
+    }
+  ) => Promise<{ released: boolean; alreadyReleased: boolean }>;
+  queueCommercePaymentNotifications: (input: {
+    orderId: string;
+    source: string;
+  }) => Promise<void>;
+  queueCommerceParcelSettlementNotifications: (input: {
+    orderId: string;
+    buyerId: string;
+    sellerId: string;
+    orderStatus: string;
+    sellerPayableReleasedGbp: number;
+    source: string;
+    provider: string;
+    eventType: string;
+  }) => Promise<void>;
+  sendCommerceOrderSmsNotifications: (input: {
+    orderId: string;
+    orderStatus: string;
+    trackingNumber?: string | null;
+    shippingProvider?: string | null;
+    reason?: string;
+  }) => Promise<void>;
+  postCommerceOrderRefundLedgerReversal: (
+    client: DbQueryable,
+    orderId: string,
+    buyerId: string,
+    totalGbp: number
+  ) => Promise<{ reversed: boolean; alreadyReversed: boolean }>;
+};
+
+export const registerOrderRoutes = ({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  createApiError,
+  getApiError,
+  ensureUserExists,
+  calculateCommercePlatformChargeGbp,
+  ensureSecurityAdminAccess,
+  orderParcelEventsTableAvailable,
+  ledgerTablesAvailable,
+  postCommerceOrderLedgerEntries,
+  provisionOrderShipmentIfMissing,
+  applyOrderParcelEvent,
+  releaseCommerceOrderEscrowToSeller,
+  queueCommercePaymentNotifications,
+  queueCommerceParcelSettlementNotifications,
+  sendCommerceOrderSmsNotifications,
+  postCommerceOrderRefundLedgerReversal,
+}: OrderRouteDependencies) => {
+
+app.post('/admin/orders/:orderId/force-status', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const paramsSchema = z.object({
+    orderId: z.string().min(4).max(64),
+  });
+  const bodySchema = z.object({
+    status: z.enum(COMMERCE_ORDER_STATUSES),
+    note: z.string().max(400).optional(),
+    metadata: z.record(z.unknown()).optional(),
+  });
+
+  const { orderId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query<{ id: string; status: CommerceOrderStatus }>(
+      'SELECT id, status FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE',
+      [orderId]
+    );
+
+    if (!existing.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return {
+        ok: false,
+        error: 'Order not found',
+      };
+    }
+
+    const previousStatus = existing.rows[0].status;
+    const updated = await client.query<{
+      id: string;
+      status: CommerceOrderStatus;
+      updated_at: string;
+    }>(
+      `
+        UPDATE orders
+        SET
+          status = $2,
+          shipped_at = CASE
+            WHEN $2 = 'shipped' THEN COALESCE(shipped_at, NOW())
+            ELSE shipped_at
+          END,
+          delivered_at = CASE
+            WHEN $2 = 'delivered' THEN COALESCE(delivered_at, NOW())
+            ELSE delivered_at
+          END,
+          shipping_metadata = COALESCE(shipping_metadata, '{}'::jsonb) || $3::jsonb,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, status, updated_at::text
+      `,
+      [
+        orderId,
+        payload.status,
+        toJsonString({
+          forceStatus: {
+            previousStatus,
+            nextStatus: payload.status,
+            note: payload.note ?? null,
+            actedBy: request.authUser?.userId ?? 'admin_token',
+            actedAt: new Date().toISOString(),
+            ...(payload.metadata ?? {}),
+          },
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    if (previousStatus !== updated.rows[0].status) {
+      sendCommerceOrderSmsNotifications({
+        orderId: updated.rows[0].id,
+        orderStatus: updated.rows[0].status,
+        reason: payload.note,
+      }).catch(() => {});
+    }
+
+    return {
+      ok: true,
+      id: updated.rows[0].id,
+      previousStatus,
+      status: updated.rows[0].status,
+      forced: previousStatus !== updated.rows[0].status,
+      updatedAt: updated.rows[0].updated_at,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error, orderId }, 'Unable to force order status transition');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to force order status transition',
+    };
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/admin/orders/stuck', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const querySchema = z.object({
+    paidOlderHours: z.coerce.number().int().min(1).max(240).default(24),
+    limit: z.coerce.number().int().min(1).max(400).default(200),
+  });
+  const { paidOlderHours, limit } = querySchema.parse(request.query);
+
+  const client = await db.connect();
+  try {
+    const parcelEventsAvailable = await orderParcelEventsTableAvailable(client);
+    const result = parcelEventsAvailable
+      ? await client.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        listing_id: string;
+        status: string;
+        total_gbp: number | string;
+        tracking_number: string | null;
+        created_at: string;
+        updated_at: string;
+        shipped_at: string | null;
+        latest_parcel_event_type: string | null;
+        latest_parcel_event_at: string | null;
+        age_hours: string;
+      }>(
+        `
+          WITH latest_parcel_event AS (
+            SELECT DISTINCT ON (ope.order_id)
+              ope.order_id,
+              ope.event_type,
+              COALESCE(ope.occurred_at, ope.created_at) AS event_at
+            FROM order_parcel_events ope
+            ORDER BY ope.order_id, COALESCE(ope.occurred_at, ope.created_at) DESC
+          )
+          SELECT
+            o.id,
+            o.buyer_id,
+            o.seller_id,
+            o.listing_id,
+            o.status,
+            o.total_gbp,
+            o.tracking_number,
+            o.created_at::text,
+            o.updated_at::text,
+            o.shipped_at::text,
+            lpe.event_type AS latest_parcel_event_type,
+            lpe.event_at::text AS latest_parcel_event_at,
+            EXTRACT(EPOCH FROM (NOW() - COALESCE(o.shipped_at, o.updated_at))) / 3600 AS age_hours
+          FROM orders o
+          LEFT JOIN latest_parcel_event lpe ON lpe.order_id = o.id
+          WHERE
+            (o.status = 'created' AND o.created_at <= NOW() - INTERVAL '2 hours')
+            OR (
+              o.status = 'paid'
+              AND (
+                o.updated_at <= NOW() - make_interval(hours => $1::int)
+                OR COALESCE(lpe.event_type, '') IN (
+                  'picked_up',
+                  'in_transit',
+                  'out_for_delivery',
+                  'delivered',
+                  'collection_confirmed'
+                )
+              )
+            )
+            OR (
+              o.status = 'shipped'
+              AND (
+                COALESCE(o.shipped_at, o.updated_at) <= NOW() - INTERVAL '7 days'
+                OR COALESCE(lpe.event_type, '') IN ('delivered', 'collection_confirmed')
+              )
+            )
+          ORDER BY o.updated_at ASC
+          LIMIT $2
+        `,
+        [paidOlderHours, limit]
+      )
+      : await client.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        listing_id: string;
+        status: string;
+        total_gbp: number | string;
+        tracking_number: string | null;
+        created_at: string;
+        updated_at: string;
+        shipped_at: string | null;
+        latest_parcel_event_type: string | null;
+        latest_parcel_event_at: string | null;
+        age_hours: string;
+      }>(
+        `
+          SELECT
+            o.id,
+            o.buyer_id,
+            o.seller_id,
+            o.listing_id,
+            o.status,
+            o.total_gbp,
+            o.tracking_number,
+            o.created_at::text,
+            o.updated_at::text,
+            o.shipped_at::text,
+            NULL::text AS latest_parcel_event_type,
+            NULL::text AS latest_parcel_event_at,
+            EXTRACT(EPOCH FROM (NOW() - COALESCE(o.shipped_at, o.updated_at))) / 3600 AS age_hours
+          FROM orders o
+          WHERE
+            (o.status = 'created' AND o.created_at <= NOW() - INTERVAL '2 hours')
+            OR (o.status = 'paid' AND o.updated_at <= NOW() - make_interval(hours => $1::int))
+            OR (o.status = 'shipped' AND COALESCE(o.shipped_at, o.updated_at) <= NOW() - INTERVAL '7 days')
+          ORDER BY o.updated_at ASC
+          LIMIT $2
+        `,
+        [paidOlderHours, limit]
+      );
+
+    return {
+      ok: true,
+      items: result.rows.map((row) => ({
+        id: row.id,
+        buyerId: row.buyer_id,
+        sellerId: row.seller_id,
+        listingId: row.listing_id,
+        status: row.status,
+        totalGbp: Number(row.total_gbp),
+        trackingNumber: row.tracking_number,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        shippedAt: row.shipped_at,
+        latestParcelEventType: row.latest_parcel_event_type,
+        latestParcelEventAt: row.latest_parcel_event_at,
+        ageHours: roundTo(Number(row.age_hours), 2),
+      })),
+    };
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders', async (request, reply) => {
+  const bodySchema = z.object({
+    orderId: z.string().min(4).max(64).optional(),
+    buyerId: z.string().min(2),
+    listingId: z.string().min(2),
+    addressId: z.coerce.number().int().positive().optional(),
+    paymentMethodId: z.coerce.number().int().positive().optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
+    shippingQuoteId: z.string().min(8).max(160).optional(),
+    // Retained for backwards-compatible parsing only. Commerce charges are
+    // always derived from the locked listing price on the server.
+    platformChargeGbp: z.number().min(0).optional(),
+    buyerProtectionFeeGbp: z.number().min(0).optional(),
+    postageFeeGbp: z.number().min(0).optional(),
+    shippingCarrierId: z.string().min(2).max(80).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body);
+  const actorUserId = resolveAuthenticatedUserId(request, payload.buyerId);
+  const requestHash = computeRequestHash({
+    buyerId: actorUserId,
+    listingId: payload.listingId,
+    addressId: payload.addressId ?? null,
+    paymentMethodId: payload.paymentMethodId ?? null,
+    shippingCarrierId: payload.shippingCarrierId ?? null,
+    shippingQuoteId: payload.shippingQuoteId ?? null,
+  });
+  const checkoutExpiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  const quoteVersion = 'commerce-gbp-2026-07-28.1';
+  const client = await db.connect();
+
+  try {
+    await client.query('BEGIN');
+    await ensureUserExists(actorUserId);
+
+    if (payload.idempotencyKey) {
+      const replay = await client.query<{
+        id: string;
+        request_hash: string | null;
+      }>(
+        `SELECT id, request_hash
+         FROM orders
+         WHERE buyer_id = $1 AND idempotency_key = $2
+         LIMIT 1
+         FOR UPDATE`,
+        [actorUserId, payload.idempotencyKey]
+      );
+      if (replay.rowCount) {
+        if (replay.rows[0].request_hash !== requestHash) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Idempotency key was already used with a different checkout payload',
+            code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+          };
+        }
+        const existingOrderResult = await client.query<{
+          id: string;
+          buyer_id: string;
+          seller_id: string;
+          listing_id: string;
+          subtotal_gbp: number | string;
+          buyer_protection_fee_gbp: number | string;
+          postage_fee_gbp: number | string;
+          total_gbp: number | string;
+          status: string;
+          address_id: number | null;
+          payment_method_id: number | null;
+          shipping_carrier_id: string | null;
+          shipping_provider: string | null;
+          tracking_number: string | null;
+          shipping_label_url: string | null;
+          shipping_quote_gbp: number | string | null;
+          shipped_at: string | null;
+          delivered_at: string | null;
+          created_at: string;
+          updated_at: string;
+        }>(
+          `SELECT
+             id, buyer_id, seller_id, listing_id,
+             subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+             status, address_id, payment_method_id, shipping_carrier_id,
+             shipping_provider, tracking_number, shipping_label_url,
+             shipping_quote_gbp, shipped_at::text, delivered_at::text,
+             created_at::text, updated_at::text
+           FROM orders
+           WHERE id = $1
+           LIMIT 1`,
+          [replay.rows[0].id]
+        );
+        const existing = existingOrderResult.rows[0];
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          idempotent: true,
+          order: {
+            id: existing.id,
+            buyerId: existing.buyer_id,
+            sellerId: existing.seller_id,
+            listingId: existing.listing_id,
+            subtotalGbp: Number(existing.subtotal_gbp),
+            buyerProtectionFeeGbp: Number(existing.buyer_protection_fee_gbp),
+            platformChargeGbp: Number(existing.buyer_protection_fee_gbp),
+            postageFeeGbp: Number(existing.postage_fee_gbp),
+            totalGbp: Number(existing.total_gbp),
+            status: existing.status,
+            addressId: existing.address_id,
+            paymentMethodId: existing.payment_method_id,
+            shippingCarrierId: existing.shipping_carrier_id,
+            shippingProvider: existing.shipping_provider,
+            trackingNumber: existing.tracking_number,
+            shippingLabelUrl: existing.shipping_label_url,
+            shippingQuoteGbp: existing.shipping_quote_gbp === null
+              ? null
+              : Number(existing.shipping_quote_gbp),
+            shippedAt: existing.shipped_at,
+            deliveredAt: existing.delivered_at,
+            createdAt: existing.created_at,
+            updatedAt: existing.updated_at,
+          },
+        };
+      }
+    }
+
+    const listingResult = await client.query<{
+      id: string;
+      seller_id: string;
+      price_gbp: number | string;
+      status: string;
+    }>(
+      `SELECT id, seller_id, price_gbp, status
+       FROM listings
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.listingId]
+    );
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    // Reconcile an expired reservation while holding the same listing lock.
+    const expiredReservation = await client.query<{ order_id: string }>(
+      `SELECT order_id
+       FROM listing_checkout_reservations
+       WHERE listing_id = $1
+         AND status = 'active'
+         AND expires_at <= NOW()
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.listingId]
+    );
+    if (expiredReservation.rowCount) {
+      await client.query(
+        `UPDATE orders
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND status = 'created'`,
+        [expiredReservation.rows[0].order_id]
+      );
+      listing.status = 'active';
+    }
+
+    if (listing.status !== 'active') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: `Listing cannot be purchased from status '${listing.status}'`,
+      };
+    }
+    if (listing.seller_id === actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return { ok: false, error: 'Buyer cannot purchase their own listing' };
+    }
+
+    const conflictingReservation = await client.query<{ id: string }>(
+      `SELECT id
+       FROM listing_checkout_reservations
+       WHERE listing_id = $1
+         AND status = 'active'
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [payload.listingId]
+    );
+    if (conflictingReservation.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This listing is currently reserved for another checkout',
+        code: 'LISTING_CHECKOUT_RESERVED',
+      };
+    }
+
+    if (payload.addressId) {
+      const addressOwner = await client.query(
+        'SELECT id FROM user_addresses WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [payload.addressId, actorUserId]
+      );
+      if (!addressOwner.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Address does not belong to buyer' };
+      }
+    }
+    if (payload.paymentMethodId) {
+      const methodOwner = await client.query(
+        `SELECT id
+         FROM user_payment_methods
+         WHERE id = $1
+           AND user_id = $2
+           AND provider = 'stripe'
+           AND status = 'active'
+           AND provider_payment_method_ref IS NOT NULL
+         LIMIT 1`,
+        [payload.paymentMethodId, actorUserId]
+      );
+      if (!methodOwner.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Payment method does not belong to buyer' };
+      }
+    }
+
+    if (!payload.shippingQuoteId) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'A current server-issued shipping quote is required',
+        code: 'SHIPPING_QUOTE_REQUIRED',
+      };
+    }
+    const shippingQuoteResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      address_id: number | string | null;
+      carrier_id: string;
+      price_gbp: number | string;
+      quote_hash: string;
+      expires_at: string;
+      used_order_id: string | null;
+      source: string;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, address_id,
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id, source
+       FROM commerce_shipping_quotes
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.shippingQuoteId]
+    );
+    const shippingQuote = shippingQuoteResult.rows[0];
+    const quoteMismatch = !shippingQuote
+      || shippingQuote.buyer_id !== actorUserId
+      || shippingQuote.seller_id !== listing.seller_id
+      || shippingQuote.listing_id !== listing.id
+      || (
+        shippingQuote.address_id === null
+          ? payload.addressId !== undefined
+          : Number(shippingQuote.address_id) !== payload.addressId
+      )
+      || shippingQuote.carrier_id !== payload.shippingCarrierId
+      || Boolean(shippingQuote.used_order_id)
+      || Date.parse(shippingQuote.expires_at) <= Date.now();
+    if (quoteMismatch) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Shipping quote is expired, already used, or does not match this checkout',
+        code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+    if (shippingQuote.source === 'fallback') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This shipping quote is not carrier-backed and cannot be used for checkout',
+        code: 'FALLBACK_QUOTE_NOT_CHARGEABLE',
+      };
+    }
+
+    const subtotalGbp = roundTo(Number(listing.price_gbp), 2);
+    const platformChargeGbp = calculateCommercePlatformChargeGbp(subtotalGbp);
+    const postageFeeGbp = roundTo(Number(shippingQuote.price_gbp), 2);
+    const totalGbp = roundTo(subtotalGbp + platformChargeGbp + postageFeeGbp, 2);
+    const orderId = request.authUser?.role === 'admin' && payload.orderId
+      ? payload.orderId
+      : createRuntimeId('ord');
+    const reservationId = createRuntimeId('lres');
+    const quoteSnapshot = {
+      source: 'direct',
+      listingId: listing.id,
+      subtotalGbp,
+      platformChargeGbp,
+      postageFeeGbp,
+      totalGbp,
+      currency: 'GBP',
+      expiresAt: checkoutExpiresAt,
+      policyVersion: quoteVersion,
+    };
+    const quoteHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(quoteSnapshot))
+      .digest('hex');
+
+    const insertResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      subtotal_gbp: number | string;
+      buyer_protection_fee_gbp: number | string;
+      postage_fee_gbp: number | string;
+      total_gbp: number | string;
+      status: string;
+      address_id: number | null;
+      payment_method_id: number | null;
+      shipping_carrier_id: string | null;
+      shipping_provider: string | null;
+      tracking_number: string | null;
+      shipping_label_url: string | null;
+      shipping_quote_gbp: number | string | null;
+      shipped_at: string | null;
+      delivered_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `INSERT INTO orders (
+         id, buyer_id, seller_id, listing_id,
+         subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+         status, address_id, payment_method_id, shipping_carrier_id,
+         idempotency_key, request_hash, checkout_expires_at,
+         quote_version, quote_hash, quote_snapshot, shipping_quote_id
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         'created', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18
+       )
+       RETURNING
+         id, buyer_id, seller_id, listing_id,
+         subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+         status, address_id, payment_method_id, shipping_carrier_id,
+         shipping_provider, tracking_number, shipping_label_url,
+         shipping_quote_gbp, shipped_at::text, delivered_at::text,
+         created_at::text, updated_at::text`,
+      [
+        orderId,
+        actorUserId,
+        listing.seller_id,
+        listing.id,
+        subtotalGbp,
+        platformChargeGbp,
+        postageFeeGbp,
+        totalGbp,
+        payload.addressId ?? null,
+        payload.paymentMethodId ?? null,
+        payload.shippingCarrierId ?? null,
+        payload.idempotencyKey ?? null,
+        requestHash,
+        checkoutExpiresAt,
+        quoteVersion,
+        quoteHash,
+        toJsonString(quoteSnapshot),
+        shippingQuote.id,
+      ]
+    );
+
+    await client.query(
+      `UPDATE commerce_shipping_quotes
+       SET used_order_id = $2
+       WHERE id = $1 AND used_order_id IS NULL`,
+      [shippingQuote.id, orderId]
+    );
+
+    await client.query(
+      `INSERT INTO listing_checkout_reservations (
+         id, offer_id, listing_id, buyer_id, seller_id,
+         order_id, source, status, expires_at
+       )
+       VALUES ($1, NULL, $2, $3, $4, $5, 'direct', 'active', $6)`,
+      [
+        reservationId,
+        listing.id,
+        actorUserId,
+        listing.seller_id,
+        orderId,
+        checkoutExpiresAt,
+      ]
+    );
+    await client.query(
+      `UPDATE listings
+       SET status = 'paused', updated_at = NOW()
+       WHERE id = $1`,
+      [listing.id]
+    );
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES
+         ($1, 'order.created', $2, 'direct_checkout', $3, $4::jsonb),
+         ($1, 'listing.reserved', $2, 'direct_checkout', $5, $6::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        actorUserId,
+        `order.created:${orderId}`,
+        toJsonString({ quoteHash }),
+        `listing.reserved:${reservationId}`,
+        toJsonString({ reservationId, expiresAt: checkoutExpiresAt }),
+      ]
+    );
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.created',
+      actorId: actorUserId,
+      correlationId: request.id,
+      idempotencyKey: payload.idempotencyKey ?? orderId,
+      deduplicationKey: `order.created:${orderId}`,
+      payload: {
+        orderId,
+        listingId: listing.id,
+        reservationId,
+        buyerId: actorUserId,
+        sellerId: listing.seller_id,
+        source: 'direct',
+        expiresAt: checkoutExpiresAt,
+        totalGbp,
+      },
+    });
+    // Gate 7: Persist seller capacity and versioned rights at purchase time.
+    // This snapshot is immutable and serves as the authoritative record of
+    // what terms the buyer and seller agreed to at the point of sale.
+    await client.query(
+      `INSERT INTO order_seller_rights_snapshot
+         (order_id, seller_id, seller_tier, dispatch_sla_days,
+          return_policy_version, return_policy_basis, return_window_days,
+          buyer_protection_fee_gbp, buyer_protection_version, platform_terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (order_id) DO NOTHING`,
+      [
+        orderId,
+        listing.seller_id,
+        'standard',          // seller_tier — TODO: derive from seller profile
+        3,                   // dispatch_sla_days — TODO: derive from seller capacity
+        1,                   // return_policy_version
+        'statutory',         // return_policy_basis
+        14,                  // return_window_days
+        platformChargeGbp,   // buyer_protection_fee_gbp
+        1,                   // buyer_protection_version
+        1,                   // platform_terms_version
+      ]
+    );
+    await client.query('COMMIT');
+    try {
+      await enqueueOutboxDrainJob();
+    } catch (error) {
+      request.log.error(
+        { err: error, orderId },
+        'Failed to enqueue direct-checkout outbox drain'
+      );
+    }
+
+    const row = insertResult.rows[0];
+    reply.code(201);
+    return {
+      ok: true,
+      idempotent: false,
+      checkout: {
+        reservationId,
+        expiresAt: checkoutExpiresAt,
+        quoteVersion,
+        quoteHash,
+      },
+      order: {
+        id: row.id,
+        buyerId: row.buyer_id,
+        sellerId: row.seller_id,
+        listingId: row.listing_id,
+        subtotalGbp: Number(row.subtotal_gbp),
+        buyerProtectionFeeGbp: Number(row.buyer_protection_fee_gbp),
+        platformChargeGbp: Number(row.buyer_protection_fee_gbp),
+        postageFeeGbp: Number(row.postage_fee_gbp),
+        totalGbp: Number(row.total_gbp),
+        status: row.status,
+        addressId: row.address_id,
+        paymentMethodId: row.payment_method_id,
+        shippingCarrierId: row.shipping_carrier_id,
+        shippingProvider: row.shipping_provider,
+        trackingNumber: row.tracking_number,
+        shippingLabelUrl: row.shipping_label_url,
+        shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+        shippedAt: row.shipped_at,
+        deliveredAt: row.delivered_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    const apiError = getApiError(error);
+    if (apiError) {
+      throw apiError;
+    }
+    request.log.error({ err: error, listingId: payload.listingId }, 'Failed to create checkout order');
+    reply.code(500);
+    return { ok: false, error: 'Unable to create checkout order' };
+  } finally {
+    client.release();
+  }
+
+});
+
+app.patch('/orders/:orderId/checkout', async (request, reply) => {
+  const { orderId } = z.object({
+    orderId: z.string().min(4).max(64),
+  }).parse(request.params);
+  const payload = z.object({
+    addressId: z.coerce.number().int().positive(),
+    paymentMethodId: z.coerce.number().int().positive().optional(),
+    shippingQuoteId: z.string().min(8).max(160),
+    shippingCarrierId: z.string().min(2).max(80),
+  }).parse(request.body);
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      subtotal_gbp: number | string;
+      status: string;
+      payment_intent_id: string | null;
+      checkout_expires_at: string | null;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, subtotal_gbp,
+         status, payment_intent_id, checkout_expires_at::text
+       FROM orders
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [orderId]
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+    if (order.buyer_id !== actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can complete checkout details' };
+    }
+    if (order.status !== 'created' || order.payment_intent_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: order.payment_intent_id
+          ? 'Checkout details cannot change after payment has started'
+          : `Checkout details cannot change from order status '${order.status}'`,
+      };
+    }
+    if (
+      order.checkout_expires_at
+      && Date.parse(order.checkout_expires_at) <= Date.now()
+    ) {
+      await client.query(
+        `UPDATE orders SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND status = 'created'`,
+        [orderId]
+      );
+      await client.query('COMMIT');
+      reply.code(410);
+      return {
+        ok: false,
+        error: 'Checkout reservation has expired',
+        code: 'CHECKOUT_RESERVATION_EXPIRED',
+      };
+    }
+
+    const address = await client.query(
+      `SELECT id FROM user_addresses
+       WHERE id = $1 AND user_id = $2
+       LIMIT 1`,
+      [payload.addressId, actorUserId]
+    );
+    if (!address.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return { ok: false, error: 'Address does not belong to buyer' };
+    }
+    if (payload.paymentMethodId) {
+      const paymentMethod = await client.query(
+        `SELECT id FROM user_payment_methods
+         WHERE id = $1
+           AND user_id = $2
+           AND provider = 'stripe'
+           AND status = 'active'
+           AND provider_payment_method_ref IS NOT NULL
+         LIMIT 1`,
+        [payload.paymentMethodId, actorUserId]
+      );
+      if (!paymentMethod.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Payment method does not belong to buyer' };
+      }
+    }
+
+    const shippingQuoteResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      address_id: number | string | null;
+      carrier_id: string;
+      price_gbp: number | string;
+      quote_hash: string;
+      expires_at: string;
+      used_order_id: string | null;
+      source: string;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, address_id,
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id, source
+       FROM commerce_shipping_quotes
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.shippingQuoteId]
+    );
+    const shippingQuote = shippingQuoteResult.rows[0];
+    const quoteMismatch = !shippingQuote
+      || shippingQuote.buyer_id !== actorUserId
+      || shippingQuote.seller_id !== order.seller_id
+      || shippingQuote.listing_id !== order.listing_id
+      || Number(shippingQuote.address_id) !== payload.addressId
+      || shippingQuote.carrier_id !== payload.shippingCarrierId
+      || (
+        shippingQuote.used_order_id !== null
+        && shippingQuote.used_order_id !== orderId
+      )
+      || (
+        shippingQuote.used_order_id === null
+        && Date.parse(shippingQuote.expires_at) <= Date.now()
+      );
+    if (quoteMismatch) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Shipping quote is expired, already used, or does not match this checkout',
+        code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+    if (shippingQuote.source === 'fallback') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This shipping quote is not carrier-backed and cannot be used for checkout',
+        code: 'FALLBACK_QUOTE_NOT_CHARGEABLE',
+      };
+    }
+
+    const subtotalGbp = roundTo(Number(order.subtotal_gbp), 2);
+    const platformChargeGbp = calculateCommercePlatformChargeGbp(subtotalGbp);
+    const postageFeeGbp = roundTo(Number(shippingQuote.price_gbp), 2);
+    const totalGbp = roundTo(subtotalGbp + platformChargeGbp + postageFeeGbp, 2);
+    const quoteVersion = 'commerce-gbp-2026-07-28.1';
+    const quoteSnapshot = {
+      source: 'checkout_completion',
+      orderId,
+      listingId: order.listing_id,
+      subtotalGbp,
+      platformChargeGbp,
+      postageFeeGbp,
+      totalGbp,
+      currency: 'GBP',
+      shippingQuoteId: shippingQuote.id,
+      shippingQuoteHash: shippingQuote.quote_hash,
+      policyVersion: quoteVersion,
+    };
+    const quoteHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(quoteSnapshot))
+      .digest('hex');
+    await client.query(
+      `UPDATE orders
+       SET address_id = $2,
+           payment_method_id = $3,
+           shipping_carrier_id = $4,
+           shipping_quote_id = $5,
+           postage_fee_gbp = $6,
+           buyer_protection_fee_gbp = $7,
+           total_gbp = $8,
+           quote_version = $9,
+           quote_hash = $10,
+           quote_snapshot = $11::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        orderId,
+        payload.addressId,
+        payload.paymentMethodId ?? null,
+        payload.shippingCarrierId,
+        shippingQuote.id,
+        postageFeeGbp,
+        platformChargeGbp,
+        totalGbp,
+        quoteVersion,
+        quoteHash,
+        toJsonString(quoteSnapshot),
+      ]
+    );
+    await client.query(
+      `UPDATE commerce_shipping_quotes
+       SET used_order_id = $2
+       WHERE id = $1
+         AND (used_order_id IS NULL OR used_order_id = $2)`,
+      [shippingQuote.id, orderId]
+    );
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES ($1, 'checkout.completed', $2, 'buyer', $3, $4::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        actorUserId,
+        `checkout.completed:${quoteHash}`,
+        toJsonString({ quoteHash, shippingQuoteId: shippingQuote.id }),
+      ]
+    );
+    // Gate 7: Persist seller capacity and versioned rights at purchase time.
+    // This snapshot is immutable and serves as the authoritative record of
+    // what terms the buyer and seller agreed to at the point of sale.
+    await client.query(
+      `INSERT INTO order_seller_rights_snapshot
+         (order_id, seller_id, seller_tier, dispatch_sla_days,
+          return_policy_version, return_policy_basis, return_window_days,
+          buyer_protection_fee_gbp, buyer_protection_version, platform_terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (order_id) DO NOTHING`,
+      [
+        orderId,
+        order.seller_id,
+        'standard',          // seller_tier — TODO: derive from seller profile
+        3,                   // dispatch_sla_days — TODO: derive from seller capacity
+        1,                   // return_policy_version
+        'statutory',         // return_policy_basis
+        14,                  // return_window_days
+        platformChargeGbp,   // buyer_protection_fee_gbp
+        1,                   // buyer_protection_version
+        1,                   // platform_terms_version
+      ]
+    );
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      orderId,
+      checkout: {
+        addressId: payload.addressId,
+        paymentMethodId: payload.paymentMethodId ?? null,
+        shippingCarrierId: payload.shippingCarrierId,
+        shippingQuoteId: shippingQuote.id,
+        subtotalGbp,
+        platformChargeGbp,
+        postageFeeGbp,
+        totalGbp,
+        quoteVersion,
+        quoteHash,
+      },
+      sellerRightsSnapshot: {
+        sellerTier: 'standard',
+        dispatchSlaDays: 3,
+        returnPolicyBasis: 'statutory',
+        returnWindowDays: 14,
+        buyerProtectionFeeGbp: platformChargeGbp,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error, orderId }, 'Failed to complete order checkout details');
+    reply.code(500);
+    return { ok: false, error: 'Unable to complete checkout details' };
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/pay', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    reply.code(403);
+    return {
+      ok: false,
+      error: 'Orders are settled via payment confirmation. Use /payments/intents to initiate payment.',
+    };
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const paid = await client.query<{
+      id: string;
+      status: string;
+      updated_at: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      address_id: number | null;
+      subtotal_gbp: number | string;
+      buyer_protection_fee_gbp: number | string;
+      postage_fee_gbp: number | string;
+      total_gbp: number | string;
+      shipping_carrier_id: string | null;
+    }>(
+      `
+        UPDATE orders
+        SET status = 'paid', updated_at = NOW()
+        WHERE id = $1 AND status = 'created'
+        RETURNING
+          id,
+          status,
+          updated_at,
+          buyer_id,
+          seller_id,
+          listing_id,
+          address_id,
+          subtotal_gbp,
+          buyer_protection_fee_gbp,
+          postage_fee_gbp,
+          total_gbp,
+          shipping_carrier_id
+      `,
+      [orderId]
+    );
+
+    if (!paid.rowCount) {
+      const existing = await client.query<{ id: string; status: string }>(
+        'SELECT id, status FROM orders WHERE id = $1 LIMIT 1',
+        [orderId]
+      );
+
+      await client.query('ROLLBACK');
+
+      if (!existing.rowCount) {
+        reply.code(404);
+        return { ok: false, error: 'Order not found' };
+      }
+
+      reply.code(409);
+      return { ok: false, error: `Order cannot be paid from status '${existing.rows[0].status}'` };
+    }
+
+    const paidRow = paid.rows[0];
+
+    if (await ledgerTablesAvailable(client)) {
+      await postCommerceOrderLedgerEntries(client, {
+        orderId: paidRow.id,
+        buyerId: paidRow.buyer_id,
+        sellerId: paidRow.seller_id,
+        subtotalGbp: Number(paidRow.subtotal_gbp),
+        platformChargeGbp: Number(paidRow.buyer_protection_fee_gbp),
+        postageFeeGbp: Number(paidRow.postage_fee_gbp),
+        totalGbp: Number(paidRow.total_gbp),
+      });
+    }
+
+    let shipment:
+      | {
+        provisioned: boolean;
+        reason?: string;
+        trackingNumber?: string | null;
+        shippingProvider?: string | null;
+        shippingLabelUrl?: string | null;
+        shippingQuoteGbp?: number | null;
+      }
+      | undefined;
+
+    try {
+      const provisionedShipment = await provisionOrderShipmentIfMissing(client, {
+        orderId: paidRow.id,
+        buyerId: paidRow.buyer_id,
+        sellerId: paidRow.seller_id,
+        addressId: paidRow.address_id,
+        listingId: paidRow.listing_id,
+        preferredCarrierId: paidRow.shipping_carrier_id,
+        postageFeeGbp: Number(paidRow.postage_fee_gbp),
+      });
+
+      shipment = provisionedShipment.provisioned
+        ? {
+          provisioned: true,
+          trackingNumber: provisionedShipment.trackingNumber,
+          shippingProvider: provisionedShipment.shippingProvider,
+          shippingLabelUrl: provisionedShipment.shippingLabelUrl,
+          shippingQuoteGbp: provisionedShipment.quoteGbp,
+        }
+        : {
+          provisioned: false,
+          reason: provisionedShipment.reason,
+          trackingNumber: provisionedShipment.trackingNumber,
+          shippingProvider: provisionedShipment.shippingProvider,
+          shippingLabelUrl: provisionedShipment.shippingLabelUrl,
+          shippingQuoteGbp: provisionedShipment.quoteGbp,
+        };
+    } catch (shipmentError) {
+      shipment = {
+        provisioned: false,
+        reason: 'shipment_provision_failed',
+      };
+      app.log.error(
+        {
+          err: shipmentError,
+          orderId: paidRow.id,
+        },
+        'Failed to provision shipment for manual order payment'
+      );
+    }
+
+    await client.query('COMMIT');
+
+    try {
+      await queueCommercePaymentNotifications({
+        orderId: paidRow.id,
+        source: 'admin_manual_order_pay',
+      });
+    } catch (notificationError) {
+      request.log.error(
+        {
+          err: notificationError,
+          orderId: paidRow.id,
+        },
+        'Failed to queue payment notifications after manual order pay'
+      );
+    }
+
+    const platformChargeCreditedGbp = Number(paidRow.buyer_protection_fee_gbp);
+    const postageFeeCreditedGbp = Number(paidRow.postage_fee_gbp);
+
+    return {
+      ok: true,
+      id: paidRow.id,
+      status: paidRow.status,
+      updatedAt: paidRow.updated_at,
+      settlement: {
+        buyerChargedGbp: Number(paidRow.total_gbp),
+        sellerPayableCreditedGbp: 0,
+        sellerEscrowHeldGbp: Number(paidRow.subtotal_gbp),
+        sellerCashoutEligible: false,
+        platformCommissionCreditedGbp: roundTo(platformChargeCreditedGbp + postageFeeCreditedGbp, 2),
+        platformChargeCreditedGbp,
+        postageFeeCreditedGbp,
+        shipment,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error, orderId }, 'Order payment settlement failed');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to settle payment for order',
+    };
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/parcel/events', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    provider: z.string().min(2).max(80),
+    eventType: z.enum(PARCEL_EVENT_TYPES),
+    providerEventId: z.string().min(3).max(180).optional(),
+    trackingId: z.string().min(3).max(180).optional(),
+    occurredAt: z.string().datetime().optional(),
+    payload: z.record(z.unknown()).optional(),
+  });
+
+  const { orderId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const applied = await applyOrderParcelEvent(client, {
+      orderId,
+      provider: payload.provider,
+      eventType: payload.eventType,
+      providerEventId: payload.providerEventId,
+      trackingId: payload.trackingId,
+      occurredAt: payload.occurredAt,
+      payload: payload.payload,
+      source: 'admin',
+    });
+
+    await client.query('COMMIT');
+
+    if (!applied.idempotent) {
+      try {
+        await queueCommerceParcelSettlementNotifications({
+          orderId: applied.order.id,
+          buyerId: applied.order.buyerId,
+          sellerId: applied.order.sellerId,
+          orderStatus: applied.order.status,
+          sellerPayableReleasedGbp: applied.settlement.sellerPayableReleasedGbp,
+          source: 'admin_parcel_event',
+          provider: payload.provider,
+          eventType: payload.eventType,
+        });
+      } catch (notificationError) {
+        request.log.error(
+          {
+            err: notificationError,
+            orderId: applied.order.id,
+            provider: payload.provider,
+            eventType: payload.eventType,
+          },
+          'Failed to queue parcel settlement notifications from admin parcel event'
+        );
+      }
+    }
+
+    sendCommerceOrderSmsNotifications({
+      orderId: applied.order.id,
+      orderStatus: applied.order.status,
+      trackingNumber: applied.order.trackingNumber,
+      shippingProvider: applied.order.shippingProvider,
+    }).catch(() => {});
+
+    return {
+      ok: true,
+      idempotent: applied.idempotent,
+      parcelEvent: applied.parcelEvent,
+      order: applied.order,
+      settlement: applied.settlement,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+
+    const apiError = getApiError(error);
+    if (apiError?.code === 'ORDER_NOT_FOUND') {
+      reply.code(404);
+      return {
+        ok: false,
+        error: apiError.message,
+      };
+    }
+
+    if (apiError?.code === 'ORDER_NOT_READY' || apiError?.code === 'ORDER_INVALID_STATE') {
+      reply.code(409);
+      return {
+        ok: false,
+        error: apiError.message,
+      };
+    }
+
+    if (apiError?.code === 'ESCROW_INSUFFICIENT') {
+      reply.code(409);
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
+    request.log.error({ err: error, orderId }, 'Unable to process parcel event for order');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to process parcel event for order',
+    };
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/orders/:orderId/parcel/events', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const orderResult = await db.query<{
+    id: string;
+    status: string;
+    tracking_number: string | null;
+    shipping_provider: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+  }>(
+    `
+      SELECT
+        id,
+        status,
+        tracking_number,
+        shipping_provider,
+        shipped_at::text,
+        delivered_at::text
+      FROM orders
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [orderId]
+  );
+
+  if (!orderResult.rowCount) {
+    reply.code(404);
+    return {
+      ok: false,
+      error: 'Order not found',
+    };
+  }
+
+  const order = orderResult.rows[0];
+  const parcelEventsAvailable = await orderParcelEventsTableAvailable(db);
+
+  if (!parcelEventsAvailable) {
+    return {
+      ok: true,
+      source: 'orders_status_only',
+      order: {
+        id: order.id,
+        status: order.status,
+        trackingNumber: order.tracking_number,
+        shippingProvider: order.shipping_provider,
+        shippedAt: order.shipped_at,
+        deliveredAt: order.delivered_at,
+      },
+      items: [],
+    };
+  }
+
+  const eventsResult = await db.query<{
+    id: number;
+    provider: string;
+    event_type: ParcelEventType;
+    provider_event_id: string | null;
+    tracking_id: string | null;
+    occurred_at: string | null;
+    received_at: string;
+    payload: Record<string, unknown>;
+  }>(
+    `
+      SELECT
+        id,
+        provider,
+        event_type,
+        provider_event_id,
+        tracking_id,
+        occurred_at::text,
+        received_at::text,
+        payload
+      FROM order_parcel_events
+      WHERE order_id = $1
+      ORDER BY COALESCE(occurred_at, received_at) ASC, id ASC
+    `,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    source: 'orders_with_parcel_events',
+    order: {
+      id: order.id,
+      status: order.status,
+      trackingNumber: order.tracking_number,
+      shippingProvider: order.shipping_provider,
+      shippedAt: order.shipped_at,
+      deliveredAt: order.delivered_at,
+    },
+    items: eventsResult.rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      eventType: row.event_type,
+      providerEventId: row.provider_event_id,
+      trackingId: row.tracking_id,
+      occurredAt: row.occurred_at,
+      receivedAt: row.received_at,
+      payload: row.payload,
+    })),
+  };
+});
+
+app.get('/orders/:orderId/events', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const order = await db.query<{ buyer_id: string; seller_id: string }>(
+    `SELECT buyer_id, seller_id
+     FROM orders
+     WHERE id = $1
+     LIMIT 1`,
+    [orderId]
+  );
+  if (!order.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+  const actor = request.authUser;
+  const canRead = actor?.role === 'admin'
+    || actor?.userId === order.rows[0].buyer_id
+    || actor?.userId === order.rows[0].seller_id;
+  if (!canRead) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: order timeline access denied' };
+  }
+
+  const events = await db.query<{
+    id: number;
+    event_type: string;
+    actor_id: string | null;
+    source: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  }>(
+    `SELECT id, event_type, actor_id, source, metadata, created_at::text
+     FROM order_events
+     WHERE order_id = $1
+     ORDER BY created_at ASC, id ASC`,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    orderId,
+    items: events.rows.map((event) => ({
+      id: event.id,
+      eventType: event.event_type,
+      actorId: event.actor_id,
+      source: event.source,
+      metadata: event.metadata,
+      createdAt: event.created_at,
+    })),
+  };
+});
+
+app.get('/orders/:orderId/ledger', async (request) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  if (!(await ledgerTablesAvailable(db))) {
+    return {
+      ok: true,
+      items: [],
+    };
+  }
+
+  const result = await db.query<{
+    id: number;
+    direction: 'debit' | 'credit';
+    amount_gbp: number | string;
+    source_type: string;
+    line_type: string;
+    created_at: string;
+    account_code: string;
+    owner_type: 'platform' | 'user';
+    owner_id: string;
+    counterparty_account_code: string;
+    counterparty_owner_type: 'platform' | 'user';
+    counterparty_owner_id: string;
+  }>(
+    `
+      SELECT
+        le.id,
+        le.direction,
+        le.amount_gbp,
+        le.source_type,
+        le.line_type,
+        le.created_at,
+        account_entry.account_code,
+        account_entry.owner_type,
+        account_entry.owner_id,
+        counterparty.account_code AS counterparty_account_code,
+        counterparty.owner_type AS counterparty_owner_type,
+        counterparty.owner_id AS counterparty_owner_id
+      FROM ledger_entries le
+      INNER JOIN ledger_accounts account_entry
+        ON account_entry.id = le.account_id
+      INNER JOIN ledger_accounts counterparty
+        ON counterparty.id = le.counterparty_account_id
+      WHERE le.source_type IN ('order_payment', 'order_delivery')
+        AND le.source_id = $1
+      ORDER BY le.created_at ASC, le.id ASC
+    `,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      direction: row.direction,
+      amountGbp: Number(row.amount_gbp),
+      sourceType: row.source_type,
+      lineType: row.line_type,
+      createdAt: row.created_at,
+      account: {
+        ownerType: row.owner_type,
+        ownerId: row.owner_id,
+        code: row.account_code,
+      },
+      counterparty: {
+        ownerType: row.counterparty_owner_type,
+        ownerId: row.counterparty_owner_id,
+        code: row.counterparty_account_code,
+      },
+    })),
+  };
+});
+
+app.get('/orders/:orderId', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const authUserId = (request as any).authUser?.userId as string | undefined;
+  const authRole = (request as any).authUser?.role as string | undefined;
+
+  if (!authUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    buyer_id: string;
+    seller_id: string;
+    listing_id: string;
+    subtotal_gbp: number | string;
+    buyer_protection_fee_gbp: number | string;
+    postage_fee_gbp: number | string;
+    total_gbp: number | string;
+    status: string;
+    address_id: number | null;
+    payment_method_id: number | null;
+    shipping_carrier_id: string | null;
+    shipping_provider: string | null;
+    tracking_number: string | null;
+    shipping_label_url: string | null;
+    shipping_quote_gbp: number | string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+    created_at: string;
+    updated_at: string;
+    buyer_username: string | null;
+    buyer_avatar: string | null;
+    seller_username: string | null;
+    seller_avatar: string | null;
+  }>(
+    `
+      SELECT
+        o.id,
+        o.buyer_id,
+        o.seller_id,
+        o.listing_id,
+        o.subtotal_gbp,
+        o.buyer_protection_fee_gbp,
+        o.postage_fee_gbp,
+        o.total_gbp,
+        o.status,
+        o.address_id,
+        o.payment_method_id,
+        o.shipping_carrier_id,
+        o.shipping_provider,
+        o.tracking_number,
+        o.shipping_label_url,
+        o.shipping_quote_gbp,
+        o.shipped_at::text,
+        o.delivered_at::text,
+        o.created_at::text,
+        o.updated_at::text,
+        bu.username AS buyer_username,
+        bu.avatar AS buyer_avatar,
+        su.username AS seller_username,
+        su.avatar AS seller_avatar
+      FROM orders o
+      LEFT JOIN users bu ON bu.id = o.buyer_id
+      LEFT JOIN users su ON su.id = o.seller_id
+      WHERE o.id = $1
+      LIMIT 1
+    `,
+    [orderId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  const row = result.rows[0];
+
+  if (authRole !== 'admin' && row.buyer_id !== authUserId && row.seller_id !== authUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: you do not have access to this order' };
+  }
+
+  const platformChargeGbp = Number(row.buyer_protection_fee_gbp);
+  return {
+    ok: true,
+    order: {
+      id: row.id,
+      buyerId: row.buyer_id,
+      sellerId: row.seller_id,
+      listingId: row.listing_id,
+      subtotalGbp: Number(row.subtotal_gbp),
+      buyerProtectionFeeGbp: platformChargeGbp,
+      platformChargeGbp,
+      postageFeeGbp: Number(row.postage_fee_gbp),
+      totalGbp: Number(row.total_gbp),
+      status: row.status,
+      addressId: row.address_id,
+      paymentMethodId: row.payment_method_id,
+      shippingCarrierId: row.shipping_carrier_id,
+      shippingProvider: row.shipping_provider,
+      trackingNumber: row.tracking_number,
+      shippingLabelUrl: row.shipping_label_url,
+      shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+      shippedAt: row.shipped_at,
+      deliveredAt: row.delivered_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      buyer: row.buyer_username ? { id: row.buyer_id, username: row.buyer_username, avatar: row.buyer_avatar ?? null } : null,
+      seller: row.seller_username ? { id: row.seller_id, username: row.seller_username, avatar: row.seller_avatar ?? null } : null,
+    },
+  };
+});
+
+app.get('/users/:userId/orders', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const querySchema = z.object({
+    role: z.enum(['buyer', 'seller', 'all']).default('all'),
+    status: z.string().optional(),
+    classification: z.enum(['needs_action', 'active', 'completed', 'cancelled']).optional(),
+    query: z.string().min(1).max(100).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    createdBefore: z.string().datetime().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  });
+
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+  const {
+    role,
+    status: statusFilter,
+    classification,
+    query: searchQuery,
+    year,
+    createdBefore,
+    cursor,
+    limit,
+  } = querySchema.parse(request.query);
+
+  // Build WHERE conditions dynamically
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
+
+  // Role filter
+  if (role === 'buyer') {
+    conditions.push(`o.buyer_id = $${paramIdx++}`);
+    params.push(userId);
+  } else if (role === 'seller') {
+    conditions.push(`o.seller_id = $${paramIdx++}`);
+    params.push(userId);
+  } else {
+    conditions.push(`(o.buyer_id = $${paramIdx++} OR o.seller_id = $${paramIdx++})`);
+    params.push(userId);
+    params.push(userId);
+  }
+
+  // Status filter (comma-separated list)
+  if (statusFilter) {
+    const statusList = statusFilter.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+    if (statusList.length > 0) {
+      const placeholders = statusList.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += statusList.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of statusList) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Classification filter
+  if (classification) {
+    const classificationSets: Record<string, string[]> = {
+      needs_action: ['created', 'paid'],
+      active: ['created', 'paid', 'shipped'],
+      completed: ['delivered', 'completed'],
+      cancelled: ['cancelled', 'refunded'],
+    };
+    const set = classificationSets[classification];
+    if (set && set.length > 0) {
+      const placeholders = set.map((_s: string, i: number) => `$${paramIdx + i}`).join(', ');
+      paramIdx += set.length;
+      conditions.push(`LOWER(o.status) IN (${placeholders})`);
+      for (const s of set) {
+        params.push(s);
+      }
+    }
+  }
+
+  // Year filter
+  if (year) {
+    conditions.push(`EXTRACT(YEAR FROM o.created_at) = $${paramIdx++}`);
+    params.push(year);
+  }
+
+  // Search query â€” match order ID, listing title, buyer/seller username, tracking number
+  if (searchQuery) {
+    const searchPattern = `%${searchQuery}%`;
+    conditions.push(`(
+      o.id ILIKE $${paramIdx}
+      OR l.title ILIKE $${paramIdx}
+      OR bu.username ILIKE $${paramIdx}
+      OR su.username ILIKE $${paramIdx}
+      OR o.tracking_number ILIKE $${paramIdx}
+    )`);
+    paramIdx++;
+    params.push(searchPattern);
+  }
+
+  // Cursor pagination â€” createdBefore or cursor (ISO timestamp)
+  const cursorDate = cursor ?? createdBefore;
+  if (cursorDate) {
+    conditions.push(`o.created_at < $${paramIdx++}`);
+    params.push(cursorDate);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  // Use LEFT JOIN on listings so deleted listings don't break history
+  const result = await db.query<{
+    id: string;
+    buyer_id: string;
+    seller_id: string;
+    listing_id: string;
+    status: string;
+    subtotal_gbp: number | string;
+    postage_fee_gbp: number | string;
+    total_gbp: number | string;
+    tracking_number: string | null;
+    shipping_provider: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+    created_at: string;
+    listing_title: string | null;
+    listing_image_url: string | null;
+    buyer_username: string | null;
+    seller_username: string | null;
+  }>(
+    `
+      SELECT
+        o.id,
+        o.buyer_id,
+        o.seller_id,
+        o.listing_id,
+        o.status,
+        o.subtotal_gbp,
+        o.postage_fee_gbp,
+        o.total_gbp,
+        o.tracking_number,
+        o.shipping_provider,
+        o.shipped_at::text,
+        o.delivered_at::text,
+        o.created_at,
+        l.title AS listing_title,
+        l.image_url AS listing_image_url,
+        bu.username AS buyer_username,
+        su.username AS seller_username
+      FROM orders o
+      LEFT JOIN listings l ON l.id = o.listing_id
+      LEFT JOIN users bu ON bu.id = o.buyer_id
+      LEFT JOIN users su ON su.id = o.seller_id
+      WHERE ${whereClause}
+      ORDER BY o.created_at DESC
+      LIMIT $${paramIdx}
+    `,
+    [...params, limit + 1]
+  );
+
+  const hasMore = result.rows.length > limit;
+  const items = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasMore && items.length > 0
+    ? items[items.length - 1].created_at
+    : null;
+
+  return {
+    ok: true,
+    items: items.map((row) => ({
+      id: row.id,
+      buyerId: row.buyer_id,
+      sellerId: row.seller_id,
+      listingId: row.listing_id,
+      listingTitle: row.listing_title,
+      listingImageUrl: row.listing_image_url,
+      status: row.status,
+      subtotalGbp: Number(row.subtotal_gbp),
+      postageFeeGbp: Number(row.postage_fee_gbp),
+      totalGbp: Number(row.total_gbp),
+      trackingNumber: row.tracking_number,
+      shippingProvider: row.shipping_provider,
+      shippedAt: row.shipped_at,
+      deliveredAt: row.delivered_at,
+      createdAt: row.created_at,
+      buyerUsername: row.buyer_username,
+      sellerUsername: row.seller_username,
+    })),
+    nextCursor,
+  };
+});
+
+app.get('/orders/:orderId/protection', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const orderResult = await db.query<{
+    buyer_id: string;
+    total_gbp: number | string;
+    buyer_protection_fee_gbp: number | string;
+    status: string;
+    delivered_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT buyer_id, total_gbp, buyer_protection_fee_gbp, status, delivered_at, created_at
+     FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  if (orderResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  const order = orderResult.rows[0];
+  if (order.buyer_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can view protection status' };
+  }
+
+  const feeGbpMinor = Math.round(Number(order.buyer_protection_fee_gbp) * 100);
+  const totalGbpMinor = Math.round(Number(order.total_gbp) * 100);
+  const coverageAmountGbpMinor = Math.min(totalGbpMinor, 50000); // capped at Â£500
+  const eligibleUntil = order.delivered_at
+    ? new Date(new Date(order.delivered_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    : new Date(new Date(order.created_at).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
+  const claimsResult = await db.query<{
+    id: string;
+    topic_id: string;
+    topic_label: string;
+    status: string;
+    created_at: string;
+  }>(
+    `SELECT id, topic_id, topic_label, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
+     ORDER BY created_at DESC`,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    protection: {
+      orderId,
+      feeGbpMinor,
+      status: feeGbpMinor > 0 ? 'covered' : 'not_covered',
+      coverageAmountGbpMinor,
+      eligibleUntil,
+      claims: claimsResult.rows.map((r) => ({
+        ticketId: r.id,
+        topicId: r.topic_id,
+        topicLabel: r.topic_label,
+        status: r.status,
+        createdAt: r.created_at,
+      })),
+    },
+  };
+});
+
+app.post('/orders/:orderId/protection/claim', {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 minute',
+    },
+  },
+}, async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    reason: z.string().trim().min(2).max(120),
+    description: z.string().trim().min(10).max(2000),
+    evidenceUrls: z.array(z.string().url()).max(5).optional(),
+  });
+  const { reason, description, evidenceUrls } = bodySchema.parse(request.body ?? {});
+
+  const orderResult = await db.query<{ buyer_id: string; status: string }>(
+    `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  if (orderResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (orderResult.rows[0].buyer_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can file a protection claim' };
+  }
+
+  const ticketId = `ticket_${crypto.randomUUID()}`;
+  const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls)
+     VALUES ($1, $2, $3, 'buyer_protection_claim', $4, $5, 'open', $6)
+     RETURNING id, status, created_at`,
+    [
+      ticketId,
+      request.authUser.userId,
+      orderId,
+      reason,
+      description,
+      evidenceUrls && evidenceUrls.length > 0 ? evidenceUrls : [],
+    ]
+  );
+
+  const ticket = ticketResult.rows[0];
+
+  reply.code(201);
+  return {
+    ok: true,
+    claim: {
+      ticketId: ticket.id,
+      status: ticket.status,
+      createdAt: ticket.created_at,
+    },
+  };
+});
+
+app.post('/orders/:orderId/cancel', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      total_gbp: number | string;
+      payment_intent_id: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, total_gbp, payment_intent_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.buyer_id !== userId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can cancel this order' };
+    }
+
+    if (order.status !== 'created') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: order.status === 'paid'
+          ? 'Paid orders must use the refund or return workflow'
+          : `Cannot cancel an order that is already ${order.status}`,
+      };
+    }
+    if (order.payment_intent_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'A payment attempt is already attached to this order',
+        code: 'ORDER_PAYMENT_IN_PROGRESS',
+      };
+    }
+
+    await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES ($1, 'order.cancelled', $2, 'buyer', $3, '{}'::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [orderId, userId, `order.cancelled:${orderId}`]
+    );
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'cancelled' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/ship', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    trackingNumber: z.string().min(1).max(128).optional(),
+    shippingProvider: z.string().min(1).max(64).optional(),
+    untracked: z.boolean().optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      subtotal_gbp: number | string;
+      shipping_provider: string | null;
+      tracking_number: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider, tracking_number FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.seller_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the seller can mark this order as shipped' };
+    }
+
+    if (order.status !== 'paid') {
+      reply.code(409);
+      return { ok: false, error: `Cannot mark as shipped from status: ${order.status}` };
+    }
+
+    const provider = body.shippingProvider ?? order.shipping_provider ?? (body.untracked ? 'untracked' : 'manual');
+    const tracking = body.trackingNumber ?? order.tracking_number ?? null;
+
+    if (!tracking && !body.untracked) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return { ok: false, error: 'A tracking number is required, or explicitly confirm untracked shipping', code: 'TRACKING_REQUIRED' };
+    }
+
+    await client.query(
+      `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
+      [orderId, provider, tracking]
+    );
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider, untracked: body.untracked === true };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/deliver', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      subtotal_gbp: number | string;
+      shipping_provider: string | null;
+    }>(
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.buyer_id !== userId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can confirm delivery' };
+    }
+
+    if (order.status !== 'shipped') {
+      reply.code(409);
+      return { ok: false, error: `Cannot confirm delivery from status: ${order.status}` };
+    }
+
+    // Gate 6: Check for open blocking disputes before releasing escrow.
+    // Buyer acknowledgement cannot release money while any return/dispute/
+    // blocking risk state is open.
+    const blockingTicketsResult = await client.query<{ id: string; topic_id: string }>(
+      `SELECT id, topic_id FROM support_tickets
+       WHERE order_id = $1 AND status = 'open'
+         AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request')`,
+      [orderId]
+    );
+    const hasOpenBlockingDispute = blockingTicketsResult.rows.length > 0;
+
+    await client.query(
+      `UPDATE orders SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [orderId]
+    );
+
+    if (hasOpenBlockingDispute) {
+      // Delivery is confirmed, but funds are held while the dispute is open.
+      // Escrow release is deferred until the dispute is resolved.
+      request.log.warn(
+        { orderId, ticketIds: blockingTicketsResult.rows.map(r => r.id) },
+        'Escrow release blocked by open dispute — delivery confirmed, funds held'
+      );
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        orderId,
+        status: 'delivered',
+        escrowHeld: true,
+        holdReason: 'OPEN_DISPUTE',
+        message: 'Delivery confirmed. Funds are held while an open dispute is resolved.',
+      };
+    }
+
+    await releaseCommerceOrderEscrowToSeller(client, {
+      orderId,
+      sellerId: order.seller_id,
+      subtotalGbp: Number(order.subtotal_gbp),
+      parcelProvider: order.shipping_provider ?? 'manual',
+      parcelEventType: 'delivered',
+    });
+
+    await client.query('COMMIT');
+    recordGmv(Number(order.subtotal_gbp));
+    recordOrderCompleted();
+    return { ok: true, orderId, status: 'delivered' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/refund', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    reason: z.string().min(1).max(500).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+  const authUser = (request as any).authUser;
+
+  if (!authUser?.userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  if (authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Refund execution requires operator or admin authority', code: 'REFUND_REQUIRES_OPERATOR' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      total_gbp: number | string;
+    }>(
+      `SELECT buyer_id, seller_id, status, total_gbp FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+    }
+
+    if (order.status !== 'paid' && order.status !== 'shipped') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: `Cannot refund order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
+    }
+
+    await postCommerceOrderRefundLedgerReversal(client, orderId, authUser.userId, Number(order.total_gbp));
+    await client.query(`UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`, [orderId]);
+
+    await client.query('COMMIT');
+    return { ok: true, orderId, status: 'refunded', refunded: true, reason: body.reason ?? null };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/refund-request', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    reason: z.string().min(1).max(2000).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const orderResult = await db.query<{ buyer_id: string; status: string }>(
+    `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+  }
+
+  if (order.buyer_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can request a refund', code: 'NOT_BUYER' };
+  }
+
+  const allowedStatuses = ['paid', 'shipped', 'delivered', 'completed'];
+  if (!allowedStatuses.includes(order.status)) {
+    reply.code(409);
+    return { ok: false, error: `Cannot request a refund for an order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
+  }
+
+  const ticketId = `ticket_${crypto.randomUUID()}`;
+  const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status)
+     VALUES ($1, $2, $3, 'refund_request', 'Refund request', $4, 'open')
+     RETURNING id, status, created_at`,
+    [ticketId, userId, orderId, body.reason ?? 'Buyer requested a refund']
+  );
+
+  const ticket = ticketResult.rows[0];
+  reply.code(201);
+  return {
+    ok: true,
+    requestId: ticket.id,
+    status: 'request_submitted',
+    ticketStatus: ticket.status,
+    createdAt: ticket.created_at,
+  };
+});
+
+app.post('/orders/:orderId/shipping-label', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const orderResult = await db.query<{ seller_id: string; status: string; shipping_label_url: string | null }>(
+    `SELECT seller_id, status, shipping_label_url FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (order.seller_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can request a shipping label' };
+  }
+
+  if (order.status !== 'paid') {
+    reply.code(409);
+    return { ok: false, error: `Cannot generate a label for an order in status: ${order.status}` };
+  }
+
+  if (order.shipping_label_url) {
+    return { ok: true, orderId, labelUrl: order.shipping_label_url };
+  }
+
+  reply.code(409);
+  return {
+    ok: false,
+    error: 'Label generation is not yet available for this carrier. Use manual shipping with a tracking number.',
+    code: 'LABEL_GENERATION_UNAVAILABLE',
+  };
+});
+
+app.post('/orders/:orderId/fulfilment/handoff-assertion', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    trackingNumber: z.string().min(1).max(128).optional(),
+    shippingProvider: z.string().min(1).max(64).optional(),
+    labelUrl: z.string().url().max(1024).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const orderResult = await db.query<{ seller_id: string; status: string; shipping_provider: string | null; tracking_number: string | null }>(
+    `SELECT seller_id, status, shipping_provider, tracking_number FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (order.seller_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can assert a handoff' };
+  }
+
+  if (order.status !== 'paid' && order.status !== 'shipped') {
+    reply.code(409);
+    return { ok: false, error: `Cannot assert handoff for an order in status: ${order.status}` };
+  }
+
+  const provider = body.shippingProvider ?? order.shipping_provider ?? 'seller_assertion';
+  const trackingId = body.trackingNumber ?? order.tracking_number ?? null;
+
+  await db.query(
+    `INSERT INTO order_parcel_events (order_id, provider, event_type, tracking_id, occurred_at, received_at, payload)
+     VALUES ($1, $2, 'handoff_asserted', $3, NOW(), NOW(), $4::jsonb)`,
+    [
+      orderId,
+      provider,
+      trackingId,
+      toJsonString({ tracking: trackingId, provider, labelUrl: body.labelUrl ?? null, assertedBy: userId }),
+    ]
+  );
+
+  return {
+    ok: true,
+    orderId,
+    handoffClaimedAt: new Date().toISOString(),
+    status: order.status,
+  };
+});
+
+
+
+};

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Radius, Space, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -36,6 +36,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   onToggleWatch,
 }: CoOwnInstrumentCardProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const statusColor = status === 'open'
     ? colors.success
     : status === 'paused'
@@ -104,7 +105,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   );
 });
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
     minWidth: 0,
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.58)',
+    backgroundColor: colors.overlay,
   },
   statusDot: {
     width: 5,
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -168,14 +169,14 @@ const styles = StyleSheet.create({
   },
   title: {
     minHeight: 38,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     lineHeight: 19,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
   price: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },

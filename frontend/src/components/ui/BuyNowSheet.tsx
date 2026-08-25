@@ -24,6 +24,7 @@ import { createStableId } from '../../utils/createStableId';
 import { toIze, formatAuctionIze } from '../../utils/currency';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
 export interface BuyNowSheetAuctionContext {
@@ -250,7 +251,7 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, 'GBP')
+    ? formatFromFiat(displayPriceGbp, DEFAULT_CURRENCY_CODE)
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'
@@ -461,12 +462,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   itemSeller: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     marginTop: 2,
   },
@@ -509,7 +510,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     fontVariant: ['tabular-nums'],
   },
   fixedPriceEquivalent: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
@@ -543,12 +544,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    backgroundColor: colors.dangerSubtle,
     marginBottom: Space.sm,
   },
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
@@ -568,7 +569,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     gap: Space.md,
   },
   submittingText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -576,7 +577,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     marginBottom: Space.xs,
   },
   submittingDetail: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -589,7 +590,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     color: colors.textPrimary,
   },
   successDetail: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -606,7 +607,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     marginBottom: Space.xs,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -614,7 +615,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   },
   // R09: Unknown-outcome recovery hint
   ambiguousHint: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',

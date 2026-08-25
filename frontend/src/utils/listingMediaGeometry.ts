@@ -27,10 +27,22 @@ function normalizeAspectRatio(value: unknown): number | null {
 }
 
 /**
+ * Structural shape required to resolve media geometry. Both the mock-data
+ * `Listing` and the production `DiscoveryListingSummary` satisfy this, so the
+ * discovery feed can resolve geometry from either without coupling the
+ * renderer to a single domain type.
+ */
+export interface MediaGeometrySource {
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+}
+
+/**
  * Resolve real media geometry when the API provides it. A stable 4:5 frame is
  * the honest fallback: item IDs must never be used to fabricate image shapes.
  */
-export function resolveListingMediaAspectRatio(listing: Listing): number {
+export function resolveListingMediaAspectRatio(listing: MediaGeometrySource): number {
   const directRatio = normalizeAspectRatio(listing.mediaAspectRatio);
   if (directRatio) {
     return directRatio;

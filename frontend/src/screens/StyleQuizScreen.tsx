@@ -110,8 +110,7 @@ export default function StyleQuizScreen() {
       categoriesAndSizesPref: selectedStyles.length > 0 ? selectedStyles.join(', ') : 'Balanced',
       brandsPref: selectedPrice ? selectedPrice : 'Any',
     });
-    show('Feed personalised — your Explore and Home feeds now reflect your preferences.', 'success');
-    // Navigate to Home tab to show the personalised feed
+    show('Saved to your style profile', 'success');
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
 
@@ -186,7 +185,7 @@ export default function StyleQuizScreen() {
         <Ionicons name="checkmark-circle" size={64} color={colors.success} />
       </View>
       <Text style={styles.stepTitle}>Quiz complete</Text>
-      <Text style={styles.stepSub}>Your Explore feed will be tailored to your preferences.</Text>
+      <Text style={styles.stepSub}>Your preferences have been saved to your style profile.</Text>
       <View style={styles.summaryCard}>
         <SummaryRow label="Shopping for" value={selectedGender || '—'} />
         <SummaryRow label="Styles" value={selectedStyles.length > 0 ? selectedStyles.join(', ') : '—'} />

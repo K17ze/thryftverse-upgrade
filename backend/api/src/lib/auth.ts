@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { SignJWT, jwtVerify, importPKCS8, importSPKI, type KeyLike } from 'jose';
 import { db } from '../db/pool.js';
 import { config } from '../config.js';
 
@@ -24,6 +25,56 @@ type RefreshLookupRow = {
   role: AuthRole;
 };
 
+const JWT_AUDIENCE = 'thryftverse-app';
+const JWT_ISSUER = 'thryftverse-api';
+
+type ResolvedSigningKey =
+  | { algorithm: 'HS256'; secret: string }
+  | { algorithm: 'EdDSA'; privateKey: KeyLike | Uint8Array };
+
+type ResolvedVerifyingKey =
+  | { algorithm: 'HS256'; secret: string }
+  | { algorithm: 'EdDSA'; publicKey: KeyLike | Uint8Array };
+
+let cachedSigningKey: ResolvedSigningKey | null = null;
+let cachedVerifyingKey: ResolvedVerifyingKey | null = null;
+
+async function resolveSigningKeyAsync(): Promise<ResolvedSigningKey> {
+  if (cachedSigningKey) {
+    return cachedSigningKey;
+  }
+
+  if (
+    config.jwtAlgorithm === 'EdDSA'
+    && config.jwtEd25519PrivateKey
+  ) {
+    const privateKey = await importPKCS8(config.jwtEd25519PrivateKey, 'EdDSA');
+    cachedSigningKey = { algorithm: 'EdDSA', privateKey };
+    return cachedSigningKey;
+  }
+
+  cachedSigningKey = { algorithm: 'HS256', secret: config.authAccessTokenSecret };
+  return cachedSigningKey;
+}
+
+async function resolveVerifyingKeyAsync(): Promise<ResolvedVerifyingKey> {
+  if (cachedVerifyingKey) {
+    return cachedVerifyingKey;
+  }
+
+  if (
+    config.jwtAlgorithm === 'EdDSA'
+    && config.jwtEd25519PublicKey
+  ) {
+    const publicKey = await importSPKI(config.jwtEd25519PublicKey, 'EdDSA');
+    cachedVerifyingKey = { algorithm: 'EdDSA', publicKey };
+    return cachedVerifyingKey;
+  }
+
+  cachedVerifyingKey = { algorithm: 'HS256', secret: config.authAccessTokenSecret };
+  return cachedVerifyingKey;
+}
+
 function createOpaqueToken(prefix = 'tok') {
   return `${prefix}_${crypto.randomBytes(32).toString('base64url')}`;
 }
@@ -36,26 +87,89 @@ function futureTimestamp(seconds: number) {
   return new Date(Date.now() + seconds * 1000).toISOString();
 }
 
-function signAccessToken(userId: string, role: AuthRole, sessionId: string) {
+export interface SignTokenPayload {
+  sub: string;
+  role: AuthRole;
+  sid: string;
+  typ: string;
+}
+
+/**
+ * Signs a JWT payload using the configured algorithm (EdDSA when Ed25519 keys
+ * are present, HS256 otherwise for backward compatibility). Returns a compact
+ * JWT string.
+ */
+export async function signToken(payload: SignTokenPayload): Promise<string> {
+  const key = await resolveSigningKeyAsync();
+
+  if (key.algorithm === 'EdDSA') {
+    return new SignJWT({ role: payload.role, sid: payload.sid, typ: payload.typ })
+      .setProtectedHeader({ alg: 'EdDSA' })
+      .setSubject(payload.sub)
+      .setAudience(JWT_AUDIENCE)
+      .setIssuer(JWT_ISSUER)
+      .setIssuedAt()
+      .setExpirationTime(`${config.authAccessTokenTtlSeconds}s`)
+      .setJti(crypto.randomUUID())
+      .sign(key.privateKey);
+  }
+
   return jwt.sign(
     {
-      role,
-      sid: sessionId,
-      typ: 'access',
+      role: payload.role,
+      sid: payload.sid,
+      typ: payload.typ,
     },
-    config.authAccessTokenSecret,
+    key.secret,
     {
       algorithm: 'HS256',
-      subject: userId,
-      audience: 'thryftverse-app',
-      issuer: 'thryftverse-api',
+      subject: payload.sub,
+      audience: JWT_AUDIENCE,
+      issuer: JWT_ISSUER,
       expiresIn: config.authAccessTokenTtlSeconds,
       jwtid: crypto.randomUUID(),
     }
   );
 }
 
-function parseJwtPayload(payload: unknown) {
+async function signAccessToken(userId: string, role: AuthRole, sessionId: string): Promise<string> {
+  return signToken({ sub: userId, role, sid: sessionId, typ: 'access' });
+}
+
+/**
+ * Verifies a JWT token and returns the parsed payload, or null if the token is
+ * invalid, expired, or has an unexpected audience/issuer. Supports both EdDSA
+ * and HS256 algorithms depending on configuration.
+ */
+export async function verifyToken(token: string): Promise<SignTokenPayload | null> {
+  const key = await resolveVerifyingKeyAsync();
+
+  if (key.algorithm === 'EdDSA') {
+    try {
+      const { payload } = await jwtVerify(token, key.publicKey, {
+        algorithms: ['EdDSA'],
+        audience: JWT_AUDIENCE,
+        issuer: JWT_ISSUER,
+      });
+      return parseJosePayload(payload);
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const payload = jwt.verify(token, key.secret, {
+      algorithms: ['HS256'],
+      audience: JWT_AUDIENCE,
+      issuer: JWT_ISSUER,
+    });
+    return parseJosePayload(payload);
+  } catch {
+    return null;
+  }
+}
+
+function parseJosePayload(payload: unknown): SignTokenPayload | null {
   if (!payload || typeof payload !== 'object') {
     return null;
   }
@@ -78,9 +192,10 @@ function parseJwtPayload(payload: unknown) {
   }
 
   return {
-    userId: maybe.sub,
+    sub: maybe.sub,
     role: maybe.role as AuthRole,
-    sessionId: maybe.sid,
+    sid: maybe.sid,
+    typ: maybe.typ,
   };
 }
 
@@ -140,7 +255,7 @@ export async function issueAuthSession(
     await client.query('COMMIT');
 
     return {
-      accessToken: signAccessToken(input.userId, input.role, sessionId),
+      accessToken: await signAccessToken(input.userId, input.role, sessionId),
       refreshToken,
       sessionId,
       accessTokenExpiresInSeconds: config.authAccessTokenTtlSeconds,
@@ -240,7 +355,7 @@ export async function rotateRefreshSession(
       userId: row.user_id,
       role: row.role,
       sessionId: row.session_id,
-      accessToken: signAccessToken(row.user_id, row.role, row.session_id),
+      accessToken: await signAccessToken(row.user_id, row.role, row.session_id),
       refreshToken: nextRefreshToken,
       accessTokenExpiresInSeconds: config.authAccessTokenTtlSeconds,
       refreshTokenExpiresAt: nextRefreshTokenExpiresAt,
@@ -314,19 +429,7 @@ export async function revokeOtherUserSessions(userId: string, keepSessionId: str
 }
 
 export async function verifyAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
-  let payload: unknown;
-
-  try {
-    payload = jwt.verify(accessToken, config.authAccessTokenSecret, {
-      algorithms: ['HS256'],
-      audience: 'thryftverse-app',
-      issuer: 'thryftverse-api',
-    });
-  } catch {
-    return null;
-  }
-
-  const parsed = parseJwtPayload(payload);
+  const parsed = await verifyToken(accessToken);
   if (!parsed) {
     return null;
   }
@@ -342,7 +445,7 @@ export async function verifyAccessToken(accessToken: string): Promise<Authentica
         AND user_id = $2
       LIMIT 1
     `,
-    [parsed.sessionId, parsed.userId]
+    [parsed.sid, parsed.sub]
   );
 
   const session = sessionResult.rows[0];
@@ -350,7 +453,11 @@ export async function verifyAccessToken(accessToken: string): Promise<Authentica
     return null;
   }
 
-  return parsed;
+  return {
+    userId: parsed.sub,
+    role: parsed.role,
+    sessionId: parsed.sid,
+  };
 }
 
 export function hashOpaqueValue(value: string) {

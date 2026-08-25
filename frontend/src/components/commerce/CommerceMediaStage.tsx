@@ -29,13 +29,14 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
-import { isVideoUri } from '../../utils/media';
+import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 import { SharedTransitionImage } from '../SharedTransitionImage';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
@@ -56,6 +57,21 @@ const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 44,
+  },
+  retryText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
   },
 });
 
@@ -82,6 +98,8 @@ function MediaPage({
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
   const [failed, setFailed] = useState(false);
+  // Retry key — incrementing forces CachedImage to remount and re-fetch.
+  const [retryKey, setRetryKey] = useState(0);
   // Track zoom state in React state so the pan gesture can be
   // disabled when not zoomed. This is critical: when the pan gesture
   // is always active, it captures horizontal swipes and prevents the
@@ -138,8 +156,8 @@ function MediaPage({
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withSpring(0, Motion.spring.settle);
+        translateY.value = withSpring(0, Motion.spring.settle);
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -148,15 +166,15 @@ function MediaPage({
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withSpring(tx, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityX });
+      translateY.value = withSpring(ty, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityY });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
+        scale.value = withSpring(1, Motion.spring.press);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         savedScale.value = 1;
@@ -165,7 +183,7 @@ function MediaPage({
         runOnJS(setIsZoomed)(false);
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withSpring(target, Motion.spring.success);
         savedScale.value = target;
         runOnJS(setIsZoomed)(true);
         if (onDoubleTap) runOnJS(onDoubleTap)();
@@ -200,20 +218,34 @@ function MediaPage({
             icon="image-outline"
             label="Photo unavailable"
             style={subComponentStyles.image}
-          />
+          >
+            <Pressable
+              style={subComponentStyles.retryBtn}
+              onPress={() => { setFailed(false); setRetryKey((k) => k + 1); }}
+              accessibilityLabel="Retry loading image"
+              accessibilityRole="button"
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />
+              <Text style={subComponentStyles.retryText}>Retry</Text>
+            </Pressable>
+          </ImageEmptyGraphic>
         ) : (
           item.focalPoint ? (
             <CachedImage
+              key={retryKey}
               uri={item.uri}
+              blurhash={item.blurhash ?? undefined}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
-              contentFit={item.fit ?? 'contain'}
+              contentFit={item.fit ?? 'cover'}
               focalPoint={item.focalPoint}
+              sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
               downscaleWidth={width}
             />
           ) : (
             <SharedTransitionImage
+              key={retryKey}
               source={{ uri: item.uri }}
               style={subComponentStyles.image}
               resizeMode={item.fit ?? 'contain'}
@@ -595,7 +627,7 @@ const videoControlStyles = StyleSheet.create({
     marginTop: -28,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -625,13 +657,13 @@ const videoControlStyles = StyleSheet.create({
   },
   scrubTrackBg: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.3)',
     overflow: 'visible',
   },
   scrubTrackFill: {
     height: '100%',
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   scrubThumb: {
@@ -639,7 +671,7 @@ const videoControlStyles = StyleSheet.create({
     top: -5,
     width: 13,
     height: 13,
-    borderRadius: 6.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     marginLeft: -6.5,
   },
@@ -702,6 +734,15 @@ export interface CommerceMediaStageProps {
    * Defaults to true for backward compatibility.
    */
   showPageIndicator?: boolean;
+  /**
+   * Category label used to derive category-sensitive default focal
+   * points for art-directed crops when the caller supplies raw image
+   * URIs (the `images` prop) rather than typed `media` with explicit
+   * focalPoint metadata. Per research doc 03 §Macro D: the gallery
+   * should default to category-appropriate focal positioning (e.g.
+   * centre-top for shoes, centre for bags) instead of blind cover.
+   */
+  category?: string | null;
 }
 
 export function CommerceMediaStage({
@@ -733,6 +774,7 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
+  category,
 }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -748,22 +790,29 @@ export function CommerceMediaStage({
   const dismissZoomHint = useCallback(() => {
     if (zoomHintDismissed.current) return;
     zoomHintDismissed.current = true;
-    zoomHintOpacity.value = withTiming(0, { duration: 400 });
+    zoomHintOpacity.value = withTiming(0, { duration: Motion.duration.slower });
   }, [zoomHintOpacity]);
   const mediaItems = React.useMemo<ProductMediaItem[]>(() => {
     if (media) return media.filter((item) => !!item.uri);
     const videoUriSet = new Set(videoUris);
+    // Per research doc 03 §Macro D: apply category-sensitive default
+    // focal points so PDP images use art-directed crops instead of blind
+    // `contentFit="contain"`. The focal point is only applied to images
+    // (videos use their own contentFit logic). `cover` + focalPoint
+    // preserves the most important region of the image.
+    const defaultFocalPoint = getCategoryFocalPoint(category);
     return images
       .filter(Boolean)
       .map((uri) => ({
         uri,
         kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
-        fit: 'contain',
+        fit: videoUriSet.has(uri) || isVideoUri(uri) ? 'contain' : 'cover',
+        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint,
       }));
-  }, [images, media, videoUris]);
+  }, [images, media, videoUris, category]);
   React.useEffect(() => {
     if (reducedMotion || mediaItems.length === 0) return;
-    zoomHintOpacity.value = withTiming(0.7, { duration: 300 });
+    zoomHintOpacity.value = withTiming(0.7, { duration: Motion.duration.slow });
     const timer = setTimeout(() => dismissZoomHint(), 2800);
     return () => clearTimeout(timer);
   }, [reducedMotion, mediaItems.length, zoomHintOpacity, dismissZoomHint]);
@@ -912,6 +961,23 @@ export function CommerceMediaStage({
         style={styles.topScrim}
         pointerEvents="none"
       />
+
+      {/* Image count badge — top-right pill showing current/total.
+          Per Aug 2026 research: subtle scrim pill, tabular numerals.
+          Sits above the topScrim for legibility; pointerEvents none so
+          it never intercepts header controls or image gestures. */}
+      {mediaItems.length > 1 && (
+        <View
+          style={styles.countBadge}
+          accessibilityLabel={`Image ${activeIndex + 1} of ${mediaItems.length}`}
+          accessibilityRole="text"
+          pointerEvents="none"
+        >
+          <Text style={styles.countBadgeText}>
+            {activeIndex + 1}/{mediaItems.length}
+          </Text>
+        </View>
+      )}
 
       {overlayBottomContent ? (
         <Reanimated.View style={[styles.bottomScrim, bottomScrimStyle]} pointerEvents="none">
@@ -1079,6 +1145,7 @@ export function CommerceMediaStage({
                     <CachedImage
                       uri={item.uri}
                       previewUri={item.posterUri ?? undefined}
+                      blurhash={item.blurhash ?? undefined}
                       style={styles.thumbnailImage}
                       containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       contentFit="cover"
@@ -1120,6 +1187,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     height: 132,
   },
+  // Image count badge — top-right pill (e.g. "1/8").
+  // Semi-transparent dark pill with white tabular-nums text.
+  countBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    backgroundColor: colors.overlay,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    zIndex: 9,
+  },
+  countBadgeText: {
+    color: colors.scrimTextPrimary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1142,7 +1227,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   soldText: {
     color: colors.background,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -1215,13 +1300,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   dot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
     width: 14,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   indexText: {

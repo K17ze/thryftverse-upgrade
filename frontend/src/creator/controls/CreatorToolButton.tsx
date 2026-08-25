@@ -31,7 +31,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Control, Radius, Space } from '../../theme/designTokens';
+import { Control, EditorRadius, Space } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -196,14 +196,15 @@ export function CreatorToolButton({
         position: 'relative',
       }}
     >
-      {/* Selected backplate (fill style only) */}
+      {/* Selected backplate (fill style only) — 10pt radius glass plate
+          (2026 flagship: 4pt square → 10pt rounded, matches IG/Snapchat) */}
       <Reanimated.View
         style={[
           styles.backplate,
           {
             width: BACKPLATE_SIZE,
             height: BACKPLATE_SIZE,
-            borderRadius: Radius.sm,
+            borderRadius: EditorRadius.plate,
             backgroundColor: colors.brand,
           },
           backplateStyle,

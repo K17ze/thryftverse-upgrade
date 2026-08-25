@@ -273,13 +273,13 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.68)',
+    backgroundColor: colors.overlay,
   },
   cardItemCountBadgeText: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: '#ffffff',
+    color: colors.scrimTextPrimary,
   },
   cardContent: {
     flex: 1,

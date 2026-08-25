@@ -16,6 +16,8 @@
  *    runs for the same file, so it never flickers or randomises. When a
  *    native waveform library (expo-audio-waveform, react-native-audio-data)
  *    is added to the project, this path can be upgraded to use it.
+ *    expo-audio's AudioPlayer sampling API (useAudioSampleListener) can
+ *    also provide real-time PCM frames for visualization during playback.
  *
  * Results are cached by URI + sample count to avoid re-reading the file
  * on every render.

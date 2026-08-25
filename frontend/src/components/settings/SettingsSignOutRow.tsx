@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Type, FontFamily } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface SettingsSignOutRowProps {
@@ -15,19 +15,22 @@ const createStyles = (colors: ThemeColors) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 14,
+      paddingVertical: Space.sm + Space.xs,
       paddingHorizontal: Space.md,
-      gap: Space.smMd,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
+      minHeight: 50,
+      gap: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     icon: {
-      width: 20,
+      width: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     label: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontSize: 16,
+      fontFamily: FontFamily.regular,
       color: colors.danger,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -77,9 +80,9 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
     >
       <View style={styles.row}>
         {isBusy ? (
-          <ActivityIndicator size={18} color={colors.danger} style={styles.icon} />
+          <ActivityIndicator size={20} color={colors.danger} style={styles.icon} />
         ) : (
-          <Ionicons name="log-out-outline" size={20} color={colors.danger} style={styles.icon} />
+          <Ionicons name="log-out-outline" size={24} color={colors.danger} style={styles.icon} />
         )}
         <Text style={styles.label}>
           {isBusy ? 'Signing out…' : 'Sign Out'}

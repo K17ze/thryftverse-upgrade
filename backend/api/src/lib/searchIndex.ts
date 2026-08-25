@@ -62,7 +62,7 @@ export interface SearchResult {
 
 export interface AutocompleteEntry {
   text: string;
-  type: 'query' | 'brand' | 'category';
+  type: 'query' | 'item' | 'brand' | 'category';
   score: number;
 }
 

@@ -2,13 +2,13 @@
  * CameraEffectPreview — effect selection for the camera surface.
  *
  * Manages the selected camera effect and renders the `CameraEffectBar` for
- * selection. Because the app uses `expo-camera` (not react-native-vision-
- * camera), real-time GPU preview via a Skia frame processor is NOT
- * available — expo-camera exposes no per-frame pipeline. This component is
- * truthful about that limitation (AGENTS.md §11): it does not fake a live
- * preview. Instead, the selected effect is stored and applied post-capture
- * via Skia when the photo/video is committed, exactly as the green-screen
- * and speed features already work in CreatorCamera.
+ * selection. The app now uses `react-native-vision-camera` v5, which
+ * supports real-time GPU preview via Skia frame processors
+ * (`useSkiaFrameProcessor`). The real-time preview path can wire the
+ * selected effect's color matrix into a frame processor on the Camera
+ * component. Until that wiring is added, the selected effect is stored
+ * and applied post-capture via Skia when the photo/video is committed,
+ * exactly as the green-screen and speed features work in CreatorCamera.
  *
  * Integration contract:
  *   - The parent owns the camera and the capture lifecycle.
@@ -17,11 +17,6 @@
  *     `CreatorInitialMedia` payload so the timeline/export engine applies
  *     the effect's color matrix via Skia.
  *
- * If react-native-vision-camera is added in the future, the real-time
- * preview path would use `useSkiaFrameProcessor` with the effect's color
- * matrix. That import is intentionally absent today — importing it without
- * the package installed would crash the bundle.
- *
  * Per AGENTS.md §11: truthful UI — no stubs, no "coming soon".
  * Per AGENTS.md §13: 44pt touch targets, haptics on selection.
  */
@@ -29,7 +24,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Space, FontFamily, FontSize, Radius } from '../../theme/designTokens';
+import { Space, FontFamily, FontSize, Radius, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
@@ -53,11 +48,10 @@ export interface CameraEffectPreviewProps {
 /**
  * Effect selection for the camera surface.
  *
- * Renders the `CameraEffectBar` and a truthful one-line note explaining
- * that the effect is applied after capture (because expo-camera has no
- * frame-processor pipeline for real-time GPU preview). The note is shown
- * only when an effect other than 'none' is selected — when 'none' is
- * active there is nothing to explain.
+ * Renders the `CameraEffectBar` and a one-line note explaining that the
+ * effect is applied after capture. The note is shown only when an effect
+ * other than 'none' is selected — when 'none' is active there is nothing
+ * to explain.
  */
 export function CameraEffectPreview({
   selectedEffect,
@@ -91,11 +85,11 @@ export function CameraEffectPreview({
         <View style={styles.noteRow}>
           <Ionicons
             name="information-circle-outline"
-            size={13}
+            size={IconGrammar.badge}
             color={colors.textMuted}
           />
           <Text style={[styles.noteText, { color: colors.textMuted }]}>
-            Applied after capture — live preview needs a newer camera engine.
+            Effect applied after capture.
           </Text>
         </View>
       ) : null}

@@ -1,0 +1,277 @@
+name: CI Gates
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/ci-gates.yml"
+  push:
+    branches:
+      - main
+      - "develop"
+      - "release/*"
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/ci-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-typecheck:
+    name: Frontend TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: frontend
+
+  backend-typecheck:
+    name: Backend TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend/api
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: backend/api
+
+  eslint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: ESLint
+        run: npx eslint src/ --ext .ts,.tsx
+        working-directory: frontend
+
+  bundle-size:
+    name: Bundle size check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Bundle size check (fail if > 5% growth)
+        run: node scripts/check-bundle-size.mjs
+        working-directory: frontend
+
+  visual-gates:
+    name: Visual release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Visual release gates
+        run: node scripts/check-visual-release-gates.mjs
+        working-directory: frontend
+
+  production-residue:
+    name: Production residue check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Production residue check
+        run: node scripts/check-production-residue.mjs
+        working-directory: frontend
+
+  ssl-pin-validation:
+    name: SSL pin validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: SSL pin validation (non-production — warnings only)
+        run: node scripts/validate-ssl-pins.mjs
+        working-directory: frontend
+
+  design-token-lint:
+    name: Design token lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Design token lint
+        run: node scripts/check-design-tokens.mjs
+        working-directory: frontend
+
+  animated-scroll:
+    name: Animated scroll check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Animated scroll usage check
+        run: node scripts/check-animated-scroll-usage.mjs
+        working-directory: frontend
+
+  mockdata-boundary:
+    name: Mock data boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Mock data boundary check
+        run: node scripts/check-mockdata-boundary.mjs
+        working-directory: frontend
+
+  unit-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Run unit tests
+        run: npx vitest run
+        working-directory: frontend
+
+  maestro-e2e:
+    name: Maestro E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for Maestro flows
+        id: check-maestro
+        run: |
+          if [ -d "frontend/.maestro/flows" ]; then
+            echo "has_maestro=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_maestro=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Maestro CLI
+        if: steps.check-maestro.outputs.has_maestro == 'true'
+        run: curl -Ls "https://get.maestro.mobile.dev" | bash
+      - name: Run Maestro flows
+        if: steps.check-maestro.outputs.has_maestro == 'true'
+        run: |
+          export PATH="$HOME/.maestro/bin:$PATH"
+          maestro test frontend/.maestro/flows/
+        continue-on-error: true
+
+  sbom-generation:
+    name: SBOM generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend/api
+      - name: Generate SBOM
+        run: |
+          chmod +x frontend/scripts/generate-sbom.sh
+          bash frontend/scripts/generate-sbom.sh
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/
+          retention-days: 30

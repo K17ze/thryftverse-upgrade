@@ -7,6 +7,8 @@ export interface CreatorTemplate {
   type: 'look' | 'poster';
   description: string;
   category: 'featured' | 'announcement' | 'interactive' | 'story' | 'editorial' | 'sale' | 'moodboard';
+  /** Optional style tags used to sort templates by user preferences. */
+  styleTags?: string[];
   build: () => CreatorDocument;
 }
 
@@ -35,6 +37,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Editorial single-photo layout',
     category: 'editorial',
+    styleTags: ['Minimal', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -54,6 +57,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Three-piece outfit grid',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Techwear'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -75,6 +79,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Minimal product grid layout',
     category: 'editorial',
+    styleTags: ['Minimal'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -97,6 +102,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Magazine-style editorial layout',
     category: 'editorial',
+    styleTags: ['Archive', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -117,6 +123,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Colour-focused story layout',
     category: 'editorial',
+    styleTags: ['Gorpcore', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -139,6 +146,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Two-photo vertical split',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -159,6 +167,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Three-photo horizontal strip',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Techwear'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -180,6 +189,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Four-photo grid collage',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Gorpcore'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -202,6 +212,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Six-photo grid collage',
     category: 'editorial',
+    styleTags: ['Gorpcore', 'Techwear'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -226,6 +237,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Large feature photo with two side photos',
     category: 'editorial',
+    styleTags: ['Archive', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -248,6 +260,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Side-by-side comparison layout',
     category: 'editorial',
+    styleTags: ['Minimal', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -268,6 +281,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Vertical strip of three photos',
     category: 'editorial',
+    styleTags: ['Vintage', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -289,6 +303,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: '2x2 grid with alternating media and colour',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -311,6 +326,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Diagonal split two-photo layout',
     category: 'editorial',
+    styleTags: ['Techwear', 'Streetwear'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -332,6 +348,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Central circular photo with border',
     category: 'editorial',
+    styleTags: ['Minimal', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -352,6 +369,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Horizontal film strip with three photos',
     category: 'editorial',
+    styleTags: ['Vintage', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -374,6 +392,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Polaroid-style frame with caption space',
     category: 'editorial',
+    styleTags: ['Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -395,6 +414,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Full magazine cover with title and subtitle',
     category: 'editorial',
+    styleTags: ['Archive', 'Vintage'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -416,6 +436,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Free-form collage with four overlapping photos',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Gorpcore'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -438,6 +459,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Three-way horizontal split',
     category: 'editorial',
+    styleTags: ['Streetwear', 'Techwear'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -459,6 +481,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     type: 'look',
     description: 'Stacked feature with one large and two small photos',
     category: 'editorial',
+    styleTags: ['Minimal', 'Archive'],
     build: () => ({
       id: createStableId('doc'),
       type: 'look',

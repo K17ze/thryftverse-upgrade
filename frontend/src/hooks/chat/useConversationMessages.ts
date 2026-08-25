@@ -31,14 +31,28 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  mapApiMessageToConversationMessage,
 } from "../../services/chatApi";
-import { requestPushPermissionOnce } from "../../lib/pushPermission";
+import { uploadMedia } from "../../services/mediaUpload";
+import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
+import {
+  useChatMessageEvent,
+  useChatMessageDeletedEvent,
+  useChatReactionEvent,
+  useChatReadReceiptEvent,
+  realtimePayloadToMessage,
+  chatConversationTopic,
+  type ChatMessageCreatedPayload,
+} from "../../services/realtimeClient";
+import { useRealtimeResnapshot } from "../../platform/realtime";
+import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 import { isVideoUri } from "../../utils/media";
-import { makeStableId } from "../../utils/createStableId";
+import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { CurrencyDisplayMode } from "../../utils/currency";
 
 import type { Message } from "./types";
@@ -115,6 +129,12 @@ export function useConversationMessages({
   const [syncError, setSyncError] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  // P0.6: Cursor-based pagination state. oldestCursor is used to fetch
+  // older history incrementally; newestCursor is used to detect gaps.
+  const [oldestCursor, setOldestCursor] = useState<string | undefined>(undefined);
+  const [newestCursor, setNewestCursor] = useState<string | undefined>(undefined);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
   const [composerSending, setComposerSending] = useState(false);
 
@@ -132,6 +152,11 @@ export function useConversationMessages({
   const composerSendingRef = useRef(false);
   const pushPermissionAskedRef = useRef(false);
 
+  // Tracks how many messages the user has seen when last at the bottom.
+  // When the user scrolls up, new messages arriving increment the unread
+  // count shown on the scroll-to-bottom FAB (Instagram/WhatsApp pattern).
+  const seenMessageCountRef = useRef(0);
+
   // Sync local messages when hydrated store messages change
   useEffect(() => {
     setMessages(hydratedMessages);
@@ -143,9 +168,14 @@ export function useConversationMessages({
     setIsSyncing(true);
     setSyncError(false);
     try {
-      const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
-      if (!syncedMessages.length) return;
+      const { messages: apiMessages, oldestCursor: oc, newestCursor: nc } = await fetchConversationMessagesFromApi(conversationId);
+      if (!apiMessages.length) return;
+      const syncedMessages = apiMessages.map(mapApiMessageToConversationMessage);
       replaceConversationMessages(conversationId, syncedMessages);
+      // P0.6: Capture cursors for incremental pagination.
+      setOldestCursor(oc);
+      setNewestCursor(nc);
+      setHasMoreOlder(Boolean(oc));
     } catch {
       setSyncError(true);
     } finally {
@@ -166,6 +196,37 @@ export function useConversationMessages({
     );
     return () => unsubscribe();
   }, [syncMessagesFromApi]);
+
+  // P0.6: Incremental older-history load using the oldestCursor. Prepends
+  // older messages to the list without losing scroll position. The caller
+  // (onScroll handler) is responsible for preserving the visual anchor.
+  const loadOlderMessages = useCallback(async () => {
+    if (!conversationId || !oldestCursor || !hasMoreOlder || isLoadingOlder) return;
+    setIsLoadingOlder(true);
+    try {
+      const { messages: olderMessages, oldestCursor: oc } = await fetchConversationMessagesFromApi(
+        conversationId,
+        { before: oldestCursor },
+      );
+      if (!olderMessages.length) {
+        setHasMoreOlder(false);
+        return;
+      }
+      const mapped = olderMessages.map(mapApiMessageToConversationMessage) as Message[];
+      setMessages((prev) => {
+        // Dedup by id — if a resnapshot already loaded some of these.
+        const existingIds = new Set(prev.map((m) => m.id));
+        const deduped = mapped.filter((m) => !existingIds.has(m.id));
+        return [...deduped, ...prev];
+      });
+      setOldestCursor(oc);
+      setHasMoreOlder(Boolean(oc));
+    } catch {
+      // Silently fail — the user can retry by scrolling up again.
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [conversationId, oldestCursor, hasMoreOlder, isLoadingOlder]);
 
   // AppState listener — sync on foreground
   useEffect(() => {
@@ -200,8 +261,8 @@ export function useConversationMessages({
       senderLabel: currentUser?.username ?? "you",
       text:
         (counterRound ?? 0) > 0
-          ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
-          : `Offer: ${formatFromFiat(price, "GBP")}`,
+          ? `Counter-offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`
+          : `Offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`,
       offer: {
         offerId,
         price,
@@ -239,6 +300,179 @@ export function useConversationMessages({
 
   const pushMessage = useCallback((next: Message) => {
     setMessages((prev) => [...prev, next]);
+  }, []);
+
+  // Realtime subscription — append incoming messages live.
+  // useChatMessageEvent subscribes to the conversation's topic and invokes
+  // the handler for each `chat.message.created` event. The handler is held
+  // in a ref by the hook so a fresh closure is captured every render without
+  // re-subscribing.
+  useChatMessageEvent(
+    conversationId,
+    useCallback(
+      (payload: ChatMessageCreatedPayload) => {
+        // P0.1: Deduplicate by BOTH server id AND clientMessageId. The
+        // realtime event can arrive before the HTTP response, and the
+        // optimistic message has a local id (not the server id). If the
+        // realtime payload includes clientMessageId, match against the
+        // optimistic message's clientMessageId to reconcile instead of
+        // appending a duplicate.
+        if (messagesRef.current.some((m) => m.id === payload.id)) return;
+
+        // P0.1: If the realtime payload has a clientMessageId, check if we
+        // already have an optimistic message with that clientMessageId. If so,
+        // reconcile it (update id + status) instead of appending.
+        if (payload.clientMessageId) {
+          const optimistic = messagesRef.current.find(
+            (m) => m.clientMessageId === payload.clientMessageId,
+          );
+          if (optimistic) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.clientMessageId === payload.clientMessageId
+                  ? { ...m, id: payload.id, status: "sent" as const }
+                  : m,
+              ),
+            );
+            return;
+          }
+        }
+
+        const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
+
+        // Map the domain Message into the local chat Message shape used by
+        // this hook's UI state.
+        const localMessage: Message = {
+          id: domainMessage.id,
+          type:
+            domainMessage.type === "system"
+              ? "system"
+              : domainMessage.mediaType
+                ? "media"
+                : "text",
+          sender: domainMessage.sender === "me" ? "me" : "them",
+          senderId: domainMessage.senderId,
+          text: domainMessage.text,
+          isSystem: domainMessage.isSystem,
+          systemTitle: domainMessage.systemTitle,
+          date: domainMessage.timestamp,
+          mediaUri: domainMessage.mediaUri,
+          mediaType: domainMessage.mediaType,
+          status: "sent",
+          replyToMessageId: domainMessage.replyToMessageId,
+        };
+
+        setMessages((prev) => [...prev, localMessage]);
+
+        // Persist into the conversation store so the inbox preview and
+        // hydration stay in sync.
+        if (conversationId) {
+          appendConversationMessage(conversationId, domainMessage);
+        }
+
+        scheduleScrollToEnd();
+      },
+      [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd],
+    ),
+  );
+
+  // P0.9: Consume delete realtime events — remove the message from the local
+  // list when the server confirms a delete (for-me or for-everyone). This
+  // handles second-device state and optimistic reconciliation.
+  useChatMessageDeletedEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; scope: 'me' | 'everyone'; deletedBy: string }) => {
+        setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
+      },
+      [],
+    ),
+  );
+
+  // P0.9: Consume reaction realtime events — update the local message's
+  // reactions when another participant adds or removes a reaction.
+  useChatReactionEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; emoji: string; userId: string; action: 'added' | 'removed' }) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== event.messageId) return m;
+            const reactions = [...(m.reactions ?? [])];
+            const idx = reactions.findIndex((r) => r.emoji === event.emoji);
+            const isMe = event.userId === currentUser?.id;
+            if (event.action === 'added') {
+              if (idx >= 0) {
+                reactions[idx] = {
+                  ...reactions[idx],
+                  count: reactions[idx].count + 1,
+                  reactedByMe: reactions[idx].reactedByMe || isMe,
+                };
+              } else {
+                reactions.push({ emoji: event.emoji, count: 1, reactedByMe: isMe });
+              }
+            } else {
+              if (idx >= 0) {
+                const nextCount = reactions[idx].count - 1;
+                if (nextCount <= 0) {
+                  reactions.splice(idx, 1);
+                } else {
+                  reactions[idx] = {
+                    ...reactions[idx],
+                    count: nextCount,
+                    reactedByMe: reactions[idx].reactedByMe && !isMe ? true : !isMe && reactions[idx].reactedByMe,
+                  };
+                }
+              }
+            }
+            return { ...m, reactions };
+          }),
+        );
+      },
+      [currentUser?.id],
+    ),
+  );
+
+  // P0.9: Consume read receipt realtime events — when another participant
+  // reads the conversation, mark all of our messages sent before the read
+  // cursor as "read". This closes the second-device read-state gap.
+  useChatReadReceiptEvent(
+    conversationId,
+    useCallback(
+      (event: { userId: string; readAt: string }) => {
+        if (event.userId === currentUser?.id) return; // ignore our own read
+        const readAtTime = new Date(event.readAt).getTime();
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.sender !== 'me') return m;
+            const msgTime = m.date ? new Date(m.date).getTime() : 0;
+            if (msgTime <= readAtTime && m.readStatus !== 'read') {
+              return { ...m, readStatus: 'read' as const };
+            }
+            return m;
+          }),
+        );
+      },
+      [currentUser?.id],
+    ),
+  );
+
+  // Realtime resnapshot — when the bridge signals that canonical state for
+  // this conversation should be refetched (e.g. after a gap was replayed),
+  // re-sync the full message list from the API.
+  const needsResnapshot = useRealtimeResnapshot(
+    conversationId ? chatConversationTopic(conversationId) : "",
+  );
+  useEffect(() => {
+    if (needsResnapshot) {
+      void syncMessagesFromApi();
+    }
+  }, [needsResnapshot, syncMessagesFromApi]);
+
+  // P0.14: Drain the chat outbox on mount — in case messages were queued
+  // while offline and the user is now opening the conversation.
+  useEffect(() => {
+    void drainChatOutbox();
   }, []);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
@@ -291,10 +525,15 @@ export function useConversationMessages({
       try {
         // Canonical server send — exactly once. The agent identity is
         // preserved via metadata so the backend can attribute the message.
+        // P0-MSG-2: reuse the draft's clientMessageId so a retry after a
+        // dropped response replays the original message instead of
+        // duplicating it.
+        const clientMessageId = draftMsg.clientMessageId ?? createStableId('cmsg');
         const serverMsg = await sendConversationMessageOnApi(
           conversationId,
           draftMsg.text ?? "",
           { agentId: draftMsg.senderId },
+          clientMessageId,
         );
 
         // Replace the local draft with the server-confirmed message.
@@ -314,7 +553,8 @@ export function useConversationMessages({
           draftMsg.senderId,
         );
       } catch {
-        // Mark as failed with retry affordance.
+        // Mark as failed with retry affordance. Retry reuses the same
+        // clientMessageId so it is idempotent (P0-MSG-2).
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId ? { ...m, status: "failed" as const } : m,
@@ -354,6 +594,12 @@ export function useConversationMessages({
       setComposerSending(true);
 
       const localId = makeStableId('msg', 7);
+      // P0-MSG-2: stable clientMessageId generated BEFORE the first send and
+      // reused on every retry. The backend deduplicates on
+      // (conversation_id, sender_user_id, client_message_id) and replays the
+      // original message, so a dropped response followed by retry cannot
+      // create a duplicate row.
+      const clientMessageId = createStableId('cmsg');
       const outgoing: Message = {
         id: localId,
         type: "text",
@@ -361,6 +607,7 @@ export function useConversationMessages({
         senderLabel: currentUser?.username ?? "you",
         text: trimmed,
         status: "sending",
+        clientMessageId,
       };
 
       if (replyTo) {
@@ -373,12 +620,14 @@ export function useConversationMessages({
 
       if (!pushPermissionAskedRef.current) {
         pushPermissionAskedRef.current = true;
-        requestPushPermissionOnce("chat").catch(() => undefined);
+        requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
 
       performance.mark("chat:send");
 
-      sendConversationMessageOnApi(conversationId, trimmed)
+      sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId, {
+        replyToMessageId: replyTo?.id,
+      })
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -388,12 +637,27 @@ export function useConversationMessages({
           performance.mark("chat:delivered");
         })
         .catch(() => {
+          // P0.2: A dropped response is an UNKNOWN outcome, not a known
+          // failure. The server may have accepted the message. Mark as
+          // "reconciling" — the user sees a quiet pending state, not a
+          // failure. The next sync or realtime event will reconcile via
+          // clientMessageId. Only after a retry attempt also fails do we
+          // show "failed".
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === localId ? { ...m, status: "failed" as const } : m,
+              m.id === localId ? { ...m, status: "reconciling" as const } : m,
             ),
           );
-          show("Message failed to send. Tap to retry.", "error");
+          // P0.14: Persist to the durable outbox so the message is flushed
+          // automatically when connectivity returns. The clientMessageId
+          // ensures idempotent replay — the server will return the original
+          // message if the send actually succeeded, or create it now.
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: trimmed,
+            replyToMessageId: replyTo?.id,
+          }).catch(() => undefined);
         })
         .finally(() => {
           composerSendingRef.current = false;
@@ -405,36 +669,11 @@ export function useConversationMessages({
 
       clearComposerState(conversationId).catch(() => undefined);
 
-      // AI chat agent response (demo)
-      if (deployedChatAgents.length > 0 && conversationId) {
-        setTimeout(() => {
-          const agentResponse = getChatAgentResponse(conversationId, trimmed);
-          if (!agentResponse.content) return;
-          const agentMsg: Message = {
-            id: agentResponse.id,
-            type: "text",
-            sender: "them",
-            senderId: agentResponse.agentId,
-            senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
-            text: agentResponse.content,
-            // Per spec 16: agent drafts are not sent messages. They enter the
-            // history only after the user confirms them via confirmAgentDraft,
-            // which performs the canonical server send and only then inserts
-            // the message into the conversation store. The draft is ephemeral
-            // local state so the user can review it before it is committed.
-            status: "draft",
-            isAgent: true,
-            agentAvatar: deployedChatAgents[0]?.avatar,
-          };
-          pushMessage(agentMsg);
-          setChatAgentSuggestionsExternal(
-            getChatAgentSuggestions(conversationId, agentResponse.content),
-          );
-          scheduleScrollToEnd();
-        }, 500);
-      } else if (conversationId) {
-        setChatAgentSuggestionsExternal(getChatAgentSuggestions(conversationId, trimmed));
-      }
+      // P0.15/anti-AI policy: Demo agent auto-injection removed from production.
+      // The report (§8.9) states: "never inject mock AI replies into production
+      // history." Agent drafts that auto-appear after every user message are
+      // mock output. When a real agent runtime exists, it will be invoked
+      // explicitly by the user, not auto-injected after every send.
     },
     [
       conversationId,
@@ -444,41 +683,83 @@ export function useConversationMessages({
       appendToConversationStore,
       scheduleScrollToEnd,
       clearComposerState,
-      deployedChatAgents,
-      getChatAgentResponse,
-      getChatAgentSuggestions,
-      setChatAgentSuggestionsExternal,
       currentUser?.username,
       currentUser?.id,
     ],
   );
 
   const sendMediaMessage = useCallback(
-    (msgId: string, uri: string, mediaType: "image" | "video") => {
+    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string, existingCanonicalUrl?: string) => {
       if (!conversationId) return;
-      sendConversationMessageOnApi(conversationId, "", {
-        mediaUri: uri,
-        mediaType,
-      })
-        .then((serverMsg) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const } : m,
-            ),
-          );
-        })
-        .catch(() => {
+      // P0-MSG-2: stable clientMessageId for idempotent media send/retry.
+      const clientMessageId = createStableId('cmsg');
+
+      // P0.7: If a canonical URL from a previous successful upload already
+      // exists (retry scenario), reuse it — do NOT re-upload. Re-uploading
+      // would create duplicate media_assets rows and waste bandwidth. The
+      // canonical URL is immutable once finalized.
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        // P0.4: Upload via the canonical media platform BEFORE sending the
+        // message. The raw file:/// URI is only valid on the sender's device.
+        // uploadMedia() does presign → PUT → finalize → returns a canonical
+        // publicUrl that recipients and second devices can read.
+        try {
+          const uploaded = await uploadMedia(uri, 'uploads');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
             ),
           );
           show("Upload failed. Tap media to retry.", "error");
+          return;
+        }
+      }
+
+      // P0-MSG-1: send a discriminated media payload with the CANONICAL URL
+      // (not the local file:/// URI). The canonical URL is readable by all
+      // devices and recipients.
+      sendConversationMessageOnApi(
+        conversationId,
+        caption ?? "",
+        { mediaUri: canonicalUrl, mediaType },
+        clientMessageId,
+        { type: mediaType, mediaUri: canonicalUrl },
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
+            ),
+          );
+        })
+        .catch(() => {
+          // P0.4: The upload succeeded but the message send response was
+          // dropped — this is an UNKNOWN outcome, not a known failure. The
+          // server may have created the message. Enter reconciling state and
+          // enqueue to the durable outbox so the drain can replay with the
+          // same clientMessageId (server dedups) and canonical URL (no
+          // re-upload needed).
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
+            ),
+          );
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: caption ?? "",
+            metadata: { mediaUri: canonicalUrl, type: mediaType },
+          });
         });
 
       if (!pushPermissionAskedRef.current) {
         pushPermissionAskedRef.current = true;
-        requestPushPermissionOnce("chat").catch(() => undefined);
+        requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
     },
     [conversationId, show],
@@ -490,8 +771,20 @@ export function useConversationMessages({
         const msg = prev.find((m) => m.id === msgId);
         if (!msg?.mediaUri || !msg.mediaType) return prev;
         if (msg.uploadStatus === "uploading") return prev;
-        // Trigger upload after state update
-        setTimeout(() => sendMediaMessage(msgId, msg.mediaUri!, msg.mediaType!), 0);
+        // P0.7: If the media was already uploaded (canonical URL exists),
+        // pass it so sendMediaMessage skips re-upload and only retries the
+        // message send with the same clientMessageId.
+        const alreadyUploaded = msg.mediaUri.startsWith('http');
+        setTimeout(
+          () => sendMediaMessage(
+            msgId,
+            msg.mediaUri!,
+            msg.mediaType!,
+            msg.text || undefined,
+            alreadyUploaded ? msg.mediaUri : undefined,
+          ),
+          0,
+        );
         return prev.map((m) =>
           m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
         );
@@ -507,9 +800,12 @@ export function useConversationMessages({
       setMessages((prev) => {
         const msg = prev.find((m) => m.id === msgId);
         if (!msg?.text || msg.status === "sending") return prev;
+        // P0-MSG-2: reuse the same clientMessageId so the backend replays the
+        // original message if the previous request actually succeeded.
+        const clientMessageId = msg.clientMessageId ?? createStableId('cmsg');
         // Trigger send after state update
         setTimeout(() => {
-          sendConversationMessageOnApi(conversationId, msg.text!)
+          sendConversationMessageOnApi(conversationId, msg.text!, undefined, clientMessageId)
             .then((serverMsg) => {
               setMessages((p) =>
                 p.map((m) =>
@@ -529,7 +825,9 @@ export function useConversationMessages({
             });
         }, 0);
         return prev.map((m) =>
-          m.id === msgId ? { ...m, status: "sending" as const } : m,
+          m.id === msgId
+            ? { ...m, status: "sending" as const, clientMessageId }
+            : m,
         );
       });
       haptic.light();
@@ -570,7 +868,7 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? "me");
       haptic.success();
       scheduleScrollToEnd();
-      sendMediaMessage(outgoing.id, uri, mediaType);
+      sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
@@ -624,7 +922,7 @@ export function useConversationMessages({
               try {
                 if (!conversationId) throw new Error("No conversation");
                 await Promise.all(
-                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id)),
+                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
                 );
                 deleteApiStatusRef.current = "success";
               } catch {
@@ -641,35 +939,73 @@ export function useConversationMessages({
 
   const handleDeleteMessage = useCallback(
     (msg: Message) => {
-      Alert.alert("Delete message?", "This message will be removed.", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            haptic.medium();
-            deleteApiStatusRef.current = "pending";
-            setRecentlyDeleted([msg]);
-            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-            scheduleUndoClear();
-            try {
-              if (!conversationId) throw new Error("No conversation");
-              await deleteConversationMessageOnApi(conversationId, msg.id);
-              deleteApiStatusRef.current = "success";
-            } catch {
-              deleteApiStatusRef.current = "error";
-              show("Message deleted locally. It may still be visible to others.", "info");
-            }
+      const isOwnMessage = msg.sender === "me";
+      const messageAgeMs = msg.date ? Date.now() - new Date(msg.date).getTime() : Infinity;
+      const withinDeleteWindow = messageAgeMs < 24 * 60 * 60 * 1000;
+      const canDeleteForEveryone = isOwnMessage && withinDeleteWindow;
+
+      const performDelete = async (scope: 'me' | 'everyone') => {
+        haptic.medium();
+        deleteApiStatusRef.current = "pending";
+        setRecentlyDeleted([msg]);
+        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+        scheduleUndoClear();
+        try {
+          if (!conversationId) throw new Error("No conversation");
+          await deleteConversationMessageOnApi(conversationId, msg.id, scope);
+          deleteApiStatusRef.current = "success";
+        } catch {
+          deleteApiStatusRef.current = "error";
+          show(scope === 'everyone'
+            ? "Delete failed. The message may still be visible to others."
+            : "Message deleted locally. It may still be visible to others.", "info");
+        }
+      };
+
+      if (canDeleteForEveryone) {
+        Alert.alert("Delete message?", "Choose how to delete this message.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete for me",
+            onPress: () => performDelete('me'),
           },
-        },
-      ]);
+          {
+            text: "Delete for everyone",
+            style: "destructive",
+            onPress: () => performDelete('everyone'),
+          },
+        ]);
+      } else {
+        Alert.alert("Delete message?", "This message will be removed for you.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => performDelete('me'),
+          },
+        ]);
+      }
     },
     [conversationId, haptic, show, scheduleUndoClear],
   );
 
+  // When the user is at the bottom, record the seen message count so
+  // unread messages arriving while scrolled up can be counted for the
+  // scroll-to-bottom FAB badge (Instagram/WhatsApp pattern).
+  useEffect(() => {
+    if (!showScrollToBottom) {
+      seenMessageCountRef.current = messages.length;
+    }
+  }, [messages.length, showScrollToBottom]);
+
+  const unreadBelowCount = showScrollToBottom
+    ? Math.max(0, messages.length - seenMessageCountRef.current)
+    : 0;
+
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
     setShowScrollToBottom(false);
+    seenMessageCountRef.current = messagesRef.current.length;
   }, []);
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -730,8 +1066,14 @@ export function useConversationMessages({
       const isNearBottom =
         contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
       setShowScrollToBottom(!isNearBottom);
+      // P0.6: Trigger incremental history load when the user scrolls near
+      // the top. The FlashList's maintainVisibleContentPosition or the
+      // screen's scroll-anchor logic preserves the visual position.
+      if (contentOffset.y < 100 && hasMoreOlder && !isLoadingOlder) {
+        void loadOlderMessages();
+      }
     },
-    [],
+    [hasMoreOlder, isLoadingOlder, loadOlderMessages],
   );
 
   return {
@@ -742,6 +1084,7 @@ export function useConversationMessages({
     isOffline,
     showScrollToBottom,
     setShowScrollToBottom,
+    unreadBelowCount,
     recentlyDeleted,
     composerSending,
     listRef,
@@ -765,5 +1108,8 @@ export function useConversationMessages({
     unreadDividerIndex,
     handleMessageListScroll,
     syncMessagesFromApi,
+    loadOlderMessages,
+    isLoadingOlder,
+    hasMoreOlder,
   };
 }

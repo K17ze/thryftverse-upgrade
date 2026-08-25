@@ -20,6 +20,9 @@ import { Space, Type, Typography, Radius, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { haptics } from '../utils/haptics';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WalletActivity'>;
 
@@ -32,6 +35,7 @@ const FILTERS: Array<{ value: AssetFilter; label: string; accessibilityLabel: st
 ];
 
 export default function WalletActivityScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const [assetFilter, setAssetFilter] = React.useState<AssetFilter>('ALL');
 
@@ -63,7 +67,7 @@ export default function WalletActivityScreen({ navigation }: Props) {
               key={filter.value}
               style={({ pressed }) => [
                 styles.filterChip,
-                selected && { borderColor: colors.brand, backgroundColor: colors.brand + '12' },
+                selected && { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
                 pressed && { opacity: 0.7 },
               ]}
               onPress={() => {
@@ -112,10 +116,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   listWrap: {
     flex: 1,

@@ -5,6 +5,7 @@ import {
 } from '../hooks/useServerClock';
 import { formatFinalMinutesCountdown, type AuctionViewerState } from './auctionHomeLogic';
 import type { AuctionFulfilmentSummary } from '../services/marketApi';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 // ── Detail-level auction input (richer than AuctionHomeItem) ──
 
@@ -761,7 +762,7 @@ export function resolveViewerContextMessage(
   if (viewerState === 'outbid') {
     return {
       title: 'You have been outbid',
-      subtitle: `Minimum next bid: ${formatFromFiat(auction.minimumNextBidGbp, 'GBP')}`,
+      subtitle: `Minimum next bid: ${formatFromFiat(auction.minimumNextBidGbp, DEFAULT_CURRENCY_CODE)}`,
       treatment: 'warning',
     };
   }
@@ -860,7 +861,7 @@ export function formatBidActivityRow(
 ): BidActivityDisplayRow {
   return {
     id: bid.id,
-    amountText: formatFromFiat(bid.amountGbp, 'GBP'),
+    amountText: formatFromFiat(bid.amountGbp, DEFAULT_CURRENCY_CODE),
     bidderLabel: anonymizeBidder(bid.bidderUsername, bid.isViewer),
     isViewer: bid.isViewer,
     isTopBid: index === 0,

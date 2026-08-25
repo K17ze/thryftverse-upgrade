@@ -40,16 +40,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Install API dependencies
-        run: npm ci
-        working-directory: backend/api
-
       - name: Run postgres-backup.mjs
         id: backup
-        working-directory: backend/api
+        working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: node scripts/postgres-backup.mjs
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          NODE_ENV: production
+        run: |
+          if [ -z "${BACKUP_ENCRYPTION_KEY}" ]; then
+            echo "FATAL: BACKUP_ENCRYPTION_KEY secret is required for production backups"
+            exit 1
+          fi
+          node scripts/postgres-backup.mjs
 
       - name: Configure AWS credentials for S3 upload
         uses: aws-actions/configure-aws-credentials@v4
@@ -67,13 +70,54 @@ jobs:
           $prefix = "${env:S3_BACKUP_PREFIX}"
           if ([string]::IsNullOrWhiteSpace($prefix)) { $prefix = "db-backups" }
           $backupDir = "${env:GITHUB_WORKSPACE}/backups"
-          $files = Get-ChildItem -Path $backupDir -Filter "thryftverse_*.dump" -File
+          $files = Get-ChildItem -Path $backupDir -Filter "thryftverse_*.dump*" -File | Where-Object { $_.Extension -ne '.sha256' }
           foreach ($file in $files) {
             $key = "$prefix/$($file.Name)"
             Write-Host "Uploading $($file.Name) → s3://$bucket/$key"
-            aws s3 cp $file.FullName "s3://$bucket/$key" --no-progress
+            aws s3 cp $file.FullName "s3://$bucket/$key" --no-progress --sse aws:kms
+
+            $checksum = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
+            $checksumFile = "$($file.FullName).sha256"
+            Set-Content -Path $checksumFile -Value "$checksum`n" -NoNewline
+            $checksumKey = "$prefix/$($file.Name).sha256"
+            Write-Host "Uploading checksum $($file.Name).sha256 → s3://$bucket/$checksumKey"
+            aws s3 cp $checksumFile "s3://$bucket/$checksumKey" --no-progress --sse aws:kms
           }
           Write-Host "Uploaded $($files.Count) backup file(s) to s3://$bucket/$prefix"
+        shell: pwsh
+
+      - name: Verify backup checksums
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_BACKUP_PREFIX: ${{ secrets.S3_BACKUP_PREFIX }}
+        run: |
+          $bucket = "${env:S3_BACKUP_BUCKET}"
+          $prefix = "${env:S3_BACKUP_PREFIX}"
+          if ([string]::IsNullOrWhiteSpace($prefix)) { $prefix = "db-backups" }
+          $backupDir = "${env:GITHUB_WORKSPACE}/backups"
+          $verifyDir = "${env:GITHUB_WORKSPACE}/verify"
+          New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
+          $files = Get-ChildItem -Path $backupDir -Filter "thryftverse_*.dump*" -File | Where-Object { $_.Extension -ne '.sha256' }
+          foreach ($file in $files) {
+            $key = "$prefix/$($file.Name)"
+            $downloaded = Join-Path $verifyDir $file.Name
+            Write-Host "Downloading $($file.Name) from s3://$bucket/$key for verification"
+            aws s3 cp "s3://$bucket/$key" $downloaded --no-progress
+
+            $checksumKey = "$prefix/$($file.Name).sha256"
+            $downloadedChecksum = Join-Path $verifyDir "$($file.Name).sha256"
+            aws s3 cp "s3://$bucket/$checksumKey" $downloadedChecksum --no-progress
+
+            $expectedHash = (Get-Content $downloadedChecksum).Trim()
+            $actualHash = (Get-FileHash -Algorithm SHA256 $downloaded).Hash.ToLower()
+            if ($actualHash -ne $expectedHash) {
+              Write-Host "FATAL: Checksum mismatch for $($file.Name)"
+              Write-Host "Expected: $expectedHash"
+              Write-Host "Actual:   $actualHash"
+              exit 1
+            }
+            Write-Host "Checksum verified: $($file.Name) ($expectedHash)"
+          }
         shell: pwsh
 
       - name: S3 retention cleanup (keep 30 days)

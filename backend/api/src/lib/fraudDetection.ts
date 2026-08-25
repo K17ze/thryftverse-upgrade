@@ -28,7 +28,37 @@ import type { Redis } from 'ioredis';
 
 export type FraudEventType = 'signup' | 'listing' | 'message' | 'transaction';
 
-export type FraudRiskLevel = 'low' | 'medium' | 'high';
+/**
+ * Risk level derived from rule-engine evaluation.
+ * `'unknown'` is reserved for the case where no evaluation completed —
+ * it must never be produced by the scoring path, only by the failure
+ * path of `checkFraudNonBlocking`.
+ */
+export type FraudRiskLevel = 'low' | 'medium' | 'high' | 'unknown';
+
+/**
+ * Whether the fraud evaluation actually ran to completion.
+ * - `'completed'`   — rules were evaluated; `riskScore`/`riskLevel`/`action` are meaningful.
+ * - `'unavailable'` — the fraud service could not evaluate (Redis down, timeout, exception);
+ *                      `riskScore` is `null`, `riskLevel` is `'unknown'`, and `policyAction`
+ *                      carries the failover decision.
+ * - `'error'`       — reserved for malformed-input / programming errors.
+ */
+export type FraudEvaluationStatus = 'completed' | 'unavailable' | 'error';
+
+/**
+ * Failover policy applied when the fraud evaluation is unavailable.
+ * Distinct from `FraudAction` (the rule-engine decision) because the
+ * decision domain is different: we are choosing a safe default, not
+ * acting on signals.
+ * - `'allow_low_risk_flow'` — low-stakes event (browsing, messaging, listing);
+ *                              continue and review post-hoc.
+ * - `'step_up'`             — account-creation / account-change events;
+ *                              require additional verification.
+ * - `'hold_for_review'`     — money movement (payouts, ownership transfers);
+ *                              queue for manual review before proceeding.
+ */
+export type FraudPolicyAction = 'allow_low_risk_flow' | 'step_up' | 'hold_for_review';
 
 export type FraudAction = 'allow' | 'flag' | 'block';
 
@@ -51,6 +81,21 @@ export interface DeviceFingerprint {
   signals: DeviceSignals;
 }
 
+/**
+ * Alias for `DeviceFingerprint` that reflects what the hash actually is:
+ * a hash of mutable request headers + IP, NOT a stable device identity.
+ *
+ * FR-08 correction: the previous name (`deviceFingerprint`) implied a
+ * stable, spoof-resistant device identity. It is not — it changes with
+ * network/header churn and is easy to spoof. The new name
+ * (`requestEnvironmentHash`) is honest about what it represents.
+ *
+ * Future device-identity signals (app-instance id, passkey credential id,
+ * hardware attestation) will be separate fields with confidence/rotation
+ * metadata, not conflated with this request-environment hash.
+ */
+export type RequestEnvironmentHash = DeviceFingerprint;
+
 export interface FraudSignal {
   /** Stable identifier for the signal (e.g. "velocity.account_creation"). */
   ruleId: string;
@@ -66,11 +111,31 @@ export interface FraudCheckResult {
   eventId: string;
   eventType: FraudEventType;
   userId: string | null;
+  /**
+   * Hash of mutable request headers + IP. NOT a stable device identity.
+   *
+   * FR-08: renamed from `deviceFingerprint` to `requestEnvironmentHash`.
+   * The old name implied a stable, spoof-resistant device identity. It is
+   * not — it changes with network/header churn and is easy to spoof.
+   *
+   * The `deviceFingerprint` alias is kept for backward compatibility but
+   * is deprecated. New code should use `requestEnvironmentHash`.
+   */
+  requestEnvironmentHash: string;
+  /** @deprecated Use `requestEnvironmentHash`. Kept for backward compat. */
   deviceFingerprint: string;
   ipAddress: string;
-  riskScore: number;
+  /** Whether the evaluation ran to completion. See `FraudEvaluationStatus`. */
+  evaluationStatus: FraudEvaluationStatus;
+  /** Risk score 0-100, or `null` when no evaluation completed. */
+  riskScore: number | null;
   riskLevel: FraudRiskLevel;
-  action: FraudAction;
+  /** Rule-engine decision, or `null` when no evaluation completed. */
+  action: FraudAction | null;
+  /** Failover policy when `evaluationStatus !== 'completed'`; `null` otherwise. */
+  policyAction: FraudPolicyAction | null;
+  /** Machine-readable reason code for the outcome; `null` on success. */
+  reasonCode: string | null;
   signals: FraudSignal[];
   checkedAt: string;
 }
@@ -112,10 +177,13 @@ export interface VelocityCounts {
 
 export interface FraudUserRiskProfile {
   userId: string;
-  currentScore: number;
+  currentScore: number | null;
   riskLevel: FraudRiskLevel;
   signals: FraudSignal[];
+  /** @deprecated Use `requestEnvironmentHashes`. Kept for backward compat. */
   deviceFingerprints: string[];
+  /** FR-08: honest name for the request-environment hash. */
+  requestEnvironmentHashes: string[];
   lastCheckedAt: string;
   eventCount: number;
 }
@@ -665,6 +733,25 @@ export function actionFromRiskLevel(level: FraudRiskLevel): FraudAction {
   return 'allow';
 }
 
+/**
+ * Determine the failover policy when the fraud evaluation is unavailable.
+ *
+ * The policy is event-type-dependent so that low-stakes flows continue
+ * while money-movement and account-change events receive a safer default.
+ * This follows the fail-open-vs-fail-closed principle: fail open for
+ * survivable events, fail closed (step-up / hold) for high-stakes ones.
+ *
+ * - `signup`      → `step_up`           (account creation: require extra verification)
+ * - `listing`     → `allow_low_risk_flow` (can be reviewed post-hoc)
+ * - `message`     → `allow_low_risk_flow` (can be reviewed post-hoc)
+ * - `transaction` → `hold_for_review`   (money movement: require manual review)
+ */
+export function failoverPolicyAction(eventType: FraudEventType): FraudPolicyAction {
+  if (eventType === 'transaction') return 'hold_for_review';
+  if (eventType === 'signup') return 'step_up';
+  return 'allow_low_risk_flow';
+}
+
 // ---------------------------------------------------------------------------
 // Device-to-account tracking
 // ---------------------------------------------------------------------------
@@ -703,7 +790,9 @@ export async function getDeviceAccounts(
 /**
  * Persist a fraud check result to the Redis audit trail.
  * Stores the full result as JSON in a list, keyed by user (or device
- * for anonymous events). Also updates the user's current risk profile.
+ * for anonymous events). Also updates the user's current risk profile
+ * — but only when the evaluation completed, so an unavailable result
+ * never overwrites a real risk profile with null/unknown.
  */
 export async function persistFraudAudit(
   redis: Redis,
@@ -725,8 +814,10 @@ export async function persistFraudAudit(
   await redis.ltrim(globalKey, 0, 9999); // Keep last 10,000
   await redis.expire(globalKey, 30 * 24 * 60 * 60);
 
-  // Update user's current risk profile
-  if (result.userId) {
+  // Update user's current risk profile — only when evaluation completed.
+  // An unavailable result is logged to the audit trail for traceability
+  // but must not corrupt the user's real risk profile.
+  if (result.userId && result.evaluationStatus === 'completed') {
     const profileKey = redisKey('profile', result.userId);
     const profile: FraudUserRiskProfile = {
       userId: result.userId,
@@ -734,6 +825,7 @@ export async function persistFraudAudit(
       riskLevel: result.riskLevel,
       signals: result.signals,
       deviceFingerprints: [result.deviceFingerprint],
+      requestEnvironmentHashes: [result.requestEnvironmentHash],
       lastCheckedAt: result.checkedAt,
       eventCount: 1,
     };
@@ -892,11 +984,15 @@ export async function checkFraud(
     eventId: `fraud_${crypto.randomUUID()}`,
     eventType: input.eventType,
     userId: input.userId ?? null,
+    requestEnvironmentHash: deviceFingerprint,
     deviceFingerprint,
     ipAddress: input.ip,
+    evaluationStatus: 'completed',
     riskScore,
     riskLevel,
     action,
+    policyAction: null,
+    reasonCode: null,
     signals: ruleSignals,
     checkedAt: new Date().toISOString(),
   };
@@ -914,12 +1010,40 @@ export async function checkFraud(
  * on high risk — the caller decides whether to block. This follows
  * AGENTS.md §6 (proportional) and §11 (truthful) — we don't want false
  * positives disrupting legit users, so the check is advisory by default.
+ *
+ * If the fraud evaluation itself fails (Redis unavailable, timeout,
+ * unexpected exception), the result honestly reports that no evaluation
+ * completed: `evaluationStatus: 'unavailable'`, `riskScore: null`,
+ * `riskLevel: 'unknown'`. The `policyAction` field carries an
+ * event-type-dependent failover decision so callers can step up or
+ * hold high-stakes events without mistaking the unavailable state for
+ * a clean low-risk assessment.
+ *
+ * Shadow scoring (Phase 6): when a `FraudShadowScoringService` is supplied
+ * and `FRAUD_SHADOW_ENABLED=true`, the rule-engine result is also scored
+ * by the shadow ML model and both scores are logged to
+ * `fraud_scoring_ledger` for offline comparison. The shadow score NEVER
+ * affects the user-facing result — the rule engine remains the champion
+ * until the shadow model is promoted via the model artifact registry.
+ * The shadow call is non-blocking and best-effort: if it fails, the rule
+ * engine result stands unchanged.
  */
 export async function checkFraudNonBlocking(
   redis: Redis,
   input: FraudCheckInput,
   limits: VelocityLimits = DEFAULT_VELOCITY_LIMITS,
-  logger?: { warn?: (obj: unknown, msg: string) => void; info?: (obj: unknown, msg: string) => void }
+  logger?: { warn?: (obj: unknown, msg: string) => void; info?: (obj: unknown, msg: string) => void },
+  shadowService?: {
+    scoreShadow(input: unknown): Promise<unknown>;
+    logScoreComparison(
+      eventId: string,
+      eventType: FraudEventType,
+      userId: string | null,
+      ruleEngineResult: FraudCheckResult,
+      shadowResult: unknown,
+      input: unknown,
+    ): Promise<void>;
+  } | null,
 ): Promise<FraudCheckResult> {
   try {
     const result = await checkFraud(redis, input, limits);
@@ -945,25 +1069,157 @@ export async function checkFraudNonBlocking(
         'Fraud check flagged medium-risk event'
       );
     }
+
+    // Shadow scoring (Phase 6): best-effort, non-blocking, never affects
+    // the served decision. The rule engine result is already final.
+    if (shadowService) {
+      try {
+        const shadowInput = {
+          eventId: result.eventId,
+          eventType: result.eventType,
+          userId: result.userId,
+          ruleEngineScore: result.riskScore,
+          riskLevel: result.riskLevel,
+          action: result.action,
+          signals: result.signals,
+          velocity: extractVelocityFromResult(result),
+          accountAgeSeconds: input.accountAgeSeconds ?? -1,
+          amountGbp: input.amountGbp ?? 0,
+          deviceMultipleAccounts: extractDeviceAccountCount(result),
+        };
+        const shadowResult = await shadowService.scoreShadow(shadowInput);
+        await shadowService.logScoreComparison(
+          result.eventId,
+          result.eventType,
+          result.userId,
+          result,
+          shadowResult,
+          shadowInput,
+        );
+      } catch (shadowError) {
+        // Shadow scoring is best-effort — log and continue. The rule
+        // engine result is already returned to the caller.
+        if (logger?.warn) {
+          logger.warn(
+            { err: shadowError, eventId: result.eventId },
+            'Fraud shadow scoring failed — rule engine result stands',
+          );
+        }
+      }
+    }
+
     return result;
   } catch (error) {
-    // Fraud check failures must never break the user flow (AGENTS.md §6).
+    // The fraud evaluation could not complete. We must NOT fabricate a
+    // low-risk score — that would be a truthful-contract violation
+    // (AGENTS.md §11). Instead we report the unavailable state honestly
+    // and let the caller act on `policyAction`.
+    const policyAction = failoverPolicyAction(input.eventType);
     if (logger?.warn) {
-      logger.warn({ err: error, eventType: input.eventType }, 'Fraud check failed — allowing event');
+      logger.warn(
+        {
+          err: error,
+          eventType: input.eventType,
+          userId: input.userId ?? null,
+          policyAction,
+          reasonCode: 'fraud_service_unavailable',
+        },
+        'Fraud check unavailable — applying failover policy'
+      );
     }
-    return {
+    const unavailableResult: FraudCheckResult = {
       eventId: `fraud_err_${crypto.randomUUID()}`,
       eventType: input.eventType,
       userId: input.userId ?? null,
+      requestEnvironmentHash: '',
       deviceFingerprint: '',
       ipAddress: input.ip,
-      riskScore: 0,
-      riskLevel: 'low',
-      action: 'allow',
+      evaluationStatus: 'unavailable',
+      riskScore: null,
+      riskLevel: 'unknown',
+      action: null,
+      policyAction,
+      reasonCode: 'fraud_service_unavailable',
       signals: [],
       checkedAt: new Date().toISOString(),
     };
+    // Persist the unavailable result to the audit trail for traceability.
+    // persistFraudAudit will log it but will NOT overwrite the user's
+    // real risk profile with null/unknown.
+    try {
+      await persistFraudAudit(redis, unavailableResult);
+    } catch {
+      // If even the audit trail is unreachable, there is nothing more to
+      // do here — the result is already returned to the caller.
+    }
+
+    // Log the unavailable result to the shadow ledger too, so the ledger
+    // captures every fraud check even when the rule engine was down.
+    if (shadowService) {
+      try {
+        const shadowInput = {
+          eventId: unavailableResult.eventId,
+          eventType: unavailableResult.eventType,
+          userId: unavailableResult.userId,
+          ruleEngineScore: null,
+          riskLevel: 'unknown' as FraudRiskLevel,
+          action: null,
+          signals: [],
+          velocity: { accountCreation: 0, listingCreation: 0, message: 0, loginAttempt: 0 },
+          accountAgeSeconds: input.accountAgeSeconds ?? -1,
+          amountGbp: input.amountGbp ?? 0,
+          deviceMultipleAccounts: 0,
+        };
+        const shadowResult = await shadowService.scoreShadow(shadowInput);
+        await shadowService.logScoreComparison(
+          unavailableResult.eventId,
+          unavailableResult.eventType,
+          unavailableResult.userId,
+          unavailableResult,
+          shadowResult,
+          shadowInput,
+        );
+      } catch {
+        // Shadow logging is best-effort — the unavailable result stands.
+      }
+    }
+
+    return unavailableResult;
   }
+}
+
+/**
+ * Extract velocity counts from the rule-engine result signals.
+ * The signals carry the observed values; we reconstruct the counts for
+ * the shadow feature vector.
+ */
+function extractVelocityFromResult(result: FraudCheckResult): VelocityCounts {
+  const counts: VelocityCounts = {
+    accountCreation: 0,
+    listingCreation: 0,
+    message: 0,
+    loginAttempt: 0,
+  };
+  for (const signal of result.signals) {
+    if (signal.ruleId === 'velocity.account_creation') {
+      counts.accountCreation = Number(signal.observedValue) || 0;
+    } else if (signal.ruleId === 'velocity.listing_creation') {
+      counts.listingCreation = Number(signal.observedValue) || 0;
+    } else if (signal.ruleId === 'velocity.message') {
+      counts.message = Number(signal.observedValue) || 0;
+    } else if (signal.ruleId === 'velocity.login_attempt') {
+      counts.loginAttempt = Number(signal.observedValue) || 0;
+    }
+  }
+  return counts;
+}
+
+/**
+ * Extract the device-multiple-accounts count from the rule-engine signals.
+ */
+function extractDeviceAccountCount(result: FraudCheckResult): number {
+  const signal = result.signals.find((s) => s.ruleId === 'device.multiple_accounts');
+  return signal ? Number(signal.observedValue) || 0 : 0;
 }
 
 // ---------------------------------------------------------------------------

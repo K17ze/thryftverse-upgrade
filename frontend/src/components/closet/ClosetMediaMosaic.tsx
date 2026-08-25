@@ -30,6 +30,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { Listing } from '../../domain';
 import { filterImageUris } from '../../utils/media';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import {
   Space,
   Radius,
@@ -173,7 +174,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         scaleValue={PressScale.gentle}
         hapticFeedback="light"
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
         {/* Media — 3:4 portrait, full bleed */}
@@ -188,6 +189,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
             style={[styles.image, { width: tileWidth, height: tileHeight }]}
             contentFit="cover"
             transition={300}
+            sharedTransitionTag={`image-${item.id}-0`}
             onError={() => setImageFailed(true)}
           />
         )}
@@ -262,8 +264,13 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
               pointerEvents="none"
             />
             <View style={styles.priceOverlay} pointerEvents="none">
+              {item.brand ? (
+                <Text style={styles.brandText} numberOfLines={1}>
+                  {item.brand}
+                </Text>
+              ) : null}
               <Text style={styles.priceText} numberOfLines={1}>
-                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
               </Text>
             </View>
           </>
@@ -368,6 +375,19 @@ const createStyles = (colors: ThemeColors) =>
       bottom: Space.xs,
       left: Space.xs + 1,
       right: Space.xs + 1,
+    },
+    // Brand label — recognition cue above price. In a closet the user is
+    // re-scanning known items; brand is the fastest recognition signal.
+    brandText: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      fontFamily: Typography.family.semibold,
+      color: '#fff',
+      letterSpacing: 0.1,
+      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+      marginBottom: 1,
     },
     priceText: {
       fontSize: Type.caption.size,

@@ -15,7 +15,7 @@
  * onCommit fires once on gesture end (one undo entry).
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { StyleSheet, View, LayoutChangeEvent } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -59,7 +59,12 @@ export function SVPlane({
 }: SVPlaneProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
-  const layoutRef = useRef({ width: size, height: size });
+  // Shared values (not useRef) so the worklet can read the measured
+  // dimensions without triggering Reanimated's "Tried to modify key
+  // `current`" freeze warning, which logs synchronously on the Android UI
+  // thread and causes ANRs (input dispatch timeout).
+  const layoutWidth = useSharedValue(size);
+  const layoutHeight = useSharedValue(size);
 
   // Animated indicator position
   const indicatorX = useSharedValue(hsv.s * size);
@@ -72,11 +77,9 @@ export function SVPlane({
   }, [hsv.s, hsv.v, size, indicatorX, indicatorY]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    layoutRef.current = {
-      width: e.nativeEvent.layout.width,
-      height: e.nativeEvent.layout.height,
-    };
-  }, []);
+    layoutWidth.value = e.nativeEvent.layout.width;
+    layoutHeight.value = e.nativeEvent.layout.height;
+  }, [layoutWidth, layoutHeight]);
 
   // Pan gesture — updates S and V from drag position
   const panGesture = React.useMemo(() => {
@@ -84,8 +87,8 @@ export function SVPlane({
       .activateAfterLongPress(0)
       .onBegin((e) => {
         'worklet';
-        const w = layoutRef.current.width;
-        const h = layoutRef.current.height;
+        const w = layoutWidth.value;
+        const h = layoutHeight.value;
         const s = Math.max(0, Math.min(1, e.x / w));
         const v = Math.max(0, Math.min(1, 1 - e.y / h));
         indicatorX.value = s * w;
@@ -95,8 +98,8 @@ export function SVPlane({
       })
       .onChange((e) => {
         'worklet';
-        const w = layoutRef.current.width;
-        const h = layoutRef.current.height;
+        const w = layoutWidth.value;
+        const h = layoutHeight.value;
         const s = Math.max(0, Math.min(1, e.x / w));
         const v = Math.max(0, Math.min(1, 1 - e.y / h));
         indicatorX.value = s * w;
@@ -106,14 +109,14 @@ export function SVPlane({
       })
       .onEnd(() => {
         'worklet';
-        const w = layoutRef.current.width;
-        const h = layoutRef.current.height;
+        const w = layoutWidth.value;
+        const h = layoutHeight.value;
         const s = Math.max(0, Math.min(1, indicatorX.value / w));
         const v = Math.max(0, Math.min(1, 1 - indicatorY.value / h));
         const finalHsv: HSV = { h: hsv.h, s, v };
         runOnJS(onCommit)(finalHsv);
       });
-  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit]);
+  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit, layoutWidth, layoutHeight]);
 
   // Animated indicator style
   const indicatorStyle = useAnimatedStyle(() => {
@@ -203,7 +206,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     borderWidth: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

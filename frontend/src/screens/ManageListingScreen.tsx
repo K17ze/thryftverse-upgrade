@@ -49,6 +49,9 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -202,7 +205,7 @@ export default function ManageListingScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}.`,
+        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}.`,
       });
     } catch {
       // silently fail
@@ -368,7 +371,7 @@ export default function ManageListingScreen() {
         {/* ── Flat identity block (no floating card over media) ── */}
         <View style={styles.identityBlock}>
           <Text style={styles.identityTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
+          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
 
           <View style={styles.statusRow}>
             <View style={[styles.statusPillFlat, { backgroundColor: `${statusColor}1A` }]}>
@@ -620,7 +623,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.06)',
+      backgroundColor: colors.overlay,
     },
     dotRow: {
       position: 'absolute',
@@ -635,7 +638,7 @@ function createStyles(colors: ThemeColors) {
       width: Space.xs + 2,
       height: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.45)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     dotActive: {
       backgroundColor: colors.textInverse,
@@ -683,12 +686,12 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
     },
     statusPillFlatText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: LetterSpacing.wide,
     },
     statusMeta: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       flexShrink: 1,
@@ -732,7 +735,7 @@ function createStyles(colors: ThemeColors) {
 
     // ── Section labels (flat, no card) ──
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',

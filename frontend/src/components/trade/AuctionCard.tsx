@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -40,7 +40,7 @@ interface AuctionCardProps {
 
 function LiveDot({ color }: { color: string }) {
   return (
-    <View style={{ width: 6, height: 6, borderRadius: Radius.sm, backgroundColor: color }} />
+    <View style={{ width: Space.xs - 2, height: Space.xs - 2, borderRadius: Radius.sm, backgroundColor: color }} />
   );
 }
 
@@ -80,7 +80,12 @@ function AuctionCardBase({
 
   return (
     <AnimatedPressable
-      style={styles.container}
+      style={[
+        styles.container,
+        viewerState === 'outbid' && styles.containerOutbid,
+        viewerState === 'leading' && styles.containerLeading,
+        viewerState === 'won' && styles.containerWon,
+      ]}
       onPress={onPress}
       activeOpacity={0.92}
       disableAnimation={false}
@@ -104,25 +109,25 @@ function AuctionCardBase({
         )}
         {endingSoon && isLive && (
           <View style={styles.endingSoonBadge}>
-            <Ionicons name="time-outline" size={10} color="#fff" />
+            <Ionicons name="time-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>ENDING SOON</Meta>
           </View>
         )}
         {viewerState === 'outbid' && !endingSoon && (
           <View style={styles.outbidBadge}>
-            <Ionicons name="trending-down-outline" size={10} color="#fff" />
+            <Ionicons name="trending-down-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>OUTBID</Meta>
           </View>
         )}
         {viewerState === 'leading' && !endingSoon && (
           <View style={styles.leadingBadge}>
-            <Ionicons name="trophy-outline" size={10} color="#fff" />
+            <Ionicons name="trophy-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>LEADING</Meta>
           </View>
         )}
         {viewerState === 'won' && !endingSoon && (
           <View style={styles.wonBadge}>
-            <Ionicons name="ribbon-outline" size={10} color="#fff" />
+            <Ionicons name="ribbon-outline" size={10} color={colors.textInverse} />
             <Meta style={styles.viewerBadgeText}>WON</Meta>
           </View>
         )}
@@ -245,13 +250,27 @@ export const AuctionCard = React.memo(AuctionCardBase);
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: 0,
+  },
+  // State-based left accent — creates asymmetry based on viewer's relationship
+  // to the auction. Anti-AI-slop: breaks the symmetrical card pattern.
+  containerOutbid: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.danger,
+    marginLeft: Space.md - 3,
+  },
+  containerLeading: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success,
+    marginLeft: Space.md - 3,
+  },
+  containerWon: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success,
+    marginLeft: Space.md - 3,
   },
   imageWrap: {
     position: 'relative',
@@ -259,8 +278,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 172,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
   },
   image: {
     width: '100%',
@@ -273,14 +290,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
   },
   liveDot: {
-    width: 6,
-    height: 6,
+    width: Space.xs - 2,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.danger,
   },
@@ -291,13 +308,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(220,38,38,0.9)',
+    backgroundColor: `${colors.danger}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   liveText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 2,
   },
   outbidBadge: {
@@ -307,7 +324,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(255,68,68,0.9)',
+    backgroundColor: `${colors.danger}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -319,7 +336,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(0,180,80,0.9)',
+    backgroundColor: `${colors.success}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -331,18 +348,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(255,170,0,0.9)',
+    backgroundColor: `${colors.warning}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   viewerBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 3,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
   body: {
     padding: Space.md,
+    paddingBottom: Space.md + Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   topRow: {
     flexDirection: 'row',
@@ -368,8 +388,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   sellerMessageBtn: {
-    width: 32,
-    height: 32,
+    width: Control.iconCompact + Space.xs + 2,
+    height: Control.iconCompact + Space.xs + 2,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -405,13 +425,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.caption.size,
   },
   progressTrack: {
-    height: 4,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   progressFill: {
-    height: 4,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },

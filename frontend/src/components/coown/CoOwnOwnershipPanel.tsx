@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   priceValue: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
   allocationBlock: {
@@ -396,12 +396,12 @@ const styles = StyleSheet.create({
   },
   allocationBarBg: {
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
   },
   viewerBlock: {
     borderRadius: Radius.md,
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewerTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   viewerStats: {
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   viewerStatValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
   footerRow: {
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   supplyRows: {
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   supplyRowMissing: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   // ── New styles for viewer position grid ──

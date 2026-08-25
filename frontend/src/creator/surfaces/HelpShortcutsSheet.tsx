@@ -13,7 +13,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
-import { Space, Radius, FontFamily, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Type, Stroke, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -105,7 +105,7 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
           {CATEGORIES.map((cat) => (
             <View key={cat.title} style={styles.category}>
               <View style={styles.categoryHeader}>
-                <Ionicons name={cat.icon} size={16} color={colors.textSecondary} />
+                <Ionicons name={cat.icon} size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
                   {cat.title}
                 </Text>
@@ -191,9 +191,9 @@ const styles = StyleSheet.create({
   },
   categoryTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   entryList: {
@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
   },
   gotItText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     letterSpacing: 0.12,
   },
 });

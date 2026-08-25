@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,10 +22,14 @@ import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
 export default function AddBankAccountScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accountName, setAccountName] = useState('');
@@ -124,13 +127,8 @@ export default function AddBankAccountScreen({ navigation }: Props) {
       show('Bank account saved', 'success');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to save bank account right now.');
-      if (parsed.isNetworkError) {
-        savePaymentMethod(localPaymentMethod);
-        show('Bank account saved locally. Backend sync unavailable.', 'info');
-      } else {
-        shouldCloseScreen = false;
-        show(parsed.message, 'error');
-      }
+      shouldCloseScreen = false;
+      show(parsed.message, 'error');
     } finally {
       setIsSaving(false);
       if (shouldCloseScreen) {
@@ -165,7 +163,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             variant="empty"
             icon="ban-outline"
             title="Bank payouts unavailable"
-            subtitle="Bank withdrawals are not available in your region. Switch your country policy to enable bank withdrawal rails."
+            subtitle="Bank withdrawals unavailable in your region."
           />
         ) : (
           <>
@@ -183,7 +181,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                       Withdrawals take 1-3 business days
                     </Text>
                   </View>
-                  <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                  <View style={[styles.heroBadge, { backgroundColor: colors.successSubtle }]}>
                     <Ionicons name="lock-closed" size={12} color={colors.success} />
                     <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
                   </View>
@@ -261,7 +259,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
               <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 <Text style={[styles.infoText, { color: colors.textMuted }]}>
-                  Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
+                  Withdrawals typically take 1-3 business days to process.
                 </Text>
               </View>
 
@@ -304,7 +302,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -357,7 +355,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     fieldInput: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
       paddingVertical: Space.xs,
     },

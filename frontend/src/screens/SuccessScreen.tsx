@@ -22,7 +22,9 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
-type RouteT = RouteProp<RootStackParamList, 'Success'>;
+import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+type RouteT = RouteProp<RootStackParamList, 'Success'>;;
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
@@ -75,6 +77,51 @@ export default function SuccessScreen() {
 
   const sellerName = order?.seller?.username ?? `Seller ${order?.sellerId?.slice(0, 8) ?? ''}`;
 
+  // ── Timeline state — derived from the real order status, not hardcoded.
+  // Per §11, the UI must not fabricate activity or tracking state. The
+  // "Seller prepares item" step is only `isActive` (brand-coloured, implying
+  // it is happening now) when the backend has confirmed the seller has
+  // accepted the order ('processing' / 'preparing'). When the order is
+  // merely 'paid', the step is `pending` — muted, "waiting for seller
+  // confirmation" — not active.
+  const timelineStates = useMemo(() => {
+    const status = order ? normaliseOrderStatus(order.status) : 'paid';
+    const shippedOrBeyond = new Set(['shipped', 'in transit', 'out for delivery', 'delivered', 'completed']);
+    const deliveredOrBeyond = new Set(['delivered', 'completed']);
+
+    const sellerPreparing = new Set(['processing', 'preparing']);
+    const inTransit = new Set(['shipped', 'in transit', 'out for delivery']);
+
+    return {
+      orderPlaced: {
+        isComplete: true, // Payment confirmed — we are on the success screen.
+        isActive: false,
+        detail: "We've notified the seller",
+      },
+      sellerPrep: {
+        isComplete: shippedOrBeyond.has(status),
+        // Only active when the seller has genuinely accepted ('processing'/'preparing').
+        // 'paid' means waiting for seller — pending, not active.
+        isActive: sellerPreparing.has(status),
+        detail: sellerPreparing.has(status)
+          ? 'The seller is preparing your item'
+          : 'Waiting for the seller to confirm',
+      },
+      shipped: {
+        isComplete: deliveredOrBeyond.has(status),
+        isActive: inTransit.has(status),
+        detail: inTransit.has(status)
+          ? "You'll get tracking updates in chat"
+          : 'Not yet shipped',
+      },
+      delivered: {
+        isComplete: status === 'completed',
+        isActive: status === 'delivered',
+        detail: 'Leave a review once you receive it',
+      },
+    };
+  }, [order]);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -112,7 +159,7 @@ export default function SuccessScreen() {
                 <View style={styles.orderInfo}>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
                   <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
+                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE)}</Text>
                 </View>
               </ElevatedSurface>
             </View>
@@ -126,27 +173,29 @@ export default function SuccessScreen() {
                 <TimelineStep
                   icon="checkmark-circle"
                   label="Order placed"
-                  detail="We've notified the seller"
-                  isComplete
+                  detail={timelineStates.orderPlaced.detail}
+                  isComplete={timelineStates.orderPlaced.isComplete}
                 />
                 <TimelineStep
                   icon="cube-outline"
                   label="Seller prepares item"
-                  detail="Usually within 1-2 business days"
-                  isComplete={false}
-                  isActive
+                  detail={timelineStates.sellerPrep.detail}
+                  isComplete={timelineStates.sellerPrep.isComplete}
+                  isActive={timelineStates.sellerPrep.isActive}
                 />
                 <TimelineStep
                   icon="airplane-outline"
                   label="Item shipped"
-                  detail="You'll get tracking updates in chat"
-                  isComplete={false}
+                  detail={timelineStates.shipped.detail}
+                  isComplete={timelineStates.shipped.isComplete}
+                  isActive={timelineStates.shipped.isActive}
                 />
                 <TimelineStep
                   icon="home-outline"
                   label="Delivered"
-                  detail="Leave a review once you receive it"
-                  isComplete={false}
+                  detail={timelineStates.delivered.detail}
+                  isComplete={timelineStates.delivered.isComplete}
+                  isActive={timelineStates.delivered.isActive}
                   isLast
                 />
               </View>
@@ -297,8 +346,8 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
 
-  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
-  subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
+  subtitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
@@ -311,9 +360,9 @@ function createStyles(colors: ThemeColors) {
   },
   orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  orderSeller: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
-  orderAmount: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  orderSeller: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  orderAmount: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
@@ -321,7 +370,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs,
   },
   timelineTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     marginBottom: Space.sm + 2,
@@ -350,7 +399,7 @@ function createStyles(colors: ThemeColors) {
   },
   supportText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

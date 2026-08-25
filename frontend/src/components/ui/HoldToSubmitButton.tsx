@@ -22,6 +22,7 @@ import Reanimated, {
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius, Typography, Type } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -88,7 +89,7 @@ export function HoldToSubmitButton({
       return;
     }
     cancelAnimation(progress);
-    progress.value = withTiming(0, { duration: 120 });
+    progress.value = withTiming(0, { duration: Motion.duration.fast });
     setIsHolding(false);
   }, [disabled, requireHold, reducedMotion, progress]);
 
@@ -170,8 +171,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 });

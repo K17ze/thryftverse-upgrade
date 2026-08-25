@@ -21,7 +21,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { CURRENCIES } from '../constants/currencies';
+import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
 import {
   calculateOfferSummaryFromDisplay,
@@ -38,6 +38,9 @@ import {
 } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
+import { track } from '../analytics';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -71,7 +74,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         if (!mounted) return;
         if (res.ok && res.listing) setListing(res.listing);
       })
-      .catch(() => { if (mounted) show('Could not load listing', 'error'); })
+      .catch(() => { if (mounted) show(t('makeOffer.toast.couldNotLoadListing'), 'error'); })
       .finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [itemId, show]);
@@ -109,17 +112,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   // the confirmation step without submitting.
   const validateOffer = useCallback((): string | null => {
     if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
-      return 'Enter a valid offer amount.';
+      return t('makeOffer.error.invalidAmount');
     }
     if (numericOfferGbp > price * 2) {
-      return 'Offer seems too high. Review the amount.';
+      return t('makeOffer.error.tooHigh');
     }
     const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
     if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      return `Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`;
+      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) });
     }
     if (!listing?.sellerId) {
-      return 'Could not load seller info. Try again.';
+      return t('makeOffer.error.couldNotLoadSeller');
     }
     return null;
   }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat]);
@@ -153,7 +156,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         idempotencyKeyRef.current = createStableId(isCounterOffer ? 'counter' : 'offer');
       }
       if (isCounterOffer && !parentOfferId) {
-        throw new Error('The original offer is unavailable. Refresh the conversation and try again.');
+        throw new Error(t('makeOffer.error.originalOfferUnavailable'));
       }
       const offer = isCounterOffer
         ? await counterListingOfferOnApi(parentOfferId!, {
@@ -172,9 +175,11 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           },
         });
 
+      track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
+
       const offerText = isCounterOffer
-        ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
-        : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
+        ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), previousAmount: formatFromFiat(previousOffer ?? 0, DEFAULT_CURRENCY_CODE), hours: expiryHours })
+        : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), title, hours: expiryHours });
 
       navigation.navigate('Chat', {
         conversationId: `offer_${listing.sellerId}_${itemId}`,
@@ -188,12 +193,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           counterRound: offer.counterRound,
         },
       });
-      show('Opening chat to send your offer.', 'info');
+      show(t('makeOffer.toast.openingChat'), 'info');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const message = isNetworkError
-        ? 'You appear to be offline. Check your connection and try again.'
-        : err instanceof Error ? err.message : 'Could not submit offer.';
+        ? t('makeOffer.error.offline')
+        : err instanceof Error ? err.message : t('makeOffer.error.couldNotSubmit');
       setErrorMsg(message);
       // Stay on review step so the user can retry without re-entering details.
     } finally {
@@ -219,7 +224,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       focusQuery: title,
       partnerUserId: listing.sellerId,
     });
-    show('Opening seller chat.', 'info');
+    show(t('makeOffer.toast.openingSellerChat'), 'info');
   }, [itemId, navigation, listing?.sellerId, show, title]);
 
   // Item image — use listing image if available, fall back to icon
@@ -229,7 +234,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title={isCounterOffer ? 'Counter-offer' : 'Make offer'}
+          title={isCounterOffer ? t('makeOffer.header.counterOffer') : t('makeOffer.header.makeOffer')}
           onBack={() => navigation.goBack()}
           backIcon="close"
         />
@@ -265,7 +270,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               {title}
             </Text>
             <Text style={[styles.itemListingPrice, { color: colors.textSecondary }]}>
-              Listed at {formatFromFiat(price, 'GBP')}
+              {t('makeOffer.item.listedAt', { amount: formatFromFiat(price, DEFAULT_CURRENCY_CODE) })}
             </Text>
           </View>
         </View>
@@ -278,12 +283,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           style={styles.messageAction}
           onPress={handleMessageSeller}
           accessibilityRole="button"
-          accessibilityLabel="Message seller"
-          accessibilityHint="Opens chat with the seller"
+          accessibilityLabel={t('makeOffer.a11y.messageSeller')}
+          accessibilityHint={t('makeOffer.a11y.opensChatSeller')}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textSecondary} />
           <Text style={[styles.messageActionText, { color: colors.textSecondary }]}>
-            Message seller
+            {t('makeOffer.action.messageSeller')}
           </Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </Pressable>
@@ -300,7 +305,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         <View>
         <View style={styles.priceSection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            {isCounterOffer ? 'Your counter-offer' : 'Your offer'}
+            {isCounterOffer ? t('makeOffer.label.yourCounterOffer') : t('makeOffer.label.yourOffer')}
           </Text>
 
           <View style={[styles.priceInputContainer, { borderBottomColor: colors.border }]}>
@@ -315,7 +320,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               selectionColor={colors.brand}
               placeholderTextColor={colors.textMuted}
               placeholder="0.00"
-              accessibilityLabel="Offer amount"
+              accessibilityLabel={t('makeOffer.a11y.offerAmount')}
             />
           </View>
 
@@ -323,7 +328,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           {discountPct != null && (
             <View style={styles.discountRow}>
               <Text style={[styles.discountText, { color: colors.warning }]}>
-                {discountPct}% below asking
+                {t('makeOffer.discount.belowAsking', { percent: discountPct })}
               </Text>
             </View>
           )}
@@ -345,7 +350,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   style={[styles.quickOfferChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}
                   onPress={() => applyQuickOffer(pct)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Quick offer: ${Math.round(pct * 100)}% of asking price, ${currencySymbol}${displayAmount.toFixed(0)}`}
+                  accessibilityLabel={t('makeOffer.a11y.quickOffer', { percent: Math.round(pct * 100), amount: `${currencySymbol}${displayAmount.toFixed(0)}` })}
                 >
                   <Text style={[styles.quickOfferChipLabel, { color: colors.textPrimary }]}>
                     {label}
@@ -365,19 +370,19 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <View style={[styles.counterCompareBox, { backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.counterCompareCol}>
                 <Text style={[styles.counterCompareLabel, { color: colors.textMuted }]}>
-                  Previous offer
+                  {t('makeOffer.counter.previousOffer')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.textSecondary }]}>
-                  {formatFromFiat(previousOffer, 'GBP')}
+                  {formatFromFiat(previousOffer, DEFAULT_CURRENCY_CODE)}
                 </Text>
               </View>
               <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
               <View style={styles.counterCompareCol}>
                 <Text style={[styles.counterCompareLabel, { color: colors.brand }]}>
-                  Your counter
+                  {t('makeOffer.counter.yourCounter')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.brand }]}>
-                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, 'GBP') : '—'}
+                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE) : '—'}
                 </Text>
               </View>
             </View>
@@ -391,7 +396,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <View style={styles.contextRow}>
                 <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.contextText, { color: colors.textSecondary }]}>
-                  Seller's minimum offer: {formatFromFiat(sellerMinOffer, 'GBP')}
+                  {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) })}
                 </Text>
               </View>
             );
@@ -405,7 +410,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         <View>
         <View style={styles.expirySection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            Offer valid for
+            {t('makeOffer.expiry.validFor')}
           </Text>
           <View style={styles.expiryRow}>
             {expiryOptions.map((hours) => {
@@ -420,7 +425,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   ]}
                   onPress={() => { setExpiryHours(hours); haptics.tap(); }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Offer valid for ${hours} hours`}
+                  accessibilityLabel={t('makeOffer.a11y.offerValidFor', { hours })}
                   accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[
@@ -434,7 +439,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             })}
           </View>
           <Text style={[styles.expiryHint, { color: colors.textMuted }]}>
-            Seller has {expiryHours} hours to respond. After that, the offer expires automatically.
+            {t('makeOffer.expiry.hint', { hours: expiryHours })}
           </Text>
         </View>
         </View>
@@ -452,7 +457,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               Your offer
             </Text>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(numericOfferGbp, 'GBP')}
+              {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
             </Text>
           </View>
           <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
@@ -463,7 +468,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               </Text>
             </View>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(platformChargeGbp, 'GBP')}
+              {formatFromFiat(platformChargeGbp, DEFAULT_CURRENCY_CODE)}
             </Text>
           </View>
           <View style={styles.totalRow}>
@@ -471,7 +476,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.brand }]}>
-              {formatFromFiat(total, 'GBP')}
+              {formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
             </Text>
           </View>
         </View>
@@ -535,7 +540,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       {showReview && (
         <View style={styles.reviewOverlay}>
           <Pressable
-            style={styles.reviewBackdrop}
+            style={[styles.reviewBackdrop, { backgroundColor: colors.overlay }]}
             onPress={() => { if (!isSubmitting) setShowReview(false); }}
             accessibilityLabel="Cancel review"
             accessibilityRole="button"
@@ -566,7 +571,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   {title}
                 </Text>
                 <Text style={[styles.reviewItemPrice, { color: colors.textSecondary }]}>
-                  Listed at {formatFromFiat(price, 'GBP')}
+                  Listed at {formatFromFiat(price, DEFAULT_CURRENCY_CODE)}
                 </Text>
               </View>
             </View>
@@ -577,16 +582,16 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 {isCounterOffer ? 'Counter-offer amount' : 'Offer amount'}
               </Text>
               <Text style={[styles.reviewAmountValue, { color: colors.brand }]}>
-                {formatFromFiat(numericOfferGbp, 'GBP')}
+                {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
               </Text>
               {isCounterOffer && previousOffer != null && (
-                <View style={styles.reviewCompareRow}>
+                <View style={[styles.reviewCompareRow, { borderTopColor: colors.borderSubtle }]}>
                   <View style={styles.reviewCompareItem}>
                     <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
                       Previous
                     </Text>
                     <Text style={[styles.reviewCompareValue, { color: colors.textSecondary }]}>
-                      {formatFromFiat(previousOffer, 'GBP')}
+                      {formatFromFiat(previousOffer, DEFAULT_CURRENCY_CODE)}
                     </Text>
                   </View>
                   <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
@@ -595,7 +600,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                       New offer
                     </Text>
                     <Text style={[styles.reviewCompareValue, { color: colors.brand }]}>
-                      {formatFromFiat(numericOfferGbp, 'GBP')}
+                      {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
                     </Text>
                   </View>
                 </View>
@@ -611,7 +616,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 Platform charge
               </Text>
               <Text style={[styles.reviewSummaryValue, { color: colors.textPrimary }]}>
-                {formatFromFiat(platformChargeGbp, 'GBP')}
+                {formatFromFiat(platformChargeGbp, DEFAULT_CURRENCY_CODE)}
               </Text>
             </View>
             <View style={styles.reviewTotalRow}>
@@ -619,7 +624,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 Total
               </Text>
               <Text style={[styles.reviewTotalValue, { color: colors.brand }]}>
-                {formatFromFiat(total, 'GBP')}
+                {formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
               </Text>
             </View>
 
@@ -665,14 +670,14 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <AppButton
                 style={styles.reviewConfirmBtn}
                 title={isSubmitting ? 'Sending…' : 'Confirm & send'}
-                subtitle={formatFromFiat(total, 'GBP')}
+                subtitle={formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
                 icon={isSubmitting ? undefined : <Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
                 variant="primary"
                 size="lg"
                 onPress={handleSendOffer}
                 disabled={isSubmitting}
                 loading={isSubmitting}
-                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
+                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} on ${title}`}
               />
             </View>
           </View>
@@ -697,14 +702,14 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <AppButton
               style={styles.sendBtn}
               title={isCounterOffer ? 'Review counter-offer' : 'Review offer'}
-              subtitle={formatFromFiat(total, 'GBP')}
+              subtitle={formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
               icon={<Ionicons name="arrow-forward-outline" size={16} color={colors.textInverse} />}
               variant="primary"
               size="lg"
               onPress={handleReviewOffer}
               disabled={numericOffer <= 0 || isSubmitting}
               loading={isSubmitting}
-              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
+              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} on ${title}`}
             />
           )}
         </View>
@@ -748,8 +753,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   itemListingPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Message seller action ──
@@ -762,8 +767,8 @@ const styles = StyleSheet.create({
   },
   messageActionText: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.medium,
   },
   // ── Price input section ──
@@ -772,10 +777,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   sectionLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.md,
   },
@@ -803,8 +808,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   discountText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // ── Quick offer chips ──
@@ -822,8 +827,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   quickOfferChipLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   quickOfferChipSub: {
@@ -839,8 +844,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   contextText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Counter-offer side-by-side compare ──
@@ -865,7 +870,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   counterCompareValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -886,13 +891,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expiryChipText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   expiryHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     marginTop: Space.sm,
   },
@@ -919,8 +924,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   summaryValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -932,8 +937,8 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   totalLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   totalValue: {
@@ -952,22 +957,22 @@ const styles = StyleSheet.create({
   },
   trustText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
   },
   // ── Tip ──
   tipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 4,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 4,
     fontFamily: Typography.family.regular,
     paddingTop: Space.md,
   },
   // ── Error ──
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   errorBlock: {
@@ -987,7 +992,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   retryBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   // ── Footer ──
@@ -1018,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   reviewBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'transparent',
   },
   reviewSheet: {
     position: 'absolute',
@@ -1061,8 +1066,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   reviewItemPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   reviewAmountBox: {
@@ -1072,9 +1077,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   reviewAmountLabel: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
@@ -1090,7 +1095,7 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.2)',
+    borderTopColor: 'transparent',
   },
   reviewCompareItem: {
     alignItems: 'center',
@@ -1102,7 +1107,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs / 2,
   },
   reviewCompareValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -1125,7 +1130,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   reviewSummaryValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -1137,7 +1142,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   reviewTotalLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewTotalValue: {
@@ -1160,7 +1165,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   reviewCancelText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewConfirmBtn: {

@@ -21,7 +21,7 @@ import type { SustainabilityScore } from '../../utils/sustainabilityScore';
 export type SustainabilityBadgeVariant = 'compact' | 'detailed';
 
 export interface SustainabilityBadgeProps {
-  score: SustainabilityScore;
+  score: SustainabilityScore | null;
   variant?: SustainabilityBadgeVariant;
   /**
    * Compact-only: render on top of media and use a legible solid fill +
@@ -49,7 +49,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       // Green — strongest positive signal.
       return {
         fill: colors.success,
-        onFill: '#FFFFFF',
+        onFill: colors.scrimTextPrimary,
         tint: `${colors.success}22`,
         label: 'Excellent',
       };
@@ -57,7 +57,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       // Light green — positive, slightly less.
       return {
         fill: `${colors.success}CC`,
-        onFill: '#FFFFFF',
+        onFill: colors.scrimTextPrimary,
         tint: `${colors.success}14`,
         label: 'Good',
       };
@@ -87,6 +87,10 @@ export function SustainabilityBadge({
   onMedia = false,
 }: SustainabilityBadgeProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  if (!score) return null;
+
   const meta = gradeMeta(score.grade, colors);
 
   if (variant === 'compact') {
@@ -195,7 +199,7 @@ export function SustainabilityBadge({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── Compact chip ──────────────────────────────────────────────────────────
   compactChip: {
     flexDirection: 'row',
@@ -208,7 +212,7 @@ const styles = StyleSheet.create({
   compactChipOnMedia: {
     // Legibility on photography — subtle dark backing is provided by the
     // solid grade fill itself, so no extra scrim is needed.
-    shadowColor: 'rgba(0,0,0,0.45)',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.5,
     shadowRadius: 3,
@@ -241,8 +245,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   gradeChipLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
@@ -298,8 +302,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   factorValue: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     textAlign: 'right',
     flexShrink: 0,
@@ -325,8 +329,8 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   statValue: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     fontVariant: ['tabular-nums'],

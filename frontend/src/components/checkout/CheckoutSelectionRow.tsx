@@ -139,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.8,
   },
   title: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -160,12 +160,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 3,
   },
   warningText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.warning,
   },
   errorText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
   },
@@ -181,7 +181,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   actionLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

@@ -36,8 +36,8 @@ export function CommerceDetailOfflineBanner({
       style={[
         styles.container,
         {
-          backgroundColor: colors.warning + '12',
-          borderColor: colors.warning + '30',
+          backgroundColor: colors.warningSubtle,
+          borderColor: colors.warningBorder,
         },
       ]}
     >
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   subtitle: {
     fontSize: Type.meta.size,

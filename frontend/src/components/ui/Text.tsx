@@ -8,12 +8,25 @@ import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
 import { Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useAccessibilityPreferences } from '../../context/AccessibilityPreferencesContext';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;
   color?: string;
   style?: StyleProp<TextStyle>;
   numberOfLines?: number;
+}
+
+/**
+ * Returns a font-size multiplier derived from the user's in-app text size
+ * preference. This is applied ON TOP of the OS-level font scale that RN
+ * handles natively via `maxFontSizeMultiplier`. The product of the two
+ * scales allows users to reach 200%+ effective text size when both the
+ * OS setting and the in-app setting are maxed out.
+ */
+function useTextSizeMultiplier(): number {
+  const { textSizeScale } = useAccessibilityPreferences();
+  return textSizeScale;
 }
 
 // ============================================================================
@@ -27,11 +40,14 @@ export const Caption: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.caption,
         { color: color ?? colors.textSecondary },
+        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -48,11 +64,14 @@ export const CaptionEmphasis: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.captionEmphasis,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -73,11 +92,14 @@ export const Body: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={2}
       style={[
         styles.body,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.body.size * scale), lineHeight: Math.round(Type.body.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -94,11 +116,14 @@ export const BodyEmphasis: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={2}
       style={[
         styles.bodyEmphasis,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.priceList.size * scale), lineHeight: Math.round(Type.priceList.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -119,11 +144,14 @@ export const Headline: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.headline,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.subtitle.size * scale), lineHeight: Math.round(Type.subtitle.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -144,11 +172,14 @@ export const Title3: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.title3,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -165,11 +196,14 @@ export const Title2: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.title2,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -186,11 +220,14 @@ export const Title1: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.title1,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -217,11 +254,14 @@ export const Price: React.FC<PriceProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.price,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.priceList.size * scale), lineHeight: Math.round(Type.priceList.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -239,11 +279,14 @@ export const PriceCompact: React.FC<PriceProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.priceCompact,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -261,11 +304,14 @@ export const PriceLarge: React.FC<PriceProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.5}
       style={[
         styles.priceLarge,
         { color: color ?? colors.textPrimary },
+        scale !== 1 ? { fontSize: Math.round(Type.priceHero.size * scale), lineHeight: Math.round(Type.priceHero.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -286,11 +332,14 @@ export const Meta: React.FC<TextComponentProps> = ({
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const scale = useTextSizeMultiplier();
   return (
     <RNText
+      maxFontSizeMultiplier={1.8}
       style={[
         styles.meta,
         { color: color ?? colors.textSecondary },
+        scale !== 1 ? { fontSize: Math.round(Type.meta.size * scale), lineHeight: Math.round(Type.meta.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -324,10 +373,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   bodyEmphasis: {
-    fontSize: Type.price.size,
-    lineHeight: Type.price.lineHeight,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.price.letterSpacing,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   headline: {
     fontSize: Type.subtitle.size,
@@ -354,8 +403,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.title.letterSpacing,
   },
   price: {
-    fontSize: Type.price.size,
-    lineHeight: Type.price.lineHeight,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: 0,
   },
@@ -366,10 +415,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   priceLarge: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   meta: {
     fontSize: Type.meta.size,

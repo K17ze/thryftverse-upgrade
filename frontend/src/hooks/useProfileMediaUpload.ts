@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
+import { useHaptic } from './useHaptic';
 import { MediaUploadAsset, convertPickerAsset, validateMediaAssets } from '../utils/mediaUploadAsset';
 import { uploadMedia } from '../services/mediaUpload';
 import { updateMyProfile } from '../services/profileApi';
@@ -41,6 +41,7 @@ export function useProfileMediaUpload(
   onAvatarConfirmed: (url: string) => void,
   onCoverConfirmed: (url: string) => void
 ): ProfileMediaUploadResult {
+  const haptic = useHaptic();
   const [avatar, setAvatar] = useState<ProfileMediaState>({
     confirmedRemote: currentAvatarRemote,
     pendingLocal: null,
@@ -144,7 +145,7 @@ export function useProfileMediaUpload(
 
       if (result.canceled || !result.assets?.[0]) return;
 
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic.medium();
       const rawAsset = result.assets[0];
       const asset = convertPickerAsset(rawAsset);
 
@@ -178,7 +179,7 @@ export function useProfileMediaUpload(
       const message = err instanceof Error ? err.message : 'Could not select photo';
       updateState({ status: 'failed', error: message });
     }
-  }, [updateAvatarState, updateCoverState, performUpload, avatar.confirmedRemote, cover.confirmedRemote]);
+  }, [updateAvatarState, updateCoverState, performUpload, avatar.confirmedRemote, cover.confirmedRemote, haptic]);
 
   const retryMedia = useCallback(async (type: ProfileMediaType): Promise<void> => {
     const pending = pendingAssetRef.current[type];

@@ -6,9 +6,9 @@ import {
   Dimensions,
   RefreshControl,
   ImageStyle,
-  ScrollView,
   Pressable,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,15 +21,19 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
+import { AppInput } from '../components/ui/AppInput';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   fetchMoodboards,
   fetchPublicMoodboards,
   MOODBOARD_DEMO_MODE,
   type Moodboard,
 } from '../services/moodboardApi';
+import { useFeatureFlag } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -290,37 +294,6 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Masonry layout — true Pinterest-style column assignment by shortest height
-// ---------------------------------------------------------------------------
-function buildMasonryColumns(items: Moodboard[]): { item: Moodboard; height: number }[][] {
-  const cols: { item: Moodboard; height: number }[][] = Array.from(
-    { length: MASONRY_COLUMN_COUNT },
-    () => [],
-  );
-  const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
-
-  items.forEach((mb, idx) => {
-    const ratio = MASONRY_ASPECT_RATIOS[idx % MASONRY_ASPECT_RATIOS.length];
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * ratio);
-    const metaHeight = 64;
-    const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
-
-    let shortestCol = 0;
-    let shortestHeight = heights[0];
-    for (let c = 1; c < MASONRY_COLUMN_COUNT; c++) {
-      if (heights[c] < shortestHeight) {
-        shortestCol = c;
-        shortestHeight = heights[c];
-      }
-    }
-    cols[shortestCol].push({ item: mb, height: imgHeight });
-    heights[shortestCol] += itemHeight;
-  });
-
-  return cols;
-}
-
-// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 export default function MoodboardHomeScreen() {
@@ -330,12 +303,20 @@ export default function MoodboardHomeScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
+
+  // Feature flag — gates the moodboard beta badge on the creation entry
+  // points. Additive indicator; absent when the flag is off (current
+  // behaviour). When enabled, the Create and Studio buttons surface a
+  // "Beta" label so users know the collage tooling is in beta.
+  const moodboardBetaEnabled = useFeatureFlag('moodboard_beta');
 
   const [userMoodboards, setUserMoodboards] = useState<Moodboard[]>([]);
   const [publicMoodboards, setPublicMoodboards] = useState<Moodboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ── Data loading ──
   const loadAll = useCallback(async (isRefresh: boolean) => {
@@ -404,9 +385,218 @@ export default function MoodboardHomeScreen() {
   }, [navigation]);
 
   // ── Derived data ──
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(publicMoodboards),
-    [publicMoodboards],
+  const filteredPublicMoodboards = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return publicMoodboards;
+    return publicMoodboards.filter((mb) => {
+      return (
+        mb.title.toLowerCase().includes(q) ||
+        mb.curator.toLowerCase().includes(q) ||
+        mb.description.toLowerCase().includes(q)
+      );
+    });
+  }, [publicMoodboards, searchQuery]);
+
+  // ── FlashList masonry callbacks ──
+  const keyExtractor = useCallback((item: Moodboard) => item.id, []);
+
+  const renderMasonryItem = useCallback(
+    ({ item, index }: { item: Moodboard; index: number }) => {
+      const ratio = MASONRY_ASPECT_RATIOS[index % MASONRY_ASPECT_RATIOS.length];
+      const imgHeight = Math.round(MASONRY_COL_WIDTH * ratio);
+      return (
+        <View style={{ paddingHorizontal: MASONRY_GAP / 2, width: '100%' }}>
+          <PublicMoodboardCard
+            moodboard={item}
+            cardHeight={imgHeight}
+            onPress={() => handleMoodboardPress(item)}
+          />
+        </View>
+      );
+    },
+    [handleMoodboardPress],
+  );
+
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }) => {
+      layout.span = 1;
+    },
+    [],
+  );
+
+  const listHeader = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
+        {/* ── Header ── */}
+        <View style={styles.headerRow}>
+          <AnimatedPressable
+            style={styles.backButton}
+            onPress={handleGoBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Moodboards</Text>
+          <View style={styles.headerActions}>
+            <AnimatedPressable
+              style={styles.studioButton}
+              onPress={handleCreateWithPosterStudio}
+              activeOpacity={0.8}
+              scaleValue={0.96}
+              accessibilityRole="button"
+              accessibilityLabel="Create moodboard with Poster Studio"
+              accessibilityHint="Opens the Poster Creator with moodboard collage templates"
+            >
+              <Ionicons name="create-outline" size={16} color={colors.brand} />
+              <Text style={styles.studioButtonText}>Studio</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.createButton}
+              onPress={handleCreatePress}
+              activeOpacity={0.8}
+              scaleValue={0.96}
+              accessibilityRole="button"
+              accessibilityLabel={moodboardBetaEnabled ? 'Create a new moodboard (beta)' : 'Create a new moodboard'}
+              accessibilityHint="Opens the moodboard editor to create a new collage"
+            >
+              <Ionicons name="add" size={20} color={colors.textInverse} />
+              <Text style={styles.createButtonText}>Create</Text>
+              {moodboardBetaEnabled ? (
+                <View style={styles.betaBadge} pointerEvents="none" accessible={false}>
+                  <Text style={styles.betaBadgeText}>Beta</Text>
+                </View>
+              ) : null}
+            </AnimatedPressable>
+          </View>
+        </View>
+
+        {/* ── Search ── */}
+        <View style={styles.searchWrap}>
+          <AppInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search moodboards"
+            placeholderTextColor={colors.textMuted}
+            appearance="filled"
+            returnKeyType="search"
+            autoCorrect={false}
+            inputContainerStyle={styles.searchInputContainer}
+            inputStyle={styles.searchInput}
+            prefix={
+              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            }
+            suffix={
+              searchQuery.length > 0 ? (
+                <Pressable
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => setSearchQuery('')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  accessibilityHint="Clears the search query"
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null
+            }
+          />
+        </View>
+
+        {/* ── Section 1: Your Moodboards rail ── */}
+        {loading ? (
+          <View style={styles.sectionWrap}>
+            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
+            <UserRailSkeleton />
+          </View>
+        ) : userMoodboards.length > 0 ? (
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
+            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
+            <HorizontalRail
+              contentContainerStyle={styles.railContent}
+              showsHorizontalScrollIndicator={false}
+              accessibilityLabel="Your moodboards rail"
+            >
+              {userMoodboards.map((mb) => (
+                <UserMoodboardCard
+                  key={mb.id}
+                  moodboard={mb}
+                  onPress={() => handleMoodboardPress(mb)}
+                />
+              ))}
+            </HorizontalRail>
+          </Reanimated.View>
+        ) : null}
+
+        {/* ── Section 2: Discover Moodboards — header + loading/empty states ── */}
+        {loading ? (
+          <View style={styles.sectionWrap}>
+            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+            <DiscoverMasonrySkeleton />
+          </View>
+        ) : searchQuery.trim().length > 0 && filteredPublicMoodboards.length === 0 ? (
+          <View style={styles.sectionWrap}>
+            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+            <View style={styles.searchEmptyWrap}>
+              <Ionicons name="search-outline" size={32} color={colors.textMuted} />
+              <Text style={styles.searchEmptyTitle}>
+                No moodboards match '{searchQuery.trim()}'
+              </Text>
+              <Text style={styles.searchEmptySubtitle}>
+                Try a different title, curator, or keyword.
+              </Text>
+            </View>
+          </View>
+        ) : filteredPublicMoodboards.length > 0 ? (
+          <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+        ) : null}
+      </View>
+    ),
+    [
+      loading,
+      userMoodboards,
+      searchQuery,
+      filteredPublicMoodboards.length,
+      reducedMotion,
+      styles,
+      colors,
+      handleMoodboardPress,
+      handleGoBack,
+      handleCreatePress,
+      handleCreateWithPosterStudio,
+      moodboardBetaEnabled,
+    ],
+  );
+
+  const listFooter = useMemo(
+    () =>
+      !loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
+        <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2), marginTop: Space.lg }}>
+          <View style={styles.inlineEmptyWrap}>
+            <View style={styles.inlineEmptyCard}>
+              <Ionicons name="grid-outline" size={28} color={colors.brand} />
+              <Text style={styles.inlineEmptyTitle}>Create your first moodboard</Text>
+              <Text style={styles.inlineEmptySubtitle}>
+                Arrange listings into a collage that expresses your style.
+              </Text>
+              <AnimatedPressable
+                style={styles.inlineEmptyCta}
+                onPress={handleCreatePress}
+                activeOpacity={0.8}
+                scaleValue={0.97}
+                accessibilityRole="button"
+                accessibilityLabel="Create your first moodboard"
+                accessibilityHint="Opens the moodboard editor"
+              >
+                <Text style={styles.inlineEmptyCtaText}>Start creating</Text>
+              </AnimatedPressable>
+            </View>
+          </View>
+        </View>
+      ) : null,
+    [loading, userMoodboards.length, publicMoodboards.length, styles, colors, handleCreatePress],
   );
 
   // ── Error state ──
@@ -453,7 +643,7 @@ export default function MoodboardHomeScreen() {
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
-          <Text style={styles.offlineBannerText}>Offline — showing cached moodboards</Text>
+          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing. Reconnect to load latest.</Text>
         </View>
       )}
 
@@ -462,17 +652,26 @@ export default function MoodboardHomeScreen() {
         <View style={styles.demoBanner}>
           <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are saved locally. Connect the backend to share publicly.
+            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
           </Text>
         </View>
       )}
 
-      <ScrollView
+      <FlashList
+        data={loading ? [] : filteredPublicMoodboards}
+        masonry
+        numColumns={MASONRY_COLUMN_COUNT}
+        renderItem={renderMasonryItem}
+        keyExtractor={keyExtractor}
+        overrideItemLayout={overrideItemLayout}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        contentContainerStyle={{
+          paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
+          paddingTop: insets.top + Space.sm,
+          paddingBottom: Space.xxl,
+        }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + Space.sm },
-        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -482,127 +681,7 @@ export default function MoodboardHomeScreen() {
             progressBackgroundColor="transparent"
           />
         }
-      >
-        {/* ── Header ── */}
-        <View style={styles.headerRow}>
-          <AnimatedPressable
-            style={styles.backButton}
-            onPress={handleGoBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Moodboards</Text>
-          <View style={styles.headerActions}>
-            <AnimatedPressable
-              style={styles.studioButton}
-              onPress={handleCreateWithPosterStudio}
-              activeOpacity={0.8}
-              scaleValue={0.96}
-              accessibilityRole="button"
-              accessibilityLabel="Create moodboard with Poster Studio"
-              accessibilityHint="Opens the Poster Creator with moodboard collage templates"
-            >
-              <Ionicons name="create-outline" size={16} color={colors.brand} />
-              <Text style={styles.studioButtonText}>Studio</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.createButton}
-              onPress={handleCreatePress}
-              activeOpacity={0.8}
-              scaleValue={0.96}
-              accessibilityRole="button"
-              accessibilityLabel="Create a new moodboard"
-              accessibilityHint="Opens the moodboard editor to create a new collage"
-            >
-              <Ionicons name="add" size={20} color={colors.textInverse} />
-              <Text style={styles.createButtonText}>Create</Text>
-            </AnimatedPressable>
-          </View>
-        </View>
-
-        {/* ── Section 1: Your Moodboards rail ── */}
-        {loading ? (
-          <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
-            <UserRailSkeleton />
-          </View>
-        ) : userMoodboards.length > 0 ? (
-          <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-              showsHorizontalScrollIndicator={false}
-              accessibilityLabel="Your moodboards rail"
-            >
-              {userMoodboards.map((mb) => (
-                <UserMoodboardCard
-                  key={mb.id}
-                  moodboard={mb}
-                  onPress={() => handleMoodboardPress(mb)}
-                />
-              ))}
-            </HorizontalRail>
-          </View>
-        ) : null}
-
-        {/* ── Section 2: Discover Moodboards masonry ── */}
-        {loading ? (
-          <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
-            <DiscoverMasonrySkeleton />
-          </View>
-        ) : publicMoodboards.length > 0 ? (
-          <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
-            <View style={styles.masonryGrid}>
-              {masonryColumns.map((col, colIdx) => (
-                <View
-                  key={colIdx}
-                  style={[styles.masonryColumn, { width: MASONRY_COL_WIDTH }]}
-                >
-                  {col.map(({ item, height }) => (
-                    <PublicMoodboardCard
-                      key={item.id}
-                      moodboard={item}
-                      cardHeight={height}
-                      onPress={() => handleMoodboardPress(item)}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* ── Empty user moodboards inline prompt ── */}
-        {!loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
-          <View style={styles.inlineEmptyWrap}>
-            <View style={styles.inlineEmptyCard}>
-              <Ionicons name="grid-outline" size={28} color={colors.brand} />
-              <Text style={styles.inlineEmptyTitle}>Create your first moodboard</Text>
-              <Text style={styles.inlineEmptySubtitle}>
-                Arrange listings into a collage that expresses your style.
-              </Text>
-              <AnimatedPressable
-                style={styles.inlineEmptyCta}
-                onPress={handleCreatePress}
-                activeOpacity={0.8}
-                scaleValue={0.97}
-                accessibilityRole="button"
-                accessibilityLabel="Create your first moodboard"
-                accessibilityHint="Opens the moodboard editor"
-              >
-                <Text style={styles.inlineEmptyCtaText}>Start creating</Text>
-              </AnimatedPressable>
-            </View>
-          </View>
-        ) : null}
-      </ScrollView>
+      />
     </View>
   );
 }
@@ -695,13 +774,13 @@ function useStyles() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          backgroundColor: colors.brand + '14',
+          backgroundColor: colors.brandSubtle,
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
         },
         studioButtonText: {
-          fontSize: Type.captionElevated.size,
+          fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.brand,
         },
@@ -715,9 +794,62 @@ function useStyles() {
           borderRadius: Radius.full,
         },
         createButtonText: {
-          fontSize: Type.captionElevated.size,
+          fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
+        },
+        // ── Search ──
+        searchWrap: {
+          paddingHorizontal: Space.md,
+          paddingTop: Space.xs,
+          paddingBottom: Space.sm,
+        },
+        searchInputContainer: {
+          minHeight: 40,
+          borderRadius: Radius.lg,
+        },
+        searchInput: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.regular,
+          paddingVertical: 8,
+        },
+        searchEmptyWrap: {
+          alignItems: 'center',
+          gap: Space.sm,
+          paddingVertical: Space.xxl,
+          paddingHorizontal: Space.lg,
+        },
+        searchEmptyTitle: {
+          fontSize: Type.bodyStrong.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textPrimary,
+          textAlign: 'center',
+          letterSpacing: Type.body.letterSpacing,
+        },
+        searchEmptySubtitle: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+          textAlign: 'center',
+          lineHeight: Type.body.lineHeight,
+        },
+        // Beta badge — additive indicator gated by the moodboard_beta flag.
+        // A compact label on the Create button so users know the collage
+        // tooling is in beta. Absent when the flag is off.
+        betaBadge: {
+          marginLeft: Space.xxs,
+          paddingHorizontal: Space.xs,
+          paddingVertical: 1,
+          borderRadius: Radius.sm,
+          backgroundColor: `${colors.textInverse}24`,
+        },
+        betaBadgeText: {
+          fontSize: 9,
+          lineHeight: 12,
+          fontFamily: Typography.family.bold,
+          color: colors.textInverse,
+          letterSpacing: 0.3,
+          textTransform: 'uppercase',
         },
         // ── Section wrappers ──
         sectionWrap: {
@@ -729,10 +861,10 @@ function useStyles() {
           paddingBottom: Space.md,
         },
         sectionEyebrow: {
-          fontSize: Type.metaElevated.size,
+          fontSize: Type.label.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           marginBottom: Space.xs,
         },
         sectionTitle: {
@@ -766,7 +898,7 @@ function useStyles() {
           gap: Space.xs / 2 + 1,
         },
         userCardTitle: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
@@ -802,7 +934,7 @@ function useStyles() {
           gap: Space.xs,
         },
         publicCardTitle: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
@@ -870,7 +1002,7 @@ function useStyles() {
           borderRadius: Radius.full,
         },
         inlineEmptyCtaText: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.bold,
           color: colors.textInverse,
           letterSpacing: LetterSpacing.wide,

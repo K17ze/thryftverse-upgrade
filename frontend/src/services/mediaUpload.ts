@@ -35,6 +35,7 @@ export interface UploadFinalizationInput {
   scopeRefId?: string;
   metadata?: Record<string, unknown>;
   verifyObject?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface UploadFinalization {
@@ -144,6 +145,7 @@ export async function finalizeUpload(
         metadata: input.metadata ?? {},
         verifyObject: input.verifyObject ?? true,
       }),
+      signal: input.signal,
     }
   );
   return payload.finalization;
@@ -161,26 +163,40 @@ export interface UploadedMedia {
 const MEDIA_PROCESSING_TIMEOUT_MS = 90_000;
 const MEDIA_PROCESSING_POLL_MS = 1_500;
 
-function waitFor(delayMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, delayMs);
+function waitFor(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Upload cancelled'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error('Upload cancelled'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
-async function fetchMediaAsset(assetId: string): Promise<MediaAssetReceipt> {
+async function fetchMediaAsset(assetId: string, signal?: AbortSignal): Promise<MediaAssetReceipt> {
   const payload = await fetchJson<{ ok: true; asset: MediaAssetReceipt }>(
     `/media/assets/${encodeURIComponent(assetId)}`,
+    { signal },
   );
   return payload.asset;
 }
 
-async function publishMediaAsset(assetId: string): Promise<MediaAssetReceipt> {
+async function publishMediaAsset(assetId: string, signal?: AbortSignal): Promise<MediaAssetReceipt> {
   const payload = await fetchJson<{ ok: true; asset: MediaAssetReceipt }>(
     `/media/assets/${encodeURIComponent(assetId)}/publish`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
+      signal,
     },
   );
   return payload.asset;
@@ -188,6 +204,7 @@ async function publishMediaAsset(assetId: string): Promise<MediaAssetReceipt> {
 
 async function waitForPublishableMedia(
   assetId: string,
+  signal?: AbortSignal,
 ): Promise<MediaAssetReceipt> {
   const deadline = Date.now() + MEDIA_PROCESSING_TIMEOUT_MS;
   const terminalFailureStatuses = new Set<MediaAssetReceipt['status']>([
@@ -200,12 +217,13 @@ async function waitForPublishableMedia(
   ]);
 
   while (Date.now() < deadline) {
-    const asset = await fetchMediaAsset(assetId);
+    if (signal?.aborted) throw new Error('Upload cancelled');
+    const asset = await fetchMediaAsset(assetId, signal);
     if (asset.status === 'published') {
       return asset;
     }
     if (asset.status === 'publishable') {
-      return publishMediaAsset(assetId);
+      return publishMediaAsset(assetId, signal);
     }
     if (terminalFailureStatuses.has(asset.status)) {
       throw new Error(
@@ -214,12 +232,84 @@ async function waitForPublishableMedia(
         ?? `Media processing ended with status ${asset.status}`,
       );
     }
-    await waitFor(MEDIA_PROCESSING_POLL_MS);
+    await waitFor(MEDIA_PROCESSING_POLL_MS, signal);
   }
 
   throw new Error(
     'Media is still being checked. Keep this draft and try publishing again shortly.',
   );
+}
+
+function creatorScopeForFolder(folder: string): UploadFinalizationInput['scope'] {
+  if (folder === 'looks') return 'look';
+  if (folder === 'posters') return 'poster';
+  if (folder === 'listings') return 'listing_media';
+  if (folder === 'avatars') return 'avatar';
+  if (folder === 'covers') return 'cover';
+  if (folder === 'evidence') return 'evidence';
+  if (folder === 'review') return 'review';
+  return 'general';
+}
+
+export interface FinalizePresignedMediaInput {
+  presign: PresignResponse;
+  fileName: string;
+  folder: string;
+  scopeRefId?: string;
+  metadata?: Record<string, unknown>;
+  signal?: AbortSignal;
+}
+
+/**
+ * Convert an object-store PUT into a trusted creator asset. A successful PUT
+ * is not publication: the backend must verify the object, create the durable
+ * media-asset receipt and, when enabled, complete scanning/processing before
+ * returning a canonical delivery URL.
+ */
+export async function finalizePresignedMedia(
+  input: FinalizePresignedMediaInput,
+): Promise<UploadedMedia> {
+  const { presign, fileName, folder, signal } = input;
+  const finalization = await finalizeUpload({
+    objectKey: presign.key,
+    bucket: presign.bucket,
+    fileName,
+    contentType: presign.contentType,
+    sizeBytes: presign.sizeBytes,
+    publicUrl: presign.publicUrl,
+    folder,
+    scope: creatorScopeForFolder(folder),
+    scopeRefId: input.scopeRefId,
+    metadata: input.metadata,
+    signal,
+  });
+
+  if (finalization.status !== 'finalized') {
+    throw new Error(
+      `Upload finalization ${finalization.status}: ${finalization.failureReason ?? 'unknown'}`,
+    );
+  }
+
+  let resolvedPublicUrl = presign.publicUrl;
+  if (finalization.publicationGateRequired) {
+    if (!finalization.mediaAsset?.id) {
+      throw new Error('The media processor did not return a canonical asset reference');
+    }
+    const publishedAsset = await waitForPublishableMedia(finalization.mediaAsset.id, signal);
+    if (!publishedAsset.canonicalUrl) {
+      throw new Error('The published media asset has no canonical delivery URL');
+    }
+    resolvedPublicUrl = publishedAsset.canonicalUrl;
+  }
+
+  return {
+    publicUrl: resolvedPublicUrl,
+    objectKey: presign.key,
+    finalizationId: finalization.id,
+    mediaAssetId: finalization.mediaAsset?.id,
+    sizeBytes: presign.sizeBytes,
+    contentType: presign.contentType,
+  };
 }
 
 export async function uploadMedia(fileUri: string, folder?: string): Promise<UploadedMedia>;
@@ -264,43 +354,10 @@ export async function uploadMedia(
   // Finalize with the backend so the object is verified in S3 and recorded
   // durably. If this throws, the caller must surface an honest error — the
   // upload may have landed but the backend cannot vouch for it.
-  const finalization = await finalizeUpload({
-    objectKey: presign.key,
-    bucket: presign.bucket,
-    fileName,
-    contentType,
-    sizeBytes: blob.size,
-    publicUrl: presign.publicUrl,
-    folder,
-  });
-
-  if (finalization.status !== 'finalized') {
-    throw new Error(
-      `Upload finalization ${finalization.status}: ${finalization.failureReason ?? 'unknown'}`
-    );
-  }
-
-  let resolvedPublicUrl = presign.publicUrl;
-  if (finalization.publicationGateRequired) {
-    if (!finalization.mediaAsset?.id) {
-      throw new Error('The media processor did not return a canonical asset reference');
-    }
-    const publishedAsset = await waitForPublishableMedia(finalization.mediaAsset.id);
-    if (!publishedAsset.canonicalUrl) {
-      throw new Error('The published media asset has no canonical delivery URL');
-    }
-    resolvedPublicUrl = publishedAsset.canonicalUrl;
-  }
+  const uploaded = await finalizePresignedMedia({ presign, fileName, folder });
 
   // Performance mark: image/media upload complete (finalized + published).
   performance.mark('upload:complete');
 
-  return {
-    publicUrl: resolvedPublicUrl,
-    objectKey: presign.key,
-    finalizationId: finalization.id,
-    mediaAssetId: finalization.mediaAsset?.id,
-    sizeBytes: blob.size,
-    contentType,
-  };
+  return uploaded;
 }

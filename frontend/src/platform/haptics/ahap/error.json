@@ -1,0 +1,39 @@
+{
+  "Version": 1.0,
+  "Metadata": {
+    "Project": "ThryftVerse",
+    "Description": "Error — three sharp mechanical taps for failure"
+  },
+  "Pattern": [
+    {
+      "Event": {
+        "EventType": "HapticTransient",
+        "Time": 0.0,
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.7 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.9 }
+        ]
+      }
+    },
+    {
+      "Event": {
+        "EventType": "HapticTransient",
+        "Time": 0.07,
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.7 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.9 }
+        ]
+      }
+    },
+    {
+      "Event": {
+        "EventType": "HapticTransient",
+        "Time": 0.14,
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.7 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.9 }
+        ]
+      }
+    }
+  ]
+}

@@ -109,7 +109,7 @@ export function AppButton({
   trailingIconContainerStyle,
   align,
   activeOpacity = 0.9,
-  hapticFeedback = 'none',
+  hapticFeedback,
   accessibilityLabel,
   accessibilityHint,
   accessibilityRole,
@@ -117,6 +117,11 @@ export function AppButton({
   const { colors } = useAppTheme();
   const tokens = resolveVariantTokens(variant, colors);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
+  // Haptic default — primary actions get a medium impact, all other variants
+  // get a light impact. Most call sites don't opt in, so this ensures every
+  // button communicates its press natively without each caller repeating the
+  // prop. Explicit `hapticFeedback` overrides still win.
+  const resolvedHaptic = hapticFeedback ?? (variant === 'primary' ? 'medium' : 'light');
 
   return (
     <AnimatedPressable
@@ -136,7 +141,7 @@ export function AppButton({
       activeOpacity={activeOpacity}
       disableAnimation={false}
       scaleValue={0.985}
-      hapticFeedback={hapticFeedback}
+      hapticFeedback={resolvedHaptic}
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
       accessibilityRole={accessibilityRole}

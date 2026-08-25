@@ -1,21 +1,98 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, StyleSheet, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  useWindowDimensions,
+  Text,
+  Pressable,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Reanimated from 'react-native-reanimated';
 import type { Listing } from '../../domain';
+import type {
+  DiscoveryFeedUnit,
+  ListingFeedUnit,
+  LookFeedUnit,
+  MoodboardFeedUnit,
+  PosterFeedUnit,
+  RecommendationBreakFeedUnit,
+} from '../../contracts/discoveryFeedUnit';
+import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { ProductDiscoveryTile } from '../ProductCardV2';
-import { Space } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { typographyV2Style } from '../../theme/typography.v2';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
+import { PremiumSkeletonTile } from './PremiumSkeletonTile';
 import { EmptyState } from '../EmptyState';
 
+// ============================================================================
+// ANIMATED FLASHLIST
+// ============================================================================
+// FlashList v2 is wrapped with Reanimated so the grid can receive an animated
+// `onScroll` handler (worklet) for surfaces that drive a shared scroll value
+// (e.g. DiscoverScene's RefreshIndicator). The wrap is transparent for
+// callers that pass a plain onScroll or none at all — it is still one
+// FlashList, one performance path. This matches the established pattern in
+// HomeScreen / InboxScreen.
+const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
+  React.ComponentProps<typeof FlashList<Listing | DiscoveryFeedUnit>> & { ref?: React.Ref<any> }
+>;
+
+// ============================================================================
+// FEED-UNIT TYPE GUARD
+// ============================================================================
+const FEED_UNIT_TYPES = new Set<string>([
+  'listing',
+  'look',
+  'poster',
+  'moodboard',
+  'editorial',
+  'recommendation_break',
+]);
+
+function isFeedUnit(item: Listing | DiscoveryFeedUnit): item is DiscoveryFeedUnit {
+  return typeof (item as DiscoveryFeedUnit).type === 'string' && FEED_UNIT_TYPES.has((item as DiscoveryFeedUnit).type);
+}
+
 interface Props {
-  items: Listing[];
-  /** Legacy navigation callback — kept so existing callers type-check. */
+  /**
+   * The feed data. Accepts either:
+   *  - `DiscoveryFeedUnit[]` (heterogeneous path): the renderer switches on
+   *    `unit.type` and honours `unit.span`. This is the Discover tab's
+   *    authored-feed path.
+   *  - `Listing[]` (legacy path): unchanged single-column listing tiles.
+   *    Used by Browse / CategoryDetail / VisualSearch.
+   * The grid detects which path to use from the first item's shape.
+   */
+  items: (Listing | DiscoveryFeedUnit)[];
+  /** Legacy navigation callback (Listing[] path). */
   onPressItem?: (item: Listing) => void;
-  /** Preferred navigation callback (spec). Falls back to onPressItem. */
-  onItemPress?: (item: Listing) => void;
+  /**
+   * Heterogeneous-path navigation callback for listing units. Receives the
+   * production `DiscoveryListingSummary` carried by the `ListingFeedUnit`.
+   */
+  onItemPress?: (listing: DiscoveryListingSummary) => void;
+  /**
+   * Save-toggle callback for listing tiles. When provided, each listing tile
+   * renders a bookmark button over the media (Pinterest/Depop quick-save
+   * pattern). The parent owns the saved state and passes it back via
+   * `isItemSaved`.
+   */
+  onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  /** Returns whether a listing is currently saved. Drives the bookmark glyph. */
+  isItemSaved?: (listingId: string) => boolean;
+  onLookPress?: (lookId: string) => void;
+  onPosterPress?: (storyId: string) => void;
+  /** Fired when a moodboard tile is tapped. */
+  onMoodboardPress?: (moodboardId: string) => void;
   /** Kept for interface compatibility; the discovery tile has no seller row. */
   onPressSeller?: (item: Listing) => void;
   onMessageSeller?: (item: Listing) => void;
@@ -25,6 +102,8 @@ interface Props {
   isLoading?: boolean;
   /** Loading more pages (items present) → small footer indicator. */
   isLoadingMore?: boolean;
+  /** When false and not loading more, show end-of-list state. */
+  hasMore?: boolean;
   numColumns?: number;
   /** Kept for interface compatibility; the discovery tile has no save button. */
   showSaveButton?: boolean;
@@ -45,6 +124,23 @@ interface Props {
   testIDPrefix?: string;
   /** Pull-to-refresh control — passed through to FlashList. */
   refreshControl?: React.ReactElement<any>;
+  /**
+   * Optional scroll handler so a parent can drive a shared scroll value from
+   * the FlashList's own scrolling — without wrapping the grid in a ScrollView
+   * (which would break virtualization). A plain JS handler that sets a
+   * Reanimated SharedValue's `.value` is the proven pattern with FlashList +
+   * Reanimated 4.x (`useAnimatedScrollHandler` does not fire from FlashList
+   * in 4.x).
+   */
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  /** Optional ref forwarded to the FlashList (scrollToOffset / useScrollToTop). */
+  scrollRef?: React.MutableRefObject<any>;
+  /**
+   * Optional header rendered by FlashList above the masonry grid. Scrolls
+   * with the feed (it is NOT sticky-fixed) so it never overlaps content.
+   * Used by DiscoverScene to mount the category pill bar.
+   */
+  listHeaderComponent?: React.ReactElement;
 }
 
 /**
@@ -55,9 +151,19 @@ interface Props {
  * required and no manual column balancing is needed. The FlashList owns its
  * own scrolling — it must NOT be wrapped in a ScrollView.
  *
+ * Heterogeneous feed (DiscoveryFeedUnit[]):
+ *  - The renderer switches on `unit.type` and honours `unit.span`, so the
+ *    feed is an authored canvas (listings + full-width context breaks +
+ *    hero listings + live Looks/Posters/Moodboards), not a uniform catalogue.
+ *    This is the structural fix for the Discover tab: the feed-unit model
+ *    itself changed, not just the tile styling.
+ *  - Creator modules render only after the assembly layer validates live
+ *    media. Server editorial remains fail-closed until its route is wired.
+ *
  * Recycling safety:
- *  - `keyExtractor` returns a stable `product-${id}` key.
+ *  - `keyExtractor` returns a stable `${id}` key.
  *  - `renderItem` is memoized with `useCallback`.
+ *  - `getItemType` returns `type:span` so recycled cells stay type-stable.
  *  - The tile uses `expo-image` with `recyclingKey={item.id}` so recycled
  *    cells never display stale media.
  *  - No per-item service subscriptions or network calls inside the tile.
@@ -66,18 +172,28 @@ export function PinterestMasonryGrid({
   items,
   onPressItem,
   onItemPress,
+  onItemSaveToggle,
+  isItemSaved,
+  onLookPress,
+  onPosterPress,
+  onMoodboardPress,
   onEndReached,
   isLoading = false,
   isLoadingMore = false,
+  hasMore = true,
   numColumns = 2,
   gap = Space.sm,
   horizontalPadding = Space.md,
   testIDPrefix,
   refreshControl,
+  onScroll,
+  scrollRef,
+  listHeaderComponent,
 }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Column width for CDN downscaling. FlashList v2 masonry gives each column
   // (windowWidth - 2*horizontalPadding) / numColumns; subtract the inter-item
@@ -86,53 +202,113 @@ export function PinterestMasonryGrid({
     1,
     Math.floor((windowWidth - horizontalPadding * 2 - gap * (numColumns - 1)) / numColumns),
   );
+  const footerTileWidth = colWidth;
 
-  // Resolve navigation handler — prefer the spec's onItemPress, fall back to
-  // the legacy onPressItem so existing callers keep working. The grid never
-  // navigates directly; the parent decides.
-  const handlePress = useCallback(
+  // Navigation handlers — kept distinct so the two paths stay type-safe.
+  const handleListingPress = useCallback(
     (item: Listing) => {
-      const handler = onItemPress ?? onPressItem;
-      handler?.(item);
+      onPressItem?.(item);
     },
-    [onItemPress, onPressItem],
+    [onPressItem],
   );
 
-  const keyExtractor = useCallback((item: Listing) => `product-${item.id}`, []);
-
-  const renderItem = useCallback(
-    ({ item, index }: { item: Listing; index: number }) => (
-      <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
-        <ProductDiscoveryTile
-          item={item}
-          onPress={() => handlePress(item)}
-          aspectRatio={resolveListingMediaAspectRatio(item)}
-          downscaleWidth={colWidth}
-          testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
-        />
-      </View>
-    ),
-    [gap, colWidth, handlePress, testIDPrefix],
+  const handleUnitPress = useCallback(
+    (listing: DiscoveryListingSummary) => {
+      onItemPress?.(listing);
+    },
+    [onItemPress],
   );
 
-  // Discovery tiles never span the full width — single-column placement only.
-  // `overrideItemLayout` is wired so full-span units (e.g. editorial breaks)
-  // can be introduced later by switching on item type here.
-  const overrideItemLayout = useCallback(
-    (layout: { span?: number }) => {
-      layout.span = 1;
+  const keyExtractor = useCallback(
+    (item: Listing | DiscoveryFeedUnit) => item.id,
+    [],
+  );
+
+  // getItemType — type+span so recycled cells are reused only among
+  // structurally identical units (a full-width break never recycles into a
+  // single-column tile's measured cell).
+  const getItemType = useCallback(
+    (item: Listing | DiscoveryFeedUnit): string => {
+      if (isFeedUnit(item)) {
+        return `${item.type}:${item.span ?? 1}`;
+      }
+      return 'listing:1';
     },
     [],
+  );
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: Listing | DiscoveryFeedUnit; index: number }) => {
+      if (isFeedUnit(item)) {
+        return renderUnit(item, index, {
+          numColumns,
+          gap,
+          colWidth,
+          testIDPrefix,
+          onListingPress: handleUnitPress,
+          onListingSaveToggle: onItemSaveToggle,
+          isListingSaved: isItemSaved,
+          onLookPress,
+          onPosterPress,
+          onMoodboardPress,
+        });
+      }
+      // Legacy listing path — unchanged single-column tile.
+      return (
+        <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
+          <ProductDiscoveryTile
+            item={item}
+            onPress={() => handleListingPress(item)}
+            aspectRatio={resolveListingMediaAspectRatio(item)}
+            downscaleWidth={colWidth}
+            testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+          />
+        </View>
+      );
+    },
+    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
+  );
+
+  // overrideItemLayout — span is decided here from the unit's declared span
+  // (clamped to numColumns). Listings default to span 1; full-width units
+  // (breaks, editorial, hero listings) declare span = numColumns upstream in
+  // the feed-assembly layer, so the rhythm decision lives in one place.
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }, item: Listing | DiscoveryFeedUnit) => {
+      if (isFeedUnit(item)) {
+        const span = item.span ?? 1;
+        layout.span = Math.max(1, Math.min(span, numColumns));
+      } else {
+        layout.span = 1;
+      }
+    },
+    [numColumns],
   );
 
   const ListFooterComponent = useMemo(
     () =>
       isLoadingMore ? (
         <View style={styles.footer}>
-          <ActivityIndicator color={colors.textMuted} />
+          <View style={styles.footerSkeletonRow}>
+            <PremiumSkeletonTile
+              width={footerTileWidth}
+              height={Math.round(footerTileWidth / 0.75)}
+              borderRadius={Radius.lg}
+            />
+            <PremiumSkeletonTile
+              width={footerTileWidth}
+              height={Math.round(footerTileWidth / 1.0)}
+              borderRadius={Radius.lg}
+            />
+          </View>
+        </View>
+      ) : !hasMore && items.length > 0 ? (
+        <View style={styles.endOfList}>
+          <View style={styles.endOfListHairline} />
+          <Text style={styles.endOfListText}>You've reached the end</Text>
         </View>
       ) : null,
-    [isLoadingMore, colors.textMuted],
+    [isLoadingMore, hasMore, items.length, footerTileWidth],
   );
 
   // Empty / loading states. FlashList owns its own scrolling, so these render
@@ -165,30 +341,385 @@ export function PinterestMasonryGrid({
   void reducedMotionEnabled;
 
   return (
-    <FlashList
+    <AnimatedFlashList
+      ref={scrollRef}
       data={items}
       masonry
       numColumns={numColumns}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
+      getItemType={getItemType}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.5}
       overrideItemLayout={overrideItemLayout}
+      onScroll={onScroll}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: Math.max(horizontalPadding - gap / 2, 0) }}
+      ListHeaderComponent={listHeaderComponent}
       ListFooterComponent={ListFooterComponent}
       refreshControl={refreshControl}
     />
   );
 }
 
-const styles = StyleSheet.create({
+// ============================================================================
+// UNIT RENDERER — switches on DiscoveryFeedUnit.type
+// ============================================================================
+
+interface UnitRenderContext {
+  numColumns: number;
+  gap: number;
+  colWidth: number;
+  testIDPrefix?: string;
+  onListingPress: (listing: DiscoveryListingSummary) => void;
+  onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  isListingSaved?: (listingId: string) => boolean;
+  onLookPress?: (lookId: string) => void;
+  onPosterPress?: (storyId: string) => void;
+  onMoodboardPress?: (moodboardId: string) => void;
+}
+
+function renderUnit(
+  unit: DiscoveryFeedUnit,
+  index: number,
+  ctx: UnitRenderContext,
+): React.ReactElement | null {
+  switch (unit.type) {
+    case 'listing': {
+      const u = unit as ListingFeedUnit;
+      const isHero = (u.span ?? 1) >= ctx.numColumns;
+      return (
+        <View
+          style={{
+            paddingHorizontal: ctx.gap / 2,
+            paddingBottom: ctx.gap,
+            width: '100%',
+          }}
+        >
+          <ProductDiscoveryTile
+            item={u.listing}
+            onPress={() => ctx.onListingPress(u.listing)}
+            aspectRatio={u.aspectRatio}
+            // Hero (full-width) units request a wider derivative; single-
+            // column units request the column width.
+            downscaleWidth={isHero ? ctx.colWidth * ctx.numColumns + ctx.gap : ctx.colWidth}
+            testID={ctx.testIDPrefix && index === 0 ? `${ctx.testIDPrefix}-first` : undefined}
+            isSaved={ctx.isListingSaved?.(u.listing.id)}
+            onSaveToggle={ctx.onListingSaveToggle ? () => ctx.onListingSaveToggle!(u.listing) : undefined}
+          />
+        </View>
+      );
+    }
+    case 'recommendation_break': {
+      const u = unit as RecommendationBreakFeedUnit;
+      return <RecommendationBreakRow label={u.label} gap={ctx.gap} />;
+    }
+    case 'look': {
+      const u = unit as LookFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
+          <LookDiscoveryTile unit={u} onPress={ctx.onLookPress} />
+        </View>
+      );
+    }
+    case 'poster': {
+      const u = unit as PosterFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
+          <PosterDiscoveryTile unit={u} onPress={ctx.onPosterPress} />
+        </View>
+      );
+    }
+    case 'moodboard': {
+      const u = unit as MoodboardFeedUnit;
+      return (
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: Space.md }}>
+          <MoodboardDiscoveryTile unit={u} onPress={ctx.onMoodboardPress} />
+        </View>
+      );
+    }
+    case 'editorial':
+      // Editorial remains fail-closed until a valid server-owned module and
+      // destination are present. Looks, Posters and Moodboards have concrete
+      // renderers above and are filtered at the assembly boundary.
+      return null;
+    default:
+      return null;
+  }
+}
+
+function LookDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: LookFeedUnit;
+  onPress?: (lookId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const creator = unit.look.creator.username ?? 'creator';
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+        <ExpoImage
+          source={{ uri: unit.coverImageUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={unit.id}
+          transition={160}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.56)']}
+          locations={[0.48, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
+          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+            {unit.title}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
+            @{creator}
+          </Text>
+        </View>
+        {unit.itemIds.length > 0 ? (
+          <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
+            <Ionicons name="pricetag" size={15} color="#FFFFFF" />
+          </View>
+        ) : null}
+    </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.look.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${unit.title}, look by ${creator}`}
+      accessibilityHint="Opens the look"
+      style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
+}
+
+function PosterDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: PosterFeedUnit;
+  onPress?: (storyId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const creator = unit.story.creator.username ?? 'creator';
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+        <ExpoImage
+          source={{ uri: unit.coverUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={unit.id}
+          transition={160}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.5)']}
+          locations={[0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <Ionicons name="play" size={16} color="#FFFFFF" style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
+        <Text
+          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
+          numberOfLines={1}
+        >
+          @{creator}
+        </Text>
+    </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.story.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`Poster by ${creator}`}
+      accessibilityHint="Opens the poster"
+      style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
+}
+
+function MoodboardDiscoveryTile({
+  unit,
+  onPress,
+}: {
+  unit: MoodboardFeedUnit;
+  onPress?: (moodboardId: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const imageUris = [unit.coverUri, ...unit.moodboard.items.map((item) => item.imageUri)]
+    .filter((uri, index, all) => uri.trim().length > 0 && all.indexOf(uri) === index)
+    .slice(0, 3);
+  const tile = (
+    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt, flexDirection: 'row', gap: 2 }}>
+        <ExpoImage
+          source={{ uri: imageUris[0] }}
+          style={{ flex: imageUris.length > 1 ? 1.35 : 1 }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={`${unit.id}:0`}
+          transition={160}
+        />
+        {imageUris.length > 1 ? (
+          <View style={{ flex: 0.9, gap: 2 }}>
+            {imageUris.slice(1).map((uri, index) => (
+              <ExpoImage
+                key={uri}
+                source={{ uri }}
+                style={{ flex: 1 }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`${unit.id}:${index + 1}`}
+                transition={160}
+              />
+            ))}
+          </View>
+        ) : null}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.62)']}
+          locations={[0.48, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ position: 'absolute', left: Space.md, right: Space.md, bottom: Space.smMd }}>
+          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
+            {unit.moodboard.title}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
+            {unit.moodboard.curator} · {unit.moodboard.items.length} pieces
+          </Text>
+        </View>
+      </View>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.moodboard.title}, moodboard by ${unit.moodboard.curator}`}>
+        {tile}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onPress(unit.moodboard.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${unit.moodboard.title}, moodboard by ${unit.moodboard.curator}`}
+      accessibilityHint="Opens the moodboard"
+      style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
+    >
+      {tile}
+    </Pressable>
+  );
+}
+
+// ============================================================================
+// RECOMMENDATION BREAK — full-width quiet eyebrow, no media
+// ============================================================================
+
+/** Short decorative hairline before the eyebrow label (24pt). */
+const BREAK_HAIRLINE_WIDTH = 24;
+
+function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) {
+  const { colors } = useAppTheme();
+  // TypographyV2 has no dedicated `eyebrow` role; `label` is the canonical
+  // uppercase role (11/14/600, letterSpacing 0.5) and is the closest semantic
+  // match for a quiet section-divider eyebrow.
+  const eyebrowStyle = React.useMemo(
+    () => ({
+      ...typographyV2Style('label'),
+      color: colors.textSecondary,
+    }),
+    [colors.textSecondary],
+  );
+  return (
+    <View
+      style={{
+        // Full-width units in FlashList masonry still receive the column
+        // padding; counter it so the eyebrow aligns to the outer rail.
+        paddingHorizontal: 0,
+        paddingTop: Space.lg,
+        paddingBottom: Space.xs,
+        width: '100%',
+      }}
+      accessibilityRole="header"
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginLeft: gap / 2,
+          gap: Space.xs,
+        }}
+      >
+        {/* Subtle decorative hairline before the text — a quiet visual
+            marker that separates chapters without fabricated media. */}
+        <View
+          style={{
+            width: BREAK_HAIRLINE_WIDTH,
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: colors.borderSubtle,
+          }}
+        />
+        <Text style={eyebrowStyle} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   footer: {
     paddingVertical: Space.md,
     alignItems: 'center',
+  },
+  footerSkeletonRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    justifyContent: 'center',
+  },
+  endOfList: {
+    alignItems: 'center',
+    paddingVertical: Space.lg,
+    gap: Space.sm,
+  },
+  endOfListHairline: {
+    width: 40,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+  },
+  endOfListText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
   },
   empty: {
     flex: 1,
     paddingHorizontal: Space.md,
   },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +30,7 @@ import {
   previewCoOwnOrder,
   reserveCoOwnOrder,
   type CoOwnOrderBookSnapshot,
+  type MarketCoOwnAsset,
 } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -57,25 +58,30 @@ import {
   type CoOwnTicketDuration,
 } from '../components/coown';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
+import { createStableId } from '../utils/createStableId';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
-  { value: 'buy', label: 'Buy', accessibilityLabel: 'Buy side' },
-  { value: 'sell', label: 'Sell', accessibilityLabel: 'Sell side' },
+  { value: 'buy', label: t('trade.side.buy'), accessibilityLabel: t('trade.side.buyA11y') },
+  { value: 'sell', label: t('trade.side.sell'), accessibilityLabel: t('trade.side.sellA11y') },
 ];
 
 // Phase 2.5: order-type selector options
 const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; accessibilityLabel: string }> = [
-  { value: 'protected_instant', label: 'Protected instant', accessibilityLabel: 'Protected instant — marketable limit with visible protection price' },
-  { value: 'limit', label: 'Limit', accessibilityLabel: 'Limit — resting order' },
+  { value: 'protected_instant', label: t('trade.orderType.protectedInstant'), accessibilityLabel: t('trade.orderType.protectedInstantA11y') },
+  { value: 'limit', label: t('trade.orderType.limit'), accessibilityLabel: t('trade.orderType.limitA11y') },
 ];
 
 export default function TradeScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
@@ -94,11 +100,12 @@ export default function TradeScreen() {
     route.params?.limitPrice ? String(route.params.limitPrice) : ''
   );
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
   // Phase 2.5: exchange-grade order type + duration
   const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>('protected_instant');
   const [ticketDuration, setTicketDuration] = React.useState<CoOwnTicketDuration>('GFD');
 
-  const [asset, setAsset] = React.useState<any>(null);
+  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [yourUnits, setYourUnits] = React.useState(0);
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -126,7 +133,7 @@ export default function TradeScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load asset');
+        const parsed = parseApiError(err, t('trade.error.unableLoadAsset'));
         show(parsed.message, 'error');
         setIsError(true);
       })
@@ -137,8 +144,22 @@ export default function TradeScreen() {
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
 
+  // Poll the order book every 10s so traders see fresh depth without
+  // manual refresh. Stops when the asset id changes or the screen unmounts.
+  React.useEffect(() => {
+    if (!tradeAssetId) return;
+    let cancelled = false;
+    const intervalId = setInterval(() => {
+      if (cancelled) return;
+      fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
+        .then((book) => { if (!cancelled) setOrderBook(book); })
+        .catch(() => undefined);
+    }, 10_000);
+    return () => { cancelled = true; clearInterval(intervalId); };
+  }, [tradeAssetId]);
+
   const marketPrice = asset ? asset.unitPriceGbp : 0;
-  const orderMode = 'limit' as const;
+  const orderMode: 'market' | 'limit' = ticketOrderType === 'protected_instant' ? 'market' : 'limit';
   const bestBid = orderBook?.bids[0]?.unitPriceGbp ?? 0;
   const bestAsk = orderBook?.asks[0]?.unitPriceGbp ?? 0;
   const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;
@@ -154,9 +175,21 @@ export default function TradeScreen() {
   // If any rights row is TBC, trading is blocked — even if navigated directly.
   const hasIncompleteRights = React.useMemo(() => {
     if (!asset) return false;
-    const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
-      const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
-      return row ?? { label, answer: 'To be confirmed', isTbc: true };
+    // GAP 3 fix: derive per-label rows from the structured rights fields
+    // on `asset.rights` (economic/voting/exit/fee) rather than a
+    // non-existent `asset.rightsRows` array. Mirrors AssetDetailScreen.
+    const structuredRightsMap: Record<string, string | null> = {
+      'Distributions': asset.rights?.economicRights ?? null,
+      'Voting rights': asset.rights?.votingRights ?? null,
+      'Exit & proceeds': asset.rights?.exitRights ?? null,
+      'Operating costs': asset.rights?.feeRights ?? null,
+    };
+    const rightsRows: CoOwnRightsRow[] = CANONICAL_RIGHTS_LABELS.map((label) => {
+      const structured = structuredRightsMap[label] ?? null;
+      if (structured) {
+        return { label, answer: structured, isTbc: false };
+      }
+      return { label, answer: t('trade.rights.tbc'), isTbc: true };
     });
     return rightsRows.some((r) => r.isTbc);
   }, [asset]);
@@ -206,7 +239,7 @@ export default function TradeScreen() {
     return { unitsAfter, ownershipPct, outstandingUnits };
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
-  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
+  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: t('trade.error.assetNotFound') };
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
     && Boolean(orderBook.serverTimestamp);
@@ -217,10 +250,10 @@ export default function TradeScreen() {
   const submitDisabledReason = React.useMemo(() => {
     const tradeReason = getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights });
     if (tradeReason) return tradeReason;
-    if (isOffline) return 'Reconnect to review this order';
-    if (orderBook?.source !== 'live') return 'Live market data is unavailable';
-    if (orderBook.reconciliationState !== 'reconciled') return 'Market reconciliation is in progress';
-    if (!orderBook.serverTimestamp) return 'Market timestamp is unavailable';
+    if (isOffline) return t('trade.error.reconnectToReview');
+    if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
+    if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
+    if (!orderBook.serverTimestamp) return t('trade.error.timestampUnavailable');
     return null;
   }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote]);
 
@@ -239,15 +272,19 @@ export default function TradeScreen() {
     });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
-    if (!asset) { show('Asset not found', 'error'); return; }
+    if (!asset) { show(t('trade.error.assetNotFound'), 'error'); return; }
 
-    if (!currentUser?.id) { show('Sign in is required to trade.', 'error'); return; }
+    if (!currentUser?.id) { show(t('trade.error.signInRequired'), 'error'); return; }
     if (!marketIsAuthoritative || !orderBook) {
-      show('Live market data is unavailable. Trading remains paused.', 'error');
+      show(t('trade.error.liveDataPaused'), 'error');
       return;
     }
 
     setIsSubmittingOrder(true);
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createStableId('reserve');
+    }
+    const idempotencyKey = idempotencyKeyRef.current;
     try {
       const command = {
         userId: currentUser.id,
@@ -259,12 +296,12 @@ export default function TradeScreen() {
       const previewResponse = await previewCoOwnOrder(asset.id, command);
       const preview = previewResponse.preview;
       if (!preview.eligibility.allowed) {
-        show(preview.eligibility.message || 'This order is not eligible.', 'error');
+        show(preview.eligibility.message || t('trade.error.notEligible'), 'error');
         return;
       }
       const reservationResponse = await reserveCoOwnOrder(asset.id, {
         ...command,
-        idempotencyKey: `reserve_${currentUser.id}_${asset.id}_${Date.now()}`,
+        idempotencyKey,
       });
       const reserved = reservationResponse.reservation;
       haptic.medium();
@@ -290,6 +327,7 @@ export default function TradeScreen() {
         maxReserved1ze: reserved.reserved1zeMg / 1000,
         marketDataTimestamp: orderBook.serverTimestamp,
       });
+      idempotencyKeyRef.current = null;
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to prepare this order');
       show(parsed.message, 'error');
@@ -374,13 +412,13 @@ export default function TradeScreen() {
       {/* Compact value strip — spec 03 §3.2: last/bid/ask/spread one line */}
       <CoOwnValueStrip
         last={{ price: asset.unitPriceGbp, ageSeconds: null }}
-        nav={asset.appraisalValue && asset.totalUnits > 0 ? {
-          pricePerUnit: asset.appraisalValue / asset.totalUnits,
+        nav={asset.appraisalValueGbp && asset.totalUnits > 0 ? {
+          pricePerUnit: asset.appraisalValueGbp / asset.totalUnits,
           valuedAt: asset.appraisalValuedAt ?? '—',
-          method: asset.appraisalMethod ?? '—',
+          method: asset.appraisalValuer ?? '—',
         } : undefined}
-        premiumPct={asset.appraisalValue && asset.totalUnits > 0
-          ? ((asset.unitPriceGbp - (asset.appraisalValue / asset.totalUnits)) / (asset.appraisalValue / asset.totalUnits)) * 100
+        premiumPct={asset.appraisalValueGbp && asset.totalUnits > 0
+          ? ((asset.unitPriceGbp - (asset.appraisalValueGbp / asset.totalUnits)) / (asset.appraisalValueGbp / asset.totalUnits)) * 100
           : null}
       />
 
@@ -406,12 +444,12 @@ export default function TradeScreen() {
         {/* Compliance alert */}
         {!eligibility.ok && (
           <View>
-            <View style={[styles.alertCard, { backgroundColor: colors.danger + '12', borderColor: colors.danger + '40' }]}>
+            <View style={[styles.alertCard, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="warning-outline" size={16} color={colors.danger} />
-                <Text style={[styles.alertTitle, { color: colors.danger }]}>Trading restricted</Text>
+                <Text style={[styles.alertTitle, { color: colors.danger }]} maxFontSizeMultiplier={2}>Trading restricted</Text>
               </View>
-              <Text style={[styles.alertText, { color: colors.textSecondary }]}>{eligibility.message}</Text>
+              <Text style={[styles.alertText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>{eligibility.message}</Text>
             </View>
           </View>
         )}
@@ -419,26 +457,26 @@ export default function TradeScreen() {
         {/* Rights incomplete alert — spec 10 §9.3: TBC blocks trading on live instruments */}
         {hasIncompleteRights && (
           <View>
-            <View style={[styles.alertCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+            <View style={[styles.alertCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="document-text-outline" size={16} color={colors.warning} />
-                <Text style={[styles.alertTitle, { color: colors.warning }]}>Rights incomplete</Text>
+                <Text style={[styles.alertTitle, { color: colors.warning }]} maxFontSizeMultiplier={2}>Rights incomplete</Text>
               </View>
-              <Text style={[styles.alertText, { color: colors.textSecondary }]}>
+              <Text style={[styles.alertText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                 This instrument has rights rows marked "To be confirmed". Trading is blocked until all rights are confirmed.
               </Text>
               {/* WS5: surface TBC reason and ETA when the backend provides them. */}
               {asset?.rights?.tbcReason ? (
-                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]} maxFontSizeMultiplier={2}>
                   Reason: {asset.rights.tbcReason}
                 </Text>
               ) : null}
               {asset?.rights?.tbcEtaDate ? (
-                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]} maxFontSizeMultiplier={2}>
                   Expected by {new Date(asset.rights.tbcEtaDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </Text>
               ) : (
-                <Text style={[styles.alertText, { color: colors.textMuted, marginTop: Space.xs }]}>
+                <Text style={[styles.alertText, { color: colors.textMuted, marginTop: Space.xs }]} maxFontSizeMultiplier={2}>
                   No confirmation date available.
                 </Text>
               )}
@@ -449,8 +487,8 @@ export default function TradeScreen() {
         <View style={[
           styles.illustrativeBanner,
           {
-            backgroundColor: marketIsAuthoritative ? colors.success + '10' : colors.warning + '12',
-            borderColor: marketIsAuthoritative ? colors.success + '35' : colors.warning + '40',
+            backgroundColor: marketIsAuthoritative ? colors.successSubtle : colors.warningSubtle,
+            borderColor: marketIsAuthoritative ? colors.successBorder : colors.warningBorder,
           },
         ]}>
           <Ionicons
@@ -458,7 +496,7 @@ export default function TradeScreen() {
             size={14}
             color={marketIsAuthoritative ? colors.success : colors.warning}
           />
-          <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3}>
+          <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {marketIsAuthoritative
               ? `Live order book · snapshot ${orderBook?.snapshotSequence ?? 0}. A server preview and reservation are required before confirmation.`
               : 'Trading paused. Displayed depth may be a development fallback and is never treated as an executable quote.'}
@@ -501,7 +539,7 @@ export default function TradeScreen() {
             depthContext={depthContext}
             duration={ticketDuration}
             postTradePreview={postTradePreview}
-            rightsVersion={asset.rightsVersion ?? undefined}
+            rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
           />
         </View>
 
@@ -512,14 +550,14 @@ export default function TradeScreen() {
         <View>
           <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {/* Order type */}
-            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Order type</Text>
+            <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>Order type</Text>
             <AppSegmentControl
               options={ORDER_TYPE_OPTIONS}
               value={ticketOrderType}
               onChange={setTicketOrderType}
               fullWidth
             />
-            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={1}>
               {ticketOrderType === 'protected_instant'
                 ? 'Marketable limit with visible protection price. Never uncapped in an illiquid asset.'
                 : 'Resting order. Queued until matched at your limit price.'}
@@ -530,7 +568,7 @@ export default function TradeScreen() {
             {/* Quantity + availability context */}
             <View style={styles.ticketRow}>
               <View style={styles.ticketFieldWrap}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Quantity</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>Quantity</Text>
                 <AppInput
                   value={quantityInput}
                   onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
@@ -547,7 +585,7 @@ export default function TradeScreen() {
                     scaleValue={0.96}
                     hapticFeedback="light"
                   >
-                    <Text style={[styles.maxLink, { color: colors.textSecondary }]}>Max: {maxUnits}</Text>
+                    <Text style={[styles.maxLink, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>Max: {maxUnits}</Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -842,7 +880,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Input labels — captionElevated for quiet, professional hierarchy ──
-  // Per Design.md: "Labels: Type.captionElevated."
+  // Per Design.md: "Labels: Type.caption."
   inputLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

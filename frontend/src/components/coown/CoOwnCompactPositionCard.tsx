@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     lineHeight: 19,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
@@ -184,8 +184,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   unitPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
@@ -226,8 +226,8 @@ const styles = StyleSheet.create({
   },
   positionValue: {
     maxWidth: '100%',
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -255,12 +255,12 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   progressFill: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   viewAffordance: {
     minHeight: 28,

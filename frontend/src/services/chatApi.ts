@@ -10,6 +10,9 @@ interface ApiConversationPayload {
   title: string | null;
   ownerId: string | null;
   itemId: string | null;
+  description?: string | null;
+  avatar?: string | null;
+  coverPhoto?: string | null;
   participantIds: string[];
   participantProfiles?: Array<{
     id: string;
@@ -17,15 +20,26 @@ interface ApiConversationPayload {
     displayName: string | null;
     avatar: string | null;
     emailVerified: boolean;
+    identityVerified?: boolean;
   }>;
   botIds: string[];
   lastMessage: string;
   lastMessageTime: string;
   unread: boolean;
   memberRoles?: Record<string, string>;
+  isMuted?: boolean;
+  isArchived?: boolean;
+  requestStatus?: 'pending' | 'accepted' | 'declined';
+  pinnedRank?: number;
+  markedUnread?: boolean;
 }
 
-interface ApiMessagePayload {
+interface ApiMessageReaction {
+  emoji: string;
+  userIds: string[];
+}
+
+export interface ApiMessagePayload {
   id: string;
   senderType: ApiSenderType;
   senderUserId: string | null;
@@ -33,6 +47,12 @@ interface ApiMessagePayload {
   body: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  clientMessageId?: string;
+  replyToMessageId?: string;
+  deletedForEveryoneAt?: string;
+  editVersion?: number;
+  editedAt?: string;
+  reactions?: ApiMessageReaction[];
 }
 
 interface ApiBotPayload {
@@ -93,7 +113,7 @@ function normalizeMemberRoles(
   return result;
 }
 
-function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
+export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
   const senderId = payload.senderType === 'bot'
     ? payload.senderBotId ?? 'system'
     : payload.senderType === 'user'
@@ -113,6 +133,8 @@ function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message
     sender: payload.senderType === 'system' ? 'system' : 'other',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    replyToMessageId: payload.replyToMessageId,
+    reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
   };
 }
 
@@ -145,6 +167,9 @@ function mapApiConversationToApp(
     title: payload.title ?? undefined,
     ownerId: payload.ownerId ?? undefined,
     itemId: payload.itemId ?? undefined,
+    description: payload.description ?? undefined,
+    avatar: payload.avatar ?? undefined,
+    coverPhoto: payload.coverPhoto ?? undefined,
     participantIds: payload.participantIds,
     participantProfiles: payload.participantProfiles,
     botIds: payload.botIds,
@@ -153,6 +178,11 @@ function mapApiConversationToApp(
     unread: payload.unread,
     messages: resolvedMessages,
     memberRoles: normalizeMemberRoles(payload.memberRoles),
+    isMuted: payload.isMuted ?? false,
+    isArchived: payload.isArchived ?? false,
+    requestStatus: payload.requestStatus ?? 'accepted',
+    isPinned: (payload.pinnedRank ?? 0) > 0,
+    markedUnread: payload.markedUnread ?? false,
   };
 }
 
@@ -182,6 +212,9 @@ export async function createGroupConversationOnApi(input: {
   idempotencyKey?: string;
   description?: string;
   avatar?: string;
+  avatarFinalizationId?: string;
+  coverPhoto?: string;
+  coverPhotoFinalizationId?: string;
 }): Promise<Conversation> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -202,6 +235,9 @@ export async function createGroupConversationOnApi(input: {
       itemId: input.itemId,
       description: input.description,
       avatar: input.avatar,
+      avatarFinalizationId: input.avatarFinalizationId,
+      coverPhoto: input.coverPhoto,
+      coverPhotoFinalizationId: input.coverPhotoFinalizationId,
     }),
   });
 
@@ -223,21 +259,64 @@ export async function fetchConversationsFromApi(): Promise<Conversation[]> {
 
 export async function fetchConversationMessagesFromApi(
   conversationId: string,
-  limit = 120
-): Promise<Message[]> {
+  options?: {
+    limit?: number;
+    before?: string;
+    after?: string;
+    aroundMessageId?: string;
+  }
+): Promise<{ messages: ApiMessagePayload[]; oldestCursor?: string; newestCursor?: string }> {
+  const limit = options?.limit ?? 120;
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (options?.before) params.set('before', options.before);
+  if (options?.after) params.set('after', options.after);
+  if (options?.aroundMessageId) params.set('aroundMessageId', options.aroundMessageId);
+
   const payload = await fetchJson<{
     ok: true;
     items: ApiMessagePayload[];
-  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`);
+    oldestCursor?: string | null;
+    newestCursor?: string | null;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`);
 
-  return payload.items.map((item) => mapApiMessageToConversationMessage(item));
+  return {
+    messages: payload.items,
+    oldestCursor: payload.oldestCursor ?? undefined,
+    newestCursor: payload.newestCursor ?? undefined,
+  };
 }
 
 export async function sendConversationMessageOnApi(
   conversationId: string,
   text: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  clientMessageId?: string,
+  options?: { type?: 'text' | 'image' | 'video'; mediaUri?: string; replyToMessageId?: string },
 ): Promise<Message> {
+  // P0-MSG-1: Discriminated message payload. The backend accepts a
+  // `type` field — 'text' (or absent) requires text; 'image'/'video'
+  // require mediaUri and make text optional. We only forward fields
+  // that are present so text-only callers stay backwards compatible.
+  const body: Record<string, unknown> = {};
+  if (options?.type) {
+    body.type = options.type;
+  }
+  if (text) {
+    body.text = text;
+  }
+  if (options?.mediaUri) {
+    body.mediaUri = options.mediaUri;
+  }
+  if (metadata !== undefined) {
+    body.metadata = metadata;
+  }
+  if (clientMessageId) {
+    body.clientMessageId = clientMessageId;
+  }
+  if (options?.replyToMessageId) {
+    body.replyToMessageId = options.replyToMessageId;
+  }
   const payload = await fetchJson<{
     ok: true;
     message: ApiMessagePayload;
@@ -246,10 +325,7 @@ export async function sendConversationMessageOnApi(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      text,
-      metadata,
-    }),
+    body: JSON.stringify(body),
   });
 
   return mapApiMessageToConversationMessage(payload.message);
@@ -257,18 +333,71 @@ export async function sendConversationMessageOnApi(
 
 export async function deleteConversationMessageOnApi(
   conversationId: string,
-  messageId: string
-): Promise<void> {
-  await fetchJson<{ ok: true }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+  messageId: string,
+  scope: 'me' | 'everyone' = 'me'
+): Promise<{ ok: true; deleted: boolean; scope: 'me' | 'everyone' }> {
+  return fetchJson<{ ok: true; deleted: boolean; scope: 'me' | 'everyone' }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}?scope=${scope}`,
     { method: 'DELETE' }
   );
 }
 
-export async function deleteConversationOnApi(conversationId: string): Promise<void> {
+export async function deleteConversationOnApi(
+  conversationId: string,
+  scope: 'me' | 'leave' = 'me'
+): Promise<void> {
   await fetchJson<{ ok: true }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}`,
+    `/chat/conversations/${encodeURIComponent(conversationId)}?scope=${scope}`,
     { method: 'DELETE' }
+  );
+}
+
+export async function addMessageReactionOnApi(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<{ ok: true; reacted: boolean; emoji: string }> {
+  return fetchJson<{ ok: true; reacted: boolean; emoji: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji }),
+    }
+  );
+}
+
+export async function removeMessageReactionOnApi(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<{ ok: true; removed: boolean; emoji: string }> {
+  return fetchJson<{ ok: true; removed: boolean; emoji: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions?emoji=${encodeURIComponent(emoji)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function reportConversationOnApi(
+  conversationId: string,
+  reason: string,
+  details?: string,
+  messageId?: string,
+  idempotencyKey?: string,
+  evidenceUris?: string[]
+): Promise<{ ok: true; reportId: string; status: string }> {
+  const body: Record<string, unknown> = { reason };
+  if (details) body.details = details;
+  if (messageId) body.messageId = messageId;
+  if (idempotencyKey) body.idempotencyKey = idempotencyKey;
+  if (evidenceUris?.length) body.evidence_uris = evidenceUris;
+  return fetchJson<{ ok: true; reportId: string; status: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
   );
 }
 
@@ -354,6 +483,9 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
   title: string | null;
   ownerId: string;
   itemId: string | null;
+  description: string | null;
+  avatar: string | null;
+  coverPhoto: string | null;
   metadata: Record<string, unknown>;
   participantIds: string[];
   memberRoles: Record<string, string>;
@@ -370,6 +502,9 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
       title: string | null;
       ownerId: string;
       itemId: string | null;
+      description: string | null;
+      avatar: string | null;
+      coverPhoto: string | null;
       metadata: Record<string, unknown>;
       participantIds: string[];
       memberRoles: Record<string, string>;
@@ -385,13 +520,47 @@ export async function fetchConversationFromApi(conversationId: string): Promise<
 
 export async function updateConversationOnApi(
   conversationId: string,
-  updates: { title?: string; description?: string; avatar?: string }
-): Promise<void> {
-  await fetchJson<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+  updates: {
+    title?: string;
+    description?: string;
+    avatar?: string | null;
+    avatarFinalizationId?: string;
+    coverPhoto?: string | null;
+    coverPhotoFinalizationId?: string;
+  },
+  idempotencyKey?: string,
+): Promise<{
+  id: string;
+  type: 'group';
+  title: string;
+  ownerId: string;
+  itemId: string | null;
+  description: string | null;
+  avatar: string | null;
+  coverPhoto: string | null;
+  updatedAt: string;
+}> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
+  const payload = await fetchJson<{
+    ok: true;
+    conversation: {
+      id: string;
+      type: 'group';
+      title: string;
+      ownerId: string;
+      itemId: string | null;
+      description: string | null;
+      avatar: string | null;
+      coverPhoto: string | null;
+      updatedAt: string;
+    };
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(updates),
   });
+  return payload.conversation;
 }
 
 export async function fetchConversationMembersFromApi(conversationId: string): Promise<
@@ -596,6 +765,189 @@ export async function leaveGroupOnApi(
 ): Promise<void> {
   await fetchJson<{ ok: true }>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(memberUserId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+/**
+ * Promote a group member to admin. Only the current owner (or another admin
+ * with the add-admins permission) can call this.
+ */
+export async function promoteConversationMemberOnApi(
+  conversationId: string,
+  userId: string,
+): Promise<{ memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'admin' }),
+  });
+  return { memberRoles: payload.memberRoles };
+}
+
+/**
+ * Demote an admin back to regular member. Only the owner (or another admin
+ * with the add-admins permission) can call this. The owner cannot be demoted.
+ */
+export async function demoteConversationMemberOnApi(
+  conversationId: string,
+  userId: string,
+): Promise<{ memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'member' }),
+  });
+  return { memberRoles: payload.memberRoles };
+}
+
+/**
+ * Transfer group ownership to another member. The current owner's role
+ * becomes admin after the transfer. Only the current owner can call this.
+ */
+export async function transferConversationOwnershipOnApi(
+  conversationId: string,
+  newOwnerId: string,
+): Promise<{ ownerId: string; memberRoles: Record<string, string> }> {
+  const payload = await fetchJson<{
+    ok: true;
+    ownerId: string;
+    memberRoles: Record<string, string>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/transfer-ownership`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newOwnerId }),
+  });
+  return { ownerId: payload.ownerId, memberRoles: payload.memberRoles };
+}
+
+// ---------------------------------------------------------------------------
+// P0 #1 / P2 #56: Typing indicator publisher.
+// Ephemeral realtime signal — the backend fans this out to other participants
+// via the conversation's realtime topic. Callers should debounce "started
+// typing" (~1s) and send `false` on 3s inactivity or on message send.
+// ---------------------------------------------------------------------------
+
+export async function setTypingStatus(
+  conversationId: string,
+  isTyping: boolean
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/typing`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isTyping }),
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// P1 #25: Per-user conversation state — mute, archive, message-request status.
+// These mutations persist server-side so state survives across devices.
+// ---------------------------------------------------------------------------
+
+export async function muteConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/mute`,
+    { method: 'POST' }
+  );
+}
+
+export async function unmuteConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/mute`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function archiveConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/archive`,
+    { method: 'POST' }
+  );
+}
+
+export async function unarchiveConversationOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/archive`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function acceptMessageRequestOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/accept`,
+    { method: 'POST' }
+  );
+}
+
+export async function declineMessageRequestOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/decline`,
+    { method: 'POST' }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// P1 #25: Quick replies — persisted per user with buyer/seller role.
+// ---------------------------------------------------------------------------
+
+export interface ApiQuickReply {
+  id: string;
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+  sortOrder: number;
+}
+
+export async function fetchQuickRepliesFromApi(role?: 'buyer' | 'seller'): Promise<ApiQuickReply[]> {
+  const query = role ? `?role=${role}` : '';
+  const payload = await fetchJson<{ ok: true; items: ApiQuickReply[] }>(
+    `/chat/quick-replies${query}`
+  );
+  return payload.items;
+}
+
+export async function createQuickReplyOnApi(input: {
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+}): Promise<ApiQuickReply> {
+  const payload = await fetchJson<{ ok: true; quickReply: ApiQuickReply }>(
+    '/chat/quick-replies',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.quickReply;
+}
+
+export async function updateQuickReplyOnApi(
+  replyId: string,
+  updates: { title?: string; body?: string }
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function deleteQuickReplyOnApi(replyId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
     { method: 'DELETE' }
   );
 }

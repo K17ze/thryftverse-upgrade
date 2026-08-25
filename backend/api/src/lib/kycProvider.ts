@@ -5,7 +5,8 @@ export type KycProviderDecision =
   | 'pending'
   | 'verified'
   | 'requires_input'
-  | 'cancelled';
+  | 'cancelled'
+  | 'redacted';
 
 export interface KycProviderEvent {
   providerEventId: string;
@@ -94,6 +95,9 @@ function decisionForEventType(type: string): KycProviderDecision | null {
   }
   if (type === 'identity.verification_session.processing') {
     return 'pending';
+  }
+  if (type === 'identity.verification_session.redacted') {
+    return 'redacted';
   }
   return null;
 }

@@ -65,6 +65,7 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
           hapticFeedback="light"
           scaleValue={0.96}
           activeOpacity={0.65}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityLabel="Clear search"
           accessibilityRole="button"
         >

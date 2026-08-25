@@ -7,7 +7,7 @@ import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
 import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
-import { Type, Space, Radius, Typography } from '../../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke } from '../../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W - Space.md * 2;
 const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
@@ -44,7 +44,9 @@ export function CollectionCard({ collection, onPress }: Props) {
       accessibilityLabel={`${collection.name} collection, ${count} ${count === 1 ? 'item' : 'items'}`}
       accessibilityHint="Tap to view collection"
     >
-      {/* Cover Collage */}
+      {/* Cover Collage — media is the colour; no nested card surface.
+          When empty, a dashed-outline creation prompt replaces the blunt
+          "Empty" label (Pinterest pattern — the empty board invites creation). */}
       <View style={styles.collage}>
         {covers.length > 0 ? (
           <>
@@ -63,7 +65,7 @@ export function CollectionCard({ collection, onPress }: Props) {
                 )}
                 {covers.length === 2 && (
                   <View style={[styles.sideCover, styles.sideEmpty]}>
-                    <Ionicons name="folder-open-outline" size={20} color={colors.textMuted} />
+                    <Ionicons name="add-outline" size={20} color={colors.textMuted} />
                   </View>
                 )}
               </View>
@@ -71,15 +73,18 @@ export function CollectionCard({ collection, onPress }: Props) {
           </>
         ) : (
           <View style={styles.emptyCover}>
-            <Ionicons name="folder-open-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyCoverText}>Empty</Text>
+            <Ionicons name="add-outline" size={28} color={colors.textMuted} />
+            <Text style={styles.emptyCoverText}>Add items</Text>
           </View>
         )}
       </View>
 
-      {/* Info */}
+      {/* Info — flat, hairline separator instead of a bordered panel */}
       <View style={styles.info}>
         <View style={styles.nameRow}>
+          {collection.isPrivate === true ? (
+            <Ionicons name="lock-closed" size={13} color={colors.textMuted} style={styles.privacyGlyph} />
+          ) : null}
           <Text style={styles.name} numberOfLines={1}>{collection.name}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </View>
@@ -90,11 +95,13 @@ export function CollectionCard({ collection, onPress }: Props) {
 }
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  // Flattened — no bordered card wrapper. Media is the colour; the info
+  // row sits on the flat canvas with a hairline top separator. This removes
+  // the card-on-card composition (AGENTS.md §4) where rounded media surfaces
+  // sat inside a redundant bordered container.
   container: {
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -132,31 +139,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  // Empty cover — dashed-outline creation prompt, not a status label
   emptyCover: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
+    gap: Space.xs + 2,
+    margin: Space.xs,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
   },
   emptyCoverText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   info: {
     padding: Space.sm,
     paddingHorizontal: Space.md,
-    borderTopWidth: 1,
+    borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
+    gap: Space.xs,
+  },
+  privacyGlyph: {
+    marginTop: 1,
   },
   name: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     flex: 1,

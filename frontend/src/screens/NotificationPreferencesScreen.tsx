@@ -24,12 +24,15 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -39,8 +42,8 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
-// Demo mode flag — live shopping & preview toggles are local-only in this build.
-const NOTIFICATION_PREFS_DEMO_MODE = __DEV__;
+const LIVE_SHOPPING_KEY = '@thryftverse/notif_prefs_live_shopping';
+const SHOW_PREVIEW_KEY = '@thryftverse/notif_prefs_show_preview';
 
 function formatHour(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -53,6 +56,7 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 export default function NotificationPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show } = useToast();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const {
@@ -65,10 +69,44 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setQuietHours,
   } = useSettingsPreferences();
 
-  // Local-only toggles (not yet in the canonical context).
+  // Local-only toggles — persisted to AsyncStorage so they survive restarts.
+  // Per AGENTS.md §11, these are not yet backed by a server-side sync, so an
+  // honest banner makes that clear rather than pretending the toggles are
+  // synced.
   const [liveShopping, setLiveShopping] = React.useState(true);
   const [showPreview, setShowPreview] = React.useState(true);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
+
+  // Hydrate local toggles from AsyncStorage on mount.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [lsVal, spVal] = await Promise.all([
+          AsyncStorage.getItem(LIVE_SHOPPING_KEY),
+          AsyncStorage.getItem(SHOW_PREVIEW_KEY),
+        ]);
+        if (!mounted) return;
+        if (lsVal !== null) setLiveShopping(lsVal === 'true');
+        if (spVal !== null) setShowPreview(spVal === 'true');
+      } catch {
+        // AsyncStorage read failure — keep defaults
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleLiveShoppingChange = React.useCallback((v: boolean) => {
+    haptic.selection();
+    setLiveShopping(v);
+    AsyncStorage.setItem(LIVE_SHOPPING_KEY, String(v)).catch(() => {});
+  }, [haptic]);
+
+  const handleShowPreviewChange = React.useCallback((v: boolean) => {
+    haptic.selection();
+    setShowPreview(v);
+    AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(v)).catch(() => {});
+  }, [haptic]);
 
   const masterOn = enabledCount > 0;
 
@@ -82,9 +120,26 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setPushNotificationToggle(key, !toggles[key]);
   };
 
-  const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
-    haptic.selection();
-    setter(v);
+  const handleTestNotification = async () => {
+    haptic.medium();
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        show('Enable push notifications to test them.', 'error');
+        return;
+      }
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Test notification 🔔',
+          body: 'Your notification settings are working correctly.',
+          data: { type: 'test' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
+      });
+      show('Test notification scheduled — check your notifications.', 'success');
+    } catch {
+      show('Could not schedule test notification.', 'error');
+    }
   };
 
   return (
@@ -92,40 +147,30 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Notifications"
-          subtitle="Choose what reaches you"
           onBack={() => navigation.goBack()}
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {NOTIFICATION_PREFS_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Live shopping and preview toggles are saved on this device only in demo mode.
-          </Text>
-        </View>
-      )}
+      {/* ── Honest persistence banner (truthful UI per AGENTS.md §11) ── */}
+      <View
+        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Notification preferences saved on device"
+      >
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.demoBannerText}>
+          Most preferences sync across devices. Live shopping and preview settings are saved on this device only.
+        </Text>
+      </View>
 
-      {/* ── Posture hero ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="notifications" size={20} color={enabledCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? "You won't receive any alerts" : 'Some alerts are paused'}
-              </Text>
-            </View>
-          </View>
+      {/* ── Summary — flat intro block ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? "You won't receive any alerts" : 'Some alerts are paused'}
+          </Text>
           <View style={styles.progressRow}>
             <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
               <View
@@ -190,11 +235,19 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             disabled={!masterOn}
           />
           <SettingsRow
+            icon="trophy-outline"
+            title="Auction alerts"
+            subtitle="Outbid, auction ending, and auction won alerts"
+            toggleValue={!!toggles.auctionAlerts}
+            onToggle={() => toggleCategory('auctionAlerts')}
+            disabled={!masterOn}
+          />
+          <SettingsRow
             icon="videocam-outline"
             title="Live shopping notifications"
             subtitle="When sellers you follow go live"
             toggleValue={liveShopping}
-            onToggle={toggleWithHaptic(setLiveShopping)}
+            onToggle={handleLiveShoppingChange}
             disabled={!masterOn}
           />
           <SettingsRow
@@ -307,7 +360,19 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             title="Notification preview"
             subtitle="Show message content in notification previews"
             toggleValue={showPreview}
-            onToggle={toggleWithHaptic(setShowPreview)}
+            onToggle={handleShowPreviewChange}
+            isFirst
+            isLast
+          />
+        </SettingsSection>
+
+      {/* ── Test notification ── */}
+        <SettingsSection title="Diagnostics" noCard>
+          <SettingsRow
+            icon="notifications-outline"
+            title="Send test notification"
+            subtitle="Verify your notification settings are working"
+            onPress={handleTestNotification}
             isFirst
             isLast
           />
@@ -335,34 +400,26 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+      marginBottom: Space.md,
+      marginHorizontal: Space.md,
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+    summaryTitle: {
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
     },
     progressRow: {
       flexDirection: 'row',
@@ -420,7 +477,7 @@ function createStyles(colors: ThemeColors) {
     },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },

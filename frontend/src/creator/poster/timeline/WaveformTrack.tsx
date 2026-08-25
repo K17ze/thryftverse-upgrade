@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
-import { Space, FontFamily } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -264,7 +264,7 @@ const ViewWaveform = React.memo(function ViewWaveform({
               marginTop: cy - h / 2,
               marginRight: barGap,
               backgroundColor: color,
-              borderRadius: 1,
+              borderRadius: Radius.none,
             }}
           />
         );

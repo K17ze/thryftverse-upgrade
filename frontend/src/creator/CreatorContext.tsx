@@ -9,6 +9,7 @@ import {
   duplicateLayerInPage,
   computeLookLayout,
   POSTER_DEFAULT_ASPECT_RATIO,
+  POSTER_DEFAULT_BACKGROUND,
 } from './composition';
 import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
@@ -40,7 +41,13 @@ export interface CreatorContextValue {
 
   addLayer: (layer: CreatorLayer) => void;
   updateLayer: (id: string, updates: Partial<CreatorLayer>, label?: string) => void;
-  commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string) => void;
+  /** Live (no-history) layer update — mutates document state without pushing
+   *  to the undo/redo stack. Used for transient previews (e.g. live filter
+   *  preview while scrolling the effect rail) that must not create history
+   *  entries. Callers are responsible for committing via updateLayer or
+   *  reverting when the preview ends. */
+  updateLayerLive: (id: string, updates: Partial<CreatorLayer>) => void;
+  commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string, isAutoLayout?: boolean) => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   reorderLayer: (id: string, direction: 'front' | 'forward' | 'backward' | 'back') => void;
@@ -497,9 +504,31 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     CreatorAnalytics.layerTransform(document.type, updates.type ?? 'update');
   }, [activePageIndex, syncHistoryButtons, document.type]);
 
-  const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
+  // Live (no-history) layer update. Mutates the document state so the canvas
+  // reflects the change immediately, but does NOT push to the undo/redo stack.
+  // Used for transient previews (live filter preview during effect-rail
+  // scroll). The caller must commit via updateLayer (with a history label) or
+  // revert by writing the previous value back through this same method.
+  const updateLayerLive = useCallback((id: string, updates: Partial<CreatorLayer>) => {
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, updates);
+      doc.updatedAt = new Date().toISOString();
+      return doc;
+    });
+  }, [activePageIndex]);
+
+  const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string, isAutoLayout?: boolean) => {
+    // Per §8.3: auto-layout NEVER silently moves a manually positioned
+    // object. When a user manually edits a layer (isAutoLayout is not
+    // true), mark it as manuallyPositioned so future auto-layout passes
+    // skip it. Auto-layout calls pass isAutoLayout: true to avoid
+    // setting the flag (the layer remains auto-arrangeable until the
+    // user manually touches it).
+    const finalUpdates = isAutoLayout
+      ? updates
+      : { ...updates, manuallyPositioned: true };
+    setDocumentState((prev) => {
+      const doc = updateLayerInPage(prev, activePageIndex, id, finalUpdates);
       doc.updatedAt = new Date().toISOString();
       historyRef.current.push(doc, label);
       setIsDirty(true);
@@ -1029,13 +1058,17 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         locked: false,
         hidden: false,
         opacity: 1,
-        payload: {
-          mediaUri: media.uri,
-          mediaType: media.kind,
-          contentFit: 'cover',
-          videoDurationMs: media.kind === 'video' ? media.durationMs : undefined,
-          opacity: 1,
-        },
+          payload: {
+            mediaUri: media.uri,
+            mediaType: media.kind,
+            contentFit: 'cover',
+            videoDurationMs: media.kind === 'video' ? media.durationMs : undefined,
+            opacity: 1,
+            ...(media.speed ? { speed: media.speed } : {}),
+            ...(media.cameraEffect ? {
+              effects: [{ type: 'filter' as const, id: media.cameraEffect, amount: 1 }],
+            } : {}),
+          },
       } : null;
       const newPage: CreatorPage = {
         id: makeStableId('page'),
@@ -1089,6 +1122,10 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
             contentFit: 'cover',
             videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
             opacity: 1,
+            ...(asset.speed ? { speed: asset.speed } : {}),
+            ...(asset.cameraEffect ? {
+              effects: [{ type: 'filter' as const, id: asset.cameraEffect, amount: 1 }],
+            } : {}),
           },
         };
         return {
@@ -1384,7 +1421,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         version: 1,
         canvas: {
           aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
-          background: { type: 'color', value: '#1a1a1a' },
+          background: { type: 'color', value: POSTER_DEFAULT_BACKGROUND },
         },
         pages: [{
           id: 'page_1',
@@ -1464,74 +1501,145 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     };
   }, [document, isDirty]);
 
-  const value: CreatorContextValue = {
-    document,
-    activePageIndex,
-    selectedLayerId,
-    canUndo,
-    canRedo,
-    undoLabel,
-    redoLabel,
-    isDirty,
-    autosaveStatus,
-    isLoadingDraft,
-    setDocument,
-    commitDocument: commit,
-    setActivePageIndex,
-    selectLayer,
-    addLayer,
-    updateLayer,
-    commitLayerTransform,
-    removeLayer,
-    duplicateLayer,
-    reorderLayer,
-    toggleLayerLock,
-    toggleLayerVisibility,
-    updateMetadata,
-    updateCanvas,
-    addPage,
-    duplicatePage,
-    removePage,
-    reorderPages,
-    updatePageDuration,
-    undo,
-    redo,
-    retryAutosave,
-    saveDraft,
-    loadDraft,
-    clipboard,
-    copyLayer,
-    pasteLayer,
-    selectedLayerIds,
-    toggleMultiSelect,
-    clearMultiSelect,
-    deleteMultiSelected,
-    selectLayers,
-    toggleLayerInSelection,
-    commitMultiLayerTransform,
-    updateLayersLive,
-    bringSelectedToFront,
-    sendSelectedToBack,
-    alignLayerToCenter,
-    alignLayerToHorizontalCenter,
-    alignLayerToVerticalCenter,
-    addPosterFrame,
-    addPosterFrames,
-    replacePosterFrameMedia,
-    reorderPosterFrames,
-    addLookCutout,
-    addLookProduct,
-    swapLookAsset,
-    autoArrangeLook,
-    createCompositionFromClips,
-    // ── Durable project store integration ──
-    projectStore: projectStoreRef.current,
-    assetRegistry: assetRegistryRef.current,
-    hasPendingRecovery,
-    recoverCrashedProject,
-    dismissRecovery,
-    importAsset,
-  };
+  const value = useMemo<CreatorContextValue>(
+    () => ({
+      document,
+      activePageIndex,
+      selectedLayerId,
+      canUndo,
+      canRedo,
+      undoLabel,
+      redoLabel,
+      isDirty,
+      autosaveStatus,
+      isLoadingDraft,
+      setDocument,
+      commitDocument: commit,
+      setActivePageIndex,
+      selectLayer,
+      addLayer,
+      updateLayer,
+      commitLayerTransform,
+      removeLayer,
+      duplicateLayer,
+      reorderLayer,
+      toggleLayerLock,
+      toggleLayerVisibility,
+      updateMetadata,
+      updateCanvas,
+      addPage,
+      duplicatePage,
+      removePage,
+      reorderPages,
+      updatePageDuration,
+      undo,
+      redo,
+      retryAutosave,
+      saveDraft,
+      loadDraft,
+      clipboard,
+      copyLayer,
+      pasteLayer,
+      selectedLayerIds,
+      toggleMultiSelect,
+      clearMultiSelect,
+      deleteMultiSelected,
+      selectLayers,
+      toggleLayerInSelection,
+      commitMultiLayerTransform,
+      updateLayersLive,
+      updateLayerLive,
+      bringSelectedToFront,
+      sendSelectedToBack,
+      alignLayerToCenter,
+      alignLayerToHorizontalCenter,
+      alignLayerToVerticalCenter,
+      addPosterFrame,
+      addPosterFrames,
+      replacePosterFrameMedia,
+      reorderPosterFrames,
+      addLookCutout,
+      addLookProduct,
+      swapLookAsset,
+      autoArrangeLook,
+      createCompositionFromClips,
+      // ── Durable project store integration ──
+      projectStore: projectStoreRef.current,
+      assetRegistry: assetRegistryRef.current,
+      hasPendingRecovery,
+      recoverCrashedProject,
+      dismissRecovery,
+      importAsset,
+    }),
+    [
+      document,
+      activePageIndex,
+      selectedLayerId,
+      canUndo,
+      canRedo,
+      undoLabel,
+      redoLabel,
+      isDirty,
+      autosaveStatus,
+      isLoadingDraft,
+      setDocument,
+      commit,
+      setActivePageIndex,
+      selectLayer,
+      addLayer,
+      updateLayer,
+      commitLayerTransform,
+      removeLayer,
+      duplicateLayer,
+      reorderLayer,
+      toggleLayerLock,
+      toggleLayerVisibility,
+      updateMetadata,
+      updateCanvas,
+      addPage,
+      duplicatePage,
+      removePage,
+      reorderPages,
+      updatePageDuration,
+      undo,
+      redo,
+      retryAutosave,
+      saveDraft,
+      loadDraft,
+      clipboard,
+      copyLayer,
+      pasteLayer,
+      selectedLayerIds,
+      toggleMultiSelect,
+      clearMultiSelect,
+      deleteMultiSelected,
+      selectLayers,
+      toggleLayerInSelection,
+      commitMultiLayerTransform,
+      updateLayersLive,
+      updateLayerLive,
+      bringSelectedToFront,
+      sendSelectedToBack,
+      alignLayerToCenter,
+      alignLayerToHorizontalCenter,
+      alignLayerToVerticalCenter,
+      addPosterFrame,
+      addPosterFrames,
+      replacePosterFrameMedia,
+      reorderPosterFrames,
+      addLookCutout,
+      addLookProduct,
+      swapLookAsset,
+      autoArrangeLook,
+      createCompositionFromClips,
+      projectStoreRef.current,
+      assetRegistryRef.current,
+      hasPendingRecovery,
+      recoverCrashedProject,
+      dismissRecovery,
+      importAsset,
+    ],
+  );
 
   return <CreatorContext.Provider value={value}>{children}</CreatorContext.Provider>;
 }

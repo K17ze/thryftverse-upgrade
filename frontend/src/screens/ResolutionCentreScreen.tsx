@@ -226,7 +226,7 @@ function createStyles(colors: ThemeColors) {
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -259,7 +259,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   filterChipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },

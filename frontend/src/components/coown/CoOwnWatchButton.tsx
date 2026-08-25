@@ -6,7 +6,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useStore } from '../../store/useStore';
 import { haptics } from '../../utils/haptics';
-import { requestPushPermissionOnce } from '../../lib/pushPermission';
+import { requestPushPermissionWithSoftAsk } from '../../lib/pushPermission';
 
 export interface CoOwnWatchButtonProps {
   assetId: string;
@@ -30,7 +30,7 @@ export function CoOwnWatchButton({ assetId, assetTitle }: CoOwnWatchButtonProps)
     // Co-Own asset to their watchlist. Best-effort; never blocks the flow.
     if (willWatch && !pushAskedRef.current) {
       pushAskedRef.current = true;
-      requestPushPermissionOnce('favorite').catch(() => undefined);
+      requestPushPermissionWithSoftAsk('favorite').catch(() => undefined);
     }
   }, [assetId, isWatched, toggleCoOwnWatch]);
 

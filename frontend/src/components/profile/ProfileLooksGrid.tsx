@@ -191,7 +191,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
   },
   stateTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -209,9 +209,9 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
   },
   retryBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   createBtn: {
     marginTop: Space.xs,
@@ -221,9 +221,9 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
   },
   createBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   });
 }

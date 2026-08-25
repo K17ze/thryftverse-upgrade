@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import { View, Text, StyleSheet, Linking, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -10,11 +10,17 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
-import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { fetchPrivacyPreferences, updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PrivacySettings'>;
+
+const SAFETY_TIPS = [
+  'Keep all payments and messages on ThryftVerse for buyer protection',
+  'Check seller ratings and verification badges before buying',
+  'Report suspicious listings or users — our team reviews every report',
+];
 
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -26,10 +32,38 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
   const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
 
-  const [activityStatusVisible, setActivityStatusVisible] = React.useState(true);
-  const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden'>('visible');
+  // Hydrate privacy preferences from backend on mount so the posture score
+  // reflects real server-side state, not fabricated defaults.
+  const [activityStatusVisible, setActivityStatusVisible] = React.useState<boolean | null>(null);
+  const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden' | null>(null);
+  const [fetchError, setFetchError] = React.useState(false);
+  const mountedRef = React.useRef(true);
 
-  // Compute privacy posture score
+  const loadPrivacyPrefs = React.useCallback(() => {
+    setFetchError(false);
+    setActivityStatusVisible(null);
+    setSearchVisibility(null);
+    fetchPrivacyPreferences()
+      .then((prefs) => {
+        if (!mountedRef.current) return;
+        setActivityStatusVisible(prefs.activityStatusVisible);
+        setSearchVisibility(prefs.searchVisibility);
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setFetchError(true);
+      });
+  }, []);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    loadPrivacyPrefs();
+    return () => { mountedRef.current = false; };
+  }, [loadPrivacyPrefs]);
+
+  const isHydrating = activityStatusVisible === null || searchVisibility === null;
+
+  // Compute privacy posture score — only from hydrated values.
   const postureItems = [
     { label: 'Private profile', active: accountPreferences.privateProfile },
     { label: '2FA enabled', active: twoFactorEnabled },
@@ -73,8 +107,40 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
-      {/* Privacy posture hero */}
-      <View>
+      {/* Privacy posture hero — error card on fetch failure, skeleton during hydration, score when hydrated */}
+      {fetchError ? (
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.danger }]}>
+              <Ionicons name="cloud-offline-outline" size={20} color={colors.textInverse} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Couldn't load privacy settings</Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                Check your connection and try again.
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.retryBtn, { borderColor: colors.brand }]}
+              onPress={loadPrivacyPrefs}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading privacy preferences"
+            >
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : isHydrating ? (
+        <View style={[styles.heroCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.border }]} />
+            <View style={styles.heroText}>
+              <View style={[styles.skeletonLine, { width: 120, height: Type.bodyStrong.size }]} />
+              <View style={[styles.skeletonLine, { width: 180, height: Type.caption.size, marginTop: Space.xs / 2 }]} />
+            </View>
+          </View>
+        </View>
+      ) : (
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
@@ -91,9 +157,8 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </View>
+      )}
 
-      <View>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -107,8 +172,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           icon="radio-button-on-outline"
           title="Activity status"
           subtitle="Show when you're online and active"
-          toggleValue={activityStatusVisible}
+          toggleValue={activityStatusVisible === true}
           onToggle={handleActivityStatusToggle}
+          disabled={isHydrating || fetchError}
         />
         <SettingsRow
           icon="search-outline"
@@ -116,12 +182,11 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           subtitle="Allow others to find you in search"
           toggleValue={searchVisibility === 'visible'}
           onToggle={handleSearchVisibilityToggle}
+          disabled={isHydrating || fetchError}
           isLast
         />
       </SettingsSection>
-      </View>
 
-      <View>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -133,9 +198,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </View>
 
-      <View>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -146,9 +209,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </View>
 
-      <View>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -159,46 +220,24 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </View>
 
-      {/* Safety tips — empowering, not frightening.
-          A marketplace that visibly
-          educates users on safe trading practices builds reflective trust.
-          This section makes safety actionable rather than buried. Research
-          (TechVinta 2026): "surface a Report link on every surface" and
-          "buyer/seller protection" are core trust pillars. */}
-      <View>
-        <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.safetyTipsHeader}>
-            <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
-              <Ionicons name="checkmark-done-outline" size={18} color={colors.commerceTrust} />
-            </View>
-            <Text style={[styles.safetyTipsTitle, { color: colors.textPrimary }]}>Trading safely</Text>
-          </View>
-          <View style={styles.safetyTipsList}>
-            <View style={styles.safetyTipItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
-                Keep all payments and messages on ThryftVerse for buyer protection
-              </Text>
-            </View>
-            <View style={styles.safetyTipItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
-                Check seller ratings and verification badges before buying
-              </Text>
-            </View>
-            <View style={styles.safetyTipItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
-                Report suspicious listings or users — our team reviews every report
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      {/* Safety tips — flattened from a card into a flat info block.
+          A marketplace that visibly educates users on safe trading practices
+          builds reflective trust. No card wrapper — just a section title and
+          checkmark rows, matching the flat composition used elsewhere. */}
+      <SettingsSection title="Trading safely" noCard>
+        {SAFETY_TIPS.map((tip, i) => (
+          <SettingsRow
+            key={tip}
+            icon="checkmark-circle"
+            iconColor={colors.success}
+            title={tip}
+            isFirst={i === 0}
+            isLast={i === SAFETY_TIPS.length - 1}
+          />
+        ))}
+      </SettingsSection>
 
-      <View>
       <SettingsSection title="Data & analytics" noCard>
         <SettingsRow
           icon="analytics-outline"
@@ -210,9 +249,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </View>
 
-      <View>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"
@@ -227,7 +264,6 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </View>
     </FlagshipScreen>
   );
 }
@@ -254,7 +290,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -272,44 +308,19 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
     },
-    // Safety tips card
-    safetyTipsCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
+    skeletonLine: {
+      borderRadius: Radius.sm,
+      backgroundColor: colors.border,
     },
-    safetyTipsHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm + 2,
-      marginBottom: Space.sm + 2,
+    retryBtn: {
+      borderWidth: StyleSheet.hairlineWidth + 0.5,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
     },
-    safetyTipsIcon: {
-      width: Control.chrome + Space.xs,
-      height: Control.chrome + Space.xs,
-      borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    safetyTipsTitle: {
-      fontSize: Type.bodyEmphasis.size,
+    retryBtnText: {
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    },
-    safetyTipsList: {
-      gap: Space.sm,
-    },
-    safetyTipItem: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.sm,
-    },
-    safetyTipText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
     },
   });
 }

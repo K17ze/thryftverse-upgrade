@@ -137,7 +137,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     {
       key: 'tags',
       label: tagCount >= MIN_TAGS_FOR_FULL ? '3+ tags' : 'Tags',
-      icon: 'hash-outline',
+      icon: 'pricetags-outline',
       done: tagCount >= 1,
       weight: tagCount >= MIN_TAGS_FOR_FULL ? 0.10 : tagCount >= 1 ? 0.05 : 0,
     },

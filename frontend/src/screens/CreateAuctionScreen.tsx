@@ -28,6 +28,7 @@ import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -217,7 +218,7 @@ export default function CreateAuctionScreen() {
         />
         <View style={styles.listingMeta}>
           <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP')}</Meta>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
@@ -311,7 +312,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? 'Select a listing'}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -457,7 +458,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? 'Select a listing'}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -908,7 +909,7 @@ function createStyles(colors: ThemeColors) {
   },
   // ── Review ──
   reviewHeadline: {
-    fontSize: Type.priceLarge.size - 2,
+    fontSize: Type.priceHero.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
     letterSpacing: Type.title.letterSpacing,
@@ -971,7 +972,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: colors.overlay,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: Space.xs,
@@ -991,12 +992,12 @@ function createStyles(colors: ThemeColors) {
   },
   termsInlineLabel: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   termsInlineValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
@@ -1007,7 +1008,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.lg,
@@ -1022,7 +1023,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
+      ios: { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
       android: { elevation: 16 },
     }),
   },
@@ -1031,16 +1032,16 @@ function createStyles(colors: ThemeColors) {
     width: Space.xxl + Space.xxl + 8,
     height: Space.xxl + Space.xxl + 8,
     borderRadius: Space.lg + 4,
-    backgroundColor: 'rgba(22,163,74,0.12)',
+    backgroundColor: colors.successSubtle,
     borderWidth: Stroke.emphasis,
-    borderColor: 'rgba(22,163,74,0.25)',
+    borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   resultTitle: {
     fontSize: Type.title.size,
     textAlign: 'center',
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   resultSubtitle: {
     color: colors.textMuted,

@@ -7,7 +7,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';
-import * as Haptics from 'expo-haptics';
+import { useHaptic } from '../../hooks/useHaptic';
 
 interface Props {
   visible: boolean;
@@ -37,6 +37,7 @@ const COMMON_COUNTRIES = [
 
 export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const [name, setName] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
   const [apartment, setApartment] = useState('');
@@ -75,7 +76,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const handleSave = async () => {
     if (!isFormValid || isSaving) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic.medium();
 
     const nextAddress = {
       name: name.trim(),
@@ -114,11 +115,11 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
         isDefault: saved.isDefault,
       });
       show('Delivery address saved', 'success');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic.success();
     } catch {
       saveAddress(nextAddress);
       show('Address saved locally. Backend sync unavailable.', 'info');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      haptic.warning();
     } finally {
       setIsSaving(false);
       onDismiss();
@@ -266,7 +267,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
           ]}
           onPress={() => {
             setIsDefaultAddress(!isDefaultAddress);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            haptic.light();
           }}
           accessibilityRole="switch"
           accessibilityState={{ checked: isDefaultAddress }}
@@ -333,10 +334,10 @@ function createStyles(colors: any) {
       paddingBottom: Space.xxl + Space.md,
     },
     heroCopy: {
-      fontSize: Type.priceLarge.size,
-      lineHeight: Type.priceLarge.lineHeight,
+      fontSize: Type.priceHero.size,
+      lineHeight: Type.priceHero.lineHeight,
       fontFamily: Typography.family.bold,
-      letterSpacing: Type.priceLarge.letterSpacing,
+      letterSpacing: Type.priceHero.letterSpacing,
       marginBottom: Space.xxl,
       maxWidth: '80%',
     },
@@ -344,10 +345,10 @@ function createStyles(colors: any) {
       marginBottom: Space.lg,
     },
     label: {
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
+      fontSize: Type.label.size,
+      lineHeight: Type.label.lineHeight,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
       marginLeft: Space.xs,
@@ -362,8 +363,8 @@ function createStyles(colors: any) {
       borderWidth: 1,
     },
     input: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.medium,
     },
     // ── Country selector ──
@@ -378,8 +379,8 @@ function createStyles(colors: any) {
       minHeight: 52,
     },
     countryText: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.medium,
     },
     // ── Default toggle — flat row ──
@@ -395,8 +396,8 @@ function createStyles(colors: any) {
     },
     defaultToggleText: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.semibold,
     },
     // ── Footer ──
@@ -412,8 +413,8 @@ function createStyles(colors: any) {
       borderWidth: 1,
     },
     saveBtnText: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.bold,
     },
   });

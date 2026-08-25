@@ -112,7 +112,7 @@ export const registerRealtimeRoutes = ({ app, db }: RealtimeRouteDependencies) =
     return {
       ok: true,
       topic,
-      seq: getTopicSequence(topic),
+      seq: await getTopicSequence(topic),
     };
   });
 
@@ -151,7 +151,7 @@ export const registerRealtimeRoutes = ({ app, db }: RealtimeRouteDependencies) =
         ok: true,
         topic,
         canReplay: false,
-        currentSeq: getTopicSequence(topic),
+        currentSeq: await getTopicSequence(topic),
         events: [],
       };
     }
@@ -161,7 +161,7 @@ export const registerRealtimeRoutes = ({ app, db }: RealtimeRouteDependencies) =
       ok: true,
       topic,
       canReplay: true,
-      currentSeq: getTopicSequence(topic),
+      currentSeq: await getTopicSequence(topic),
       events,
     };
   });

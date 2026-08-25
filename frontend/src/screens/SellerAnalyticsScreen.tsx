@@ -15,6 +15,9 @@ import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type To
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { useFeatureFlag, track } from '../analytics';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,12 +39,228 @@ const PERIOD_OPTIONS: { key: Period; label: string }[] = [
   { key: '1y', label: '1y' },
 ];
 
+// ── Simple bar chart for listing activity over time ──
+// Derived from real listing createdAt timestamps. No fabricated data.
+// Shows listings created per day (7d/30d) or per week (90d) or per month (1y).
+interface ChartBucket {
+  label: string;
+  count: number;
+}
+
+function computeActivityBuckets(listings: ListingApiItem[], period: Period): ChartBucket[] {
+  const now = Date.now();
+  const buckets: ChartBucket[] = [];
+
+  if (period === '7d') {
+    // 7 daily buckets
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = now - i * dayMs;
+      const date = new Date(dayStart);
+      const dayLabel = date.toLocaleDateString('en-GB', { weekday: 'short' });
+      buckets.push({ label: dayLabel, count: 0 });
+    }
+    const bucketStart = now - 7 * dayMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const dayIndex = Math.floor((created - bucketStart) / dayMs);
+        if (dayIndex >= 0 && dayIndex < 7) {
+          buckets[dayIndex].count++;
+        }
+      }
+    }
+  } else if (period === '30d') {
+    // 30 daily buckets — thin bars
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (let i = 29; i >= 0; i--) {
+      const dayStart = now - i * dayMs;
+      const date = new Date(dayStart);
+      const dayLabel = date.getDate().toString();
+      buckets.push({ label: dayLabel, count: 0 });
+    }
+    const bucketStart = now - 30 * dayMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const dayIndex = Math.floor((created - bucketStart) / dayMs);
+        if (dayIndex >= 0 && dayIndex < 30) {
+          buckets[dayIndex].count++;
+        }
+      }
+    }
+  } else if (period === '90d') {
+    // ~13 weekly buckets
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const numWeeks = 13;
+    for (let i = numWeeks - 1; i >= 0; i--) {
+      const weekStart = now - i * weekMs;
+      const date = new Date(weekStart);
+      const weekLabel = `${date.getDate()}/${date.getMonth() + 1}`;
+      buckets.push({ label: weekLabel, count: 0 });
+    }
+    const bucketStart = now - numWeeks * weekMs;
+    for (const l of listings) {
+      const created = new Date(l.createdAt).getTime();
+      if (!Number.isNaN(created) && created >= bucketStart) {
+        const weekIndex = Math.floor((created - bucketStart) / weekMs);
+        if (weekIndex >= 0 && weekIndex < numWeeks) {
+          buckets[weekIndex].count++;
+        }
+      }
+    }
+  } else {
+    // 1y — 12 monthly buckets
+    const now2 = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+      const monthLabel = d.toLocaleDateString('en-GB', { month: 'short' });
+      buckets.push({ label: monthLabel, count: 0 });
+    }
+    for (const l of listings) {
+      const created = new Date(l.createdAt);
+      if (!Number.isNaN(created.getTime())) {
+        for (let i = 0; i < 12; i++) {
+          const bucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i), 1);
+          const nextBucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i) + 1, 1);
+          if (created >= bucketDate && created < nextBucketDate) {
+            buckets[i].count++;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return buckets;
+}
+
+// ── Activity chart component ──
+// Simple View-based bar chart. No external library. Uses theme colors.
+// Per AGENTS.md §4: flat, no card chrome. Hierarchy from typography.
+function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: ChartBucket[]; colors: ThemeColors; accessibilitySummary: string }) {
+  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  const hasData = buckets.some((b) => b.count > 0);
+  const isCompact = buckets.length > 10;
+
+  if (!hasData) {
+    return (
+      <View style={chartStyles.emptyWrap}>
+        <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
+        <Text style={[chartStyles.emptyText, { color: colors.textMuted }]}>
+          No listing activity in this period
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={chartStyles.container}>
+      <Text
+        accessibilityLabel={accessibilitySummary}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
+      {/* Bars row */}
+      <View style={chartStyles.barsRow}>
+        {buckets.map((bucket, i) => {
+          const heightPct = (bucket.count / maxCount) * 100;
+          return (
+            <View key={i} style={chartStyles.barColumn}>
+              <View style={chartStyles.barTrack}>
+                <View
+                  style={[
+                    chartStyles.bar,
+                    {
+                      height: `${heightPct}%`,
+                      backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {/* Labels row — show every Nth label for compact charts */}
+      <View style={chartStyles.labelsRow}>
+        {buckets.map((bucket, i) => {
+          const showLabel = isCompact
+            ? i % Math.ceil(buckets.length / 6) === 0 || i === buckets.length - 1
+            : true;
+          return (
+            <View key={i} style={chartStyles.labelColumn}>
+              {showLabel && (
+                <Text style={[chartStyles.labelText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {bucket.label}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const chartStyles = StyleSheet.create({
+  container: {
+    paddingVertical: Space.sm,
+  },
+  barsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 80,
+    gap: 2,
+  },
+  barColumn: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  barTrack: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 2,
+    minHeight: 2,
+  },
+  labelsRow: {
+    flexDirection: 'row',
+    marginTop: Space.xs - 2,
+    gap: 2,
+  },
+  labelColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  labelText: {
+    fontSize: 9,
+    fontFamily: Typography.family.regular,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.lg,
+  },
+  emptyText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+});
+
 export default function SellerAnalyticsScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { isOffline } = useConnectivity();
+
+  // Feature flag — gates the enhanced Seller Analytics v2 metrics section.
+  // Defaults to false (current behaviour) when PostHog is not loaded.
+  const sellerAnalyticsV2Enabled = useFeatureFlag('seller_analytics_v2');
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
@@ -50,17 +269,26 @@ export default function SellerAnalyticsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [partialError, setPartialError] = useState(false);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
+      setPartialError(false);
       const [listingsRes, analyticsData, topData] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
         fetchSellerAnalytics(currentUser.id, period).catch(() => null),
         fetchTopPerformers(currentUser.id, 10).catch(() => [] as TopPerformerListing[]),
       ]);
       setListings(listingsRes.items);
-      if (analyticsData) setAnalytics(analyticsData);
+      if (analyticsData) {
+        setAnalytics(analyticsData);
+      } else {
+        // Analytics endpoint failed — surface a partial-error state instead
+        // of silently rendering zero KPIs (AGENTS.md §11 — unknown outcome is
+        // not success).
+        setPartialError(true);
+      }
       setTopPerformersData(topData);
       setIsError(false);
     } catch {
@@ -77,6 +305,8 @@ export default function SellerAnalyticsScreen() {
     load().finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [load]);
+
+  useEffect(() => { track('seller_dashboard_viewed'); }, []);
 
   const onRefresh = async () => {
     setIsRefreshing(true);
@@ -121,15 +351,10 @@ export default function SellerAnalyticsScreen() {
     return revenue / itemsSold;
   }, [revenue, itemsSold]);
 
-  // ── Trend indicator: percentage change vs items sold baseline ──
-  const trendPercentage = useMemo(() => {
-    if (itemsSold === 0) return 0;
-    // Use conversion rate as a proxy for trend direction
-    if (conversionRate > 0) {
-      return Math.min(999, Math.round(conversionRate * 10) / 10);
-    }
-    return 0;
-  }, [conversionRate, itemsSold]);
+  // ── Trend indicator ──
+  // Per AGENTS.md §11, we do NOT relabel conversion rate as a trend
+  // percentage. Real period-over-period delta data is not available from the
+  // backend in this build, so we show no trend — only the honest item count.
 
   // ── Supporting KPIs as flat rows (2-4 max) ──
   const kpiRows = useMemo<KpiRow[]>(() => {
@@ -175,6 +400,20 @@ export default function SellerAnalyticsScreen() {
         imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
       }));
   }, [listings, topPerformersData]);
+
+  // ── Activity chart data ──
+  // Derived from real listing createdAt timestamps. Shows listings created
+  // per day (7d/30d), per week (90d), or per month (1y).
+  const activityBuckets = useMemo(() => computeActivityBuckets(listings, period), [listings, period]);
+
+  const activityChartSummary = useMemo(() => {
+    const counts = activityBuckets.map((b) => b.count);
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
+    const total = counts.reduce((sum, c) => sum + c, 0);
+    const periodDesc = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
+    return `Listing activity chart over ${periodDesc}. ${total} listings created. Highest: ${max}, lowest: ${min}.`;
+  }, [activityBuckets, period]);
 
   // ── Needs attention: active listings with low views and no sales ──
   const needsAttention = useMemo(() => {
@@ -279,6 +518,13 @@ export default function SellerAnalyticsScreen() {
       {isOffline ? (
         <OfflineBanner onRetry={() => void onRefresh()} />
       ) : null}
+      {partialError ? (
+        <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
+          <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18 }}>
+            Analytics details couldn't be loaded — showing listing data only. Pull to retry.
+          </Text>
+        </View>
+      ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -292,13 +538,13 @@ export default function SellerAnalyticsScreen() {
           </Text>
           <View style={styles.heroTrendRow}>
             <Ionicons
-              name={itemsSold > 0 ? 'trending-up' : 'remove'}
+              name={itemsSold > 0 ? 'checkmark-circle-outline' : 'remove'}
               size={14}
               color={itemsSold > 0 ? colors.success : colors.textMuted}
             />
             <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
               {itemsSold > 0
-                ? `${trendPercentage}% conv · ${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
+                ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
                 : 'No sales yet'}
             </Text>
           </View>
@@ -328,6 +574,22 @@ export default function SellerAnalyticsScreen() {
           })}
         </View>
 
+        {/* ── Activity chart — listings created over time ──
+            Simple bar chart derived from real listing createdAt timestamps.
+            Shows listing creation activity per day/week/month depending on
+            the selected period. No fabricated data — only real listings. */}
+        <View style={styles.chartSection}>
+          <View style={styles.chartHeader}>
+            <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>
+              Listing activity
+            </Text>
+            <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>
+              {activityBuckets.reduce((sum, b) => sum + b.count, 0)} created
+            </Text>
+          </View>
+          <ActivityChart buckets={activityBuckets} colors={colors} accessibilitySummary={activityChartSummary} />
+        </View>
+
         {/* ── Supporting KPIs as flat rows ── */}
         <View style={styles.kpiList}>
           {kpiRows.map((kpi) => (
@@ -340,6 +602,47 @@ export default function SellerAnalyticsScreen() {
             </View>
           ))}
         </View>
+
+        {/* ── Seller Analytics v2 — enhanced metrics (gated by feature flag) ──
+            Additive section: engagement ratio + active inventory count. When
+            the flag is off this section is absent (current behaviour). */}
+        {sellerAnalyticsV2Enabled ? (
+          <View style={styles.v2Section}>
+            <View style={styles.v2Header}>
+              <Ionicons name="sparkles" size={14} color={colors.brand} />
+              <Text style={[styles.v2HeaderTitle, { color: colors.textPrimary }]}>Engagement insights</Text>
+            </View>
+            <View style={styles.kpiList}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="heart-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Like-to-view ratio</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {totalViews > 0 ? `${((totalLikes / totalViews) * 100).toFixed(1)}%` : '—'}
+                </Text>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Active listings</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {listings.filter((l) => l.status === 'active').length}
+                </Text>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Avg rating</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
+                  {avgRating != null ? `${avgRating.toFixed(1)}${reviewCount > 0 ? ` (${reviewCount})` : ''}` : '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {/* ── Top listings — horizontal scroll of compact cards ── */}
         <View>
@@ -504,14 +807,55 @@ function createStyles(colors: ThemeColors) {
       minHeight: 36,
     },
     periodSegmentText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
+    },
+
+    // ── Activity chart section ──
+    chartSection: {
+      marginTop: Space.sm,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    chartHeader: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      marginBottom: Space.xs,
+    },
+    chartTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+    },
+    chartSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      fontVariant: ['tabular-nums'],
     },
 
     // ── KPI flat rows ──
     kpiList: {
       marginTop: Space.sm,
+    },
+    // ── Seller Analytics v2 — engagement insights section ──
+    v2Section: {
+      marginTop: Space.lg,
+      paddingTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    v2Header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginBottom: Space.xs,
+    },
+    v2HeaderTitle: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
     },
     kpiRow: {
       flexDirection: 'row',
@@ -531,7 +875,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
     },
     kpiValue: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'],
     },
@@ -587,13 +931,13 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     topListingTitle: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
     },
     topListingRevenue: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.bold,
       fontVariant: ['tabular-nums'],
     },

@@ -1,8 +1,10 @@
 // Centralised date formatting utilities.
-// The app is UK-based, so all formats use 'en-GB' locale and day-first ordering.
+// The app is UK-based, so the default locale is 'en-GB' with day-first ordering.
+// Each function accepts an optional `locale` parameter so callers can render
+// dates in the user's active locale when i18n is wired in (research doc 26 §M2).
 // Using a single source of truth prevents inconsistent date rendering across surfaces.
 
-const LOCALE = 'en-GB';
+const DEFAULT_LOCALE = 'en-GB';
 
 /**
  * Parse an ISO string or Date into a valid Date, returning null for invalid input.
@@ -16,12 +18,12 @@ function toDate(value: string | Date | number): Date | null {
  * "12 Aug" — day + short month. Omits year when same year as now.
  * Use for list rows, timestamps, and compact metadata.
  */
-export function formatShortDate(value: string | Date | number): string {
+export function formatShortDate(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString(LOCALE, sameYear
+  return d.toLocaleDateString(locale, sameYear
     ? { day: 'numeric', month: 'short' }
     : { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -30,50 +32,50 @@ export function formatShortDate(value: string | Date | number): string {
  * "12 Aug 2026" — day + short month + full year.
  * Use for receipts, order details, and formal records.
  */
-export function formatFullDate(value: string | Date | number): string {
+export function formatFullDate(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
-  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /**
  * "12 August 2026" — day + long month + full year.
  * Use for section headers and prominent date labels.
  */
-export function formatLongDate(value: string | Date | number): string {
+export function formatLongDate(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
-  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 /**
  * "14:30" — 24-hour time without seconds.
  * Use for message timestamps and time-of-day metadata.
  */
-export function formatTime(value: string | Date | number): string {
+export function formatTime(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
-  return d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
  * "12 Aug · 14:30" — short date + time.
  * Use for trade history, ledger rows, and inline timestamps.
  */
-export function formatShortDateTime(value: string | Date | number): string {
+export function formatShortDateTime(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
-  return `${formatShortDate(d)} · ${formatTime(d)}`;
+  return `${formatShortDate(d, locale)} · ${formatTime(d, locale)}`;
 }
 
 /**
  * "12 Aug 2026, 14:30" — full date + time.
  * Use for detailed records, receipts, and audit trails.
  */
-export function formatFullDateTime(value: string | Date | number): string {
+export function formatFullDateTime(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
-  return d.toLocaleString(LOCALE, {
+  return d.toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -87,7 +89,7 @@ export function formatFullDateTime(value: string | Date | number): string {
  * Falls back to formatShortDate for anything older than 7 days.
  * Use for conversation lists, notifications, and activity feeds.
  */
-export function formatRelativeTime(value: string | Date | number): string {
+export function formatRelativeTime(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
   const now = new Date();
@@ -100,14 +102,14 @@ export function formatRelativeTime(value: string | Date | number): string {
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffHr < 24) return `${diffHr}h ago`;
   if (diffDay < 7) return `${diffDay}d ago`;
-  return formatShortDate(d);
+  return formatShortDate(d, locale);
 }
 
 /**
  * "Today", "Yesterday", or a formatted date.
  * Use for section headers in grouped lists.
  */
-export function formatDayLabel(value: string | Date | number): string {
+export function formatDayLabel(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
   const today = new Date();
@@ -116,19 +118,19 @@ export function formatDayLabel(value: string | Date | number): string {
 
   if (d.toDateString() === today.toDateString()) return 'Today';
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return formatLongDate(d);
+  return formatLongDate(d, locale);
 }
 
 /**
  * Time if today, otherwise short date.
  * Use for conversation list timestamps and activity indicators.
  */
-export function formatActivityTimestamp(value: string | Date | number): string {
+export function formatActivityTimestamp(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
   const d = toDate(value);
   if (!d) return '';
   const today = new Date();
   if (d.toDateString() === today.toDateString()) {
-    return formatTime(d);
+    return formatTime(d, locale);
   }
-  return formatShortDate(d);
+  return formatShortDate(d, locale);
 }

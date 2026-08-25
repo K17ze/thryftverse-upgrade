@@ -21,6 +21,7 @@ import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
 import {
@@ -92,6 +93,7 @@ export function BidSheet({
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
     danger: colors.danger,
+    dangerSubtle: colors.dangerSubtle,
     success: colors.success,
     warning: colors.warning,
     background: colors.background,
@@ -380,11 +382,11 @@ export function BidSheet({
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Current bid</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
@@ -491,7 +493,7 @@ export function BidSheet({
 
             {/* Dominant bid amount */}
             <View style={styles.reviewAmountBlock}>
-              <Text style={styles.reviewAmountValue} numberOfLines={1}>
+              <Text style={styles.reviewAmountValue} numberOfLines={1} accessibilityLabel={`${currencyCode} ${bidInput}`}>
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
@@ -506,11 +508,11 @@ export function BidSheet({
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Current value</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
@@ -588,7 +590,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP')} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, DEFAULT_CURRENCY_CODE)} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -614,7 +616,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, 'GBP')}
+                  {formatFromFiat(error.buyNowPriceGbp, DEFAULT_CURRENCY_CODE)}
                 </Text>
               </View>
             )}
@@ -682,7 +684,7 @@ const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
-  danger: string; success: string; warning: string;
+  danger: string; dangerSubtle: string; success: string; warning: string;
   background: string; textInverse: string;
 }) => StyleSheet.create({
   container: {
@@ -717,12 +719,12 @@ const createStyles = (themed: {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
   },
   itemSeller: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     marginTop: 2,
   },
@@ -759,7 +761,7 @@ const createStyles = (themed: {
     flex: 1,
   },
   amountIzeEquivalent: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.brand,
     fontFamily: Typography.family.medium,
     textAlign: 'center',
@@ -787,7 +789,7 @@ const createStyles = (themed: {
     textTransform: 'uppercase',
   },
   bidContextValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
@@ -885,7 +887,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   countdownText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -914,7 +916,7 @@ const createStyles = (themed: {
     opacity: 0.7,
   },
   incrementText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
   },
@@ -940,12 +942,12 @@ const createStyles = (themed: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    backgroundColor: themed.dangerSubtle,
     marginBottom: Space.sm,
   },
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
@@ -975,7 +977,7 @@ const createStyles = (themed: {
     paddingVertical: Space.xs / 2,
   },
   commitmentText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
   },
@@ -985,7 +987,7 @@ const createStyles = (themed: {
     gap: Space.md,
   },
   submittingText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
   },
@@ -993,7 +995,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   submittingDetail: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -1006,7 +1008,7 @@ const createStyles = (themed: {
     color: themed.textPrimary,
   },
   successDetail: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -1021,7 +1023,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
     textAlign: 'center',
@@ -1039,7 +1041,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   conflictExplanation: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -1061,7 +1063,7 @@ const createStyles = (themed: {
     color: themed.textSecondary,
   },
   conflictPriceValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
   },

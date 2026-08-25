@@ -63,6 +63,16 @@ export interface CachedSearchResult {
     capabilityLevel: string;
     fallback: boolean;
   };
+  /**
+   * Honest retrieval capability metadata. Cached alongside results so a
+   * stale-while-revalidate hit still discloses which method produced them.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured: boolean;
+    searchEngineVersion?: string;
+  };
   items: unknown[];
   cachedAt: number;
   fromCache: boolean;
@@ -71,7 +81,7 @@ export interface CachedSearchResult {
 
 export interface AutocompleteSuggestion {
   text: string;
-  type: 'query' | 'brand' | 'category';
+  type: 'query' | 'item' | 'brand' | 'category';
   score: number;
 }
 

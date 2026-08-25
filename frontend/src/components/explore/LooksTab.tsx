@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,38 +6,67 @@ import {
   useWindowDimensions,
   Pressable,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, AspectRatio } from '../../theme/designTokens';
+import { useScrollToTop } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
+import { useHaptic } from '../../hooks/useHaptic';
 import { EmptyState } from '../EmptyState';
-import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
+import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
+// ── Feed mode tabs ───────────────────────────────────────────────────────────
+// Pinterest/LTK-style feed segmentation. "For You" is the personalised default,
+// "Following" restricts to creators the viewer follows. The `sort` value is
+// passed through to the API; unsupported ranking modes are not exposed as
+// decorative controls.
+type FeedMode = 'foryou' | 'following';
+
+const FEED_TABS: { key: FeedMode; label: string; sort: string }[] = [
+  { key: 'foryou', label: 'For You', sort: 'foryou' },
+  { key: 'following', label: 'Following', sort: 'following' },
+];
+
 // ── Template set ─────────────────────────────────────────────────────────────
-// A small, deterministic template set drives the mixed-tile Explore canvas.
-// Templates are assigned from item properties + index, never at random.
+// A deterministic template set drives the mixed-tile Explore canvas with
+// TRUE masonry rhythm — varying heights so the two columns stagger naturally
+// like Pinterest/Instagram Explore, not a uniform grid.
 //
 //   1×1 standard        — default image look (span 1, 4:5)
-//   1×2 portrait feature — tall portrait look (span 1, 4:5, taller media)
+//   1×1 portrait        — tall portrait look (span 1, 3:4)
+//   1×1 square          — compact square look (span 1, 1:1)
 //   2×1 cinematic        — video or multi-layer collage (span 2, 16:9)
 //   2×2 editorial anchor — rare, every 8th item (span 2, 4:5)
 //
-// `span` is consumed by FlashList's `overrideItemLayout`; the aspect ratio is
-// applied inside the tile so each cell sizes to its creator's media, not a
-// screen-imposed fixed height.
+// The height variation between standard/portrait/square is what creates the
+// masonry staggering. Assignment is deterministic from index — no randomness.
 const EDITORIAL_ANCHOR_INTERVAL = 8;
+
+// Deterministic height rhythm: a 7-step cycle that creates organic masonry
+// staggering without visible pattern repetition. Prime-length cycles avoid
+// the "every 4th item looks the same" tell. The mix of portrait/square/
+// marketplace/landscape creates true Pinterest-style column stagger.
+const HEIGHT_RHYTHM: number[] = [
+  AspectRatio.portrait,    // 3:4 — tall
+  AspectRatio.square,      // 1:1 — compact
+  AspectRatio.marketplace, // 4:5 — standard
+  AspectRatio.portrait,    // 3:4 — tall
+  AspectRatio.landscape,   // 4:3 — wide-ish (still span 1)
+  AspectRatio.square,      // 1:1 — compact
+  AspectRatio.marketplace, // 4:5 — standard
+];
 
 interface LookTemplate {
   /** Column span (1 or 2). Consumed by overrideItemLayout. */
@@ -45,7 +74,7 @@ interface LookTemplate {
   /** Media aspect ratio (width / height) applied to the tile image. */
   aspect: number;
   /** Semantic template id — drives overlay cues. */
-  kind: 'standard' | 'portrait' | 'cinematic' | 'editorial';
+  kind: 'standard' | 'portrait' | 'square' | 'cinematic' | 'editorial';
 }
 
 function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
@@ -61,9 +90,16 @@ function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
     return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
   }
 
-  // 1×1 standard image look. 4:5 is the marketplace default; the tile honours
-  // real media dimensions once exposed by the service.
-  return { span: 1, aspect: AspectRatio.marketplace, kind: 'standard' };
+  // 1×1 tiles with deterministic height variation for true masonry rhythm.
+  // The cycle creates visual stagger between columns without randomness.
+  const aspect = HEIGHT_RHYTHM[index % HEIGHT_RHYTHM.length];
+  if (aspect === AspectRatio.portrait) {
+    return { span: 1, aspect, kind: 'portrait' };
+  }
+  if (aspect === AspectRatio.square) {
+    return { span: 1, aspect, kind: 'square' };
+  }
+  return { span: 1, aspect, kind: 'standard' };
 }
 
 // ── LookTile ─────────────────────────────────────────────────────────────────
@@ -109,11 +145,27 @@ function LookTile({
           transition={180}
         />
 
-        {/* Creator identity — small, bottom-left, low density */}
+        {/* Bottom gradient scrim — Pinterest/Instagram approach for text
+            legibility without heavy overlay pills. Fades from transparent to
+            a subtle dark scrim at the bottom 40% of the tile. */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']}
+          locations={[0, 0.55, 1.0]}
+          style={styles.tileScrim}
+          pointerEvents="none"
+        />
+
+        {/* Creator identity — bottom-left, on the gradient scrim. No pill. */}
         <View style={styles.creatorOverlay}>
           <Text style={styles.creatorText} numberOfLines={1}>
             @{creatorHandle}
           </Text>
+          {isShoppable && (
+            <View style={styles.shoppableInline}>
+              <Ionicons name="pricetag" size={9} color={colors.textInverse} />
+              <Text style={styles.shoppableText}>{look.tags.length}</Text>
+            </View>
+          )}
         </View>
 
         {/* Media-type / multi-layer cue — top-right, small icon only */}
@@ -127,10 +179,14 @@ function LookTile({
           </View>
         )}
 
-        {/* Shoppable / provenance marker — bottom-right, distinct from likes */}
-        {isShoppable && (
-          <View style={styles.shoppableMarker}>
-            <Ionicons name="pricetag" size={11} color={colors.textInverse} />
+        {/* Like count — bottom-right, on the gradient scrim. Pinterest-style
+            engagement cue without a heavy badge. */}
+        {look.likeCount > 0 && (
+          <View style={styles.likeOverlay}>
+            <Ionicons name="heart" size={11} color={colors.textInverse} />
+            <Text style={styles.likeText}>
+              {look.likeCount > 999 ? `${(look.likeCount / 1000).toFixed(1)}k` : look.likeCount}
+            </Text>
           </View>
         )}
       </View>
@@ -144,6 +200,9 @@ export default function LooksTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const { width: windowWidth } = useWindowDimensions();
+  const scrollRef = useRef<any>(null);
+  useScrollToTop(scrollRef);
+  const haptic = useHaptic();
 
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -151,36 +210,61 @@ export default function LooksTab() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Initial / refresh load. Resets the cursor and replaces the list.
-  const loadLooks = useCallback(async (isRefresh: boolean = false) => {
-    if (isRefresh) {
-      setIsRefreshing(true);
-    }
-    setLoadError(null);
-    try {
-      const res = await fetchLooksFromApi({ status: 'published' });
-      setLooks(res.items ?? []);
-      setCursor(res.nextCursor ?? null);
-    } catch {
-      if (!isRefresh && looks.length === 0) {
-        setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
-      } else if (isRefresh) {
-        setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
-      }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [looks.length]);
+  const [feedMode, setFeedMode] = useState<FeedMode>('foryou');
+  const loadedLookCountRef = useRef(0);
 
   useEffect(() => {
-    loadLooks();
-  }, [loadLooks]);
+    loadedLookCountRef.current = looks.length;
+  }, [looks.length]);
+
+  // Initial / refresh load. Resets the cursor and replaces the list.
+  // The feed mode drives the `sort` parameter so the API can segment the feed.
+  const loadLooks = useCallback(
+    async (isRefresh: boolean = false, mode: FeedMode) => {
+      const sort = FEED_TABS.find((t) => t.key === mode)?.sort ?? 'foryou';
+      if (isRefresh) {
+        setIsRefreshing(true);
+      }
+      setLoadError(null);
+      try {
+        const res = await fetchLooksFromApi({ status: 'published', sort });
+        setLooks(res.items ?? []);
+        setCursor(res.nextCursor ?? null);
+      } catch {
+        if (!isRefresh && loadedLookCountRef.current === 0) {
+          setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
+        } else if (isRefresh) {
+          setLoadError('Looks could not be refreshed.\nShowing the last loaded posts.');
+        }
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void loadLooks(false, feedMode);
+  }, [feedMode, loadLooks]);
 
   const handleRefresh = useCallback(() => {
-    loadLooks(true);
-  }, [loadLooks]);
+    haptic.patterns.refresh();
+    void loadLooks(true, feedMode);
+  }, [feedMode, loadLooks, haptic]);
+
+  // Feed tab switch — haptic, clear the list, reload with the new sort.
+  const handleFeedModeChange = useCallback(
+    (mode: FeedMode) => {
+      if (mode === feedMode) return;
+      haptic.selection();
+      setFeedMode(mode);
+      setLooks([]);
+      setCursor(null);
+      setIsLoading(true);
+    },
+    [feedMode, haptic],
+  );
 
   // Cursor-based pagination. The service returns nextCursor; when present we
   // fetch the next page and append. Otherwise onEndReached stays undefined.
@@ -188,7 +272,8 @@ export default function LooksTab() {
     if (!cursor || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const res = await fetchLooksFromApi({ status: 'published', cursor });
+      const sort = FEED_TABS.find((t) => t.key === feedMode)?.sort ?? 'foryou';
+      const res = await fetchLooksFromApi({ status: 'published', sort, cursor });
       setLooks((prev) => [...prev, ...(res.items ?? [])]);
       setCursor(res.nextCursor ?? null);
     } catch {
@@ -197,17 +282,88 @@ export default function LooksTab() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [cursor, isLoadingMore]);
+  }, [cursor, isLoadingMore, feedMode]);
 
   const handleCreateLook = useCallback(() => {
     navigation.navigate('CreatorStudio', { type: 'look' });
   }, [navigation]);
 
+  // Pill-style feed tabs — rendered above the masonry grid in every state
+  // except the full-screen error. Active pill uses the brand fill; inactive
+  // pills are plain secondary text. Mirrors Pinterest/LTK feed segmentation.
+  const FeedTabs = useMemo(
+    () => (
+      <View style={styles.feedTabsRow}>
+        {FEED_TABS.map((tab) => {
+          const isActive = feedMode === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={[styles.feedPill, isActive && styles.feedPillActive]}
+              onPress={() => handleFeedModeChange(tab.key)}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text
+                style={[
+                  styles.feedPillText,
+                  isActive ? styles.feedPillTextActive : styles.feedPillTextInactive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    ),
+    [feedMode, handleFeedModeChange, styles],
+  );
+
   // ── Loading / error / empty states (preserved) ────────────────────────────
   if (isLoading) {
+    // Masonry skeleton matching the final layout — two columns of
+    // surfaceAlt blocks with varying heights that mirror the template
+    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
+    // final layout; no generic centred spinner).
+    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
+    const skeletonHeights = [
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.wide),
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.marketplace),
+    ];
+    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
+    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
+
     return (
-      <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.scrollContent}>
+        {FeedTabs}
+        <View style={styles.masonrySkeletonGrid}>
+          <View style={styles.masonrySkeletonCol}>
+            {leftCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`l-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+          <View style={styles.masonrySkeletonCol}>
+            {rightCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`r-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+        </View>
       </View>
     );
   }
@@ -222,7 +378,7 @@ export default function LooksTab() {
           style={styles.retryBtn}
           onPress={() => {
             setIsLoading(true);
-            loadLooks();
+            void loadLooks(false, feedMode);
           }}
           activeOpacity={0.85}
           accessibilityRole="button"
@@ -236,7 +392,8 @@ export default function LooksTab() {
 
   if (looks.length === 0 && !loadError) {
     return (
-      <View>
+      <View style={styles.scrollContent}>
+        {FeedTabs}
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
@@ -254,7 +411,10 @@ export default function LooksTab() {
   }
 
   // ── FlashList v2 masonry canvas ───────────────────────────────────────────
-  const keyExtractor = useCallback((item: LookApiItem) => `look-${item.id}`, []);
+  const keyExtractor = useCallback(
+    (item: LookApiItem) => `look-${item.id}`,
+    [],
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: LookApiItem; index: number }) => {
@@ -276,13 +436,17 @@ export default function LooksTab() {
         </View>
       );
     },
-    [colors, styles, navigation],
+    [styles, colors, navigation],
   );
 
   // Deterministic span: editorial anchors + cinematic (video / multi-layer)
   // looks span both columns. Everything else is a single-column tile.
   const overrideItemLayout = useCallback(
-    (layout: { span?: number }, item: LookApiItem, index: number) => {
+    (
+      layout: { span?: number },
+      item: LookApiItem,
+      index: number,
+    ) => {
       const template = resolveLookTemplate(item, index);
       layout.span = template.span;
     },
@@ -291,15 +455,14 @@ export default function LooksTab() {
 
   const ListHeaderComponent = useMemo(
     () => (
-      <View style={styles.headerWrap}>
-        <DiscoverySectionHeader kicker="Community" title="Looks" />
+      <>
         {loadError && looks.length > 0 && (
           <View style={styles.refreshErrorBanner}>
             <Text style={styles.refreshErrorText}>
               Looks could not be refreshed. Showing the last loaded posts.
             </Text>
             <Pressable
-              onPress={() => loadLooks(true)}
+              onPress={() => loadLooks(true, feedMode)}
               accessibilityRole="button"
               accessibilityLabel="Retry refresh"
             >
@@ -307,64 +470,131 @@ export default function LooksTab() {
             </Pressable>
           </View>
         )}
-      </View>
+      </>
     ),
-    [loadError, looks.length, loadLooks, styles],
+    [loadError, looks.length, styles, loadLooks, feedMode],
   );
 
   const ListFooterComponent = useMemo(
     () =>
       isLoadingMore ? (
         <View style={styles.footer}>
-          <ActivityIndicator color={colors.textMuted} />
+          <View style={styles.masonrySkeletonGrid}>
+            <View style={styles.masonrySkeletonCol}>
+              <PremiumSkeletonTile
+                width={(windowWidth - Space.md * 2 - Space.sm) / 2}
+                height={Math.round((windowWidth - Space.md * 2 - Space.sm) / 2 / AspectRatio.marketplace)}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            </View>
+            <View style={styles.masonrySkeletonCol}>
+              <PremiumSkeletonTile
+                width={(windowWidth - Space.md * 2 - Space.sm) / 2}
+                height={Math.round((windowWidth - Space.md * 2 - Space.sm) / 2 / AspectRatio.wide)}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            </View>
+          </View>
+        </View>
+      ) : !cursor && looks.length > 0 ? (
+        <View style={styles.endOfList}>
+          <View style={styles.endOfListHairline} />
+          <Text style={styles.endOfListText}>You've reached the end</Text>
         </View>
       ) : null,
-    [isLoadingMore, colors.textMuted],
+    [isLoadingMore, cursor, looks.length, windowWidth, styles],
   );
-
-  // Column width for CDN downscaling (kept for future derivative sizing).
-  void windowWidth;
 
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.
   const onEndReached = cursor ? loadMore : undefined;
 
   return (
-    <FlashList
-      data={looks}
-      masonry
-      numColumns={2}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      onEndReached={onEndReached}
-      onEndReachedThreshold={0.5}
-      overrideItemLayout={overrideItemLayout}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-      ListHeaderComponent={ListHeaderComponent}
-      ListFooterComponent={ListFooterComponent}
-      refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
-      }
-    />
+    <View style={styles.feedContainer}>
+      <View style={styles.feedStaticHeader}>
+        {FeedTabs}
+      </View>
+      <FlashList
+        ref={scrollRef}
+        data={looks}
+        masonry
+        numColumns={2}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
+        overrideItemLayout={overrideItemLayout}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={ListFooterComponent}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
+        }
+      />
+    </View>
   );
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    loadingWrap: {
-      flex: 1,
-      alignItems: 'center',
+    masonrySkeletonGrid: {
+      flexDirection: 'row',
       justifyContent: 'center',
-      paddingVertical: 80,
+      gap: Space.sm,
+    },
+    masonrySkeletonCol: {
+      flexDirection: 'column',
+      gap: Space.sm,
+    },
+    masonrySkeletonTile: {
+      marginBottom: 0,
     },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.xl,
     },
-    headerWrap: {
-      paddingBottom: Space.md,
+    // Outer container for the populated feed — holds the static header +
+    // feed tabs above the scrolling FlashList.
+    feedContainer: {
+      flex: 1,
+    },
+    // Static (non-scrolling) header region: section header + feed tabs.
+    // Horizontal padding matches the FlashList content padding so the
+    // header aligns with the masonry grid below.
+    feedStaticHeader: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+    },
+    // ── Feed tabs ──
+    // Pill-style feed segmentation (For You / Following / Trending).
+    // Active pill carries the brand fill; inactive pills are plain text.
+    feedTabsRow: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      paddingBottom: Space.sm,
+    },
+    feedPill: {
+      paddingVertical: Space.xs + 2,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+    },
+    feedPillActive: {
+      backgroundColor: colors.brand,
+    },
+    feedPillText: {
+      fontSize: Type.caption.size,
+    },
+    feedPillTextActive: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+    },
+    feedPillTextInactive: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
     },
     errorWrap: {
       alignItems: 'center',
@@ -414,13 +644,29 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     retryLink: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },
     footer: {
       paddingVertical: Space.md,
       alignItems: 'center',
+    },
+    endOfList: {
+      alignItems: 'center',
+      paddingVertical: Space.lg,
+      gap: Space.sm,
+    },
+    endOfListHairline: {
+      width: 40,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
+    endOfListText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
     },
     // ── Tile ──
     tileCell: {
@@ -442,23 +688,41 @@ function createStyles(colors: ThemeColors) {
       width: '100%',
       height: '100%',
     },
-    // Creator identity — small, bottom-left. Low-density overlay.
+    // Gradient scrim — covers bottom 40% of tile for text legibility.
+    tileScrim: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '45%',
+    },
+    // Creator identity — bottom-left, on the gradient scrim. No pill.
     creatorOverlay: {
       position: 'absolute',
-      bottom: Space.xs,
-      left: Space.xs,
-      right: Space.xl,
-      backgroundColor: colors.overlay,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xxs,
-      alignSelf: 'flex-start',
+      bottom: Space.xs + 2,
+      left: Space.xs + 2,
+      right: Space.xs + 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
     },
     creatorText: {
       color: colors.textInverse,
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.meta.letterSpacing,
+      flexShrink: 1,
+    },
+    // Shoppable count — inline with creator handle, not a separate badge.
+    shoppableInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    shoppableText: {
+      color: colors.textInverse,
+      fontSize: 10,
+      fontFamily: Typography.family.semibold,
     },
     // Media-type / multi-layer cue — top-right, small icon only.
     mediaCueBadge: {
@@ -472,17 +736,19 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.overlay,
     },
-    // Shoppable / provenance marker — bottom-right, distinct from likes.
-    shoppableMarker: {
+    // Like count — bottom-right, on the gradient scrim.
+    likeOverlay: {
       position: 'absolute',
-      bottom: Space.xs,
-      right: Space.xs,
-      width: 20,
-      height: 20,
-      borderRadius: Radius.full,
+      bottom: Space.xs + 2,
+      right: Space.xs + 2,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.overlay,
+      gap: 3,
+    },
+    likeText: {
+      color: colors.textInverse,
+      fontSize: 10,
+      fontFamily: Typography.family.semibold,
     },
   });
 }

@@ -73,6 +73,8 @@ export interface Listing {
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   engagement?: ListingEngagementSummaryApi | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 interface ApiListingRow {
@@ -94,6 +96,8 @@ interface ApiListingRow {
   originalPriceGbp: number | null;
   createdAt: string;
   seller?: ListingSeller | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 interface ApiListingsResponse {
@@ -145,22 +149,30 @@ export interface ListingSearchResult {
   category?: string | null;
 }
 
-export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {
+export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean; retrievalMeta?: { method: string; fallbackReason?: string; embedderConfigured: boolean; searchEngineVersion?: string } }> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return { items: [], fallback: false };
   const params = new URLSearchParams();
   params.set('q', trimmed);
   if (limit) params.set('limit', String(Math.min(limit, 100)));
-  const payload = await fetchJson<{ ok: boolean; query: string; items: ListingSearchResult[]; fallback?: boolean }>(
+  const payload = await fetchJson<{
+    ok: boolean;
+    query: string;
+    items: ListingSearchResult[];
+    fallback?: boolean;
+    retrievalMeta?: { method: string; fallbackReason?: string; embedderConfigured: boolean; searchEngineVersion?: string };
+  }>(
     `/search/listings?${params.toString()}`
   );
   return {
     items: Array.isArray(payload.items) ? payload.items : [],
     fallback: payload.fallback === true,
+    retrievalMeta: payload.retrievalMeta,
   };
 }
 
 export async function fetchFilteredListings(options?: {
+  query?: string;
   category?: string;
   brand?: string;
   size?: string;
@@ -172,6 +184,7 @@ export async function fetchFilteredListings(options?: {
   cursor?: string;
 }): Promise<ListingsSyncResult> {
   const params = new URLSearchParams();
+  if (options?.query) params.set('q', options.query.trim());
   if (options?.category) params.set('category', options.category);
   if (options?.brand) params.set('brand', options.brand);
   if (options?.size) params.set('size', options.size);
@@ -190,7 +203,8 @@ export async function fetchFilteredListings(options?: {
     return {
       listings: mapBackendListings(rows),
       source: 'api',
-      error: rows.length === 0 ? 'No listings match your filters.' : undefined,
+      // A successful empty response is an empty state, not a transport error.
+      error: undefined,
       nextCursor: payload.nextCursor,
     };
   } catch (error) {
@@ -206,19 +220,40 @@ export interface VisualSearchResult {
   listings: DisplayReadyListing[];
   source: 'api' | 'fallback';
   visualMatching: boolean;
+  /** Honest label describing how results were matched. */
+  similarityMethod?: string;
+  /**
+   * Structured retrieval capability metadata from the backend. Discloses
+   * the actual method used and any fallback reason. Present on API
+   * responses; absent on client-side fallback.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured: boolean;
+    searchEngineVersion?: string;
+  };
   note?: string;
   error?: string;
 }
 
 /**
  * Visual Search — calls POST /visual-search.
- * The backend returns real listings filtered by category/brand/price/description
- * (visualMatching=false until an ML image-similarity model is deployed).
+ *
+ * When `imageBase64` is supplied, the backend extracts a real colour-and-layout
+ * feature vector from the image and ranks candidate listings by visual
+ * similarity (`similarityMethod: 'heuristic_color_features'`). This is a
+ * deterministic heuristic, NOT an AI/ML model — the `similarityMethod` field
+ * lets the UI label results truthfully.
+ *
+ * Without a usable image the backend falls back to filtered SQL and labels
+ * results `similarityMethod: 'filter_only'` with `visualMatching: false`.
  * On any network/server failure the caller is expected to fall back to
  * client-side filtering of cached listings.
  */
 export async function visualSearch(params: {
   imageUrl?: string;
+  imageBase64?: string;
   query?: string;
   category?: string;
   brand?: string;
@@ -226,7 +261,7 @@ export async function visualSearch(params: {
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
-  sort?: 'newest' | 'price_asc' | 'price_desc';
+  sort?: 'newest' | 'price_asc' | 'price_desc' | 'similarity';
   limit?: number;
 }): Promise<VisualSearchResult> {
   try {
@@ -234,6 +269,13 @@ export async function visualSearch(params: {
       ok: boolean;
       runtimeAvailable?: boolean;
       visualMatching?: boolean;
+      similarityMethod?: string;
+      retrievalMeta?: {
+        method: string;
+        fallbackReason?: string;
+        embedderConfigured: boolean;
+        searchEngineVersion?: string;
+      };
       note?: string;
       items?: ApiListingRow[];
     }>('/visual-search', {
@@ -241,6 +283,7 @@ export async function visualSearch(params: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageUrl: params.imageUrl,
+        imageBase64: params.imageBase64,
         query: params.query,
         category: params.category,
         brand: params.brand,
@@ -248,7 +291,7 @@ export async function visualSearch(params: {
         condition: params.condition,
         minPrice: params.minPrice,
         maxPrice: params.maxPrice,
-        sort: params.sort ?? 'newest',
+        sort: params.sort ?? 'similarity',
         limit: params.limit ?? 48,
       }),
     });
@@ -258,6 +301,8 @@ export async function visualSearch(params: {
       listings: mapBackendListings(rows),
       source: 'api',
       visualMatching: payload.visualMatching === true,
+      similarityMethod: payload.similarityMethod,
+      retrievalMeta: payload.retrievalMeta,
       note: payload.note,
       error: rows.length === 0 ? 'No listings match your photo filters yet.' : undefined,
     };
@@ -312,6 +357,8 @@ export interface ListingApiItem {
   mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;
   engagement?: ListingEngagementSummaryApi | null;
+  /** Pinned/featured listing — shown first in the Shop grid when true. */
+  featured?: boolean | null;
 }
 
 export interface ListingSoldComparables {
@@ -365,6 +412,13 @@ export type ListingReportReason =
   | 'unresponsive'
   | 'harassment'
   | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
   | 'other';
 
 export interface ListingCommerceServerContext {
@@ -405,7 +459,10 @@ export interface ListingsResponse {
 export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok: boolean; listingId: string }> {
   return fetchJson<{ ok: boolean; listingId: string }>('/listings', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': body.id,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -473,14 +530,15 @@ export async function answerListingQuestion(
 export async function reportListing(
   listingId: string,
   reason: ListingReportReason,
-  details?: string
+  details?: string,
+  evidenceUris?: string[]
 ): Promise<{ reportId: string }> {
   return fetchJson<{ ok: boolean; reportId: string }>(
     `/listings/${encodeURIComponent(listingId)}/report`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, details }),
+      body: JSON.stringify({ reason, details, evidence_uris: evidenceUris }),
     }
   );
 }

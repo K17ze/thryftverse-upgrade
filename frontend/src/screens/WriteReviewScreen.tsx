@@ -11,7 +11,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useToast } from '../context/ToastContext';
-import { Typography, Space, Radius, Type, Elevation, LetterSpacing } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -20,8 +20,6 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { RootStackParamList } from '../navigation/types';
 import { getOrder, CommerceOrder } from '../services/commerceApi';
 import { getOrderReview, createOrderReview, OrderReview } from '../services/reviewApi';
@@ -32,17 +30,19 @@ import { uploadMedia } from '../services/mediaUpload';
 
 type RouteT = RouteProp<RootStackParamList, 'WriteReview'>;
 
+const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId } = route.params;
+  const { orderId, initialRating } = route.params;
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const haptic = useHaptic();
 
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(initialRating ?? 0);
   const [review, setReview] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
@@ -50,6 +50,10 @@ export default function WriteReviewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [existingReview, setExistingReview] = useState<OrderReview | null>(null);
   const [order, setOrder] = useState<CommerceOrder | null>(null);
+  // Unknown-outcome: when the network drops before the response, the outcome
+  // is ambiguous — not success, not error. Show "Checking your review" instead
+  // of fabricating success (AGENTS.md §11 — Truthful UI).
+  const [isUnknownOutcome, setIsUnknownOutcome] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +80,7 @@ export default function WriteReviewScreen() {
     return () => { cancelled = true; };
   }, [orderId]);
 
-  const canSubmit = rating > 0 && !isSubmitting && !isLoading && !existingReview;
+  const canSubmit = rating > 0 && !isSubmitting && !isLoading && !existingReview && !isUnknownOutcome;
 
   const handlePickPhotos = useCallback(async () => {
     if (photoUris.length >= 4) {
@@ -121,22 +125,31 @@ export default function WriteReviewScreen() {
     if (!canSubmit) return;
     haptic.medium();
     setIsSubmitting(true);
+    setIsUnknownOutcome(false);
     try {
       await createOrderReview(orderId, rating, review.trim() || undefined, photoUris.length > 0 ? photoUris : undefined);
-      show('Review submitted successfully', 'success');
+      haptic.success();
+      show('Review published', 'success');
       navigation.goBack();
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
-      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
-      show(parsed.message, 'error');
+      if (isNetworkError) {
+        // Unknown outcome — the request may have reached the server. Show a
+        // distinct state, not a success or a hard error (AGENTS.md §11).
+        setIsUnknownOutcome(true);
+        show('Checking your review — connection was lost. Your review may have been published.', 'info');
+      } else {
+        const parsed = parseApiError(err);
+        show(parsed.message, 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline]);
+  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline, photoUris]);
 
   if (isLoading) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Write a Review" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen header={<FlagshipHeader title="Review" onBack={() => navigation.goBack()} />}>
         <WriteReviewSkeleton />
       </FlagshipScreen>
     );
@@ -144,7 +157,7 @@ export default function WriteReviewScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Write a Review" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Review" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -155,47 +168,57 @@ export default function WriteReviewScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {/* Order context */}
+          {/* Order context — flat, no card chrome. The listing image is the
+              dominant object; title and order number are subordinate metadata. */}
           {order && (
-            <View>
-              <ElevatedSurface variant="surface" style={styles.orderCard}>
-                <View style={styles.orderRow}>
-                  {order.listingImageUrl && (
-                    <CachedImage
-                      uri={getListingCoverUri([order.listingImageUrl], '')}
-                      style={styles.orderThumb}
-                      contentFit="cover"
-                    />
-                  )}
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
-                    <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
-                  </View>
-                </View>
-              </ElevatedSurface>
+            <View style={styles.orderRow}>
+              {order.listingImageUrl && (
+                <CachedImage
+                  uri={getListingCoverUri([order.listingImageUrl], '')}
+                  style={styles.orderThumb}
+                  contentFit="cover"
+                />
+              )}
+              <View style={styles.orderInfo}>
+                <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
+              </View>
             </View>
           )}
 
           {existingReview ? (
-            <View style={styles.existingCard}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
-              <BodyEmphasis style={styles.existingTitle}>Review already submitted</BodyEmphasis>
-              <Caption color={colors.textSecondary} style={styles.existingSub}>
-                You rated this order {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} on{' '}
-                {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.
-              </Caption>
-              {existingReview.comment && (
-                <View style={styles.existingCommentBox}>
-                  <Text style={styles.existingCommentText}>{existingReview.comment}</Text>
+            <View style={styles.existingState}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <Text style={styles.existingTitle}>Review published</Text>
+              <Text style={styles.existingSub}>
+                {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
+                {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </Text>
+              {existingReview.comment ? (
+                <Text style={styles.existingComment}>{existingReview.comment}</Text>
+              ) : null}
+              {existingReview.photoUrls && existingReview.photoUrls.length > 0 && (
+                <View style={styles.existingPhotos}>
+                  {existingReview.photoUrls.map((uri, i) => (
+                    <CachedImage
+                      key={uri + i}
+                      uri={uri}
+                      style={styles.existingPhoto}
+                      containerStyle={{ width: 64, height: 64, borderRadius: Radius.md }}
+                      contentFit="cover"
+                    />
+                  ))}
                 </View>
               )}
             </View>
           ) : (
             <>
-              <View>
-                <Text style={styles.promptText}>How was your experience?</Text>
-
-                <View style={styles.starsContainer}>
+              {/* Rating — the dominant interaction. Left-aligned, not centered.
+                  The star row is the primary control; the label confirms the
+                  selection without competing for visual weight. */}
+              <View style={styles.ratingSection}>
+                <Text style={styles.ratingPrompt}>Rate this purchase</Text>
+                <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <AnimatedPressable
                       key={star}
@@ -203,96 +226,94 @@ export default function WriteReviewScreen() {
                       activeOpacity={0.7}
                       scaleValue={0.9}
                       accessibilityRole="button"
-                      accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`}
+                      accessibilityLabel={`${star} of 5${star > 1 ? 's' : ''}${rating === star ? ', selected' : ''}`}
                       accessibilityState={{ selected: rating === star }}
                     >
                       <Ionicons
                         name={rating >= star ? 'star' : 'star-outline'}
-                        size={44}
+                        size={36}
                         color={rating >= star ? colors.brand : colors.textMuted}
                       />
                     </AnimatedPressable>
                   ))}
                 </View>
-
                 {rating > 0 && (
-                  <Text style={styles.ratingLabel}>
-                    {['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][rating - 1]}
-                  </Text>
+                  <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
                 )}
               </View>
 
-              <View>
-                <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILED REVIEW (OPTIONAL)</Meta>
-                <View style={styles.inputCard}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Tell others what you thought about the item and seller..."
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    textAlignVertical="top"
-                    value={review}
-                    onChangeText={setReview}
-                    maxLength={2000}
-                    accessibilityLabel="Detailed review"
-                    accessibilityHint="Share your experience with this item and seller, up to 2000 characters"
-                  />
-                  <Text style={styles.charCount}>{review.length}/2000</Text>
-                </View>
+              {/* Text — no eyebrow label. The placeholder is the prompt.
+                  Flat input with a hairline border, no card chrome. */}
+              <View style={styles.textSection}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="What should another buyer know?"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  textAlignVertical="top"
+                  value={review}
+                  onChangeText={setReview}
+                  maxLength={2000}
+                  accessibilityLabel="Review text"
+                  accessibilityHint="Share your experience, up to 2000 characters"
+                />
+                <Text style={styles.charCount}>{review.length}/2000</Text>
               </View>
 
-              {/* Photo upload section */}
-              <View>
-                <Meta color={colors.textMuted} style={styles.sectionLabel}>PHOTOS (OPTIONAL)</Meta>
-                <View style={styles.photoSection}>
-                  {photoUris.length > 0 && (
-                    <View style={styles.photoGrid}>
-                      {photoUris.map((uri, index) => (
-                        <View key={uri + index} style={styles.photoTileWrap}>
-                          <CachedImage
-                            uri={uri}
-                            style={styles.photoTile}
-                            containerStyle={{ width: 76, height: 76, borderRadius: Radius.md }}
-                            contentFit="cover"
-                          />
-                          <Pressable
-                            style={styles.photoRemoveBtn}
-                            onPress={() => handleRemovePhoto(index)}
-                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove photo ${index + 1}`}
-                          >
-                            <Ionicons name="close-circle" size={20} color={colors.danger} />
-                          </Pressable>
-                        </View>
-                      ))}
-                    </View>
-                  )}
+              {/* Photos — optional, with privacy guidance. No eyebrow label.
+                  The add control is a hairline-bordered tile, not an elevated card. */}
+              <View style={styles.photoSection}>
+                {photoUris.length > 0 && (
+                  <View style={styles.photoGrid}>
+                    {photoUris.map((uri, index) => (
+                      <View key={uri + index} style={styles.photoTileWrap}>
+                        <CachedImage
+                          uri={uri}
+                          style={styles.photoTile}
+                          containerStyle={{ width: 72, height: 72, borderRadius: Radius.md }}
+                          contentFit="cover"
+                        />
+                        <Pressable
+                          style={styles.photoRemoveBtn}
+                          onPress={() => handleRemovePhoto(index)}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove photo ${index + 1}`}
+                        >
+                          <Ionicons name="close-circle" size={20} color={colors.danger} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-                  {photoUris.length < 4 && (
-                    <AnimatedPressable
-                      style={styles.photoAddBtn}
-                      onPress={handlePickPhotos}
-                      activeOpacity={0.8}
-                      scaleValue={0.97}
-                      hapticFeedback="light"
-                      accessibilityRole="button"
-                      accessibilityLabel="Add photos to your review"
-                    >
-                      {isUploadingPhotos ? (
-                        <ActivityIndicator size="small" color={colors.brand} />
-                      ) : (
-                        <>
-                          <Ionicons name="camera-outline" size={22} color={colors.brand} />
-                          <Text style={styles.photoAddText}>
-                            {photoUris.length > 0 ? 'Add more photos' : 'Add photos'}
-                          </Text>
-                        </>
-                      )}
-                      <Text style={styles.photoAddHint}>{photoUris.length}/4</Text>
-                    </AnimatedPressable>
-                  )}
-                </View>
+                {photoUris.length < 4 && (
+                  <AnimatedPressable
+                    style={styles.photoAddBtn}
+                    onPress={handlePickPhotos}
+                    activeOpacity={0.8}
+                    scaleValue={0.97}
+                    hapticFeedback="light"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add photos to your review"
+                  >
+                    {isUploadingPhotos ? (
+                      <ActivityIndicator size="small" color={colors.brand} />
+                    ) : (
+                      <>
+                        <Ionicons name="camera-outline" size={20} color={colors.brand} />
+                        <Text style={styles.photoAddText}>
+                          {photoUris.length > 0 ? 'Add more' : 'Add photos'}
+                        </Text>
+                      </>
+                    )}
+                    <Text style={styles.photoAddHint}>{photoUris.length}/4</Text>
+                  </AnimatedPressable>
+                )}
+
+                <Text style={styles.photoPrivacy}>
+                  Remove labels, addresses and faces you don't want public.
+                </Text>
               </View>
             </>
           )}
@@ -300,13 +321,17 @@ export default function WriteReviewScreen() {
         {!existingReview && (
           <View style={styles.footer}>
             <AppButton
-              title={isSubmitting ? 'Submitting...' : 'Submit review'}
+              title={
+                isUnknownOutcome ? 'Checking your review'
+                : isSubmitting ? 'Publishing...'
+                : 'Publish review'
+              }
               onPress={handleSubmit}
               disabled={!canSubmit}
               variant="primary"
               size="lg"
               hapticFeedback="medium"
-              accessibilityLabel="Submit review"
+              accessibilityLabel="Publish review"
             />
           </View>
         )}
@@ -320,29 +345,27 @@ function createStyles(colors: ThemeColors) {
   content: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     paddingBottom: Space.xl,
     gap: Space.lg,
   },
-  orderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle,
-  },
+  // Order context — flat row, no card
   orderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    paddingBottom: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   orderThumb: {
-    width: Space.xxl,
-    height: Space.xxl,
+    width: 48,
+    height: 48,
     borderRadius: Radius.md,
   },
   orderInfo: {
     flex: 1,
-    gap: Space.xs - 2,
+    gap: 2,
   },
   orderTitle: {
     fontSize: Type.body.size,
@@ -354,44 +377,47 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
-  promptText: {
+  // Rating — left-aligned, dominant
+  ratingSection: {
+    gap: Space.sm,
+  },
+  ratingPrompt: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: Space.md,
   },
-  starsContainer: {
+  starsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.smMd,
-    marginBottom: Space.sm,
+    gap: Space.sm,
   },
   ratingLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.brand,
-    textAlign: 'center',
   },
-  sectionLabel: {
-    marginLeft: Space.sm,
-    letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm,
+  // Text — flat input, hairline border
+  textSection: {
+    gap: Space.xs,
   },
-  inputCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle,
-  },
-  input: {
-    minHeight: Space.lg * 5,
+  textInput: {
+    minHeight: 120,
     maxHeight: 240,
     color: colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlignVertical: 'top',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    padding: Space.md,
   },
+  charCount: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    textAlign: 'right',
+  },
+  // Photos — hairline add tile, privacy guidance
   photoSection: {
     gap: Space.sm,
   },
@@ -404,14 +430,14 @@ function createStyles(colors: ThemeColors) {
     position: 'relative',
   },
   photoTile: {
-    width: Space.xxl + 28,
-    height: Space.xxl + 28,
+    width: 72,
+    height: 72,
     borderRadius: Radius.md,
   },
   photoRemoveBtn: {
     position: 'absolute',
-    top: -(Space.xs + 2),
-    right: -(Space.xs + 2),
+    top: -4,
+    right: -4,
     backgroundColor: colors.background,
     borderRadius: Radius.lg,
   },
@@ -420,12 +446,10 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+    borderRadius: Radius.md,
     paddingVertical: Space.md,
-    ...Elevation.subtle,
   },
   photoAddText: {
     fontSize: Type.body.size,
@@ -438,43 +462,44 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
-  charCount: {
-    fontSize: Type.meta.size,
+  photoPrivacy: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    textAlign: 'right',
-    marginTop: Space.xs,
+    lineHeight: Type.caption.lineHeight,
   },
-  existingCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    alignItems: 'center',
+  // Existing review state — flat, no card
+  existingState: {
     gap: Space.sm,
-    ...Elevation.subtle,
+    paddingVertical: Space.md,
   },
   existingTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginTop: Space.sm,
   },
   existingSub: {
-    textAlign: 'center',
-    lineHeight: Type.caption.lineHeight + 2,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
   },
-  existingCommentBox: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Space.md,
-    width: '100%',
-    marginTop: Space.sm,
-  },
-  existingCommentText: {
+  existingComment: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: Type.body.lineHeight + 4,
+    marginTop: Space.xs,
+  },
+  existingPhotos: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  existingPhoto: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
   },
   footer: {
     paddingHorizontal: Space.md,

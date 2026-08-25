@@ -12,7 +12,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -44,7 +44,7 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
     >
       <Ionicons
         name={icon}
-        size={22}
+        size={IconGrammar.standard}
         color={disabled ? colors.textMuted : colors.textPrimary}
       />
       <Text
@@ -149,7 +149,7 @@ export function OverflowMenu({
           onPress={onPreview}
         />
         <OverflowItem
-          icon={safeZoneVisible ? 'shield-checkmark-outline' : 'shield-outline'}
+          icon={safeZoneVisible ? 'scan-circle-outline' : 'scan-outline'}
           label={safeZoneVisible ? 'Safe Zone On' : 'Safe Zone'}
           colors={colors}
           onPress={onToggleSafeZone}
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   },
   overflowItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,

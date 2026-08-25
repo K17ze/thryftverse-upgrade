@@ -57,6 +57,9 @@ export type CreatorGlyphName =
   | 'text'
   | 'text-background'
   | 'caption'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
   // Composition
   | 'safe-zone'
   | 'product-tag'
@@ -570,6 +573,33 @@ function CaptionGlyph({ selected }: GlyphRenderProps) {
   );
 }
 
+function AlignLeftGlyph(_props: GlyphRenderProps) {
+  // Three text lines aligned to the left edge
+  return (
+    <>
+      <Path d="M4 6h16M4 12h12M4 18h16" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
+function AlignCenterGlyph(_props: GlyphRenderProps) {
+  // Three text lines aligned to the center
+  return (
+    <>
+      <Path d="M4 6h16M6 12h12M4 18h16" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
+function AlignRightGlyph(_props: GlyphRenderProps) {
+  // Three text lines aligned to the right edge
+  return (
+    <>
+      <Path d="M4 6h16M8 12h12M4 18h16" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
 // ── Composition ──
 
 function SafeZoneGlyph({ selected }: GlyphRenderProps) {
@@ -848,6 +878,9 @@ const GLYPH_REGISTRY: Record<CreatorGlyphName, (props: GlyphRenderProps) => Reac
   text: TextGlyph,
   'text-background': TextBackgroundGlyph,
   caption: CaptionGlyph,
+  'align-left': AlignLeftGlyph,
+  'align-center': AlignCenterGlyph,
+  'align-right': AlignRightGlyph,
   'safe-zone': SafeZoneGlyph,
   'product-tag': ProductTagGlyph,
   'multi-select': MultiSelectGlyph,
@@ -898,8 +931,9 @@ export function CreatorGlyph({
       height={size}
       viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
       fill="none"
-      accessibilityLabel={accessibilityLabel ?? name}
-      accessibilityRole="image"
+      accessible={Boolean(accessibilityLabel)}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityLabel ? 'image' : undefined}
       testID={testID}
     >
       <G color={color}>

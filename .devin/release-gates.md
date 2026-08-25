@@ -2,9 +2,11 @@
 
 > **Purpose:** The gates that must pass before any visual change is merged or any release candidate is promoted. These gates complement automated logic tests — they exist because logic tests cannot judge visual quality, optical alignment, hierarchy, or state authorship.
 >
-> **Authority:** AGENTS.md §4, §13, §14, §17, §18, §20, §22, §27; Design.md (release gates, reference quality gates, implementation guardrails); audit `15_VISUAL_QA_METRICS_EXPERIMENTS_RELEASE_GATES.md`; `visual-qa-gates.md`.
+> **Authority:** AGENTS.md §4, §13, §14, §17, §18, §20, §22, §27, §31; `.devin/workflows/visual-flagship-convergence-loop.md`; Design.md (release gates, reference quality gates, implementation guardrails); audit `15_VISUAL_QA_METRICS_EXPERIMENTS_RELEASE_GATES.md`; `visual-qa-gates.md`.
 >
 > **Rule:** A TypeScript pass alone is not completion. A passing test suite alone is not completion. Replacing tokens alone is not visual elevation. The improvement must be obvious at thumbnail size. No P0 defect may ship. No P1 defect may claim flagship quality.
+>
+> **Enforcement (AGENTS.md §31.7):** The visual release gate (`check:visual-gates`) now **fails on P0 by default**. The build loop enforces the constitution. The implementation unit is one surface at a time per the Visual Flagship Convergence Loop — visual completion requires a native artifact, a side-by-side vs the benchmark, at least one rework iteration, and human sign-off.
 
 ---
 
@@ -205,7 +207,7 @@ Run these before requesting human visual review. All must pass (P0) or be explic
 | Design tokens | `npm run lint:design-tokens` | No hardcoded spacing/radius/gap in platform code | P1 |
 | Animated scroll | `npm run check:animated-scroll` | Reanimated scroll handlers use animated containers | P0 |
 | Maestro flows | `npm run check:maestro-flows` | Flow YAML validates | P0 (when flows exist) |
-| Visual release gates | `npm run check:visual-gates` | Hardcoded colors, missing accessibility, missing hitSlop, card-on-card, reduced-motion | P0/P1 |
+| Visual release gates | `npm run check:visual-gates` | Hardcoded colors, missing accessibility, missing hitSlop, card-on-card, reduced-motion. **Fails on P0 by default** (AGENTS.md §31.7). Use `npm run check:visual-gates:report` for warn-only local exploration. | P0/P1 |
 | Bundle size | `npm run check:bundle-size` | Binary within limits | P1 |
 | Unit tests | `npm run test` | Affected suites pass | P0 |
 | Phase verify | `npm run verify:phase` | Phase-gated surfaces pass | P0 |

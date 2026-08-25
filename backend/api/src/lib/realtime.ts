@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
 import { logger } from './logger.js';
+import { getNextSequence, getSequence } from './realtimeSequence.js';
 
 export interface RealtimeEnvelope {
   id: string;
@@ -44,12 +45,17 @@ interface RealtimeBusMessage {
   userId?: string;
 }
 
-const REALTIME_CHANNEL = 'thryftverse:realtime:v1';
+const REALTIME_PUBSUB_PREFIX = 'realtime:pubsub:';
+const REALTIME_PUBSUB_PATTERN = `${REALTIME_PUBSUB_PREFIX}*`;
 const instanceId = randomUUID();
 const clients = new Map<string, RealtimeClient>();
 let heartbeatTimer: NodeJS.Timeout | null = null;
 let realtimePublisher: Redis | null = null;
 let realtimeSubscriber: Redis | null = null;
+
+const topicRefCount = new Map<string, number>();
+let wildcardSubscriberCount = 0;
+let wildcardSubscribed = false;
 
 function runtimeId(prefix: string): string {
   return `${prefix}_${randomUUID()}`;
@@ -57,6 +63,75 @@ function runtimeId(prefix: string): string {
 
 function normalizeTopic(topic: string): string {
   return topic.trim().toLowerCase();
+}
+
+function pubsubChannelForTopic(topic: string): string {
+  return `${REALTIME_PUBSUB_PREFIX}${topic}`;
+}
+
+function topicFromPubsubChannel(channel: string): string | null {
+  if (!channel.startsWith(REALTIME_PUBSUB_PREFIX)) {
+    return null;
+  }
+  return channel.slice(REALTIME_PUBSUB_PREFIX.length);
+}
+
+function addTopicSubscription(topic: string): void {
+  if (topic === '*') {
+    wildcardSubscriberCount += 1;
+    ensureWildcardSubscribed();
+    return;
+  }
+  const current = topicRefCount.get(topic) ?? 0;
+  topicRefCount.set(topic, current + 1);
+  if (current === 0 && !wildcardSubscribed && realtimeSubscriber) {
+    void realtimeSubscriber.subscribe(pubsubChannelForTopic(topic)).catch((error) => {
+      logger.warn({ err: error.message, topic }, '[realtime] failed to subscribe to topic channel');
+    });
+  }
+}
+
+function removeTopicSubscription(topic: string): void {
+  if (topic === '*') {
+    wildcardSubscriberCount = Math.max(0, wildcardSubscriberCount - 1);
+    if (wildcardSubscriberCount === 0) {
+      ensureWildcardUnsubscribed();
+    }
+    return;
+  }
+  const current = topicRefCount.get(topic) ?? 0;
+  if (current <= 1) {
+    topicRefCount.delete(topic);
+    if (!wildcardSubscribed && realtimeSubscriber) {
+      void realtimeSubscriber.unsubscribe(pubsubChannelForTopic(topic)).catch((error) => {
+        logger.warn({ err: error.message, topic }, '[realtime] failed to unsubscribe from topic channel');
+      });
+    }
+  } else {
+    topicRefCount.set(topic, current - 1);
+  }
+}
+
+function ensureWildcardSubscribed(): void {
+  if (wildcardSubscribed || !realtimeSubscriber) {
+    return;
+  }
+  wildcardSubscribed = true;
+  void realtimeSubscriber.psubscribe(REALTIME_PUBSUB_PATTERN).catch((error) => {
+    logger.warn({ err: error.message }, '[realtime] failed to psubscribe to topic pattern');
+    wildcardSubscribed = false;
+  });
+}
+
+function ensureWildcardUnsubscribed(): void {
+  if (!wildcardSubscribed || !realtimeSubscriber) {
+    return;
+  }
+  wildcardSubscribed = false;
+  void realtimeSubscriber.punsubscribe(REALTIME_PUBSUB_PATTERN).catch((error) => {
+    logger.warn({ err: error.message }, '[realtime] failed to punsubscribe from topic pattern');
+    wildcardSubscribed = true;
+  });
 }
 
 export function parseRealtimeTopics(raw: unknown): string[] {
@@ -136,7 +211,22 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
   const subscriber = publisher.duplicate();
 
   subscriber.on('message', (channel, raw) => {
-    if (channel !== REALTIME_CHANNEL) {
+    const topic = topicFromPubsubChannel(channel);
+    if (!topic) {
+      return;
+    }
+
+    const message = decodeBusMessage(raw);
+    if (!message || message.sourceInstanceId === instanceId) {
+      return;
+    }
+
+    deliverLocalEvent(message.event, message.userId);
+  });
+
+  subscriber.on('pmessage', (_pattern, channel, raw) => {
+    const topic = topicFromPubsubChannel(channel);
+    if (!topic) {
       return;
     }
 
@@ -152,11 +242,17 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
     logger.error({ err: error }, '[realtime] Redis subscriber error');
   });
 
-  await subscriber.subscribe(REALTIME_CHANNEL);
   realtimeSubscriber = subscriber;
 }
 
 function removeClient(clientId: string): void {
+  const client = clients.get(clientId);
+  if (client) {
+    for (const topic of client.topics) {
+      removeTopicSubscription(topic);
+    }
+  }
+
   clients.delete(clientId);
 
   if (clients.size === 0 && heartbeatTimer) {
@@ -193,26 +289,15 @@ function formatSseEvent(event: RealtimeEnvelope): string {
   return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-// R01: Per-topic monotonic sequence counter for event versioning.
-// This enables clients to detect gaps after reconnection and request
-// resync from the last seen sequence number.
-const topicSequenceMap = new Map<string, number>();
-
 // R07: Per-topic ring buffer of recent events for replay on gap.
 // Stores the last MAX_EVENTS_PER_TOPIC events so clients that detect
 // a sequence gap can replay missed events without a full resnapshot.
 const MAX_EVENTS_PER_TOPIC = 200;
 const topicEventBuffer = new Map<string, RealtimeEnvelope[]>();
 
-function nextSequenceForTopic(topic: string): number {
-  const next = (topicSequenceMap.get(topic) ?? 0) + 1;
-  topicSequenceMap.set(topic, next);
-  return next;
-}
-
 /** R01: Get the current sequence for a topic (for resync requests). */
-export function getTopicSequence(topic: string): number {
-  return topicSequenceMap.get(normalizeTopic(topic)) ?? 0;
+export async function getTopicSequence(topic: string): Promise<number> {
+  return getSequence(normalizeTopic(topic));
 }
 
 /** R07: Replay events from a given sequence number. Returns events
@@ -249,7 +334,7 @@ function bufferEvent(envelope: RealtimeEnvelope): void {
   }
 }
 
-function createEnvelope(topic: string, type: string, payload: Record<string, unknown>, options?: { seq?: boolean; version?: number }): RealtimeEnvelope {
+async function createEnvelope(topic: string, type: string, payload: Record<string, unknown>, options?: { seq?: boolean; version?: number }): Promise<RealtimeEnvelope> {
   const normalized = normalizeTopic(topic);
   const envelope: RealtimeEnvelope = {
     id: runtimeId('rt_event'),
@@ -260,7 +345,7 @@ function createEnvelope(topic: string, type: string, payload: Record<string, unk
   };
   // R01: Attach sequence and version when requested.
   if (options?.seq !== false) {
-    envelope.seq = nextSequenceForTopic(normalized);
+    envelope.seq = await getNextSequence(normalized);
   }
   if (options?.version != null) {
     envelope.v = options.version;
@@ -268,14 +353,18 @@ function createEnvelope(topic: string, type: string, payload: Record<string, unk
   return envelope;
 }
 
-export function registerWsClient(input: {
+export async function registerWsClient(input: {
   socket: WsLike;
   topics: string[];
   userId?: string;
   authorizeTopic?: (topic: string, userId?: string) => boolean | Promise<boolean>;
-}): string {
+}): Promise<string> {
   const clientId = runtimeId('rt_ws');
   const topicSet = new Set(input.topics.length > 0 ? input.topics.map(normalizeTopic) : ['*']);
+
+  for (const topic of topicSet) {
+    addTopicSubscription(topic);
+  }
 
   const client: RealtimeClient = {
     id: clientId,
@@ -331,6 +420,7 @@ export function registerWsClient(input: {
             : false;
           if (authorized) {
             client.topics.add(topic);
+            addTopicSubscription(topic);
             acceptedTopics.push(topic);
           } else {
             rejectedTopics.push(topic);
@@ -340,50 +430,54 @@ export function registerWsClient(input: {
 
       if (action === 'unsubscribe') {
         for (const topic of nextTopics) {
-          client.topics.delete(topic);
+          if (client.topics.has(topic)) {
+            client.topics.delete(topic);
+            removeTopicSubscription(topic);
+          }
           acceptedTopics.push(topic);
         }
       }
 
       if (action === 'subscribe' || action === 'unsubscribe') {
-        client.send(
-          createEnvelope('system', 'subscription_ack', {
-            action,
-            topics: Array.from(client.topics.values()),
-            acceptedTopics,
-            rejectedTopics,
-          })
-        );
+        const ack = await createEnvelope('system', 'subscription_ack', {
+          action,
+          topics: Array.from(client.topics.values()),
+          acceptedTopics,
+          rejectedTopics,
+        }, { seq: false });
+        client.send(ack);
       }
     } catch {
-      client.send(
-        createEnvelope('system', 'warning', {
-          message: 'Malformed realtime control message',
-        })
-      );
+      const warning = await createEnvelope('system', 'warning', {
+        message: 'Malformed realtime control message',
+      }, { seq: false });
+      client.send(warning);
     }
   });
 
   clients.set(clientId, client);
   ensureHeartbeat();
 
-  client.send(
-    createEnvelope('system', 'connected', {
-      transport: 'ws',
-      topics: Array.from(topicSet.values()),
-    })
-  );
+  const connected = await createEnvelope('system', 'connected', {
+    transport: 'ws',
+    topics: Array.from(topicSet.values()),
+  }, { seq: false });
+  client.send(connected);
 
   return clientId;
 }
 
-export function registerSseClient(input: {
+export async function registerSseClient(input: {
   reply: FastifyReply;
   topics: string[];
   userId?: string;
-}): string {
+}): Promise<string> {
   const clientId = runtimeId('rt_sse');
   const topicSet = new Set(input.topics.length > 0 ? input.topics.map(normalizeTopic) : ['*']);
+
+  for (const topic of topicSet) {
+    addTopicSubscription(topic);
+  }
 
   input.reply.raw.setHeader('Content-Type', 'text/event-stream');
   input.reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -414,17 +508,16 @@ export function registerSseClient(input: {
   clients.set(clientId, client);
   ensureHeartbeat();
 
-  client.send(
-    createEnvelope('system', 'connected', {
-      transport: 'sse',
-      topics: Array.from(topicSet.values()),
-    })
-  );
+  const connected = await createEnvelope('system', 'connected', {
+    transport: 'sse',
+    topics: Array.from(topicSet.values()),
+  }, { seq: false });
+  client.send(connected);
 
   return clientId;
 }
 
-export function publishRealtimeEvent(input: {
+export async function publishRealtimeEvent(input: {
   topic: string;
   type: string;
   payload: Record<string, unknown>;
@@ -434,9 +527,9 @@ export function publishRealtimeEvent(input: {
   /** R01: Event payload schema version. Clients use this for
    * forward-compatible parsing. */
   version?: number;
-}): number {
+}): Promise<number> {
   const topic = normalizeTopic(input.topic);
-  const event = createEnvelope(topic, input.type, input.payload, {
+  const event = await createEnvelope(topic, input.type, input.payload, {
     seq: input.seq,
     version: input.version,
   });
@@ -452,7 +545,7 @@ export function publishRealtimeEvent(input: {
       userId: input.userId,
     };
 
-    void realtimePublisher.publish(REALTIME_CHANNEL, JSON.stringify(message)).catch((error) => {
+    void realtimePublisher.publish(pubsubChannelForTopic(topic), JSON.stringify(message)).catch((error) => {
       logger.error({ err: error }, '[realtime] Redis publish failed');
     });
   }
@@ -475,6 +568,9 @@ export async function closeRealtimeConnections(): Promise<void> {
   }
 
   clients.clear();
+  topicRefCount.clear();
+  wildcardSubscriberCount = 0;
+  wildcardSubscribed = false;
 
   const subscriber = realtimeSubscriber;
   realtimeSubscriber = null;
@@ -482,7 +578,8 @@ export async function closeRealtimeConnections(): Promise<void> {
 
   if (subscriber) {
     try {
-      await subscriber.unsubscribe(REALTIME_CHANNEL);
+      await subscriber.unsubscribe();
+      await subscriber.punsubscribe(REALTIME_PUBSUB_PATTERN);
     } finally {
       await subscriber.quit();
     }

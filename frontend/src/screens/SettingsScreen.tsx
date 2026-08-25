@@ -1,5 +1,6 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -26,18 +27,134 @@ import {
   updateThemePreference,
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlatRow } from '../components/ui/FlatRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 
-import { Space, FontFamily } from '../theme/designTokens';
+import { Space, FontFamily, Radius, Type } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { useFeatureFlag, type FeatureFlagKey } from '../analytics';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+
+// All feature flags defined in src/analytics/types.ts. Listed here so the
+// debug view shows every flag the app can evaluate — QA can verify flag
+// states without navigating to each consuming screen.
+const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
+  'new_home_feed',
+  'live_shopping_enabled',
+  'co_own_v2',
+  'ai_listing_assist',
+  'moodboard_beta',
+  'conversational_search',
+  'advanced_filters',
+  'seller_analytics_v2',
+];
+
+/**
+ * Read-only feature flag debug section for QA teams.
+ *
+ * Renders each flag name and its current boolean value. Shown only inside
+ * the developer-gated "Advanced" section so ordinary consumers never see
+ * implementation detail. Uses the existing `useFeatureFlag` hook — no new
+ * hooks, no new dependencies.
+ */
+function FeatureFlagDebugSection() {
+  const { colors } = useAppTheme();
+  return (
+    <View style={flagStyles.container}>
+      <Text style={[flagStyles.heading, { color: colors.textMuted }]}>
+        Feature flags
+      </Text>
+      {ALL_FEATURE_FLAGS.map((flag) => (
+        <FeatureFlagRow key={flag} flagKey={flag} />
+      ))}
+    </View>
+  );
+}
+
+/** Single flag row — calls the hook and renders the live value. */
+function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
+  const { colors } = useAppTheme();
+  const enabled = useFeatureFlag(flagKey);
+  return (
+    <View style={[flagStyles.row, { borderBottomColor: colors.borderSubtle }]}>
+      <Text style={[flagStyles.flagName, { color: colors.textSecondary }]}>
+        {flagKey}
+      </Text>
+      <View
+        style={[
+          flagStyles.statusPill,
+          { backgroundColor: enabled ? `${colors.success}22` : colors.surfaceAlt },
+        ]}
+      >
+        <View
+          style={[
+            flagStyles.statusDot,
+            { backgroundColor: enabled ? colors.success : colors.textMuted },
+          ]}
+        />
+        <Text
+          style={[
+            flagStyles.statusText,
+            { color: enabled ? colors.success : colors.textMuted },
+          ]}
+        >
+          {enabled ? 'On' : 'Off'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const flagStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  heading: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  flagName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    flex: 1,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xxs + 1,
+    borderRadius: Radius.full,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+  },
+  statusText: {
+    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+  },
+});
 
 interface DestinationMeta {
   key: keyof RootStackParamList;
@@ -81,7 +198,7 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
   // ── Experience (appearance, language, currency, accessibility, recommendations) ──
-  { key: 'Personalisation', label: 'Content preferences', searchTerms: 'theme currency language feed personalisation appearance', section: 'Experience', showSection: true },
+  { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
   { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Experience' },
@@ -116,6 +233,10 @@ export default function SettingsScreen({ navigation }: Props) {
     analyticsOptOut,
     setAnalyticsOptOut,
     developerMode,
+    biometricEnabled,
+    setBiometricEnabled,
+    biometricLoginEnabled,
+    setBiometricLoginEnabled,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -125,6 +246,11 @@ export default function SettingsScreen({ navigation }: Props) {
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
+
+  // Probe biometric hardware availability so the toggle subtitle is truthful —
+  // "Not available on this device" when the device has no enrolled biometric,
+  // rather than showing a toggle that silently does nothing.
+  const { isAvailable: isBiometricAvailable } = useBiometricGate();
 
   // Track persist-store hydration so the screen can show a skeleton until the
   // user/session data is available instead of flashing "Not signed in".
@@ -303,6 +429,7 @@ export default function SettingsScreen({ navigation }: Props) {
   // that filters settings in-place. No separate overlay screen needed.
 
   return (
+    <View style={{ flex: 1 }}>
     <FlagshipScreen
       header={
         <FlagshipHeader
@@ -311,6 +438,9 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
+      {/* ── Offline banner ── */}
+      <OfflineBanner />
+
       {/* ── INLINE SEARCH — filters settings in-place ── */}
       <View style={{ marginBottom: Space.md }}>
         <AppSearchBar
@@ -366,8 +496,10 @@ export default function SettingsScreen({ navigation }: Props) {
             style={{ paddingVertical: Space.sm }}
           />
 
-          {/* ── Verification prompt — genuine account problem, flat row ── */}
-          {!currentUser?.emailVerified ? (
+          {/* ── Verification prompt — shows when identity/seller verification
+              is not yet complete. Email verification alone does not grant
+              a trust badge (P0-UI-3). ── */}
+          {!currentUser?.identityVerified && !currentUser?.sellerVerified ? (
             <FlatRow
               icon="shield-checkmark-outline"
               iconColor={colors.brand}
@@ -380,14 +512,53 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           ) : null}
 
+          {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
+              Shows completed security steps at a glance. Each pill is a
+              checkmark + label. Incomplete steps are omitted (not shown as
+              red warnings — the verification prompt above handles that). */}
+          {currentUser ? (
+            <View style={styles.healthRow}>
+              {currentUser.emailVerified ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Email confirmed</Text>
+                </View>
+              ) : null}
+              {twoFactorEnabled ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>2FA</Text>
+                </View>
+              ) : null}
+              {biometricEnabled ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Biometric</Text>
+                </View>
+              ) : null}
+              {savedPaymentMethod ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Payment</Text>
+                </View>
+              ) : null}
+              {savedAddress ? (
+                <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>Address</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
-          <SettingsSection title="Your account" icon="person-circle-outline" noCard>
+          <SettingsSection title="Your account">
             <SettingsRow
               icon="shield-checkmark-outline"
-              iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
-              titleStyle={currentUser?.emailVerified ? { color: colors.success } : undefined}
+              iconColor={currentUser?.identityVerified || currentUser?.sellerVerified ? colors.success : colors.textMuted}
+              titleStyle={currentUser?.identityVerified || currentUser?.sellerVerified ? { color: colors.success } : undefined}
               title="Verification"
-              subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
+              subtitle={currentUser?.sellerVerified ? 'Trusted Seller' : currentUser?.identityVerified ? 'ID Verified' : 'Get the verified badge'}
               onPress={() => navigation.navigate('Verification')}
               isFirst
             />
@@ -396,6 +567,34 @@ export default function SettingsScreen({ navigation }: Props) {
               title="Change password"
               subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
               onPress={() => navigation.navigate('ChangePassword')}
+            />
+            <SettingsRow
+              icon="finger-print-outline"
+              title="Biometric lock"
+              subtitle={
+                !isBiometricAvailable
+                  ? 'Not available on this device'
+                  : biometricEnabled
+                    ? 'Face ID, Touch ID & fingerprint for sensitive actions'
+                    : 'Disabled — sensitive screens use password only'
+              }
+              toggleValue={biometricEnabled && isBiometricAvailable}
+              onToggle={(v) => setBiometricEnabled(v)}
+              disabled={!isBiometricAvailable}
+            />
+            <SettingsRow
+              icon="lock-closed-outline"
+              title="Biometric login"
+              subtitle={
+                !isBiometricAvailable
+                  ? 'Not available on this device'
+                  : biometricLoginEnabled
+                    ? 'Require Face ID, Touch ID or fingerprint on app launch'
+                    : 'Disabled — app opens directly to your account'
+              }
+              toggleValue={biometricLoginEnabled && isBiometricAvailable}
+              onToggle={(v) => setBiometricLoginEnabled(v)}
+              disabled={!isBiometricAvailable}
             />
             <SettingsRow
               icon="link-outline"
@@ -419,13 +618,6 @@ export default function SettingsScreen({ navigation }: Props) {
               title="Download my data"
               subtitle="Export your account data"
               onPress={() => navigation.navigate('DataExport')}
-            />
-            <SettingsRow
-              icon="trash-outline"
-              title="Delete account"
-              subtitle="Permanently erase your account"
-              danger
-              onPress={() => navigation.navigate('DeleteAccount')}
             />
             <SettingsRow
               icon="eye-outline"
@@ -455,7 +647,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
-          <SettingsSection title="Buying & selling" icon="bag-outline" noCard>
+          <SettingsSection title="Buying & selling">
             <SettingsRow
               icon="location-outline"
               title="Saved addresses"
@@ -518,7 +710,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── NOTIFICATIONS ── */}
-          <SettingsSection title="Notifications" icon="notifications-outline" noCard>
+          <SettingsSection title="Notifications">
             <SettingsRow
               icon="notifications"
               title="Enable notifications"
@@ -550,7 +742,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
-          <SettingsSection title="Experience" icon="color-palette-outline" noCard>
+          <SettingsSection title="Experience">
             <SettingsRow
               icon="color-palette-outline"
               title="Theme"
@@ -626,7 +818,7 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
               Settings — it lives in the Agents home and profile menu. */}
-          <SettingsSection title="Connected services" icon="hardware-chip-outline" noCard>
+          <SettingsSection title="Connected services">
             <SettingsRow
               icon="people-outline"
               title="Agents"
@@ -650,7 +842,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </SettingsSection>
     
           {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
-          <SettingsSection title="Help & legal" icon="help-circle-outline" noCard>
+          <SettingsSection title="Help & legal">
 
             <SettingsRow
               icon="help-circle-outline"
@@ -683,26 +875,56 @@ export default function SettingsScreen({ navigation }: Props) {
               above. Gated behind developer mode (Settings → About → tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (
-            <SettingsSection title="Advanced" icon="code-working-outline" noCard>
+            <SettingsSection title="Advanced">
               <SettingsRow
                 icon="terminal-outline"
                 title="Runtime smoke test"
                 subtitle="Diagnostic checks for local runtime"
                 onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isFirst
+              />
+              <SettingsRow
+                icon="flag-outline"
+                title="Feature flags"
+                subtitle="Current flag values for QA"
+                onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isLast
               />
             </SettingsSection>
           ) : null}
+
+          {/* Feature flag debug view — read-only flag status for QA teams.
+              Shown only when developer mode is enabled (Advanced section). */}
+          {showAdvancedDeveloper ? <FeatureFlagDebugSection /> : null}
     
-          {/* ── SIGN OUT ── */}
-          {/* Sign Out action is rendered via SettingsSignOutRow for destructive separation */}
-          <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
-            <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
-          </View>
+          {/* ── DESTRUCTIVE ACTIONS — separate group at the bottom ── */}
+          {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit
+              at the bottom of the settings list, separated from benign rows.
+              Sign Out and Delete Account are grouped together with danger color. */}
+          <SettingsSection title="Account">
+            <SettingsSignOutRow
+              username={currentUser?.username}
+              onSignOut={handleLogout}
+            />
+            <SettingsRow
+              icon="trash-outline"
+              title="Delete account"
+              subtitle="Permanently erase your account"
+              danger
+              onPress={() => navigation.navigate('DeleteAccount')}
+              isLast
+              accessibilityLabel="Delete account"
+              accessibilityHint="Opens the account deletion flow"
+            />
+          </SettingsSection>
           </>
       )}
+    </FlagshipScreen>
 
+      {/* BottomSheetPickers MUST be rendered OUTSIDE FlagshipScreen's
+          ScrollView. When inside the ScrollView, absoluteFill fills the
+          scrollable content container — not the screen viewport — so the
+          sheet renders below the fold and is invisible to the user. */}
       <BottomSheetPicker
         visible={currencyPickerVisible}
         onClose={() => setCurrencyPickerVisible(false)}
@@ -730,7 +952,7 @@ export default function SettingsScreen({ navigation }: Props) {
         selectedValue={selectedThemeOption}
         onSelect={handleThemeSelect}
       />
-    </FlagshipScreen>
+    </View>
   );
 }
 
@@ -746,5 +968,26 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
+  },
+  // ── Account health indicator ──
+  healthRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  healthPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs + 1,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xxs + 1,
+    borderRadius: Radius.full,
+  },
+  healthPillText: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });

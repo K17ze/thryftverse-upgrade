@@ -7,6 +7,7 @@ import {
   NotificationStatusIcon,
 } from './NotificationRowBase';
 import {
+  Space,
   Type,
   FontFamily,
 } from '../../theme/designTokens';
@@ -34,19 +35,20 @@ export interface FinancialNotificationRowProps {
 interface FinancialVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'success' | 'warning';
+  accentSubtleKey: 'successSubtle' | 'warningSubtle';
   typeLabel: string;
 }
 
 function resolveFinancialVisual(eventType: NotificationEventV2['eventType']): FinancialVisual {
   switch (eventType) {
     case 'payout_processed':
-      return { icon: 'cash-outline', accentKey: 'success', typeLabel: 'Payout' };
+      return { icon: 'cash-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Payout' };
     case 'refund_completed':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
     case 'order_refunded':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
     default:
-      return { icon: 'wallet-outline', accentKey: 'success', typeLabel: 'Transaction' };
+      return { icon: 'wallet-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Transaction' };
   }
 }
 
@@ -62,6 +64,7 @@ export function FinancialNotificationRow({
 
   const visual = useMemo(() => resolveFinancialVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
+  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   // Structured amount from the payload — never from prose text.
@@ -71,7 +74,7 @@ export function FinancialNotificationRow({
 
   const amountText = amount != null ? `${currency}${amount.toFixed(2)}` : null;
   const description = amountText
-    ? `${visual.typeLabel} · ${amountText} · ${status}`
+    ? `${amountText} · ${visual.typeLabel} · ${status}`
     : `${visual.typeLabel} · ${status}`;
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${visual.typeLabel}${amountText ? ` of ${amountText}` : ''}. ${status}. ${time}`;
@@ -80,6 +83,7 @@ export function FinancialNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
+      accentSubtle={accentSubtle}
       colors={colors}
       size={44}
     />
@@ -98,12 +102,9 @@ export function FinancialNotificationRow({
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
         {event.title || visual.typeLabel}
       </Text>
-      <Text style={[styles.body, isUnread && styles.bodyUnread]} numberOfLines={2}>
+      <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
-      {amountText ? (
-        <Text style={styles.amount}>{amountText}</Text>
-      ) : null}
     </NotificationRowBase>
   );
 }
@@ -111,10 +112,11 @@ export function FinancialNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyLarge.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
+      lineHeight: Type.bodyLarge.lineHeight,
+      paddingRight: Space.xxl + Space.sm,
     },
     titleUnread: {
       color: colors.textPrimary,
@@ -125,18 +127,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
-    },
-    bodyUnread: {
-      color: colors.textPrimary,
-      fontFamily: FontFamily.medium,
-    },
-    amount: {
-      fontSize: Type.numericMeta.size,
-      fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-      lineHeight: Type.numericMeta.lineHeight,
-      fontVariant: ['tabular-nums'],
-      marginTop: 2,
     },
   });
 }

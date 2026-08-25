@@ -1,0 +1,332 @@
+name: Build and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'OTA update message'
+        required: true
+      target_channel:
+        description: 'Target channel for full rollout (production)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/build-and-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: EAS Build (production profile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
+
+      - name: SSL pin validation (production — fail on placeholder hashes)
+        working-directory: frontend
+        run: node scripts/validate-ssl-pins.mjs
+        env:
+          EXPO_PUBLIC_ENVIRONMENT: production
+          EXPO_PUBLIC_SSL_PINNING_ENABLED: 'true'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build ${{ matrix.platform }}
+        working-directory: frontend
+        run: eas build --platform ${{ matrix.platform }} --non-interactive --profile production
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  stage-staging:
+    name: Stage 0 — Publish to staging channel
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Publish to staging channel (100%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel staging \
+            --message "staging: ${{ inputs.message || github.ref_name }}" \
+            --rollout-percentage 100
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify staging published
+        run: |
+          echo "::notice::OTA update published to staging channel at 100%. Verify on staging before approving canary."
+
+  stage-canary-1:
+    name: Stage 1 — Canary 1% rollout
+    needs: stage-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: canary-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Publish to canary channel (1%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel canary \
+            --message "canary 1%: ${{ inputs.message || github.ref_name }}" \
+            --rollout-percentage 1
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify canary 1% published
+        run: |
+          echo "::notice::OTA update published to canary channel at 1% rollout. Monitor crash-free rate, error spikes, and EAS Observe before approving 10%."
+
+      - name: Smoke test gate — health check (canary 1%)
+        run: |
+          echo "Running lightweight smoke test against production API before escalating to 10%..."
+          node scripts/post-deploy-smoke.mjs
+        working-directory: backend
+        env:
+          BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://api.thryftverse.com' }}
+
+  stage-canary-10:
+    name: Stage 2 — Canary 10% rollout
+    needs: stage-canary-1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: canary-10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Publish to canary channel (10%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel canary \
+            --message "canary 10%: ${{ inputs.message || github.ref_name }}" \
+            --rollout-percentage 10
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify canary 10% published
+        run: |
+          echo "::notice::OTA update escalated to canary channel at 10% rollout. Monitor for 24h before approving 50%."
+
+      - name: Smoke test gate — health check (canary 10%)
+        run: |
+          echo "Running lightweight smoke test against production API before escalating to 50%..."
+          node scripts/post-deploy-smoke.mjs
+        working-directory: backend
+        env:
+          BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://api.thryftverse.com' }}
+
+  stage-production-50:
+    name: Stage 3 — Production 50% rollout
+    needs: stage-canary-10
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Publish to production channel (50%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel ${{ inputs.target_channel || 'production' }} \
+            --message "production 50%: ${{ inputs.message || github.ref_name }}" \
+            --rollout-percentage 50
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify production 50% published
+        run: |
+          echo "::notice::OTA update escalated to production channel at 50% rollout. Monitor for 24h before approving 100%."
+
+      - name: Smoke test gate — health check (production 50%)
+        run: |
+          echo "Running lightweight smoke test against production API before escalating to 100%..."
+          node scripts/post-deploy-smoke.mjs
+        working-directory: backend
+        env:
+          BASE_URL: ${{ vars.PRODUCTION_API_URL || 'https://api.thryftverse.com' }}
+
+  stage-production-100:
+    name: Stage 4 — Production 100% rollout
+    needs: stage-production-50
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-100
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Publish to production channel (100%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel ${{ inputs.target_channel || 'production' }} \
+            --message "production 100%: ${{ inputs.message || github.ref_name }}" \
+            --rollout-percentage 100
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify production 100% published
+        run: |
+          echo "::notice::OTA update fully rolled out to production channel at 100%."
+
+      - name: Failure notification
+        if: failure()
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"content\":\"Build and Deploy FAILED during staged rollout. Check logs and consider OTA rollback.\"}" \
+            ${{ secrets.ALERTING_WEBHOOK_URL }} || true

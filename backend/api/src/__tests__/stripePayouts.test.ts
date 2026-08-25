@@ -27,7 +27,7 @@ test('Stripe Connect payout transfer uses deterministic provider idempotency', a
     netAmountGbp: 42.35,
   });
 
-  assert.equal(result.providerPayoutRef, 'tr_live_123');
+  assert.equal(result.providerTransferRef, 'tr_live_123');
   assert.equal(result.amountMinor, 4235);
   assert.equal(calls[0]?.params.destination, 'acct_123');
   assert.equal(calls[0]?.options.idempotencyKey, 'payout:payout_123');

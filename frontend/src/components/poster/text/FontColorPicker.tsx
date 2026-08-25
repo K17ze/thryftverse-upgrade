@@ -552,7 +552,7 @@ function createEyedropperStyles(colors: ThemeColors) {
     loupeColorPreview: {
       width: 80,
       height: 80,
-      borderRadius: 40,
+      borderRadius: Radius.full,
       borderWidth: 3,
       borderColor: '#FFFFFF',
       alignItems: 'center',
@@ -598,7 +598,7 @@ function createEyedropperStyles(colors: ThemeColors) {
       gap: 8,
       backgroundColor: colors.overlay,
       borderRadius: Radius.full,
-      paddingHorizontal: 16,
+      paddingHorizontal: Space.md,
       paddingVertical: 10,
     },
     instructionText: {

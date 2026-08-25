@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Share
 } from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,6 +19,16 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
+
+interface ReferralHistoryItem {
+  id: string;
+  inviteeName: string | null;
+  inviteeHandle: string | null;
+  invitedAt: string;
+  joinedAt: string | null;
+  status: 'invited' | 'joined' | 'completed' | 'rewarded';
+  rewardAmount: number | null;
+}
 
 /**
  * Generate a deterministic referral code from a user ID.
@@ -49,21 +60,33 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   );
   const inviteLink = `https://thryftverse.app/invite/${referralCode}`;
 
-  // Fetch referral stats from backend, with graceful fallback to zeros
+  // Fetch referral stats from backend. Per AGENTS.md §6 (truthful UI), a
+  // backend failure must NOT silently show fabricated zeros — the screen
+  // surfaces a "Stats unavailable" state instead (research §5, defect at
+  // InviteFriendsScreen.tsx:63-76).
   const [referralStats, setReferralStats] = React.useState({
     invited: 0,
     joined: 0,
     rewarded: 0,
     creditsBalance: 0,
   });
+  const [statsUnavailable, setStatsUnavailable] = React.useState(false);
+
+  const [referralHistory, setReferralHistory] = React.useState<ReferralHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyUnavailable, setHistoryUnavailable] = React.useState(false);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
     let mounted = true;
+    setStatsUnavailable(false);
     fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referral-stats`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!mounted || !data) return;
+        if (!mounted || !data) {
+          if (mounted) setStatsUnavailable(true);
+          return;
+        }
         setReferralStats({
           invited: data.invited ?? 0,
           joined: data.joined ?? 0,
@@ -72,23 +95,56 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         });
       })
       .catch(() => {
-        // Backend endpoint not available — keep zeros
+        if (mounted) setStatsUnavailable(true);
       });
     return () => { mounted = false; };
   }, [currentUser?.id]);
 
-  // Loyalty tier derived from referral activity
-  const loyaltyTier = useMemo<{ name: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; nextThreshold: number | null; progress: number }>(() => {
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let mounted = true;
+    setHistoryLoading(true);
+    setHistoryUnavailable(false);
+    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referrals`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        setHistoryLoading(false);
+        if (!data || !Array.isArray(data.items)) {
+          setHistoryUnavailable(true);
+          return;
+        }
+        setReferralHistory(data.items.slice(0, 20));
+      })
+      .catch(() => {
+        if (mounted) {
+          setHistoryLoading(false);
+          setHistoryUnavailable(true);
+        }
+      });
+    return () => { mounted = false; };
+  }, [currentUser?.id]);
+
+  // Loyalty tier derived from referral activity.
+  // Per AGENTS.md §11, we do NOT fabricate a "Bronze Member" tier for users
+  // with zero referrals — the tier is only shown when actually earned.
+  const loyaltyTier = useMemo<{ name: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; nextThreshold: number | null; progress: number } | null>(() => {
     const { rewarded } = referralStats;
     if (rewarded >= 10) return { name: 'Gold', icon: 'trophy', color: ACCENT, nextThreshold: null, progress: 100 };
     if (rewarded >= 3) return { name: 'Silver', icon: 'medal', color: MUTED, nextThreshold: 10, progress: (rewarded / 10) * 100 };
-    return { name: 'Bronze', icon: 'ribbon', color: BORDER, nextThreshold: 3, progress: (rewarded / 3) * 100 };
+    return null;
   }, [referralStats.rewarded, ACCENT, MUTED, BORDER]);
+
+  const hasReferrals =
+    referralStats.invited > 0 ||
+    referralStats.joined > 0 ||
+    referralStats.rewarded > 0 ||
+    referralStats.creditsBalance > 0;
 
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Join me on Thryftverse - the premium marketplace for second-hand fashion! Use my code ${referralCode} at signup. ${inviteLink}`,
+        message: `Join me on Thryftverse — the marketplace for second-hand fashion. Use my code ${referralCode} and we both earn credit when you make your first sale. ${inviteLink}`,
         title: 'Invite to Thryftverse',
       });
     } catch {}
@@ -104,6 +160,46 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     show('Referral code copied.', 'success');
   }, [referralCode, show]);
 
+  const renderReferralItem = useCallback<ListRenderItem<ReferralHistoryItem>>(
+    ({ item, index }) => {
+      const name = item.inviteeName || item.inviteeHandle || 'Anonymous';
+      const dateLabel = new Date(item.invitedAt).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+      });
+      const badgeStyle =
+        item.status === 'invited' ? styles.badgeMuted :
+        item.status === 'joined' ? styles.badgeBrand :
+        styles.badgeSuccess;
+      const badgeText =
+        item.status === 'invited' ? styles.badgeMutedText :
+        item.status === 'joined' ? styles.badgeBrandText :
+        styles.badgeSuccessText;
+      const label =
+        item.status === 'invited' ? 'Invited' :
+        item.status === 'joined' ? 'Joined' :
+        item.status === 'completed' ? 'Completed' :
+        'Rewarded';
+      return (
+        <View style={[styles.historyRow, index < referralHistory.length - 1 && styles.historyRowBordered]}>
+          <View style={styles.historyInfo}>
+            <Text style={styles.historyName} numberOfLines={1}>{name}</Text>
+            <Text style={styles.historyDate}>{dateLabel}</Text>
+          </View>
+          <View style={[styles.badge, badgeStyle]}>
+            <Text style={[styles.badgeText, badgeText]}>{label}</Text>
+          </View>
+        </View>
+      );
+    },
+    [styles, referralHistory.length]
+  );
+
+  const referralKeyExtractor = useCallback(
+    (item: ReferralHistoryItem) => item.id,
+    []
+  );
+
   return (
     <FlagshipScreen
       header={<FlagshipHeader title="Invite friends" onBack={() => navigation.goBack()} />}
@@ -116,37 +212,33 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         <Ionicons name="gift-outline" size={48} color={ACCENT} />
         <Text style={styles.heroTitle}>Invite & earn</Text>
         <Text style={styles.heroSubtitle}>
-          Invite friends to Thryftverse. When they make their first sale, you both get a reward.
+          Invite friends to Thryftverse. When they make their first sale, you both earn Thryftverse credit — give credit, get credit.
         </Text>
       </View>
 
       {/* Referral Code */}
-      <View>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
-          <View style={styles.codeRow}>
-            <Text style={styles.codeText}>{referralCode}</Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-              <Ionicons name="copy-outline" size={18} color={ACCENT} />
-              <Text style={styles.copyText}>Copy</Text>
-            </AnimatedPressable>
-          </View>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
+        <View style={styles.codeRow}>
+          <Text style={styles.codeText}>{referralCode}</Text>
+          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
+            <Ionicons name="copy-outline" size={18} color={ACCENT} />
+            <Text style={styles.copyText}>Copy</Text>
+          </AnimatedPressable>
         </View>
       </View>
 
       {/* Share Link */}
-      <View>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
-          <View style={styles.linkRow}>
-            <Text style={styles.linkText} numberOfLines={1}>
-              {inviteLink}
-            </Text>
-            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-              <Ionicons name="copy-outline" size={18} color={ACCENT} />
-              <Text style={styles.copyText}>Copy</Text>
-            </AnimatedPressable>
-          </View>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+        <View style={styles.linkRow}>
+          <Text style={styles.linkText} numberOfLines={1}>
+            {inviteLink}
+          </Text>
+          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
+            <Ionicons name="copy-outline" size={18} color={ACCENT} />
+            <Text style={styles.copyText}>Copy</Text>
+          </AnimatedPressable>
         </View>
       </View>
 
@@ -170,12 +262,26 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       </View>
 
       {/* Rewards Summary */}
-      <View>
-        <View style={styles.rewardsCard}>
-          <View style={styles.rewardsHeader}>
-            <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
-            <Text style={styles.rewardsTitle}>Your rewards</Text>
+      <View style={styles.flatSection}>
+        <View style={styles.rewardsHeader}>
+          <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
+          <Text style={styles.rewardsTitle}>Your rewards</Text>
+        </View>
+        {statsUnavailable ? (
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              Stats unavailable right now. Pull down to refresh or try again later.
+            </Text>
           </View>
+        ) : !hasReferrals ? (
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="people-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              No referrals yet — share your code to start earning.
+            </Text>
+          </View>
+        ) : (
           <View style={styles.statsRow}>
             <View style={styles.statCell}>
               <Text style={styles.statValue}>{referralStats.invited}</Text>
@@ -197,15 +303,49 @@ export default function InviteFriendsScreen({ navigation }: Props) {
               <Text style={styles.statLabel}>Credits</Text>
             </View>
           </View>
-          <Text style={styles.rewardsFootnote}>
-            Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
-          </Text>
-        </View>
+        )}
+        <Text style={styles.rewardsFootnote}>
+          Earn Thryftverse credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
+        </Text>
       </View>
 
-      {/* Loyalty Tier Card */}
-      <View>
-        <View style={styles.loyaltyCard}>
+      {/* Referral History */}
+      {historyUnavailable ? (
+        <View style={styles.flatSection}>
+          <View style={styles.rewardsHeader}>
+            <Ionicons name="time-outline" size={18} color={ACCENT} />
+            <Text style={styles.rewardsTitle}>Referral history</Text>
+          </View>
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              History unavailable right now. Try again later.
+            </Text>
+          </View>
+        </View>
+      ) : referralHistory.length > 0 ? (
+        <View style={styles.flatSection}>
+          <View style={styles.rewardsHeader}>
+            <Ionicons name="time-outline" size={18} color={ACCENT} />
+            <Text style={styles.rewardsTitle}>Referral history</Text>
+          </View>
+          <FlashList
+            data={referralHistory}
+            scrollEnabled={false}
+            keyExtractor={referralKeyExtractor}
+            renderItem={renderReferralItem}
+            drawDistance={250}
+          />
+        </View>
+      ) : null}
+
+      {/* Loyalty Tier — tier is derived from referral activity only.
+          Per AGENTS.md §11, the tier badge is only shown when actually earned.
+          We do NOT fabricate a "Bronze Member" tier for zero referrals, and we
+          do NOT fabricate perks (reduced fees, priority support, exclusive
+          drops) that the backend does not actually provide. */}
+      {loyaltyTier && (
+        <View style={styles.flatSection}>
           <View style={styles.loyaltyHeader}>
             <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
               <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
@@ -214,49 +354,36 @@ export default function InviteFriendsScreen({ navigation }: Props) {
               <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
               <Text style={styles.loyaltySubtext}>
                 {loyaltyTier.nextThreshold
-                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
-                  : 'Highest tier reached'}
+                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Silver' ? 'Gold' : 'Silver'}`
+                  : 'Highest referral tier reached'}
               </Text>
             </View>
           </View>
           <View style={styles.loyaltyProgressTrack}>
             <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
           </View>
-          <View style={styles.loyaltyBenefitsRow}>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="pricetag-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
-            </View>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="speedometer-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Priority support</Text>
-            </View>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="star-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
-            </View>
-          </View>
+          <Text style={styles.loyaltyFootnote}>
+            Tier is based on successful referrals only.
+          </Text>
         </View>
-      </View>
+      )}
 
       {/* How it works */}
-      <View>
-        <View style={styles.howItWorksCard}>
-          <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-          {([
-            { icon: 'share-outline', text: 'Share your referral link with friends' },
-            { icon: 'person-add-outline', text: 'They sign up and create an account' },
-            { icon: 'pricetag-outline', text: 'They list their first item for sale' },
-            { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
-          ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
-            <View key={i} style={styles.stepRow}>
-              <View style={styles.stepIconWrap}>
-                <Ionicons name={step.icon} size={18} color={ACCENT} />
-              </View>
-              <Text style={styles.stepText}>{step.text}</Text>
+      <View style={styles.flatSection}>
+        <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
+        {([
+          { icon: 'share-outline', text: 'Share your referral link with friends' },
+          { icon: 'person-add-outline', text: 'They sign up and create an account' },
+          { icon: 'pricetag-outline', text: 'They list their first item for sale' },
+          { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
+        ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
+          <View key={i} style={[styles.stepRow, i < 3 && styles.stepRowBordered]}>
+            <View style={styles.stepIconWrap}>
+              <Ionicons name={step.icon} size={18} color={ACCENT} />
             </View>
-          ))}
-        </View>
+            <Text style={styles.stepText}>{step.text}</Text>
+          </View>
+        ))}
       </View>
     </FlagshipScreen>
   );
@@ -265,6 +392,12 @@ export default function InviteFriendsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: { padding: Space.lg },
+    flatSection: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: Space.lg,
+      marginBottom: Space.lg,
+    },
     heroCard: {
       backgroundColor: colors.surface,
       borderWidth: Stroke.standard,
@@ -306,12 +439,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm,
     },
     codeText: {
       fontSize: Type.title.size,
@@ -323,12 +451,7 @@ function createStyles(colors: ThemeColors) {
     linkRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm,
     },
     linkText: {
       flex: 1,
@@ -340,9 +463,9 @@ function createStyles(colors: ThemeColors) {
     },
     copyBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     copyText: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },
@@ -367,14 +490,6 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.meta.letterSpacing,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
-    },
-    rewardsCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.lg,
     },
     rewardsHeader: {
       flexDirection: 'row',
@@ -422,14 +537,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },
-    loyaltyCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.xl,
-    },
     loyaltyHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -470,34 +577,34 @@ function createStyles(colors: ThemeColors) {
       height: '100%',
       borderRadius: Radius.sm,
     },
-    loyaltyBenefitsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: Space.sm,
-    },
-    loyaltyBenefit: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    loyaltyBenefitText: {
-      fontSize: Type.meta.size,
+    loyaltyFootnote: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight + 2,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },
-    howItWorksCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.lg,
-      marginBottom: Space.xl,
+    statsUnavailableRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.md,
+    },
+    statsUnavailableText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight + 2,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
     },
     stepRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
+    },
+    stepRowBordered: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     stepIconWrap: {
       width: Control.chromeCompact,
@@ -513,6 +620,62 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.body.lineHeight,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
+    },
+    historyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.md,
+    },
+    historyRowBordered: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    historyInfo: {
+      flex: 1,
+      gap: Space.xs / 2,
+      marginRight: Space.sm,
+    },
+    historyName: {
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    historyDate: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    badge: {
+      paddingVertical: Space.xs / 2,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.sm,
+    },
+    badgeText: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      letterSpacing: Type.meta.letterSpacing,
+      fontFamily: Typography.family.semibold,
+    },
+    badgeMuted: {
+      backgroundColor: `${colors.textMuted}15`,
+    },
+    badgeMutedText: {
+      color: colors.textMuted,
+    },
+    badgeBrand: {
+      backgroundColor: `${colors.brand}15`,
+    },
+    badgeBrandText: {
+      color: colors.brand,
+    },
+    badgeSuccess: {
+      backgroundColor: `${colors.success}15`,
+    },
+    badgeSuccessText: {
+      color: colors.success,
     },
   });
 }

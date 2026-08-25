@@ -1,14 +1,15 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   StatusBar,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
@@ -19,15 +20,16 @@ import Reanimated, {
   useReducedMotion,
   Easing,
 } from 'react-native-reanimated';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useConnectivity } from '../hooks/useConnectivity';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export interface CreatorPreviewOverlayProps {
   visible: boolean;
@@ -43,19 +45,98 @@ export interface CreatorPreviewOverlayProps {
  *
  * For Poster (multi-page), the user can swipe horizontally to navigate
  * between pages with spring transitions. Pinch to zoom into the preview,
- * double-tap to reset zoom.
+ * double-tap to reset zoom. Page position is communicated by a minimal
+ * "1 / 3" indicator in the top bar — no dots, no chevrons; swipe is the
+ * native navigation gesture, matching Instagram Stories.
+ *
+ * State coverage: loading (composition still initialising), error (canvas
+ * render failure), offline (publish gated), empty (no layers yet), and the
+ * populated happy path.
  */
+
+// ── Local error boundary for the canvas render ──────────────────────────
+// A full-screen preview is a transient surface; if the canvas throws, the
+// right recovery is to return to the composer, not to retry in place. This
+// boundary renders a quiet error state with a single "Go back" action that
+// delegates to the overlay's onClose.
+
+interface BoundaryProps {
+  children: ReactNode;
+  onClose: () => void;
+  colors: ThemeColors;
+}
+
+interface BoundaryState {
+  hasError: boolean;
+}
+
+class PreviewCanvasBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): BoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Intentionally quiet — preview is ephemeral; the composer owns the
+    // document. Surfacing telemetry here would double-report against the
+    // global AppErrorBoundary that already wraps the app.
+    void error;
+    void info;
+  }
+
+  handleGoBack = () => {
+    this.setState({ hasError: false });
+    this.props.onClose();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      const { colors } = this.props;
+      return (
+        <View style={[styles.stateWrap, { backgroundColor: colors.background }]}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
+            Couldn't render preview
+          </Text>
+          <Pressable
+            onPress={this.handleGoBack}
+            style={({ pressed }) => [
+              styles.stateAction,
+              { backgroundColor: colors.brand, opacity: pressed ? 0.85 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={[styles.stateActionText, { color: colors.textInverse }]}>
+              Go back
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPreviewOverlayProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { isOffline } = useConnectivity();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [pageIndex, setPageIndex] = useState(0);
 
-  const page = document.pages[pageIndex];
   const pageCount = document.pages.length;
+  const page = document.pages[pageIndex];
   const isPoster = document.type === 'poster';
+
+  // A composition is "empty" when every page has no layers — the canvas
+  // would render a blank surface, so we surface a hint instead.
+  const isEmptyComposition =
+    pageCount > 0 && document.pages.every((p) => p.layers.length === 0);
 
   // ── Swipe navigation shared values ──
   const pageTranslateX = useSharedValue(0);
@@ -75,16 +156,12 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
     }
   }, [visible, zoomScale, pageTranslateX, pageOpacity]);
 
-  const goToPage = useCallback((newIndex: number) => {
-    setPageIndex(newIndex);
-    // Spring transition: slide + fade
-    if (!reduceMotion) {
-      pageOpacity.value = 0;
-      pageTranslateX.value = withSpring(0, spring.entrance);
-      pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+  // Keep pageIndex in range if the document's pages change underneath us.
+  useEffect(() => {
+    if (pageIndex > pageCount - 1) {
+      setPageIndex(Math.max(0, pageCount - 1));
     }
-    haptic.light();
-  }, [haptic, reduceMotion, spring.entrance, pageOpacity, pageTranslateX]);
+  }, [pageIndex, pageCount]);
 
   const goNextPage = useCallback(() => {
     setPageIndex((i) => {
@@ -161,20 +238,10 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   ).current;
 
   const handlePublish = useCallback(() => {
+    if (isOffline) return;
     haptic.medium();
     onPublish();
-  }, [haptic, onPublish]);
-
-  if (!visible || !page) return null;
-
-  // Compute canvas dimensions to fill the screen while preserving aspect ratio
-  const ratio = document.canvas.aspectRatio;
-  let canvasW = SCREEN_W;
-  let canvasH = Math.floor(SCREEN_W / ratio);
-  if (canvasH > SCREEN_H) {
-    canvasH = SCREEN_H;
-    canvasW = Math.floor(SCREEN_H * ratio);
-  }
+  }, [haptic, onPublish, isOffline]);
 
   // Animated style for page transition (slide + fade)
   const pageTransitionStyle = useAnimatedStyle(() => ({
@@ -187,6 +254,30 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
     transform: [{ scale: zoomScale.value }],
   }));
 
+  if (!visible) return null;
+
+  // ── Loading: composition still initialising (no pages yet) ──
+  if (pageCount === 0) {
+    return (
+      <View style={[styles.container, styles.stateWrap, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator size="large" color={colors.brand} />
+        <Text style={[styles.stateTitle, { color: colors.textSecondary }]}>
+          Preparing preview…
+        </Text>
+      </View>
+    );
+  }
+
+  // Compute canvas dimensions to fill the screen while preserving aspect ratio
+  const ratio = document.canvas.aspectRatio;
+  let canvasW = screenWidth;
+  let canvasH = Math.floor(screenWidth / ratio);
+  if (canvasH > screenHeight) {
+    canvasH = screenHeight;
+    canvasW = Math.floor(screenHeight * ratio);
+  }
+
   // Combined gesture: pinch + double tap + swipe
   const combinedGesture = Gesture.Race(pinchGesture, doubleTapGesture, swipeGesture);
 
@@ -194,91 +285,83 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
 
-      {/* Full-screen canonical composition render with gestures */}
+      {/* Full-screen canonical composition render with gestures.
+          Wrapped in a local error boundary so a canvas render failure
+          recovers to the composer instead of crashing the preview. */}
       <GestureDetector gesture={combinedGesture}>
         <View style={styles.canvasWrap}>
           <Reanimated.View style={zoomStyle}>
             <Reanimated.View style={pageTransitionStyle}>
-              <CreatorCanvas
-                document={document}
-                page={page}
-                canvasWidth={canvasW}
-                canvasHeight={canvasH}
-                mode="view"
-              />
+              <PreviewCanvasBoundary onClose={onClose} colors={colors}>
+                <CreatorCanvas
+                  document={document}
+                  page={page}
+                  canvasWidth={canvasW}
+                  canvasHeight={canvasH}
+                  mode="view"
+                />
+              </PreviewCanvasBoundary>
             </Reanimated.View>
           </Reanimated.View>
         </View>
       </GestureDetector>
 
-      {/* Top bar — minimal, transparent over media */}
+      {/* Top bar — minimal, transparent floating chrome over media */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
         <PressScale
           onPress={onClose}
           style={styles.topBtn}
           accessibilityLabel="Close preview"
         >
-          <Ionicons name="close" size={28} color={colors.textInverse} />
+          <Ionicons name="close" size={IconGrammar.hero} color={colors.scrimTextPrimary} />
         </PressScale>
 
         <View style={styles.topCenter}>
-          <Text style={[styles.topLabel, { color: colors.textInverse }]}>Preview</Text>
+          <Text style={[styles.topLabel, { color: colors.scrimTextPrimary }]}>Preview</Text>
           {pageCount > 1 && (
-            <Text style={[styles.pageIndicator, { color: colors.textInverse + 'B3' }]}>
+            <Text style={[styles.pageIndicator, { color: colors.scrimTextSecondary }]}>
               {pageIndex + 1} / {pageCount}
             </Text>
           )}
         </View>
 
-        {/* Enhanced publish button with gradient */}
+        {/* Publish — solid brand fill, scale feedback, no gradient chrome.
+            Disabled while offline; opacity communicates the gated state. */}
         <PressScale
           onPress={handlePublish}
-          style={styles.publishBtnWrap}
+          style={[
+            styles.publishBtnWrap,
+            { backgroundColor: colors.brand },
+            isOffline ? styles.publishBtnDisabled : {},
+          ]}
           accessibilityLabel="Publish"
+          accessibilityState={{ disabled: isOffline }}
           scale={0.95}
+          disabled={isOffline}
         >
-          <LinearGradient
-            colors={[colors.brand, colors.brandPressed]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.publishBtn}
-          >
-            <Text style={[styles.publishBtnText, { color: colors.textPrimary }]}>Publish</Text>
-          </LinearGradient>
+          <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>
+            Publish
+          </Text>
         </PressScale>
       </SafeAreaView>
 
-      {/* Page navigation for multi-page posters */}
-      {isPoster && pageCount > 1 && (
-        <View style={styles.pageNavRow}>
-          <PressScale
-            onPress={goPrevPage}
-            style={styles.pageNavBtn}
-            accessibilityLabel="Previous page"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textInverse} />
-          </PressScale>
-          <View style={styles.pageDots}>
-            {document.pages.map((p, i) => (
-              <View
-                key={p.id}
-                style={[
-                  styles.pageDot,
-                  { backgroundColor: colors.textInverse + '66' },
-                  i === pageIndex && styles.pageDotActive,
-                  i === pageIndex && { backgroundColor: colors.textInverse },
-                ]}
-              />
-            ))}
-          </View>
-          <PressScale
-            onPress={goNextPage}
-            style={styles.pageNavBtn}
-            accessibilityLabel="Next page"
-          >
-            <Ionicons name="chevron-forward" size={24} color={colors.textInverse} />
-          </PressScale>
+      {/* Empty composition hint — pages exist but nothing on them yet. */}
+      {isEmptyComposition && (
+        <View pointerEvents="none" style={styles.emptyHint}>
+          <Text style={[styles.emptyHintText, { color: colors.scrimTextPrimary }]}>
+            Add content to see a preview.
+          </Text>
         </View>
+      )}
+
+      {/* Offline banner — quiet, bottom-anchored. Publish is gated above. */}
+      {isOffline && (
+        <SafeAreaView style={styles.offlineBanner} edges={['bottom']}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
+          <Text style={[styles.offlineText, { color: colors.warning }]} numberOfLines={1}>
+            Offline — preview only, publish when connected.
+          </Text>
+        </SafeAreaView>
       )}
     </View>
   );
@@ -294,6 +377,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // ── Floating top bar ──
   topBar: {
     position: 'absolute',
     top: 0,
@@ -327,56 +411,74 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.7)',
   },
+  // ── Publish floating action button ──
   publishBtnWrap: {
-    borderRadius: Radius.full,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  publishBtn: {
     paddingHorizontal: Space.md + 4,
     height: 36,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  publishBtnDisabled: {
+    opacity: 0.4,
+  },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
-  pageNavRow: {
+  // ── State surfaces (loading / error) ──
+  stateWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  stateTitle: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+  },
+  stateAction: {
+    paddingHorizontal: Space.lg,
+    height: 44,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stateActionText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  // ── Empty composition hint ──
+  emptyHint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyHintText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+  },
+  // ── Offline banner ──
+  offlineBanner: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
+    paddingVertical: Space.sm,
   },
-  pageNavBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.full,
-  },
-  pageDots: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  pageDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  pageDotActive: {
-    width: 8,
-    height: 8,
+  offlineText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    flexShrink: 1,
   },
 });

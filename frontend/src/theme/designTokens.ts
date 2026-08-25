@@ -53,6 +53,8 @@ export const Radius = {
   lg: 12,
   /** 16px - Large cards, containers */
   xl: 16,
+  /** 20px - Chat bubbles (WhatsApp 2026 fully-rounded look) */
+  chat: 20,
   /** 24px - Navigation docks and genuinely dominant panels only */
   xxl: 24,
   /** 999px - Pills, avatars, floating buttons, tags */
@@ -232,6 +234,12 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     lineHeight: Type.bodyEmphasis.lineHeight,
   },
+  bodyStrong: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyStrong.size,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
+  },
   caption: {
     fontFamily: FontFamily.regular,
     fontSize: Type.caption.size,
@@ -314,24 +322,6 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowRadius: 22,
     elevation: 12,
   },
-} as const;
-
-// ============================================================================
-// ANIMATION DURATIONS — semantic motion bands
-// Touch: 90–150ms | Micro state: 160–240ms | Sheet/route: 260–420ms
-// Celebratory: rare, under ~600ms
-// ============================================================================
-export const Duration = {
-  /** 0ms — Immediate */
-  instant: 0,
-  /** 120ms — Touch acknowledgement (button press, toggle) */
-  fast: 120,
-  /** 200ms — Micro state transition (segment switch, sheet slide) */
-  normal: 200,
-  /** 320ms — Emphasis / route continuity (content crossfade, screen push) */
-  slow: 320,
-  /** 500ms — Hero/page transitions, rare celebratory motion */
-  slower: 500,
 } as const;
 
 // ============================================================================
@@ -505,6 +495,40 @@ export const Stroke = {
   standard: 1,
   /** Selection/focus only; never routine card decoration. */
   emphasis: 2,
+} as const;
+
+// ============================================================================
+// THUMBNAIL & AVATAR SIZES — canonical dimensions for card media and identity
+// Replaces hardcoded IMAGE_SIZE / AVATAR_SIZE in flagship primitives (audit M16).
+// ============================================================================
+export const ThumbSize = {
+  /** 40px — sticky dock anchor thumbnail */
+  dock: 40,
+  /** 64px — compact list row thumbnail */
+  sm: 64,
+  /** 72px — standard list row thumbnail (order cards, asset cards) */
+  md: 72,
+  /** 80px — large list row thumbnail (asset cards) */
+  lg: 80,
+} as const;
+
+export const AvatarSize = {
+  /** 24px — inline metadata avatar (comment rows, chat list) */
+  inline: 24,
+  /** 32px — compact avatar (notification rows) */
+  sm: 32,
+  /** 40px — standard list avatar (chat list, seller row) */
+  md: 40,
+  /** 56px — utility rail avatar */
+  lg: 56,
+  /** 76px — edit preview avatar */
+  edit: 76,
+  /** 84px — identity hero avatar */
+  identity: 84,
+  /** 88px — standard profile hero avatar */
+  hero: 88,
+  /** 104px — large profile hero avatar */
+  xl: 104,
 } as const;
 
 // ============================================================================
@@ -702,4 +726,118 @@ export const CommerceLayout = {
   candleWidth: 6,
   /** Candle gap */
   candleGap: 2,
+} as const;
+
+// ============================================================================
+// EDITOR CHROME — 2026 flagship media-editor grammar
+// Glass materials for FLOATING editor chrome (sheets, rails, plates) over
+// media. Design.md forbids glass on CONTENT cards — these tokens are for
+// floating chrome only, matching IG Stories / Snapchat editor patterns.
+// Calibrated against Aug 2026 teardowns (see .devin/reports/flagship-editor-upgrade-analysis.md).
+// ============================================================================
+
+/** Blur tint names compatible with expo-blur BlurView `tint` prop. */
+export type EditorBlurTint =
+  | 'light'
+  | 'dark'
+  | 'default'
+  | 'systemUltraThinMaterial'
+  | 'systemThinMaterial'
+  | 'systemMaterial'
+  | 'systemThickMaterial'
+  | 'systemUltraThinMaterialDark'
+  | 'systemThinMaterialDark'
+  | 'systemMaterialDark'
+  | 'systemThickMaterialDark';
+
+export interface EditorMaterialSpec {
+  /** expo-blur BlurView intensity (0–100). */
+  blurIntensity: number;
+  /** expo-blur BlurView tint. */
+  tint: EditorBlurTint;
+  /** Overlay color painted on top of the blur (adds legibility/depth). */
+  overlay: string;
+  /** Hairline border color for the glass edge. */
+  hairline: string;
+}
+
+export const EditorMaterial = {
+  /** Editor sheet / tray — glass panel over media (effects, overflow, sticker). */
+  sheet: {
+    blurIntensity: 90,
+    tint: 'systemThickMaterialDark' as EditorBlurTint,
+    overlay: 'rgba(20,20,20,0.55)',
+    hairline: 'rgba(255,255,255,0.10)',
+  },
+  /** Floating tool rail / dock over media (timeline, bottom rail). */
+  rail: {
+    blurIntensity: 24,
+    tint: 'dark' as EditorBlurTint,
+    overlay: 'rgba(0,0,0,0.35)',
+    hairline: 'rgba(255,255,255,0.12)',
+  },
+  /** Single on-media control plate (32pt tool backplate, loading pill). */
+  plate: {
+    blurIntensity: 16,
+    tint: 'dark' as EditorBlurTint,
+    overlay: 'rgba(0,0,0,0.30)',
+    hairline: 'rgba(255,255,255,0.14)',
+  },
+} as const satisfies Record<string, EditorMaterialSpec>;
+
+/** Role-based radii for editor chrome — replaces ad-hoc Radius.sm/xl usage. */
+export const EditorRadius = {
+  /** Sheet top corners (replaces mixed 16/20). */
+  sheet: 20,
+  /** Floating rail / dock capsule corners. */
+  rail: 18,
+  /** Tool backplate (replaces Radius.sm=4 — the biggest "2015" tell). */
+  plate: 10,
+  /** Slider thumbs / pills. */
+  thumb: 999,
+} as const;
+
+/** On-media glyph & text legibility — single source of truth.
+ *  Replaces 26+ files of hand-rolled textShadow values with divergent
+ *  radii/offsets. Apply via `style={GlyphShadow.glyph}` on white-on-media
+ *  Text/glyph elements. */
+export const GlyphShadow = {
+  /** 22–24pt glyph on media. */
+  glyph: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  /** 11pt label under glyph. */
+  label: {
+    textShadowColor: 'rgba(0,0,0,0.40)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  /** 17pt sheet title / larger text on media. */
+  title: {
+    textShadowColor: 'rgba(0,0,0,0.50)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+} as const;
+
+/** Scrim gradients for top/bottom/side edges over media.
+ *  Consumed via expo-linear-gradient `<LinearGradient colors={Scrim.top.colors} locations={Scrim.top.locations} />`. */
+export const Scrim = {
+  /** Top edge scrim — fades from 45% black to transparent. */
+  top: {
+    colors: ['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.18)', 'transparent'],
+    locations: [0, 0.6, 1],
+  },
+  /** Bottom edge scrim — fades from transparent to 55% black. */
+  bottom: {
+    colors: ['transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.55)'],
+    locations: [0, 0.5, 1],
+  },
+  /** Side edge scrim — for left/right tool columns. */
+  edge: {
+    colors: ['rgba(0,0,0,0.30)', 'transparent'],
+    locations: [0, 1],
+  },
 } as const;

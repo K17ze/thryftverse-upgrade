@@ -12,8 +12,14 @@
  *   - Symbols:     punctuation / typographic symbols
  *   - Decorative:  ornamental stickers (sparkles, stars, hearts)
  *   - Interactive: poll / quiz / question / mention / location / hashtag / link
+ *
+ * Interactive stickers are gated by the capability registry — only
+ * stickers whose backend, viewer, and editor capabilities are all
+ * 'supported' are visible. This prevents offering a tool whose
+ * interaction the backend cannot persist or serve.
  */
 import type { Ionicons } from '@expo/vector-icons';
+import { isCapabilitySupported, getCapabilityForLayerType } from '../../capabilities/registry';
 
 // ── Types ─────────────────────────────────────────────────────────────
 export interface StickerDef {
@@ -58,6 +64,28 @@ export const AUTO_STICKER_CATEGORY: StickerCategory = {
   name: 'Auto',
   icon: 'bulb-outline',
   stickers: [],
+};
+
+// ── Picker mode → layer type mapping ──────────────────────────────────
+// Maps the sticker pickerMode to the composition layer type it creates.
+// Used by the capability registry filter to hide stickers whose backend
+// support is not verified.
+const PICKER_MODE_TO_LAYER_TYPE: Record<string, string> = {
+  vote: 'vote',
+  quiz: 'quiz',
+  question: 'question',
+  mention: 'mention',
+  product: 'product',
+  look: 'look',
+  location: 'location',
+  hashtag: 'hashtag',
+  link: 'link',
+  emojiSlider: 'emojiSlider',
+  countdown: 'countdown',
+  music: 'music',
+  gif: 'gif',
+  time: 'time',
+  weather: 'weather',
 };
 
 export const STICKER_CATEGORIES: StickerCategory[] = [
@@ -123,7 +151,7 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
   {
     id: 'decorative',
     name: 'Decorative',
-    icon: 'sparkles-outline',
+    icon: 'shapes-outline',
     stickers: [
       { id: 'deco-sparkles', name: 'Sparkles', iconRef: 'sparkles', category: 'decorative' },
       { id: 'deco-flower', name: 'Flower', iconRef: 'flower-outline', category: 'decorative' },
@@ -136,14 +164,31 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
     id: 'interactive',
     name: 'Interactive',
     icon: 'stats-chart-outline',
-    stickers: [
+    // Interactive stickers are filtered by the capability registry.
+    // Only stickers whose backend, viewer, and editor capabilities are
+    // all 'supported' are visible. Supported: poll, item, look, mention.
+    // Unsupported (hidden): quiz, question, location, hashtag, link —
+    // the backend has no sticker type for them and the viewer cannot
+    // render their interactions.
+    stickers: ([
       { id: 'poll', name: 'Poll', iconRef: 'stats-chart-outline', category: 'interactive', description: '2-option vote', interactive: true, pickerMode: 'vote' },
+      { id: 'product', name: 'Item', iconRef: 'pricetag-outline', category: 'interactive', description: 'Tag a listing', interactive: true, pickerMode: 'product' },
+      { id: 'look', name: 'Look', iconRef: 'shirt-outline', category: 'interactive', description: 'Tag a look', interactive: true, pickerMode: 'look' },
       { id: 'quiz', name: 'Quiz', iconRef: 'help-circle-outline', category: 'interactive', description: 'Trivia with answer', interactive: true, pickerMode: 'quiz' },
       { id: 'question', name: 'Ask', iconRef: 'chatbubble-outline', category: 'interactive', description: 'Open Q&A', interactive: true, pickerMode: 'question' },
       { id: 'mention', name: '@Mention', iconRef: 'at-outline', category: 'interactive', description: 'Tag a user', interactive: true, pickerMode: 'mention' },
       { id: 'location', name: 'Location', iconRef: 'location-outline', category: 'interactive', description: 'Tag a place', interactive: true, pickerMode: 'location' },
       { id: 'hashtag', name: 'Hashtag', iconRef: 'pricetag-outline', category: 'interactive', description: 'Topic tag', interactive: true, pickerMode: 'hashtag' },
       { id: 'link', name: 'Link', iconRef: 'link-outline', category: 'interactive', description: 'Clickable URL', interactive: true, pickerMode: 'link' },
-    ],
+    ] as StickerDef[]).filter((s) => {
+      // Map pickerMode to the layer type it creates, then check capability.
+      // Non-interactive stickers (emoji, shapes, etc.) are always visible.
+      if (!s.interactive || !s.pickerMode) return true;
+      const layerType = PICKER_MODE_TO_LAYER_TYPE[s.pickerMode];
+      if (!layerType) return true;
+      const capId = getCapabilityForLayerType(layerType);
+      if (!capId) return true;
+      return isCapabilitySupported(capId);
+    }),
   },
 ];

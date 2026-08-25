@@ -35,7 +35,7 @@ interface PosterHighlightsRailProps {
   activeHighlightId?: string | null;
 }
 
-const HIGHLIGHT_SIZE = 72;
+const HIGHLIGHT_SIZE = 80; // 2026 standard: 80-96px circular story highlights
 // 2px — Instagram's refined gradient ring border at avatar sizes.
 const RING_WIDTH = 2;
 const NEW_ICON_SIZE = 24;

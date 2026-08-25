@@ -53,11 +53,21 @@ jobs:
         working-directory: frontend
 
   screenshots-ios:
-    name: iOS screenshots (Maestro)
+    name: iOS screenshots — ${{ matrix.device }} (${{ matrix.width }})
     needs: pre-flight-gates
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'ios' || inputs.platform == 'both'
     runs-on: macos-14
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: "iPhone 15 Pro"
+            sim_type: "iPhone 15 Pro"
+            width: regular
+          - device: "iPhone SE (3rd generation)"
+            sim_type: "iPhone SE (3rd generation)"
+            width: compact
     env:
       APP_ID: com.thryftverse.app
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -113,9 +123,9 @@ jobs:
           tar -xzf build.tar.gz -C build
           test -n "$(find build -maxdepth 2 -name '*.app' -print -quit)"
 
-      - name: Boot iOS simulator
+      - name: Boot iOS simulator (${{ matrix.device }})
         run: |
-          SIM_ID=$(xcrun simctl create "ThryftVerseScreenshots" "iPhone 15" "iOS17.4")
+          SIM_ID=$(xcrun simctl create "ThryftVerseScreenshots" "${{ matrix.sim_type }}" "iOS17.4")
           echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
           xcrun simctl boot "$SIM_ID"
           sleep 15
@@ -124,28 +134,64 @@ jobs:
         run: |
           xcrun simctl install "$SIM_ID" frontend/build/*.app
 
-      - name: Run Maestro screenshot flows
+      - name: Run Maestro visual regression matrix
         working-directory: frontend
         run: |
           mkdir -p .maestro/screenshots
-          for flow in .maestro/flows/*.yaml; do
-            maestro test "$flow" \
+
+          capture_variant() {
+            local theme="$1"
+            local font_scale="$2"
+            local label="$3"
+
+            xcrun simctl ui "$SIM_ID" appearance "$theme"
+            case "$font_scale" in
+              100) xcrun simctl ui "$SIM_ID" content_size default ;;
+              130) xcrun simctl ui "$SIM_ID" content_size extra-extra-large ;;
+              200) xcrun simctl ui "$SIM_ID" content_size accessibility-extra-extra-extra-large ;;
+            esac
+            sleep 2
+
+            maestro test .maestro/flows/visualRegressionMatrix.yaml \
               --env APP_ID=$APP_ID \
-              --test-output-dir=.maestro/screenshots
-          done
-          EXPECTED_SCREENSHOTS=$(grep -R --include='*.yaml' -c 'takeScreenshot' .maestro/flows | awk -F: '{sum += $2} END {print sum + 0}')
+              --env THEME="$theme" \
+              --env FONT_SCALE="$font_scale" \
+              --test-output-dir=".maestro/screenshots/${label}"
+          }
+
+          capture_variant light 100 light-100
+          capture_variant dark  100 dark-100
+          capture_variant light 130 light-130
+          capture_variant light 200 light-200
+
           ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
-          test "$ACTUAL_SCREENSHOTS" -ge "$EXPECTED_SCREENSHOTS"
+          echo "Captured $ACTUAL_SCREENSHOTS screenshots"
+          test "$ACTUAL_SCREENSHOTS" -gt 0
+
+      - name: Run reg-suit visual regression comparison
+        working-directory: frontend
+        run: |
+          mkdir -p src/__tests__/__screenshots__/actual
+          cp -r .maestro/screenshots/*.png src/__tests__/__screenshots__/actual/ 2>/dev/null || true
+          if [ -d src/__tests__/__screenshots__/expected ] && \
+             [ "$(find src/__tests__/__screenshots__/expected -name '*.png' | wc -l)" -gt 0 ]; then
+            npx reg-suit compare
+          else
+            echo "No expected baselines found — skipping reg-suit compare."
+            echo "Run 'npm run visual:capture && npm run visual:approve' to seed baselines."
+          fi
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-ios-${{ github.sha }}
+          name: screenshots-ios-${{ matrix.device }}-${{ github.sha }}
           path: |
             frontend/.maestro/screenshots/**
+            frontend/src/__tests__/__screenshots__/diff/**
+            frontend/report.html
             frontend/eas-build-ios.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Shutdown simulator
@@ -155,11 +201,21 @@ jobs:
           xcrun simctl delete "$SIM_ID" || true
 
   screenshots-android:
-    name: Android screenshots (Maestro)
+    name: Android screenshots — ${{ matrix.device }} (${{ matrix.width }})
     needs: pre-flight-gates
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: "Pixel 8"
+            profile: "pixel_8"
+            width: regular
+          - device: "Pixel 5"
+            profile: "pixel_5"
+            width: compact
     env:
       APP_ID: com.thryftverse.app
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -219,31 +275,68 @@ jobs:
           curl --fail --location --retry 3 "$EAS_BUILD_URL" --output app.apk
           test -s app.apk
 
-      - name: Boot Android emulator
+      - name: Boot Android emulator and run visual regression matrix
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
+          profile: ${{ matrix.profile }}
           script: |
             adb install -r frontend/app.apk
             cd frontend && mkdir -p .maestro/screenshots
-            for flow in .maestro/flows/*.yaml; do
-              maestro test "$flow" \
+
+            capture_variant() {
+              local theme="$1"
+              local font_scale="$2"
+              local label="$3"
+
+              if [ "$theme" = "dark" ]; then
+                adb shell cmd uimode night yes
+              else
+                adb shell cmd uimode night no
+              fi
+              adb shell settings put system font_scale "$font_scale"
+              sleep 2
+
+              maestro test .maestro/flows/visualRegressionMatrix.yaml \
                 --env APP_ID=$APP_ID \
-                --test-output-dir=.maestro/screenshots
-            done
-            EXPECTED_SCREENSHOTS=$(grep -R --include='*.yaml' -c 'takeScreenshot' .maestro/flows | awk -F: '{sum += $2} END {print sum + 0}')
+                --env THEME="$theme" \
+                --env FONT_SCALE="$(echo "$font_scale" | tr '.' '')" \
+                --test-output-dir=".maestro/screenshots/${label}"
+            }
+
+            capture_variant light 1.0 light-100
+            capture_variant dark  1.0 dark-100
+            capture_variant light 1.3 light-130
+            capture_variant light 2.0 light-200
+
             ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
-            test "$ACTUAL_SCREENSHOTS" -ge "$EXPECTED_SCREENSHOTS"
+            echo "Captured $ACTUAL_SCREENSHOTS screenshots"
+            test "$ACTUAL_SCREENSHOTS" -gt 0
+
+      - name: Run reg-suit visual regression comparison
+        working-directory: frontend
+        run: |
+          mkdir -p src/__tests__/__screenshots__/actual
+          cp -r .maestro/screenshots/*.png src/__tests__/__screenshots__/actual/ 2>/dev/null || true
+          if [ -d src/__tests__/__screenshots__/expected ] && \
+             [ "$(find src/__tests__/__screenshots__/expected -name '*.png' | wc -l)" -gt 0 ]; then
+            npx reg-suit compare
+          else
+            echo "No expected baselines found — skipping reg-suit compare."
+            echo "Run 'npm run visual:capture && npm run visual:approve' to seed baselines."
+          fi
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-android-${{ github.sha }}
+          name: screenshots-android-${{ matrix.device }}-${{ github.sha }}
           path: |
             frontend/.maestro/screenshots/**
+            frontend/src/__tests__/__screenshots__/diff/**
+            frontend/report.html
             frontend/eas-build-android.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

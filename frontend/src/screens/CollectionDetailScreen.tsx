@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -21,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -35,9 +37,12 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
 
@@ -71,10 +76,10 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
@@ -82,6 +87,7 @@ export default function CollectionDetailScreen() {
   const collections = useStore((state) => state.collections);
   const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
   const { listings, refreshListings } = useBackendData();
+  const { isOffline } = useConnectivity();
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
@@ -150,15 +156,6 @@ export default function CollectionDetailScreen() {
     setShareVisible(true);
   }, [haptic]);
 
-  const handleToggleFollow = useCallback(() => {
-    haptic.light();
-    setIsFollowing((prev) => {
-      const next = !prev;
-      show(next ? `Following "${collection?.name}"` : `Unfollowed "${collection?.name}"`, 'info');
-      return next;
-    });
-  }, [haptic, show, collection]);
-
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
@@ -205,10 +202,16 @@ export default function CollectionDetailScreen() {
         </View>
       </Reanimated.View>
 
-      {/* Top-left back button (always visible over cover) */}
+      {/* Top-left back button (always visible over cover) — transparent
+          44pt hit target; glyph legibility from the text-shadow scrim.
+          No circular chrome per AGENTS.md §4 (separate hit area from visible shape). */}
       <View style={styles.absoluteBack} pointerEvents="box-none">
-        <AnimatedPressable style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.35)', borderColor: 'transparent' }]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+        <AnimatedPressable style={styles.backBtnOverlay} onPress={handleGoBack} activeOpacity={0.85}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} style={styles.backBtnGlyph} />
         </AnimatedPressable>
       </View>
 
@@ -250,13 +253,16 @@ export default function CollectionDetailScreen() {
                 ))}
               </View>
             )}
-            <View style={styles.coverGradient} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.55)']}
+              style={styles.coverGradient}
+            />
             <View style={styles.coverInfo}>
               <View style={styles.coverTitleRow}>
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadge}>
-                    <Ionicons name="lock-closed" size={10} color={colors.textInverse} />
+                    <Ionicons name="lock-closed" size={10} color={colors.scrimTextPrimary} />
                     <Text style={styles.privacyText}>Private</Text>
                   </View>
                 )}
@@ -278,34 +284,25 @@ export default function CollectionDetailScreen() {
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
-                {!collection.isPrivate && (
-                  <AnimatedPressable
-                    style={[styles.actionBtnOverlay, isFollowing && styles.actionBtnOverlayActive]}
-                    onPress={handleToggleFollow}
-                    activeOpacity={0.85}
-                    accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? colors.brand : '#fff'} />
-                  </AnimatedPressable>
-                )}
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
                   onPress={handleShare}
                   activeOpacity={0.85}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Share collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="share-outline" size={18} color="#fff" />
+                  <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} />
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
                   onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
                   activeOpacity={0.85}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel="Edit collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="settings-outline" size={18} color="#fff" />
+                  <Ionicons name="settings-outline" size={18} color={colors.scrimTextPrimary} />
                 </AnimatedPressable>
               </View>
             </View>
@@ -339,17 +336,6 @@ export default function CollectionDetailScreen() {
               </View>
             </View>
             <View style={styles.actionRow}>
-              {!collection.isPrivate && (
-                <AnimatedPressable
-                  style={[styles.actionBtn, isFollowing && styles.actionBtnActive]}
-                  onPress={handleToggleFollow}
-                  activeOpacity={0.85}
-                  accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? colors.brand : colors.textPrimary} />
-                </AnimatedPressable>
-              )}
               <AnimatedPressable
                 style={styles.actionBtn}
                 onPress={handleShare}
@@ -387,6 +373,11 @@ export default function CollectionDetailScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         )}
+
+        {/* Offline banner — cached items are still visible but cannot refresh */}
+        {isOffline && count > 0 ? (
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+        ) : null}
 
         {/* Grid — 3-column media mosaic with 3:4 portrait thumbnails */}
         {count > 0 && (
@@ -477,7 +468,7 @@ function MoreLikeThisRow({
                 contentFit="cover"
               />
             </SharedTransitionView>
-            <Text style={styles.morePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -511,7 +502,7 @@ function createStyles(colors: ThemeColors) {
   },
   floatingTitle: {
     flex: 1,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -531,6 +522,17 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  backBtnOverlay: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnGlyph: {
+    textShadowColor: colors.overlay,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   coverWrap: {
     width: SCREEN_W,
@@ -553,8 +555,11 @@ function createStyles(colors: ThemeColors) {
     height: '50%',
   },
   coverGradient: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '65%',
   },
   coverInfo: {
     position: 'absolute',
@@ -565,15 +570,15 @@ function createStyles(colors: ThemeColors) {
   coverTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    color: colors.scrimTextPrimary,
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   coverMeta: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     marginTop: Space.xs,
   },
   coverMetaRow: {
@@ -583,14 +588,14 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   coverMetaDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.scrimTextTertiary,
   },
   coverMetaUpdated: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
   },
   coverActions: {
     position: 'absolute',
@@ -609,12 +614,9 @@ function createStyles(colors: ThemeColors) {
     width: Space.xl + 4,
     height: Space.xl + 4,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionBtnOverlayActive: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   noCoverHeader: {
     flexDirection: 'row',
@@ -628,7 +630,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   noCoverMeta: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
@@ -640,12 +642,12 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs / 2,
   },
   noCoverMetaDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   noCoverMetaUpdated: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -655,13 +657,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   coverDesc: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     marginTop: Space.xs / 2,
   },
   noCoverDesc: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     marginTop: Space.xs / 2,
@@ -673,12 +675,12 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   privacyText: {
     fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
   },
   privacyBadgeOutline: {
     flexDirection: 'row',
@@ -706,10 +708,6 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionBtnActive: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}15`,
-  },
   manageRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -734,7 +732,7 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xxl * 2 + Space.xl,
   },
   moreTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginBottom: Space.md - 2,

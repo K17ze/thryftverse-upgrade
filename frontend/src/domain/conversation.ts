@@ -40,7 +40,10 @@ export interface Conversation {
   type: ConversationType;
   title?: string;
   description?: string;
+  /** Circular group avatar / profile picture (small, 1:1). */
   avatar?: string;
+  /** Wide cover photo banner shown at the top of group info (WhatsApp/Telegram pattern). */
+  coverPhoto?: string;
   sellerId?: string;
   itemId?: string;
   ownerId?: string;
@@ -52,6 +55,8 @@ export interface Conversation {
     displayName?: string | null;
     avatar?: string | null;
     emailVerified?: boolean;
+    /** Identity/KYC verification — drives the verified badge, not email. */
+    identityVerified?: boolean;
   }>;
   botIds?: string[];
   lastMessage: string;
@@ -62,4 +67,9 @@ export interface Conversation {
   draftText?: string;
   /** Member roles: userId → 'owner' | 'admin' | 'member'. Populated from backend. */
   memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
+  /** P0.12: Per-user conversation state — hydrated from backend, not local-only. */
+  isMuted?: boolean;
+  isArchived?: boolean;
+  requestStatus?: 'pending' | 'accepted' | 'declined';
+  markedUnread?: boolean;
 }

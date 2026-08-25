@@ -18,17 +18,20 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipEmptyGraphic } from '../components/flagship';
+import { FlagshipEmptyGraphic, FlagshipHeader } from '../components/flagship';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
@@ -42,6 +45,7 @@ import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -59,24 +63,25 @@ const SKEL_TILE_W =
   (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
 const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
+// ── Board card skeleton geometry — matches ClosetBoardCard 2-column grid ──
+const BOARD_COLS = 2;
+const BOARD_GAP = Space.sm;
+const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
+const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
+
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },
     headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
-    backBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
-    shareBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
-    headerTitle: { color: colors.textPrimary },
     tabBar: { borderBottomColor: colors.border },
     tabLabel: { color: colors.textSecondary },
     tabLabelActive: { color: colors.textPrimary },
     tabIndicator: { backgroundColor: colors.textPrimary },
     countPill: { backgroundColor: 'transparent', borderColor: colors.border },
     countBadge: { color: colors.textMuted },
-    resultCount: { color: colors.textSecondary },
-    sortBtn: { backgroundColor: 'transparent', borderColor: colors.border },
-    sortLabel: { color: colors.textSecondary },
     sortMenu: { backgroundColor: 'transparent', borderColor: 'transparent' },
     sortOption: { borderBottomColor: colors.border },
     sortOptionActive: { backgroundColor: 'transparent' },
@@ -86,7 +91,14 @@ export default function ClosetScreen() {
     filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     filterChipText: { color: colors.brand },
     filterChipTextActive: { color: colors.background },
-    statsCard: { backgroundColor: 'transparent', borderColor: colors.border },
+    identityStrip: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+    marginBottom: Space.sm,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+  },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -96,6 +108,8 @@ export default function ClosetScreen() {
     brandChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
+    closetToolbarBadge: { backgroundColor: colors.textPrimary },
+    closetToolbarBadgeText: { color: colors.background },
   });
 
   const navigation = useNavigation<NavT>();
@@ -109,6 +123,7 @@ export default function ClosetScreen() {
   const [showPriceDropsOnly, setShowPriceDropsOnly] = useState(false);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
+  const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [manageMode, setManageMode] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -130,9 +145,10 @@ export default function ClosetScreen() {
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
   React.useEffect(() => {
     let mounted = true;
+    setCollectionsLoading(true);
     void loadCollectionsFromApi()
-      .then(() => { if (mounted) setCollectionsSyncError(false); })
-      .catch(() => { if (mounted) setCollectionsSyncError(true); });
+      .then(() => { if (mounted) { setCollectionsSyncError(false); setCollectionsLoading(false); } })
+      .catch(() => { if (mounted) { setCollectionsSyncError(true); setCollectionsLoading(false); } });
     return () => {
       mounted = false;
       if (refreshTimerRef.current) {
@@ -398,82 +414,6 @@ export default function ClosetScreen() {
     OUTFITS: 'shirt-outline' as const,
   };
 
-  const renderFilterPanel = () => {
-    if (!showFilters) return null;
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.brandChipScroll}
-        contentContainerStyle={styles.brandChipContent}
-      >
-        <AnimatedPressable
-          style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
-          onPress={() => { haptic.light(); setActiveBrand(null); }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityState={{ selected: !activeBrand }}
-          accessibilityLabel="All brands"
-        >
-          <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
-        </AnimatedPressable>
-        {availableBrands.map((brand) => (
-          <AnimatedPressable
-            key={brand}
-            style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
-            onPress={() => {
-              haptic.light();
-              setActiveBrand((prev) => (prev === brand ? null : brand));
-            }}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeBrand === brand }}
-            accessibilityLabel={`Filter by brand ${brand}`}
-          >
-            <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
-          </AnimatedPressable>
-        ))}
-      </ScrollView>
-    );
-  };
-
-  const renderSortBar = () => (
-    <View style={styles.sortBar}>
-      <Text style={[styles.resultCount, t.resultCount]}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
-      <AnimatedPressable
-        style={[styles.sortBtn, t.sortBtn]}
-        onPress={() => setShowSortMenu((v) => !v)}
-        activeOpacity={0.85}
-      >
-        <Text style={[styles.sortLabel, t.sortLabel]}>{sortBy}</Text>
-        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
-      </AnimatedPressable>
-    </View>
-  );
-
-  const renderSortMenu = () => {
-    if (!showSortMenu || activeTab === 'COLLECTIONS') return null;
-    return (
-      <View style={[styles.sortMenu, t.sortMenu]}>
-        {SORT_OPTIONS.map((opt) => (
-          <AnimatedPressable
-            key={opt}
-            style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
-            onPress={() => {
-              haptic.light();
-              setSortBy(opt);
-              setShowSortMenu(false);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
-            {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
-          </AnimatedPressable>
-        ))}
-      </View>
-    );
-  };
-
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonWrap}>
       <View style={styles.skeletonRow}>
@@ -485,6 +425,19 @@ export default function ClosetScreen() {
         <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
         <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
         <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+      </View>
+    </View>
+  );
+
+  const renderCollectionsSkeleton = () => (
+    <View style={styles.boardSkeletonWrap}>
+      <View style={styles.boardSkeletonRow}>
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+      </View>
+      <View style={styles.boardSkeletonRow}>
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
       </View>
     </View>
   );
@@ -539,6 +492,18 @@ export default function ClosetScreen() {
   };
 
     const renderCollectionsContent = () => {
+    if (collectionsLoading && collections.length === 0) return renderCollectionsSkeleton();
+    if (collectionsSyncError && collections.length === 0) {
+      return (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Couldn't load collections"
+          subtitle="Your collections couldn't be synced. Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => void handleRefresh()}
+        />
+      );
+    }
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
@@ -668,28 +633,28 @@ export default function ClosetScreen() {
       {/* Animated Header Border */}
       <Reanimated.View style={[styles.headerBorder, t.headerBorder, headerBgStyle]} pointerEvents="none" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>
-        </View>
-        <AnimatedPressable
-          style={[styles.shareBtn, t.shareBtn]}
-          onPress={handleShareCloset}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Share closet"
-        >
-          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={[styles.countPill, t.countPill]}>
-          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
-          <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
-        </View>
-      </View>
+      {/* Header — FlagshipHeader primitive (canonical header, 44pt back hit area) */}
+      <FlagshipHeader
+        title="Closet"
+        onBack={handleGoBack}
+        rightAction={
+          <View style={styles.headerRightActions}>
+            <AnimatedPressable
+              style={styles.shareBtn}
+              onPress={handleShareCloset}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Share closet"
+            >
+              <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+            </AnimatedPressable>
+            <View style={[styles.countPill, t.countPill]}>
+              <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
+              <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
+            </View>
+          </View>
+        }
+      />
 
       <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
@@ -708,6 +673,9 @@ export default function ClosetScreen() {
           />
         }
       >
+        {/* Offline banner */}
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+
         {/* Error banner */}
         {(lastError || collectionsSyncError) && (
           <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
@@ -786,8 +754,8 @@ export default function ClosetScreen() {
               >
                 <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
                 {activeBrand ? (
-                  <View style={styles.closetToolbarBadge}>
-                    <Text style={styles.closetToolbarBadgeText}>1</Text>
+                  <View style={[styles.closetToolbarBadge, t.closetToolbarBadge]}>
+                    <Text style={[styles.closetToolbarBadgeText, t.closetToolbarBadgeText]}>1</Text>
                   </View>
                 ) : null}
               </AnimatedPressable>
@@ -875,15 +843,13 @@ export default function ClosetScreen() {
           </View>
         ) : null}
 
-        {/* Content — grid is the FIRST visible content after tabs+toolbar */}
-        {activeTab === 'SAVED' && renderSavedContent()}
-        {activeTab === 'WISHLIST' && renderWishlistContent()}
-        {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
-        {activeTab === 'OUTFITS' && renderOutfitsContent()}
-
-        {/* Closet stats — below the fold, after content */}
+        {/* Content — grid follows the identity strip */}
+        {/* Closet identity strip — flat canvas + hairline dividers, no card.
+            This is the closet's headline (value, items, collections, savings),
+            promoted to the first viewport so the surface reads as an identity
+            moment, not a footer (AGENTS.md §4 — no card-on-card, hierarchy). */}
         {closetStats.totalItems > 0 ? (
-          <View style={[styles.statsCard, t.statsCard, styles.statsCardBelowFold]}>
+          <View style={t.identityStrip}>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
@@ -891,7 +857,7 @@ export default function ClosetScreen() {
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, DEFAULT_CURRENCY_CODE)}</Text>
                 <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
@@ -904,12 +870,33 @@ export default function ClosetScreen() {
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
                 <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
+                  {formatFromFiat(closetStats.totalSavings, DEFAULT_CURRENCY_CODE)} in price drops tracked
                 </Text>
               </View>
             ) : null}
           </View>
         ) : null}
+
+        {activeTab === 'SAVED' && (
+          <Reanimated.View key="SAVED" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderSavedContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'WISHLIST' && (
+          <Reanimated.View key="WISHLIST" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderWishlistContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'COLLECTIONS' && (
+          <Reanimated.View key="COLLECTIONS" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderCollectionsContent()}
+          </Reanimated.View>
+        )}
+        {activeTab === 'OUTFITS' && (
+          <Reanimated.View key="OUTFITS" entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+            {renderOutfitsContent()}
+          </Reanimated.View>
+        )}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -929,22 +916,10 @@ const styles = StyleSheet.create({
     height: Space.xxl + Space.xl + Space.sm + 2,
     zIndex: 1,
   },
-  header: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md - Space.xs,
+  headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    zIndex: 2,
-  },
-  backBtn: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   shareBtn: {
     width: Space.xl + Space.sm,
@@ -953,11 +928,6 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
   },
   tabBar: {
     flexDirection: 'row',
@@ -969,7 +939,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
   },
   tabLabelActive: {
@@ -1022,20 +992,15 @@ const styles = StyleSheet.create({
     right: 6,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
-    backgroundColor: '#000',
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   closetToolbarBadgeText: {
-    color: '#fff',
-    fontSize: 10,
     fontFamily: Typography.family.bold,
-    lineHeight: 12,
-  },
-  statsCardBelowFold: {
-    marginTop: Space.xl,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
   },
   tabsWrap: {
     paddingHorizontal: Space.md,
@@ -1043,30 +1008,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: Space.xs,
-  },
-  sortBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  resultCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  sortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-  },
-  sortLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
   },
   sortMenu: {
     marginHorizontal: Space.md,
@@ -1142,12 +1083,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  statsCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    padding: Space.md,
+  boardSkeletonWrap: {
+    paddingHorizontal: Space.md,
+    gap: BOARD_GAP,
+    marginTop: Space.sm,
+  },
+  boardSkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   statsRow: {
     flexDirection: 'row',
@@ -1163,7 +1106,7 @@ const styles = StyleSheet.create({
     height: Space.lg + 4,
   },
   statValue: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },

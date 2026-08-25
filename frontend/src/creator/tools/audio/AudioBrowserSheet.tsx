@@ -4,8 +4,8 @@
  * A bottom sheet for choosing audio applied to a composition:
  *  - Library tab: a curated sound library. Per AGENTS.md §11 (truthful UI)
  *    the library backend does not yet exist, so the tab presents an honest
- *    empty state — "No sounds available yet — audio library coming soon."
- *    No song titles, artist names, or durations are fabricated.
+ *    empty state — "No sounds available." No song titles, artist names,
+ *    or durations are fabricated.
  *  - Original Audio tab: toggle to keep the video's recorded audio and mix
  *    its volume.
  *
@@ -42,6 +42,7 @@ import {
   Control,
   Stroke,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -230,7 +231,7 @@ export function AudioBrowserSheet({
             accessibilityHint="Closes the audio selection sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -581,6 +582,7 @@ function PreviewButton({ colors, disabled, haptic, reducedMotion }: PreviewButto
     <Pressable
       onPress={handlePress}
       disabled={disabled}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={[
         styles.previewBtn,
         { borderColor: disabled ? colors.border : colors.brand },
@@ -591,7 +593,7 @@ function PreviewButton({ colors, disabled, haptic, reducedMotion }: PreviewButto
     >
       <Ionicons
         name={playing ? 'pause' : 'play'}
-        size={16}
+        size={IconGrammar.metadata}
         color={disabled ? colors.textMuted : colors.brand}
       />
       <Text
@@ -758,7 +760,7 @@ function createStyles(colors: ThemeColors) {
     },
     tabLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     tabLabelActive: {
       fontFamily: Typography.family.semibold,
@@ -777,7 +779,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     originalBody: {
       paddingVertical: Space.sm,
@@ -824,7 +826,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     trackMetaRow: {
       flexDirection: 'row',
@@ -940,7 +942,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

@@ -38,10 +38,12 @@ import {
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-type SortOption = 'newest' | 'available' | 'allocation';
+type SortOption = 'progress' | 'closing' | 'roi';
 type HubSegment = 'active' | 'new_issues' | 'watchlist';
+type FundingFilter = 'all' | 'funding' | 'funded' | 'matured';
 
 interface HubAsset {
   id: string;
@@ -74,7 +76,8 @@ type HubRow =
   | { kind: 'remaining'; key: 'remaining' };
 
 const SEGMENTS: HubSegment[] = ['active', 'new_issues', 'watchlist'];
-const SORT_OPTIONS: SortOption[] = ['newest', 'available', 'allocation'];
+const SORT_OPTIONS: SortOption[] = ['progress', 'closing', 'roi'];
+const FUNDING_FILTERS: FundingFilter[] = ['all', 'funding', 'funded', 'matured'];
 const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
 const POSITION_CARD_GAP = 12;
 const POSITION_SNAP_INTERVAL = POSITION_CARD_WIDTH + POSITION_CARD_GAP;
@@ -84,9 +87,15 @@ const SEGMENT_LABELS: Record<HubSegment, string> = {
   watchlist: 'Watchlist',
 };
 const SORT_LABELS: Record<SortOption, string> = {
-  newest: 'Newest',
-  available: 'Availability',
-  allocation: 'Allocation',
+  progress: 'Progress',
+  closing: 'Closing date',
+  roi: 'ROI',
+};
+const FUNDING_FILTER_LABELS: Record<FundingFilter, string> = {
+  all: 'All',
+  funding: 'Funding',
+  funded: 'Funded',
+  matured: 'Matured',
 };
 const SECTION_TITLES: Record<HubSegment, string> = {
   active: 'Open markets',
@@ -125,7 +134,8 @@ export default function CoOwnHubScreen() {
   const [query, setQuery] = React.useState('');
   const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
   const [isSortExpanded, setIsSortExpanded] = React.useState(false);
-  const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [sortBy, setSortBy] = React.useState<SortOption>('progress');
+  const [fundingFilter, setFundingFilter] = React.useState<FundingFilter>('all');
   const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
@@ -298,29 +308,57 @@ export default function CoOwnHubScreen() {
   const filteredAssets = React.useMemo(() => {
     const now = Date.now();
     const normalized = query.trim().toLowerCase();
+    // Segment filter — active, new_issues, or watchlist
     const segmentFiltered = marketAssets.filter((asset) => {
       if (activeSegment === 'active') return asset.isOpen && asset.availableUnits > 0;
       if (activeSegment === 'watchlist') return coOwnWatchlist.includes(asset.id);
       const createdAt = new Date(asset.createdAt).getTime();
       return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
     });
+    // Funding status filter — All, Funding, Funded, Matured
+    const fundingFiltered = segmentFiltered.filter((asset) => {
+      if (fundingFilter === 'all') return true;
+      if (fundingFilter === 'funding') return asset.isOpen && asset.availableUnits > 0;
+      if (fundingFilter === 'funded') return asset.isOpen && asset.availableUnits === 0;
+      if (fundingFilter === 'matured') return !asset.isOpen;
+      return true;
+    });
+    // Search filter
     const searched = normalized
-      ? segmentFiltered.filter((asset) =>
+      ? fundingFiltered.filter((asset) =>
           asset.title.toLowerCase().includes(normalized) ||
           asset.category.toLowerCase().includes(normalized) ||
           (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
         )
-      : segmentFiltered;
+      : fundingFiltered;
+    // Sort — by progress, closing date, or ROI
     return [...searched].sort((a, b) => {
-      if (sortBy === 'available') return b.availableUnits - a.availableUnits;
-      if (sortBy === 'allocation') {
-        const aAllocation = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
-        const bAllocation = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
-        return bAllocation - aAllocation;
+      if (sortBy === 'progress') {
+        const aProgress = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
+        const bProgress = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
+        return bProgress - aProgress;
       }
-      return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+      if (sortBy === 'closing') {
+        // Closing date proxy: oldest first (longest-running syndicates
+        // are likely closest to closing). Falls back to newest when equal.
+        const aDate = new Date(a.createdAt).getTime();
+        const bDate = new Date(b.createdAt).getTime();
+        return aDate - bDate;
+      }
+      if (sortBy === 'roi') {
+        // ROI: sort by unrealized P&L percentage for held positions.
+        // Assets without holdings sort last (ROI not applicable).
+        const aRoi = a.avgEntryPriceGBP != null && a.avgEntryPriceGBP > 0 && a.yourUnits > 0
+          ? ((a.unitPriceGBP - a.avgEntryPriceGBP) / a.avgEntryPriceGBP) * 100
+          : -Infinity;
+        const bRoi = b.avgEntryPriceGBP != null && b.avgEntryPriceGBP > 0 && b.yourUnits > 0
+          ? ((b.unitPriceGBP - b.avgEntryPriceGBP) / b.avgEntryPriceGBP) * 100
+          : -Infinity;
+        return bRoi - aRoi;
+      }
+      return 0;
     });
-  }, [activeSegment, coOwnWatchlist, marketAssets, query, sortBy]);
+  }, [activeSegment, coOwnWatchlist, fundingFilter, marketAssets, query, sortBy]);
 
   const format1ze = React.useCallback(
     (value1ze: number) => formatCoOwnIze(value1ze),
@@ -328,7 +366,7 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, 'GBP', { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {
@@ -651,6 +689,49 @@ export default function CoOwnHubScreen() {
               })}
             </View>
           ) : null}
+
+          {/* Funding status filter — All | Funding | Funded | Matured.
+              Secondary filter dimension within the instruments section.
+              Flat chip row, no card chrome. */}
+          <View style={styles.fundingFilterRow}>
+            {FUNDING_FILTERS.map((filter) => {
+              const isActive = fundingFilter === filter;
+              return (
+                <AnimatedPressable
+                  key={filter}
+                  onPress={() => {
+                    haptics.selection();
+                    setFundingFilter(filter);
+                  }}
+                  style={[
+                    styles.fundingFilterChip,
+                    {
+                      backgroundColor: isActive ? colors.brandSubtle : 'transparent',
+                      borderColor: isActive ? colors.brand : colors.border,
+                    },
+                  ]}
+                  scaleValue={0.97}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter by ${FUNDING_FILTER_LABELS[filter]}`}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text
+                    style={[
+                      styles.fundingFilterText,
+                      {
+                        color: isActive ? colors.brand : colors.textSecondary,
+                        fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
+                      },
+                    ]}
+                    maxFontSizeMultiplier={1.25}
+                  >
+                    {FUNDING_FILTER_LABELS[filter]}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
         </View>
       );
     }
@@ -755,6 +836,7 @@ export default function CoOwnHubScreen() {
     handleHighlightPress,
     highlights,
     holdingsError,
+    fundingFilter,
     isSearchExpanded,
     isSortExpanded,
     loadData,
@@ -899,8 +981,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
@@ -950,8 +1032,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   sectionActionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   positionsContent: {
@@ -981,8 +1063,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   inlineStateTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   inlineStateText: {
@@ -1068,6 +1150,26 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
+  // ── Funding status filter chips ──
+  // Flat chip row below sort controls. Uses brandSubtle for selected state
+  // per design tokens. No card chrome — flat canvas with hairline borders.
+  fundingFilterRow: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  fundingFilterChip: {
+    paddingHorizontal: Space.smMd,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  fundingFilterText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: LetterSpacing.normal - 0.1,
+  },
   instrumentRow: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.md,
@@ -1109,8 +1211,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   creatorTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   creatorText: {

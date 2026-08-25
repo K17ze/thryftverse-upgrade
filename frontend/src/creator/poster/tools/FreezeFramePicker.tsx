@@ -45,6 +45,7 @@ import {
   FontFamily,
   FontSize,
   LetterSpacing,
+  IconGrammar,
 } from '../../../theme/designTokens';
 
 export interface FreezeFramePickerProps {
@@ -158,7 +159,7 @@ export function FreezeFramePicker({
       >
         <Ionicons
           name={hasFreeze ? 'pause' : 'pause-outline'}
-          size={22}
+          size={IconGrammar.standard}
           color={hasFreeze ? colors.textInverse : colors.textPrimary}
         />
         <Text
@@ -211,7 +212,7 @@ export function FreezeFramePicker({
             accessibilityHint="Removes the freeze frame and resumes normal playback"
             style={[styles.clearButton, { backgroundColor: colors.danger }]}
           >
-            <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="close-circle-outline" size={IconGrammar.metadata} color="#FFFFFF" />
             <Text style={styles.clearLabel}>Clear</Text>
           </Pressable>
         </View>

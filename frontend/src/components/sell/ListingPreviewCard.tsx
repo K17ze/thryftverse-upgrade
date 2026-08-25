@@ -164,7 +164,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.sm,
     },
     labelText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
       color: colors.textSecondary,
@@ -192,7 +192,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       position: 'absolute',
       top: Space.xs,
       left: Space.xs,
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: colors.overlay,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs / 2,
       borderRadius: Radius.sm,
@@ -224,11 +224,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       alignItems: 'center',
     },
     priceHero: {
-      fontSize: Type.bodyLarge.size,
-      lineHeight: Type.bodyLarge.lineHeight,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyLarge.letterSpacing,
+      letterSpacing: Type.body.letterSpacing,
     },
     sellerRow: {
       flexDirection: 'row',

@@ -29,10 +29,15 @@ import {
   buildAuctionAccessibilityLabel,
   createSearchState,
   IDLE_SEARCH_STATE,
+  toViewModel,
+  EMPTY_HOME_DATA,
+  SORT_OPTIONS,
+  PRICE_PRESETS,
   type AuctionHomeItem,
   type AuctionSearchState,
   type AuctionBrowseState,
   type AuctionBrowseSort,
+  type HomeData,
   DEFAULT_BROWSE_STATE,
   hasActiveFilters,
   scopeToApiStatus,
@@ -43,6 +48,8 @@ import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
@@ -64,46 +71,12 @@ import {
   listAuctions,
   getAuctionHome,
   getAuctionFacets,
-  type MarketAuction,
-  type AttentionReason,
   type CategoryWorld,
-  type AuctionHomeActivity,
-  type SellerSummary,
   type AuctionScope,
   type AuctionFacets,
 } from '../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-
-function toViewModel(api: MarketAuction): AuctionHomeItem {
-  return {
-    id: api.id,
-    listingId: api.listingId,
-    sellerId: api.seller.id,
-    sellerUsername: api.seller.username,
-    sellerDisplayName: api.seller.displayName,
-    sellerAvatarUrl: api.seller.avatarUrl,
-    title: api.title,
-    imageUrl: api.imageUrl ?? '',
-    brand: api.brand,
-    startsAt: api.startsAt,
-    endsAt: api.endsAt,
-    startingBidGbp: api.startingBidGbp,
-    currentBidGbp: api.currentBidGbp,
-    minimumNextBidGbp: api.minimumNextBidGbp,
-    bidCount: api.bidCount,
-    buyNowPriceGbp: api.buyNowPriceGbp,
-    reservePriceGbp: api.reservePriceGbp ?? null,
-    viewerState: api.viewerState,
-    isWatched: api.isWatched,
-    winnerBidderId: api.winnerBidderId ?? null,
-    cancelledAt: api.cancelledAt ?? null,
-    settledAt: api.settledAt ?? null,
-    lifecycle: api.lifecycle,
-    terminalReason: api.terminalReason,
-    category: api.category,
-  };
-}
 
 interface DualPriceResult {
   primaryText: string;
@@ -296,36 +269,6 @@ const ResultRow = memo(function ResultRow({
   );
 });
 
-// ── Home data shape from /auctions/home ──
-interface HomeData {
-  attentionItem: AuctionHomeItem | null;
-  attentionReason: AttentionReason;
-  activity: AuctionHomeActivity;
-  closingSoon: AuctionHomeItem[];
-  live: AuctionHomeItem[];
-  upcoming: AuctionHomeItem[];
-  categoryWorlds: CategoryWorld[];
-  recentlyClosed: AuctionHomeItem[];
-  sellerSummary?: SellerSummary;
-  sellerAuctions: AuctionHomeItem[];
-  watchlist: AuctionHomeItem[];
-  serverNow: string | null;
-}
-
-const EMPTY_HOME_DATA: HomeData = {
-  attentionItem: null,
-  attentionReason: null,
-  activity: { activeCount: 0, needsAttentionCount: 0, leadingCount: 0, outbidCount: 0, watchingCount: 0, unresolvedWonCount: 0 },
-  closingSoon: [],
-  live: [],
-  upcoming: [],
-  categoryWorlds: [],
-  recentlyClosed: [],
-  sellerAuctions: [],
-  watchlist: [],
-  serverNow: null,
-};
-
 // ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
@@ -333,6 +276,7 @@ export default function AuctionHomeScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
   const { width } = useWindowDimensions();
+  const { isOffline } = useConnectivity();
   const [homeData, setHomeData] = React.useState<HomeData>(EMPTY_HOME_DATA);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -1265,8 +1209,8 @@ export default function AuctionHomeScreen() {
         />
         <EmptyState
           icon="cloud-offline-outline"
-          title="Unable to load"
-          subtitle="Pull to refresh"
+          title={isOffline ? 'You are offline' : 'Unable to load'}
+          subtitle={isOffline ? 'Check your connection and try again.' : 'Pull to refresh'}
           ctaLabel="Retry"
           onCtaPress={() => void fetchHome()}
         />
@@ -1826,6 +1770,11 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
+        {/* Offline banner — cached auctions are still visible but cannot refresh */}
+        {isOffline && hasAnyContent ? (
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+        ) : null}
+
         {/* Selected scope composition */}
         <SegmentContentTransition segmentKey={browseState.scope}>
           {renderComposition()}
@@ -1926,22 +1875,6 @@ export default function AuctionHomeScreen() {
 // FILTER SHEET — redesigned with hierarchical categories, checkmarked
 // sort rows, price range/presets, and bottom CTA with count
 // ════════════════════════════════════════════════════════════════
-const SORT_OPTIONS: { key: AuctionBrowseSort; label: string }[] = [
-  { key: 'recommended', label: 'Recommended' },
-  { key: 'endingSoon', label: 'Ending soon' },
-  { key: 'newest', label: 'Newest' },
-  { key: 'mostBids', label: 'Most bids' },
-  { key: 'priceLow', label: 'Price: low to high' },
-  { key: 'priceHigh', label: 'Price: high to low' },
-];
-
-const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
-  { label: 'Under £50', max: 50 },
-  { label: '£50 – £200', min: 50, max: 200 },
-  { label: '£200 – £500', min: 200, max: 500 },
-  { label: 'Over £500', min: 500 },
-];
-
 const FilterSheet = memo(function FilterSheet({
   visible,
   onDismiss,
@@ -2029,6 +1962,7 @@ const FilterSheet = memo(function FilterSheet({
             return (
               <Pressable
                 key={opt.key}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={({ pressed }) => [
                   styles.filterSortRow,
                   pressed && styles.filterOptionPressed,
@@ -2238,10 +2172,10 @@ function createStyles(colors: ThemeColors) {
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
+    fontSize: Type.sectionTitle.size,
+    lineHeight: Type.sectionTitle.lineHeight,
     fontWeight: '700',
-    letterSpacing: Type.subtitle.letterSpacing,
+    letterSpacing: Type.sectionTitle.letterSpacing,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.md,
@@ -2314,7 +2248,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   categoryTileName: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontWeight: '700',
     color: colors.textInverse,
     fontFamily: Typography.family.bold,
@@ -2348,10 +2282,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 4,
   },
   upcomingDate: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontWeight: '600',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs / 2,
@@ -2362,15 +2296,15 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
     marginBottom: Space.xs / 4,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   upcomingTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   upcomingNotify: {
     width: Control.hit,
@@ -2407,19 +2341,19 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 2,
   },
   resultTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   resultOutcome: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontWeight: '600',
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   resultActionWrap: {
@@ -2431,7 +2365,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   // ── Empty market ──
@@ -2461,7 +2395,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
     backgroundColor: colors.surfaceAlt,
@@ -2610,7 +2544,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   filterPriceChipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },

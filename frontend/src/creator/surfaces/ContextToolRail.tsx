@@ -4,11 +4,15 @@
  *
  * Replaces the static tool dock pattern with a rail that adapts its visible
  * tool set based on the active {@link ToolContext} (editor mode + selection
- * state). Up to 6 primary actions are always visible; additional tools are
+ * state). Up to 4 primary actions are always visible; additional tools are
  * revealed under a trailing "More" button.
  *
- * Design requirements (09_VISUAL_SYSTEM spec):
- *   - Maximum 6 primary actions visible; overflow under "More"
+ * Design requirements (2026 flagship creator UX research, AGENTS.md §4):
+ *   - Maximum 4 primary actions visible — the Meta Edits / Instagram / CapCut
+ *     pattern. The primary layer (canvas + preview) is ruthlessly guarded
+ *     against feature creep. More tools ≠ better; ≤4 immediately relevant
+ *     actions is the cognitive-fluency sweet spot.
+ *   - Overflow under "More" with specific grouping labels (not a flat list)
  *   - 44pt minimum touch targets (48pt preferred for high-frequency tools)
  *   - Transparent background — no card, no border, no glass container
  *   - Horizontal scroll with hidden scroll indicator
@@ -18,14 +22,13 @@
  *   - Badge: small circle on top-right of icon for counts
  *   - "More" button: always last, ellipsis-horizontal icon
  *   - 4pt spacing between tools, 16pt horizontal padding on rail
- *   - Reduced motion: no entrance animation
- *   - Haptic feedback: light haptic on press (unless overridden)
+ *   - Haptic feedback has one owner: CreatorToolButton
  *
  * Anatomy:
- *   ┌────────────────────────────────────────────────┐
- *   │  [icon]  [icon]  [icon]  [icon]  [icon]  [⋯]  │
- *   │  Text    Sticker Music  Effects Draw    More   │
- *   └────────────────────────────────────────────────┘
+ *   ┌────────────────────────────────────────┐
+ *   │  [icon]  [icon]  [icon]  [icon]  [⋯]  │
+ *   │  Text    Sticker Music  Effects More   │
+ *   └────────────────────────────────────────┘
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -33,8 +36,6 @@ import { ScrollView, StyleSheet, View, Text, type ViewStyle } from 'react-native
 
 import { Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { useHaptic } from '../../hooks/useHaptic';
 import {
   CreatorToolButton,
   type SelectedStyle,
@@ -64,8 +65,11 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Maximum primary tools visible before overflow. */
-const MAX_PRIMARY = 6;
+/** Maximum primary tools visible before overflow. The 2026 flagship creator
+ *  UX research (Meta Edits, Instagram, CapCut) converges on ≤4 immediately
+ *  relevant actions — the primary layer is ruthlessly guarded against
+ *  feature creep. More tools ≠ better; cognitive fluency peaks at 4. */
+const MAX_PRIMARY = 4;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
 /** Badge text size. */
@@ -104,15 +108,13 @@ const RailToolButton = React.memo(function RailToolButton({
   tool,
   onToolUsed,
 }: RailToolButtonProps) {
-  const haptic = useHaptic();
   const handlePress = useCallback(() => {
     if (tool.disabled) return;
-    haptic.light();
     tool.onPress();
     // Record usage for personalization (pinning / recent tools).
     // Fire-and-forget — the hook persists asynchronously.
     if (onToolUsed) onToolUsed(tool.id);
-  }, [tool, onToolUsed, haptic]);
+  }, [tool, onToolUsed]);
 
   // Determine whether to show the label. Universally familiar tools
   // (close, back, play, etc.) are icon-only; ambiguous creative tools
@@ -181,7 +183,7 @@ const MoreButton = React.memo(function MoreButton({
       label="More"
       onPress={onPress}
       accessibilityLabel="More tools"
-      accessibilityHint="Opens the overflow menu with additional tools"
+      accessibilityHint="Opens additional creative tools — layers, transitions, templates, and advanced editing"
     />
   );
 });
@@ -194,8 +196,6 @@ export function ContextToolRail({
   onOverflowPress,
   style,
 }: ContextToolRailProps) {
-  const reduceMotion = useReducedMotion();
-  const haptic = useHaptic();
   const { pinned, recordUse } = usePinnedTools();
 
   // Resolve the active tool set from the registry.
@@ -245,18 +245,6 @@ export function ContextToolRail({
   const handleToolUsed = useCallback((toolId: string) => {
     void recordUse(toolId);
   }, [recordUse]);
-
-  // Light haptic when the context changes (tool set swaps) — respects
-  // reduced motion via the haptic hook's internal gate.
-  const prevContextRef = React.useRef<ToolContext>(context);
-  React.useEffect(() => {
-    if (prevContextRef.current !== context) {
-      prevContextRef.current = context;
-      if (!reduceMotion) {
-        haptic.light();
-      }
-    }
-  }, [context, reduceMotion, haptic]);
 
   // Colors are now resolved inside CreatorToolButton (theme-aware).
   // The neutral default keeps the rail visually restrained per AGENTS.md §4

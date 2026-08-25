@@ -22,6 +22,7 @@ import {
   CoOwnPortfolioSkeleton,
   CoOwnStateCanvas,
   CoOwnPortfolioStorytelling,
+  CoOwnPortfolioPerformanceChart,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   type CoOwnPositionAction,
@@ -34,10 +35,13 @@ import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
@@ -120,6 +124,13 @@ export default function PortfolioScreen() {
   const todayChangePct = summary.todayChangePct ?? 0;
   const totalDistributionsGbp = summary.totalDistributionsGbp ?? 0;
   const staleMarkCount = summary.staleMarkCount ?? 0;
+
+  // Total cost basis — sum of avgEntryPrice * unitsOwned across all positions.
+  // Used by the performance chart to show cost basis vs current value.
+  const totalCostBasisGbp = React.useMemo(
+    () => positions.reduce((sum, p) => sum + p.avgEntryPriceGbp * p.unitsOwned, 0),
+    [positions],
+  );
 
   // Allocation bars — only when real positions exist
   const allocationBars = React.useMemo(() => {
@@ -262,16 +273,16 @@ export default function PortfolioScreen() {
         unitsOwned={item.unitsOwned}
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
-        currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
-        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, DEFAULT_CURRENCY_CODE)}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, DEFAULT_CURRENCY_CODE)}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
-          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
-          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
         }
         realizedLabel={item.realizedPnlGbp !== 0
           ? (item.realizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
-            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`)
           : undefined
         }
         status={formatPositionStatus(item)}
@@ -525,7 +536,7 @@ export default function PortfolioScreen() {
 
               {/* Phase 3: data-quality note — only when true */}
               {staleMarkCount > 0 && (
-                <View style={[styles.dataQualityNote, { backgroundColor: colors.warning + '12' }]}>
+                <View style={[styles.dataQualityNote, { backgroundColor: colors.warningSubtle }]}>
                   <Ionicons name="time-outline" size={12} color={colors.warning} />
                   <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
                     Data quality: {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
@@ -533,6 +544,17 @@ export default function PortfolioScreen() {
                 </View>
               )}
             </View>
+
+            {/* Portfolio performance chart — flat canvas, no card chrome.
+                Shows cost-basis accumulation over time and current mark value.
+                Only rendered when there are positions with cost basis. */}
+            {totalCostBasisGbp > 0 && (
+              <CoOwnPortfolioPerformanceChart
+                positions={positions}
+                totalValueGbp={summary.totalValueGbp}
+                totalCostBasisGbp={totalCostBasisGbp}
+              />
+            )}
 
             {/* Tab toggle — Positions (default) vs Insights.
                 Positions shows holdings immediately; Insights moves allocations,
@@ -769,7 +791,7 @@ export default function PortfolioScreen() {
             {performers.best && performers.best.avgEntryPriceGbp > 0 && (
               <CoOwnPortfolioStorytelling
                 premiumPct={null}
-                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, 'GBP')}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, DEFAULT_CURRENCY_CODE)}
                 markSourceLabel="Last trade"
                 markAgeLabel={undefined}
               />
@@ -854,7 +876,7 @@ export default function PortfolioScreen() {
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
-        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, DEFAULT_CURRENCY_CODE) : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />

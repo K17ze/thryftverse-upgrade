@@ -1,5 +1,5 @@
 import React from 'react';
-import { SupportedCurrencyCode } from '../constants/currencies';
+import { DEFAULT_CURRENCY_CODE, SupportedCurrencyCode } from '../constants/currencies';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CurrencyDisplayMode, formatPrice, toIze } from '../utils/currency';
 
@@ -29,7 +29,7 @@ export function useFormattedPrice() {
   const formatFromFiat = React.useCallback(
     (
       fiatAmount: number,
-      sourceCurrency: SupportedCurrencyCode = 'GBP',
+      sourceCurrency: SupportedCurrencyCode = DEFAULT_CURRENCY_CODE,
       options: FormatOptions = {}
     ) => {
       const izeAmount = toIze(fiatAmount, sourceCurrency, goldRates);

@@ -32,6 +32,10 @@ import { CoOwnStateCanvas, CoOwnWalletBreakdownSkeleton } from '../components/co
 import { getSellerWalletBalances, type SellerWalletBalanceItem } from '../services/walletApi';
 import { parseApiError } from '../lib/apiClient';
 import { haptics } from '../utils/haptics';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SellerEarnings'>;
 
@@ -43,6 +47,7 @@ interface SellerBalances {
 }
 
 export default function SellerEarningsScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
@@ -131,6 +136,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
       }
       scrollEnabled={false}
     >
+      <OfflineBanner onRetry={() => void handleRefresh()} />
       {isLoading ? (
         <CoOwnWalletBreakdownSkeleton />
       ) : isError ? (
@@ -150,7 +156,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
               <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
                 Sale proceeds
               </Text>
-              <View style={[styles.summaryChip, { backgroundColor: colors.brand + '12' }]}>
+              <View style={[styles.summaryChip, { backgroundColor: colors.brandSubtle }]}>
                 <Ionicons name="pricetag-outline" size={11} color={colors.brand} />
                 <Text style={[styles.summaryChipText, { color: colors.brand }]}>Seller balance</Text>
               </View>
@@ -321,10 +327,10 @@ const styles = StyleSheet.create({
     marginVertical: Space.xs,
   },
   summaryLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginBottom: Space.xs / 2,
   },
   summaryValue: {
@@ -360,10 +366,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   scheduleHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   emptySchedule: {
     flexDirection: 'row',
@@ -375,10 +381,10 @@ const styles = StyleSheet.create({
   },
   emptyScheduleText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   scheduleList: {
     gap: Space.xs,
@@ -401,10 +407,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   scheduleItemMeta: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs / 2,
   },
   scheduleItemAmount: {

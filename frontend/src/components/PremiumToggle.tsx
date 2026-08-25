@@ -23,6 +23,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
@@ -65,7 +66,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   track: {
     width: 52,
     height: 30,
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: Radius.xl,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,

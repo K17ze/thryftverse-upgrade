@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   windowLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   markUsedLabel: {

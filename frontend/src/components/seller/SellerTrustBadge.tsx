@@ -25,7 +25,7 @@ function deriveTrustBadges(seller: SellerTrustSummary | null): TrustBadgeType[] 
   if (!seller) return [];
   const earned: TrustBadgeType[] = [];
 
-  const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified === true ? 'email' : null);
+  const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified === true ? 'seller' : null);
   if (tier) {
     earned.push('verified');
   }

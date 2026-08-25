@@ -55,9 +55,16 @@ import {
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
 } from '../components/coown';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+
+const DOCK_HEIGHT = 52;
 
 /** Format rights version for the badge — normalises raw strings. */
 function formatRightsVersion(raw: string): string {
@@ -90,6 +97,8 @@ export default function AssetDueDiligenceScreen() {
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -206,7 +215,7 @@ export default function AssetDueDiligenceScreen() {
   const hasAboutAsset = hasProvenance || hasCondition;
 
   // ── Timeline events — all dated events combined chronologically ──
-  const timelineEvents = React.useMemo(() => {
+  const timelineEvents = (() => {
     const events: { event: string; date: Date; sortKey: number }[] = [];
 
     if (asset.authenticityVerifiedAt) {
@@ -239,10 +248,10 @@ export default function AssetDueDiligenceScreen() {
     }
 
     return events.sort((a, b) => b.sortKey - a.sortKey);
-  }, [asset.authenticityVerifiedAt, asset.appraisalValuedAt, asset.trustAuditEvents, asset.marketAuditEvents]);
+  })();
 
   // ── Document rows — legal/technical documents as flat rows ──
-  const documentRows = React.useMemo(() => {
+  const documentRows = (() => {
     const docs: { icon: string; title: string; subtitle: string | null; url: string | null; isLink: boolean }[] = [];
 
     if (asset.escrowTermsUrl) {
@@ -292,7 +301,7 @@ export default function AssetDueDiligenceScreen() {
     }
 
     return docs;
-  }, [asset]);
+  })();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -300,30 +309,22 @@ export default function AssetDueDiligenceScreen() {
 
       {/* ── Header ──
           Quiet, standard back header. No large rounded containers. */}
-      <View style={[styles.header, { borderBottomColor: colors.borderSubtle, paddingTop: insets.top }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={12}
-          style={({ pressed }) => [styles.headerBack, pressed && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Back to asset"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            Due diligence
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {asset.title}
-          </Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Due diligence"
+        subtitle={asset.title}
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingTop: insets.top,
+          paddingHorizontal: Space.sm,
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.borderSubtle,
+        }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.lg) + Space.lg }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.lg) + Space.lg + DOCK_HEIGHT }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -334,6 +335,8 @@ export default function AssetDueDiligenceScreen() {
           />
         }
       >
+        {isOffline && <OfflineBanner onRetry={handleRefresh} />}
+
         {/* ── Evidence ──
             Provenance story, condition, category evidence, authentication,
             custody — presented as a dossier gallery, not settings rows. */}
@@ -346,14 +349,9 @@ export default function AssetDueDiligenceScreen() {
                 </Text>
               )}
               {asset.conditionGrade && (
-                <View style={[styles.evidenceBlock, { borderColor: colors.borderSubtle }]}>
-                  <Text style={[styles.evidenceBlockLabel, { color: colors.textMuted }]}>
-                    CONDITION
-                  </Text>
-                  <Text style={[styles.evidenceBlockValue, { color: colors.textPrimary }]}>
-                    {asset.conditionGrade}
-                  </Text>
-                </View>
+                <Text style={[styles.conditionInline, { color: colors.textSecondary }]}>
+                  Condition · {asset.conditionGrade}
+                </Text>
               )}
               {dossierEvidenceGroups.length > 0 && (
                 <CategoryEvidence groups={dossierEvidenceGroups} />
@@ -509,7 +507,7 @@ export default function AssetDueDiligenceScreen() {
               {navPerUnitGbp != null && (
                 <CommerceDetailMetricRow
                   label="NAV / unit"
-                  value={formatFromFiat(navPerUnitGbp, 'GBP')}
+                  value={formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)}
                 />
               )}
               {referenceVsNavPct != null && (
@@ -825,6 +823,30 @@ export default function AssetDueDiligenceScreen() {
         )}
       </ScrollView>
 
+      {/* ── Back-to-asset sticky dock ── */}
+      <View
+        style={[
+          styles.backDock,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.borderSubtle,
+            paddingBottom: Math.max(insets.bottom, Space.sm),
+          },
+        ]}
+      >
+        <Pressable
+          style={({ pressed }) => [styles.backDockBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => { haptic.light(); navigation.goBack(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Back to asset"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.brand} />
+          <Text style={[styles.backDockLabel, { color: colors.brand }]}>
+            Back to asset
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Rights sheet — 13-row modal */}
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
@@ -857,40 +879,6 @@ export default function AssetDueDiligenceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  // ── Header ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerBack: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
-  },
-  headerTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
-  headerSubtitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  headerSpacer: {
-    width: Control.hit,
   },
   // ── Story text ──
   storyText: {
@@ -1056,23 +1044,11 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  evidenceBlock: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    marginTop: Space.sm,
-  },
-  evidenceBlockLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  evidenceBlockValue: {
+  conditionInline: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    marginTop: Space.xs,
   },
   custodyEvidence: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1154,5 +1130,30 @@ const styles = StyleSheet.create({
   documentSubtitle: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
+  },
+  // ── Back-to-asset sticky dock ──
+  backDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  backDockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    height: DOCK_HEIGHT,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+  },
+  backDockLabel: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
 });

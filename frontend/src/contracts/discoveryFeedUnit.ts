@@ -25,6 +25,8 @@
 import type { DiscoveryListingSummary, ListingLike } from './DiscoveryListingSummary';
 import { mapListingToDiscoverySummary } from './DiscoveryListingSummary';
 import type { PosterStory } from '../services/postersApi';
+import type { LookApiItem } from '../services/looksApi';
+import type { Moodboard } from '../services/moodboardApi';
 
 // ============================================================================
 // FEED UNIT DISCRIMINATED UNION
@@ -34,6 +36,7 @@ export type DiscoveryFeedUnitType =
   | 'listing'
   | 'look'
   | 'poster'
+  | 'moodboard'
   | 'editorial'
   | 'recommendation_break';
 
@@ -51,6 +54,14 @@ export interface DiscoveryFeedUnitBase {
   score?: number;
   /** Optional reason for inclusion (shown only in debug/overflow, never on every card). */
   reason?: string;
+  /**
+   * Masonry span hint (number of columns this unit should occupy).
+   * `1` = single column (default for listings). `numColumns` = full width
+   * (editorial / look / poster / recommendation_break / hero listing).
+   * The renderer clamps this to the grid's `numColumns`. Omit for the
+   * default single-column placement.
+   */
+  span?: number;
 }
 
 /**
@@ -75,6 +86,7 @@ export interface ListingFeedUnit extends DiscoveryFeedUnitBase {
  */
 export interface LookFeedUnit extends DiscoveryFeedUnitBase {
   type: 'look';
+  look: LookApiItem;
   title: string;
   coverImageUri: string;
   aspectRatio: number;
@@ -88,6 +100,18 @@ export interface PosterFeedUnit extends DiscoveryFeedUnitBase {
   type: 'poster';
   story: PosterStory;
   /** Cover media URI (first frame or composition thumbnail). */
+  coverUri: string;
+  aspectRatio: number;
+}
+
+/**
+ * A public community moodboard. Demo/fallback moodboards must be filtered at
+ * the data boundary before this unit is constructed; discovery never presents
+ * seeded development content as personalisation.
+ */
+export interface MoodboardFeedUnit extends DiscoveryFeedUnitBase {
+  type: 'moodboard';
+  moodboard: Moodboard;
   coverUri: string;
   aspectRatio: number;
 }
@@ -125,6 +149,7 @@ export type DiscoveryFeedUnit =
   | ListingFeedUnit
   | LookFeedUnit
   | PosterFeedUnit
+  | MoodboardFeedUnit
   | EditorialFeedUnit
   | RecommendationBreakFeedUnit;
 

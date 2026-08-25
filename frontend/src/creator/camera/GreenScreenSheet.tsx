@@ -1,16 +1,12 @@
 /**
  * GreenScreenSheet — bottom sheet for green screen (chroma key) configuration.
  *
- * Real-time chroma keying is not feasible with expo-camera alone (no
- * frame-processor API). The user selects a background image and key
- * parameters; the video is recorded normally and the green screen effect
- * is applied in post-production via Skia. The settings are preserved in
- * CreatorInitialMedia.greenScreen so the timeline can re-render the
- * composite.
- *
- * This is a minimal stub — the full Skia processing pipeline is a future
- * phase. The sheet captures the user's intent (background + key color +
- * tolerance + feather) so the camera and timeline can store it.
+ * vision-camera v5 supports real-time chroma keying via Skia frame
+ * processors. The user selects a background image and key parameters;
+ * the settings are preserved in CreatorInitialMedia.greenScreen so the
+ * timeline can re-render the composite. The real-time frame processor
+ * wiring is a future phase — until then, the effect is applied
+ * post-capture via Skia.
  */
 import React, { useState } from 'react';
 import {
@@ -24,7 +20,8 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -174,13 +171,13 @@ export function GreenScreenSheet({
           <View style={styles.infoBanner}>
             <Ionicons
               name="information-circle-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={colors.textSecondary}
               style={styles.infoIcon}
             />
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Green screen is applied in post-production via Skia. The video is
-              recorded normally and the chroma key effect is rendered on the timeline.
+              Green screen settings are saved with the capture. The chroma key
+              effect is rendered on the timeline via Skia.
             </Text>
           </View>
 
@@ -203,7 +200,7 @@ export function GreenScreenSheet({
                   source={{ uri: backgroundUri }}
                   style={styles.bgThumb}
                   contentFit="cover"
-                  transition={150}
+                  transition={Motion.transitions.mediaLoad.duration}
                 />
               </PressScale>
               <PressScale
@@ -447,8 +444,8 @@ const styles = StyleSheet.create({
   },
   bgChooseText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   bgPreviewRow: {
     flexDirection: 'row',
@@ -495,7 +492,7 @@ const styles = StyleSheet.create({
   colorSwatch: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
     borderColor: 'rgba(255,255,255,0.2)',
   },
@@ -524,7 +521,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
 });

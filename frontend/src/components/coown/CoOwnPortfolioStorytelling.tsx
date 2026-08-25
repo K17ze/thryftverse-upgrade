@@ -115,14 +115,14 @@ export function CoOwnPortfolioStorytelling({
           styles.premiumBadge,
           {
             backgroundColor: isPositivePremium
-              ? colors.coownUp + '12'
+              ? colors.coownUpSubtle
               : isNegativePremium
-                ? colors.coownDown + '12'
+                ? colors.coownDownSubtle
                 : colors.surfaceAlt,
             borderColor: isPositivePremium
-              ? colors.coownUp + '40'
+              ? colors.coownUpBorder
               : isNegativePremium
-                ? colors.coownDown + '40'
+                ? colors.coownDownBorder
                 : colors.border,
           },
         ]}>
@@ -159,7 +159,7 @@ export function CoOwnPortfolioStorytelling({
 
       {/* Stale mark warning */}
       {isStaleMark && (
-        <View style={[styles.staleWarning, { backgroundColor: colors.warning + '12' }]}>
+        <View style={[styles.staleWarning, { backgroundColor: colors.warningSubtle }]}>
           <Ionicons name="time-outline" size={12} color={colors.warning} />
           <Text style={[styles.staleWarningText, { color: colors.warning }]}>
             Mark is stale ({markAgeLabel}). The last trade was more than 24h ago — treat the price with caution.
@@ -187,10 +187,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   comparisonRow: {
     flexDirection: 'row',
@@ -204,14 +204,14 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   comparisonValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   comparisonAge: {
@@ -237,10 +237,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   premiumValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   premiumGlyph: {

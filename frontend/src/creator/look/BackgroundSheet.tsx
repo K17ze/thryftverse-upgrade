@@ -38,9 +38,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CreatorSlider } from '../controls/CreatorSlider';
 import {
   CreatorColorPicker,
@@ -57,6 +59,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
+import { Motion } from '../../theme/motionTokens';
 import type { CreatorBackground, CreatorLayer } from '../composition';
 
 // ── Presets ───────────────────────────────────────────────────────────
@@ -85,7 +88,7 @@ type BgType = CreatorBackground['type'];
 
 const TYPE_CHIPS: { id: BgType; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { id: 'color', label: 'Solid', icon: 'square-outline' },
-  { id: 'gradient', label: 'Gradient', icon: 'color-wand-outline' },
+  { id: 'gradient', label: 'Gradient', icon: 'color-filter-outline' },
   { id: 'image', label: 'Image', icon: 'image-outline' },
   { id: 'blur', label: 'Blurred', icon: 'aperture-outline' },
 ];
@@ -139,6 +142,7 @@ export function BackgroundSheet({
 }: BackgroundSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Recent color history (shared across creator tools, spec §4).
@@ -161,7 +165,6 @@ export function BackgroundSheet({
   const typeTabLayouts = useRef<Map<BgType, { x: number; width: number }>>(new Map());
   const typeUnderlineXSV = useSharedValue(0);
   const typeUnderlineWSV = useSharedValue(0);
-  const TYPE_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   useEffect(() => {
     if (visible) {
@@ -192,8 +195,13 @@ export function BackgroundSheet({
     // Animate underline to the selected tab.
     const layout = typeTabLayouts.current.get(type);
     if (layout) {
-      typeUnderlineXSV.value = withSpring(layout.x, TYPE_UNDERLINE_SPRING);
-      typeUnderlineWSV.value = withSpring(layout.width, TYPE_UNDERLINE_SPRING);
+      if (reducedMotion) {
+        typeUnderlineXSV.value = layout.x;
+        typeUnderlineWSV.value = layout.width;
+      } else {
+        typeUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        typeUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
+      }
     }
     setDraft((prev) => {
       const next: CreatorBackground = { ...prev, type };
@@ -214,7 +222,7 @@ export function BackgroundSheet({
       }
       return next;
     });
-  }, [haptic, firstMediaLayer, typeUnderlineXSV, typeUnderlineWSV]);
+  }, [haptic, firstMediaLayer, typeUnderlineXSV, typeUnderlineWSV, reducedMotion]);
 
   // ── Solid color selection (preset swatches) ────────────────────────
   const handleSolidSelect = useCallback((value: string) => {
@@ -375,7 +383,7 @@ export function BackgroundSheet({
           accessibilityLabel="Close background picker"
           accessibilityHint="Discards changes and closes the background picker"
         >
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </View>
 
@@ -456,7 +464,7 @@ export function BackgroundSheet({
                         <View style={styles.swatchCheck}>
                           <Ionicons
                             name="checkmark"
-                            size={14}
+                            size={IconGrammar.badge}
                             color={sw.value === '#ffffff' || sw.value === '#f5f5f5' || sw.value === '#e8e8e8' ? '#000' : '#fff'}
                           />
                         </View>
@@ -527,7 +535,7 @@ export function BackgroundSheet({
                       />
                       {isActive && (
                         <View style={styles.swatchCheck}>
-                          <Ionicons name="checkmark" size={14} color="#fff" />
+                          <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
                         </View>
                       )}
                     </View>
@@ -619,7 +627,7 @@ export function BackgroundSheet({
                   accessibilityLabel="Change image"
                   accessibilityHint="Opens the photo library to pick a different background image"
                 >
-                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+                  <Ionicons name="swap-horizontal-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
                   <Text style={[styles.imageChangeBtnText, { color: colors.textPrimary }]}>
                     {isPickingImage ? 'Opening…' : 'Change Image'}
                   </Text>
@@ -819,7 +827,7 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      borderRadius: 1,
+      borderRadius: Radius.full,
     },
     // ── Body ──
     body: {
@@ -985,14 +993,14 @@ function createStyles(colors: ThemeColors) {
     },
     footerCancelText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     footerConfirm: {
       // backgroundColor set inline
     },
     footerConfirmText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -126,7 +125,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   // -- Option selection ----------------------------------------------------
   const handleSelectOption = useCallback(
     (option: EnhancementOption) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       haptic.patterns.tabSwitch();
       setSelectedOptionId(option.id);
       setSelectedPresetId(null);
@@ -140,7 +138,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   );
 
   const handleSelectPreset = useCallback((preset: EnhancementPreset) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.tabSwitch();
     setSelectedPresetId(preset.id);
     setSelectedOptionId(null);
@@ -148,7 +145,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   }, [haptic]);
 
   const handleSelectScene = useCallback((scene: BackgroundScene) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.tabSwitch();
     setSelectedSceneId(scene.id);
   }, [haptic]);
@@ -158,7 +154,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
     if (!imageUri) return;
     if (isOffline) {
       setError('You appear to be offline. Check your connection and try again.');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      haptic.error();
       return;
     }
     setIsApplying(true);
@@ -178,7 +174,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       setResult(res);
       setShowAfter(true);
       setPhase('applied');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       haptic.patterns.save();
     } catch (e: unknown) {
       const msg =
@@ -187,7 +182,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
           : 'Enhancement failed. Try again.';
       setError(msg);
       setPhase('error');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      haptic.error();
     } finally {
       setIsApplying(false);
     }
@@ -196,7 +191,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   // -- Revert --------------------------------------------------------------
   const handleRevert = useCallback(async () => {
     if (!result) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.toggle();
     setShowAfter(false);
     setResult(null);
@@ -205,7 +199,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
   // -- Save (return to listing flow) ---------------------------------------
   const handleSave = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.light();
     // In demo mode, no real enhancement was applied — we return the original
     // URI truthfully. The listing flow continues with the original image.
     navigation.goBack();
@@ -213,7 +207,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
   // -- Comparison toggle ---------------------------------------------------
   const handleToggleCompare = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.light();
     setShowAfter((prev) => !prev);
   }, []);
 
@@ -590,16 +584,20 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
               style={styles.footerSecondaryBtn}
             />
             <AppButton
-              title={AI_PHOTO_DEMO_MODE ? 'Preview (Demo)' : 'Apply'}
+              title={AI_PHOTO_DEMO_MODE ? 'Coming Soon' : 'Apply'}
               onPress={handleApply}
-              disabled={!canApply}
+              disabled={AI_PHOTO_DEMO_MODE || !canApply}
               loading={isApplying}
               variant="primary"
               size="md"
               accessibilityLabel={
-                AI_PHOTO_DEMO_MODE ? 'Preview enhancement in demo mode' : 'Apply enhancement'
+                AI_PHOTO_DEMO_MODE ? 'AI enhancement coming soon' : 'Apply enhancement'
               }
-              accessibilityHint="Applies the selected enhancement to the photo"
+              accessibilityHint={
+                AI_PHOTO_DEMO_MODE
+                  ? 'AI photo enhancement is not yet available'
+                  : 'Applies the selected enhancement to the photo'
+              }
               icon={<Ionicons name="color-filter-outline" size={16} color={colors.textInverse} />}
               style={styles.footerPrimaryBtn}
             />
@@ -923,7 +921,7 @@ function createStyles(colors: ThemeColors) {
     // Processing overlay
     processingOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.lg,
@@ -934,7 +932,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     processingText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -947,7 +945,7 @@ function createStyles(colors: ThemeColors) {
     },
     // Section label
     sectionLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
       marginBottom: Space.sm,

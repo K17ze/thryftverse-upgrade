@@ -44,12 +44,13 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -78,10 +79,7 @@ import type {
   ProjectPaletteEntry,
 } from './ColorTypes';
 
-// ── Constants ────────────────────────────────────────────────────────
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SV_PLANE_SIZE = Math.min(SCREEN_WIDTH - Space.md * 2, 280);
-const SLIDER_WIDTH = SV_PLANE_SIZE;
+
 
 // ── Props ────────────────────────────────────────────────────────────
 export interface CreatorColorPickerProps {
@@ -122,6 +120,9 @@ export function CreatorColorPicker({
 }: CreatorColorPickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { width: screenWidth } = useWindowDimensions();
+  const SV_PLANE_SIZE = Math.min(screenWidth - Space.md * 2, 280);
+  const SLIDER_WIDTH = SV_PLANE_SIZE;
   const styles = usePickerStyles(colors);
 
   const [isExpanded, setIsExpanded] = useState(mode === 'expanded');
@@ -256,7 +257,7 @@ export function CreatorColorPicker({
             accessibilityLabel="Expand color picker"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-down-outline" size={20} color={colors.textSecondary} />
+            <Ionicons name="chevron-down-outline" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -367,7 +368,7 @@ export function CreatorColorPicker({
           accessibilityLabel="Collapse color picker"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-up-outline" size={20} color={colors.textSecondary} />
+          <Ionicons name="chevron-up-outline" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </ScrollView>
     </GestureHandlerRootView>
@@ -434,8 +435,8 @@ function usePickerStyles(colors: ThemeColors) {
         },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           color: colors.textSecondary,
           textTransform: 'uppercase',
         },

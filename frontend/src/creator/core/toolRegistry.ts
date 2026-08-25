@@ -24,6 +24,7 @@
 import type React from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import type { CreatorGlyphName } from '../controls/CreatorGlyph';
+import { isCapabilitySupported } from '../capabilities/registry';
 
 // ── Context identifiers ─────────────────────────────────────────────
 // A ToolContext encodes both the editor mode and the current selection
@@ -37,11 +38,39 @@ export type ToolContext =
   | 'poster-text-selected'
   | 'poster-sticker-selected'
   | 'poster-product-selected'
+  | 'poster-quiz-selected'
+  | 'poster-question-selected'
+  | 'poster-countdown-selected'
+  | 'poster-emojiSlider-selected'
+  | 'poster-draw-selected'
+  | 'poster-gif-selected'
+  | 'poster-music-selected'
+  | 'poster-link-selected'
+  | 'poster-location-selected'
+  | 'poster-hashtag-selected'
+  | 'poster-vote-selected'
+  | 'poster-mention-selected'
+  | 'poster-decorative-selected'
+  | 'poster-look-selected'
   | 'look-default'
   | 'look-media-selected'
   | 'look-text-selected'
   | 'look-product-selected'
-  | 'look-multi-select';
+  | 'look-multi-select'
+  | 'look-quiz-selected'
+  | 'look-question-selected'
+  | 'look-countdown-selected'
+  | 'look-emojiSlider-selected'
+  | 'look-draw-selected'
+  | 'look-gif-selected'
+  | 'look-music-selected'
+  | 'look-link-selected'
+  | 'look-location-selected'
+  | 'look-hashtag-selected'
+  | 'look-vote-selected'
+  | 'look-mention-selected'
+  | 'look-decorative-selected'
+  | 'look-look-selected';
 
 // ── Tool definition ─────────────────────────────────────────────────
 // A single tool action rendered as an icon + label inside the rail.
@@ -83,6 +112,18 @@ export interface ToolDefinition {
    * - 'indicator': small dot indicator below the glyph
    */
   selectedStyle?: 'fill' | 'accent' | 'indicator';
+  /**
+   * Optional capability-registry ID that gates this tool's visibility.
+   * When provided, the tool is only rendered if
+   * `isCapabilitySupported(capabilityId)` returns true. This enforces
+   * AGENTS.md §6.4 / acceptance gate 6: "Tools are generated from
+   * capability truth, not screen-local assumptions."
+   *
+   * Tools without a `capabilityId` are always visible (e.g. navigation,
+   * layers, preview, settings — these are editor infrastructure, not
+   * media capabilities).
+   */
+  capabilityId?: string;
 }
 
 // ── Tool group ──────────────────────────────────────────────────────
@@ -98,13 +139,43 @@ export type ToolGroup = {
   overflow: ToolDefinition[];
 };
 
-// ── Selectors ───────────────────────────────────────────────────────
-// Pure helpers that resolve a context to its tool set. The rail calls
-// these to split primary vs overflow rendering.
+// ── Capability gating ───────────────────────────────────────────────
+//
+// Acceptance gate 6: "Tools are generated from capability truth, not
+// screen-local assumptions." Tools that declare a `capabilityId` are
+// filtered by the capability registry — if the capability is not
+// supported (editor, viewer, backend, platform), the tool is silently
+// dropped from the rail. Tools without a `capabilityId` are editor
+// infrastructure (layers, preview, settings, navigation) and are always
+// visible.
 
 /**
- * Returns the full tool list (primary + overflow) for a context.
- * Returns an empty array when no group is registered for the context.
+ * Returns true if a tool should be visible based on its capability gate.
+ * Tools without a `capabilityId` always pass.
+ */
+export function isToolCapabilityVisible(tool: ToolDefinition): boolean {
+  if (!tool.capabilityId) return true;
+  return isCapabilitySupported(tool.capabilityId);
+}
+
+/**
+ * Filters an array of tool definitions, dropping any whose capability
+ * gate is not satisfied.
+ */
+export function filterToolsByCapability(tools: ToolDefinition[]): ToolDefinition[] {
+  return tools.filter(isToolCapabilityVisible);
+}
+
+// ── Selectors ───────────────────────────────────────────────────────
+// Pure helpers that resolve a context to its tool set. The rail calls
+// these to split primary vs overflow rendering. All selectors apply
+// capability gating before returning — tools whose `capabilityId` is
+// not supported are dropped.
+
+/**
+ * Returns the full tool list (primary + overflow) for a context,
+ * filtered by capability. Returns an empty array when no group is
+ * registered for the context.
  */
 export function getToolsForContext(
   context: ToolContext,
@@ -112,23 +183,25 @@ export function getToolsForContext(
 ): ToolDefinition[] {
   const group = groups.find((g) => g.context === context);
   if (!group) return [];
-  return [...group.primary, ...group.overflow];
+  return filterToolsByCapability([...group.primary, ...group.overflow]);
 }
 
 /**
- * Returns the primary tools for a context, capped at 6.
- * The rail renders these as always-visible icon+label buttons.
+ * Returns the primary tools for a context, filtered by capability and
+ * capped at 6. The rail renders these as always-visible icon+label
+ * buttons.
  */
 export function getPrimaryTools(
   context: ToolContext,
   groups: ToolGroup[],
 ): ToolDefinition[] {
   const group = groups.find((g) => g.context === context);
-  return group?.primary.slice(0, 6) ?? [];
+  if (!group) return [];
+  return filterToolsByCapability(group.primary).slice(0, 6);
 }
 
 /**
- * Returns the overflow tools for a context.
+ * Returns the overflow tools for a context, filtered by capability.
  * The rail reveals these under the "More" button.
  */
 export function getOverflowTools(
@@ -136,12 +209,14 @@ export function getOverflowTools(
   groups: ToolGroup[],
 ): ToolDefinition[] {
   const group = groups.find((g) => g.context === context);
-  return group?.overflow ?? [];
+  if (!group) return [];
+  return filterToolsByCapability(group.overflow);
 }
 
 /**
- * Returns true when a context has any overflow tools registered.
- * Used by the rail to decide whether to render the "More" button.
+ * Returns true when a context has any overflow tools (after capability
+ * filtering). Used by the rail to decide whether to render the "More"
+ * button.
  */
 export function hasOverflow(
   context: ToolContext,
@@ -174,6 +249,18 @@ export interface CompositionContext {
   flashOn?: boolean;
   /** The id of the currently active tool (if any tool is explicitly active). */
   activeToolId?: string;
+  // ── Interactive sticker presence flags ──
+  hasMusic?: boolean;
+  hasCountdown?: boolean;
+  hasQuiz?: boolean;
+  hasQuestion?: boolean;
+  hasEmojiSlider?: boolean;
+  hasLink?: boolean;
+  hasLocation?: boolean;
+  hasHashtag?: boolean;
+  hasVote?: boolean;
+  hasDraw?: boolean;
+  hasGif?: boolean;
 }
 
 /**
@@ -217,6 +304,28 @@ export function deriveToolActiveState(
     case 'flash':
     case 'torch':
       return ctx.flashOn === true;
+    case 'music':
+      return ctx.hasMusic === true;
+    case 'countdown':
+      return ctx.hasCountdown === true;
+    case 'quiz':
+      return ctx.hasQuiz === true;
+    case 'question':
+      return ctx.hasQuestion === true;
+    case 'emojiSlider':
+      return ctx.hasEmojiSlider === true;
+    case 'link':
+      return ctx.hasLink === true;
+    case 'location':
+      return ctx.hasLocation === true;
+    case 'hashtag':
+      return ctx.hasHashtag === true;
+    case 'vote':
+      return ctx.hasVote === true;
+    case 'draw':
+      return ctx.hasDraw === true;
+    case 'gif':
+      return ctx.hasGif === true;
     default:
       return false;
   }

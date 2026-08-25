@@ -49,9 +49,12 @@ import {
   Skia,
   Text as SkiaText,
   useFont,
+  Image as SkiaImage,
 } from '@shopify/react-native-skia';
+import { Image as ExpoImage } from 'expo-image';
 
 import { Space, Radius, FontFamily, Type, Elevation, Stroke as StrokeToken, Control } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -93,6 +96,10 @@ interface DrawingWorkspaceProps {
   onCommit: (drawing: DrawingDocument) => void;
   canvasWidth: number;
   canvasHeight: number;
+  /** Media URI to render as the drawing background (Snapchat/Instagram
+   *  pattern: draw directly ON the photo/video, not on a blank canvas).
+   *  When omitted, falls back to a solid color background. */
+  backgroundUri?: string;
 }
 
 const BRUSH_SEGMENTS: SegmentOption[] = [
@@ -388,6 +395,7 @@ export function DrawingWorkspace({
   onCommit,
   canvasWidth,
   canvasHeight,
+  backgroundUri,
 }: DrawingWorkspaceProps) {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -497,8 +505,8 @@ export function DrawingWorkspace({
         canvasOpacity.value = 1;
       } else {
         panelTranslateY.value = withTiming(0, SNAP_TIMING);
-        panelOpacity.value = withTiming(1, { duration: 160 });
-        canvasOpacity.value = withTiming(1, { duration: 200 });
+        panelOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+        canvasOpacity.value = withTiming(1, { duration: Motion.duration.normal });
       }
     } else {
       panelTranslateY.value = 400;
@@ -693,6 +701,19 @@ export function DrawingWorkspace({
               },
             ]}
           >
+            {/* ── Media background (Snapchat/Instagram pattern) ─────────── */}
+            {/* The photo/video renders as the background of the drawing
+                canvas so the user draws directly ON the media, not on a
+                blank canvas. When no backgroundUri is provided, falls back
+                to the solid canvasBg color. */}
+            {backgroundUri ? (
+              <ExpoImage
+                source={{ uri: backgroundUri }}
+                style={{ position: 'absolute', width: canvasWidth, height: canvasHeight }}
+                contentFit="cover"
+              />
+            ) : null}
+
             {skiaAvailable ? (
               <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
                 {committedPaths}
@@ -882,7 +903,7 @@ export function DrawingWorkspace({
               <View style={styles.sizeRow}>
                 <Ionicons
                   name="resize-outline"
-                  size={18}
+                  size={IconGrammar.metadata}
                   color={colors.textSecondary}
                   accessibilityLabel="Spacing"
                 />
@@ -977,9 +998,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center',
     },
     doneText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     panel: {
       position: 'absolute',
@@ -1060,8 +1081,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     emojiTabLabel: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       color: colors.textSecondary,
     },
     emojiTabLabelActive: {

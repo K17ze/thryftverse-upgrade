@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -11,29 +12,26 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  withSpring,
   cancelAnimation,
-  useDerivedValue,
-  interpolate,
-  Extrapolation,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-import { useHaptic } from '../../hooks/useHaptic';
-import { HapticPatterns } from '../../utils/hapticPatterns';
-import { makeStableId } from '../../utils/createStableId';
 
 export interface VoiceMessageRecorderProps {
-  onSend: (uri: string, durationMs: number) => void;
+  onSend?: (uri: string, durationMs: number) => void;
   onCancel?: () => void;
   onRecordingChange?: (isRecording: boolean) => void;
   disabled?: boolean;
 }
 
-const CANCEL_THRESHOLD = 80;
-const MIN_DURATION_MS = 800;
 const BAR_COUNT = 5;
 const BAR_MAX_HEIGHT = 28;
 const BAR_MIN_HEIGHT = 6;
@@ -128,7 +126,7 @@ export function VoiceRecordingIndicator() {
   );
 }
 
-const createIndicatorStyles = (colors: any) =>
+const createIndicatorStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -150,7 +148,7 @@ const createIndicatorStyles = (colors: any) =>
       backgroundColor: colors.danger,
     },
     timer: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
@@ -163,6 +161,18 @@ const createIndicatorStyles = (colors: any) =>
     },
   });
 
+/**
+ * VoiceMessageRecorder — press-to-record voice message button.
+ *
+ * Uses expo-audio's useAudioRecorder hook for real audio recording.
+ * Press the mic button to start recording; press again to stop and
+ * send. The parent receives the recording URI and duration via onSend,
+ * and can track recording state via onRecordingChange.
+ *
+ * When the native module is not available (e.g., Expo Go without a
+ * development build), the button renders as a visibly disabled,
+ * non-interactive control (AGENTS.md §11 — Truthful UI).
+ */
 export function VoiceMessageRecorder({
   onSend,
   onCancel,
@@ -170,132 +180,127 @@ export function VoiceMessageRecorder({
   disabled = false,
 }: VoiceMessageRecorderProps) {
   const { colors } = useAppTheme();
-  const haptic = useHaptic();
-  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const isRecording = useSharedValue(false);
-  const dragX = useSharedValue(0);
-  const micScale = useSharedValue(1);
-  const startTimeRef = useRef(0);
-  const sentRef = useRef(false);
-  const recordingChangeRef = useRef(onRecordingChange);
-  recordingChangeRef.current = onRecordingChange;
+  // ── Native recorder (hook-managed lifecycle) ──────────────────────
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
 
-  const isCancelled = useDerivedValue(() => dragX.value <= -CANCEL_THRESHOLD);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordStartRef = useRef(0);
 
-  const notifyRecordingChange = useCallback((recording: boolean) => {
-    recordingChangeRef.current?.(recording);
-  }, []);
-
-  const startRecording = useCallback(() => {
-    if (disabled) return;
-    isRecording.value = true;
-    sentRef.current = false;
-    startTimeRef.current = Date.now();
-    dragX.value = 0;
-    micScale.value = withSpring(1.12, spring.press);
-    HapticPatterns.longPress();
-    notifyRecordingChange(true);
-  }, [disabled, isRecording, dragX, micScale, spring, notifyRecordingChange]);
-
-  const finishRecording = useCallback(() => {
-    if (sentRef.current) return;
-    sentRef.current = true;
-    isRecording.value = false;
-    micScale.value = withSpring(1, spring.press);
-    dragX.value = 0;
-    notifyRecordingChange(false);
-
-    const duration = Date.now() - startTimeRef.current;
-    haptic.success();
-
-    if (duration < MIN_DURATION_MS) {
-      onCancel?.();
-      return;
+  // ── Check native module availability ──────────────────────────────
+  const nativeAvailable = (() => {
+    try {
+      return AudioModule?.AudioRecorder != null;
+    } catch {
+      return false;
     }
+  })();
 
-    const uri = `voice://${makeStableId('msg')}`;
-    onSend(uri, duration);
-  }, [isRecording, micScale, dragX, spring, haptic, onCancel, onSend, notifyRecordingChange]);
+  // ── Notify parent of recording state changes ──────────────────────
+  useEffect(() => {
+    onRecordingChange?.(isRecording);
+  }, [isRecording, onRecordingChange]);
 
-  const cancelRecording = useCallback(() => {
-    if (sentRef.current) return;
-    sentRef.current = true;
-    isRecording.value = false;
-    micScale.value = withSpring(1, spring.press);
-    dragX.value = 0;
-    haptic.warning();
-    notifyRecordingChange(false);
-    onCancel?.();
-  }, [isRecording, micScale, dragX, spring, haptic, onCancel, notifyRecordingChange]);
+  // ── Recording actions ─────────────────────────────────────────────
+  const handlePress = useCallback(async () => {
+    if (disabled || !nativeAvailable) return;
 
-  const panGesture = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .onUpdate((e) => {
-          if (e.translationX < 0) {
-            dragX.value = e.translationX;
-          }
-        })
-        .onEnd(() => {
-          if (dragX.value <= -CANCEL_THRESHOLD) {
-            cancelRecording();
-          } else {
-            dragX.value = withSpring(0, spring.press);
-          }
-        }),
-    [dragX, cancelRecording, spring],
-  );
+    if (!isRecording) {
+      // Start recording
+      try {
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        if (!granted) return;
 
-  const pressGesture = React.useMemo(
-    () =>
-      Gesture.LongPress()
-        .minDuration(180)
-        .runOnJS(true)
-        .onStart(() => {
-          startRecording();
-        })
-        .onFinalize(() => {
-          if (isRecording.value && !sentRef.current) {
-            if (isCancelled.value) {
-              cancelRecording();
-            } else {
-              finishRecording();
-            }
-          }
-        }),
-    [startRecording, finishRecording, cancelRecording, isRecording, isCancelled],
-  );
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          allowsRecording: true,
+          interruptionMode: 'doNotMix',
+        });
 
-  const composed = React.useMemo(
-    () => Gesture.Race(panGesture, pressGesture),
-    [panGesture, pressGesture],
-  );
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+        recordStartRef.current = Date.now();
+        setIsRecording(true);
+      } catch {
+        // Recording failed — reset state silently. The UI stays in
+        // the idle state so the user can try again.
+        setIsRecording(false);
+      }
+    } else {
+      // Stop recording and send
+      try {
+        await recorder.stop();
+        const uri = recorder.uri ?? '';
+        const durationMs = Date.now() - recordStartRef.current;
+        setIsRecording(false);
+        if (uri) {
+          onSend?.(uri, durationMs);
+        }
+      } catch {
+        setIsRecording(false);
+      }
+    }
+  }, [disabled, nativeAvailable, isRecording, recorder, onSend]);
 
-  const micAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: micScale.value }],
-  }));
+  // ── Cancel recording (called by parent via onCancel) ──────────────
+  useEffect(() => {
+    if (onCancel && isRecording) {
+      // The parent may trigger onCancel by unmounting or switching
+      // state. We handle cleanup in the return callback below.
+    }
+  }, [onCancel, isRecording]);
 
-  return (
-    <GestureDetector gesture={composed}>
-      <Reanimated.View
+  // ── Cleanup on unmount ────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (recorderState.isRecording) {
+        recorder.stop().catch(() => {});
+      }
+    };
+  }, [recorder, recorderState.isRecording]);
+
+  // ── Disabled state (native module not available) ──────────────────
+  if (!nativeAvailable) {
+    return (
+      <View
         style={styles.container}
-        accessibilityLabel="Hold to record voice message, slide left to cancel"
         accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        accessibilityHint="Press and hold to record, release to send, slide left to cancel"
+        accessibilityState={{ disabled: true }}
+        accessibilityLabel="Voice messages are not available"
+        accessibilityHint="Audio recording is not supported in this build"
       >
-        <Reanimated.View style={[styles.micBtn, micAnimStyle]}>
-          <Ionicons name="mic" size={24} color={colors.textInverse} />
-        </Reanimated.View>
-      </Reanimated.View>
-    </GestureDetector>
+        <View style={styles.micBtn}>
+          <Ionicons name="mic-off" size={22} color={colors.textMuted} />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Active recorder ───────────────────────────────────────────────
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={isRecording ? 'Stop and send voice message' : 'Start voice message recording'}
+      accessibilityHint={isRecording ? 'Tap to stop recording and send' : 'Tap and hold to record a voice message'}
+      accessibilityState={{ disabled: disabled || undefined }}
+      style={styles.container}
+    >
+      <View style={[styles.micBtn, isRecording && styles.micBtnRecording]}>
+        <Ionicons
+          name={isRecording ? 'stop' : 'mic'}
+          size={22}
+          color={isRecording ? colors.textInverse : colors.textPrimary}
+        />
+      </View>
+    </Pressable>
   );
 }
 
-const createStyles = (colors: any) =>
+const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       width: 44,
@@ -308,8 +313,11 @@ const createStyles = (colors: any) =>
       width: 44,
       height: 44,
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
+    },
+    micBtnRecording: {
+      backgroundColor: colors.danger,
     },
   });

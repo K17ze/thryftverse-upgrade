@@ -96,7 +96,7 @@ function createStyles(colors: ThemeColors) {
     minHeight: 48,
   },
   primaryText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

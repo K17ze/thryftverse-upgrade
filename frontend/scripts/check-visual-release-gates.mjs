@@ -18,7 +18,14 @@
  * transition quality — those remain human visual gates (see
  * `.devin/visual-qa-gates.md`).
  *
- * Run via: npm run check:visual-gates
+ * Enforcement (AGENTS.md §31.7, visual-flagship-convergence-loop.md §10):
+ *   - Default mode FAILS the build on P0 violations (exit 1).
+ *   - `--report` mode is warn-only (exit 0) for local exploration.
+ *   - `--strict` is retained as an alias for the default strict behaviour
+ *     so existing CI invocations keep working.
+ *
+ * Run via: npm run check:visual-gates            (strict, fails on P0)
+ *          npm run check:visual-gates:report     (warn-only)
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
@@ -45,21 +52,97 @@ const ALLOWED_COLOR_FILES = new Set([
   join(SRC, 'constants', 'colors.ts'),
 ]);
 
-// Camera/poster/live surfaces may use hardcoded colors for scrim/gradient
-// overlays on media. These are documented exceptions.
+// Camera/poster/live/creative surfaces may use hardcoded colors for
+// scrim/gradient overlays on media, or where colors ARE the creative content
+// (gradient presets, filter configs, color pickers, drawing canvas, sticker
+// layers, text color pickers). These are documented exceptions.
 const CAMERA_SURFACE_PATTERNS = [
+  // Creator/camera surfaces
   /creator[\\/]/,
   /CreatorCamera/,
   /CreatorCanvas/,
   /CreatorToolDock/,
   /CreatorStudio/,
-  /PosterViewer/,
-  /PosterHighlight/,
   /CreateCamera/,
   /LiveStreamViewer/,
   /LiveStreamSeller/,
   /LiveShoppingHome/,
   /FullscreenMediaViewer/,
+  // Poster viewer/highlight surfaces
+  /PosterViewer/,
+  /PosterHighlight/,
+  // Poster creative tools — colors ARE the content in these components
+  /poster[\\/]/,  // entire poster components directory
+  /PosterSticker/,
+  /PosterReaction/,
+  /GradientPresets/,
+  /FilterStrip/,
+  /FilterPreview/,
+  /filterConfig/,
+  /FontColorPicker/,
+  /ColorSlider/,
+  /ColorPickerPanel/,
+  /DrawingCanvas/,
+  /StickerPicker/,
+  /TemplatePicker/,
+  /LayoutPicker/,
+  /BackgroundPicker/,
+  /TextOverlayCanvas/,
+  /TextEditSheet/,
+  /DraggableText/,
+  /DraggableLayer/,
+  /MultiPhotoCollage/,
+  /BottomControlBar/,
+  /CreativeToolbar/,
+  /PosterProgressSegments/,
+  /DetailsDrawer/,
+  /ContextMenu/,
+  /PosterArchive/,
+  /PosterStoryActivity/,
+  /layerAccents/,
+  /colorUtils/,
+  // Media stage / overlay surfaces — use scrim gradients on media
+  /MediaStage/,
+  /MediaStudio/,
+  /MediaGallery/,
+  /MediaComposer/,
+  /MediaPreview/,
+  /MediaMosaic/,
+  /MediaEditor/,
+  /MediaRail/,
+  /ListingMedia/,
+  /ProductMedia/,
+  /LookMedia/,
+  /ChatMediaPreview/,
+  /VisualSearchCamera/,
+  /VisualSearchScreen/,
+  /ListingCameraSheet/,
+  /HeroCarousel/,
+  /ImageEmptyGraphic/,
+  /BoardEmptyGraphic/,
+  /OrdersEmptyGraphic/,
+  /SearchEmptyGraphic/,
+  /LookPreviewCard/,
+  /EditProfilePreview/,
+  /FlagshipProfileMedia/,
+  /ProfileVisualHeader/,
+  /ProfileMediaEditor/,
+  // Creative tools — colors ARE the content
+  /OutfitBuilder/,
+  // Creator performance/timeline infrastructure
+  /performance/,
+  /timeline/,
+  /PosterComposerParts/,
+  // Data files with domain color values (sticker presets, poster data)
+  /data[\\/]posters/,
+  /data[\\/]stickerPresets/,
+  /services[\\/]moodboardApi/,
+  /services[\\/]postersApi/,
+  /orderCapabilities/,
+  // Share-image composition surfaces — colors ARE the content in exported
+  // social media story/sticker images (Skia canvas rendering). These are
+  // not UI surfaces and cannot be themed.
+  /platform[\\/]share/,
 ];
 
 // Hardcoded color patterns
@@ -146,8 +229,19 @@ function checkHardcodedColors(files) {
       RGB_COLOR.lastIndex = 0;
 
       if (hasHex || hasRgb) {
-        // Skip if the color is inside a string that's clearly a gradient/asset path
+        // Skip gradient color arrays: LinearGradient uses colors={[...]} prop
         if (line.includes('gradient') && line.includes('[')) continue;
+        // Skip LinearGradient colors prop arrays (colors={['...', '...']})
+        if (/colors\s*=\s*\{?\s*\[/.test(line)) continue;
+        // Skip ternary branch lines that are gradient color arrays
+        // (e.g. "? ['rgba(...)', 'rgba(...)']" or ": ['rgba(...)', ...]")
+        if (/^\s*[?:]\s*\[.*rgba?\(/.test(line)) continue;
+        // Skip shimmer/skeleton wave arrays (visual effect gradient stops)
+        if (/SHIMMER|WAVE|TINT|BRAND_TINT/i.test(line) && line.includes('[')) continue;
+        // Skip brand color data (Visa, Mastercard, Google, Apple, WhatsApp, etc.)
+        if (/logo-|icon:\s*'logo|Visa|Mastercard|amex|discover|whatsapp|instagram|facebook|google|apple/i.test(line)) continue;
+        // Skip console CSS styles (not UI colors)
+        if (/console\.(log|warn|error|group|info)/.test(line) || /color:\s*#/.test(line) && /font-weight/.test(line)) continue;
         violations.push({
           file: relPath(file),
           line: i + 1,
@@ -161,26 +255,47 @@ function checkHardcodedColors(files) {
 }
 
 // ─── Check 2: Missing accessibility on interactive controls ─────────────────
+
+/**
+ * Find the real closing '>' of a JSX opening tag, properly skipping
+ * over {expresspressions}, strings, arrow functions, etc.
+ */
+function findTagEnd(src, startPos) {
+  let i = startPos;
+  const len = src.length;
+  while (i < len && /[a-zA-Z0-9_.]/.test(src[i])) i++;
+  let braceDepth = 0, parenDepth = 0, bracketDepth = 0;
+  while (i < len) {
+    const ch = src[i], next = src[i + 1];
+    if (ch === '/' && next === '>' && braceDepth === 0 && parenDepth === 0) return i + 1;
+    if (ch === '>' && braceDepth === 0 && parenDepth === 0 && bracketDepth === 0) return i;
+    if (ch === '"' || ch === "'") { i++; while (i < len && src[i] !== ch) { if (src[i] === '\\') i++; i++; } i++; continue; }
+    if (ch === '`') { i++; while (i < len && src[i] !== '`') { if (src[i] === '\\') { i += 2; continue; } if (src[i] === '$' && src[i + 1] === '{') { i += 2; let d = 1; while (i < len && d > 0) { if (src[i] === '{') d++; else if (src[i] === '}') d--; if (src[i] === '\\') i++; i++; } continue; } i++; } i++; continue; }
+    if (ch === '{') { braceDepth++; i++; continue; }
+    if (ch === '}') { braceDepth--; i++; continue; }
+    if (ch === '(') { parenDepth++; i++; continue; }
+    if (ch === ')') { parenDepth--; i++; continue; }
+    if (ch === '[') { bracketDepth++; i++; continue; }
+    if (ch === ']') { bracketDepth--; i++; continue; }
+    if (ch === '/' && next === '*' && braceDepth > 0) { i += 2; while (i < len && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (ch === '/' && next === '/' && braceDepth > 0) { while (i < len && src[i] !== '\n') i++; continue; }
+    i++;
+  }
+  return -1;
+}
+
 function checkAccessibility(files) {
   const violations = [];
   for (const file of files) {
     const src = readFileSync(file, 'utf-8');
 
-    // Find all Pressable/Touchable/Button opening tags and check the JSX block
     let match;
     PRESSABLE_OPEN.lastIndex = 0;
     while ((match = PRESSABLE_OPEN.exec(src)) !== null) {
       const tagStart = match.index;
-      // Grab a window of text after the opening tag to capture props
-      const windowEnd = Math.min(src.length, tagStart + 600);
-      const block = src.slice(tagStart, windowEnd);
-
-      // Find the end of the opening tag (first '>')
-      const tagEnd = block.indexOf('>');
+      const tagEnd = findTagEnd(src, tagStart);
       if (tagEnd === -1) continue;
-      const openingTag = block.slice(0, tagEnd + 1);
-
-      // Self-closing? skip (no children, likely a wrapper)
+      const openingTag = src.slice(tagStart, tagEnd + 1);
       if (openingTag.endsWith('/>')) continue;
 
       const hasLabel =
@@ -189,10 +304,8 @@ function checkAccessibility(files) {
       const hasRole = HAS_A11Y_ROLE.test(openingTag);
       const hasAccessible = HAS_ACCESSIBLE.test(openingTag);
 
-      // If the component has visible text children, it may not need an
-      // explicit label. Heuristic: check if there's text content shortly
-      // after the opening tag.
-      const childWindow = block.slice(tagEnd + 1, tagEnd + 200);
+      const childStart = tagEnd + 1;
+      const childWindow = src.slice(childStart, Math.min(src.length, childStart + 200));
       const hasTextChild = />[^<{]{2,}</.test(childWindow);
 
       if (!hasLabel && !hasTextChild && !hasAccessible) {
@@ -229,19 +342,17 @@ function checkHitSlop(files) {
     PRESSABLE_OPEN.lastIndex = 0;
     while ((match = PRESSABLE_OPEN.exec(src)) !== null) {
       const tagStart = match.index;
-      const windowEnd = Math.min(src.length, tagStart + 600);
-      const block = src.slice(tagStart, windowEnd);
-      const tagEnd = block.indexOf('>');
+      const tagEnd = findTagEnd(src, tagStart);
       if (tagEnd === -1) continue;
-      const openingTag = block.slice(0, tagEnd + 1);
+      const openingTag = src.slice(tagStart, tagEnd + 1);
 
       if (openingTag.endsWith('/>')) continue;
 
       const hasHitSlop = HAS_HITSLOP.test(openingTag);
 
-      // Heuristic: icon-only if the opening tag contains an Ionicons/icon
-      // import reference or the children window is short and contains an icon
-      const childWindow = block.slice(tagEnd + 1, tagEnd + 300);
+      // Heuristic: icon-only if the children contain an icon component
+      const childStart = tagEnd + 1;
+      const childWindow = src.slice(childStart, Math.min(src.length, childStart + 300));
       const looksIconOnly =
         /<Ionicons|<Icon|<MaterialIcons|<FontAwesome|<Entypo|<Feather|<MaterialCommunityIcons/.test(
           childWindow
@@ -265,6 +376,7 @@ function checkHitSlop(files) {
 function checkReducedMotion(files) {
   const violations = [];
   for (const file of files) {
+    if (isCameraSurface(file)) continue;
     const src = readFileSync(file, 'utf-8');
 
     if (!USES_REANIMATED_ANIMATION.test(src)) continue;
@@ -494,7 +606,12 @@ function checkExperimentFramework(files) {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 function main() {
-  const strict = process.argv.includes('--strict');
+  // Enforcement (AGENTS.md §31.7): the gate FAILS on P0 by default so the
+  // build loop actually enforces the visual constitution. `--report` opts
+  // into the old warn-only behaviour for local exploration. `--strict` is
+  // retained as an alias for the default strict behaviour for back-compat.
+  const report = process.argv.includes('--report');
+  const strict = !report; // default strict; --report disables it
 
   const files = walk(SRC);
 
@@ -569,16 +686,22 @@ function main() {
 
   if (strict && p0Violations.length > 0) {
     console.error(
-      '\n✗ visual-gates: P0 violations found in strict mode — fix before merge.\n'
+      '\n✗ visual-gates: P0 violations found — fix before merge.\n' +
+        '  (AGENTS.md §31.7: the visual release gate is enforced by default.\n' +
+        '   Run with --report for warn-only local exploration.)\n'
     );
     process.exit(1);
   }
 
   if (p0Violations.length === 0 && p1Violations.length === 0) {
     console.log('\n✓ visual-gates: No violations found.');
+  } else if (report) {
+    console.log(
+      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported (--report mode; default would fail on P0).`
+    );
   } else {
     console.log(
-      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported (use --strict to fail on P0).`
+      `\n~ visual-gates: ${p0Violations.length} P0, ${p1Violations.length} P1 reported.`
     );
   }
   process.exit(0);

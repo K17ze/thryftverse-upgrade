@@ -24,6 +24,9 @@ import { ListingPreviewFooter } from '../components/listing/ListingPreviewFooter
 import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
@@ -42,10 +45,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const title = preview?.title?.trim() || 'Untitled listing';
   const hasRealTitle = !!preview?.title?.trim();
   const priceText = preview?.price != null
-    ? formatFromFiat(preview.price, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(preview.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
   const originalPriceText = preview?.originalPrice != null && preview.originalPrice > 0
-    ? formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(preview.originalPrice, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
   const hasDiscount = priceText != null && originalPriceText != null && preview!.originalPrice! > (preview!.price ?? 0);
 
@@ -110,16 +113,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
-              onPress={handleBack}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit"
-            >
-              <Text style={styles.editText}>Edit</Text>
+              <Ionicons name="arrow-back" size={24} color={colors.surface} />
             </Pressable>
           </View>
 
@@ -305,7 +299,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: Space.xxl + Space.xxl + Space.xxl + Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: colors.overlay,
   },
   floatingHeader: {
     position: 'absolute',
@@ -321,20 +315,15 @@ function createStyles(colors: ThemeColors) {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  editText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
   },
   previewBadge: {
     position: 'absolute',
     bottom: Space.md,
     left: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
@@ -362,7 +351,7 @@ function createStyles(colors: ThemeColors) {
   },
   contextText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -371,7 +360,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -409,7 +398,7 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
   },
   descriptionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: Type.body.lineHeight + Space.xs,

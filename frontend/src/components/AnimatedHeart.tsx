@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useHaptic } from '../hooks/useHaptic';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface Props {
   isActive: boolean;
@@ -95,9 +96,12 @@ export function AnimatedHeart({
   isActive,
   onToggle,
   size = 24,
-  activeColor = '#E06666',
-  inactiveColor = '#ffffff',
+  activeColor,
+  inactiveColor,
 }: Props) {
+  const { colors } = useAppTheme();
+  const resolvedActiveColor = activeColor ?? colors.danger;
+  const resolvedInactiveColor = inactiveColor ?? colors.surfaceElevated;
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
   const scale = useSharedValue(1);
@@ -161,12 +165,12 @@ export function AnimatedHeart({
     >
       <Reanimated.View style={[animStyle, { alignItems: 'center', justifyContent: 'center' }]}>
         {particles.map((particle) => (
-          <HeartParticle key={particle.id} particle={particle} progress={burstProgress} color={activeColor} />
+          <HeartParticle key={particle.id} particle={particle} progress={burstProgress} color={resolvedActiveColor} />
         ))}
         <Ionicons
           name={isActive ? 'heart' : 'heart-outline'}
           size={size}
-          color={isActive ? activeColor : inactiveColor}
+          color={isActive ? resolvedActiveColor : resolvedInactiveColor}
         />
       </Reanimated.View>
     </AnimatedPressable>

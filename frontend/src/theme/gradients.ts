@@ -29,10 +29,20 @@ interface GradientColorSource {
   danger: string;
   success: string;
   textPrimary: string;
+  /** Whether the active theme is dark. Passed explicitly to avoid fragile
+   *  hex-value sniffing (audit M10). When absent, falls back to textPrimary
+   *  check for backward compatibility with static (non-reactive) callers. */
+  isDark?: boolean;
 }
 
 // THEME-AWARE GRADIENT COMPUTATION
 // ============================================================================
+
+function resolveIsDark(colors: GradientColorSource): boolean {
+  if (typeof colors.isDark === 'boolean') return colors.isDark;
+  // Backward-compatible fallback for static callers that don't pass isDark.
+  return colors.textPrimary === '#FFFFFF';
+}
 
 function computeGradients(colors: GradientColorSource) {
   return {
@@ -51,7 +61,8 @@ function computeGradients(colors: GradientColorSource) {
 
 function computeGlass(colors: GradientColorSource) {
   // In dark mode, glass uses white tints; in light mode, black tints.
-  const isDark = colors.background === '#0A0A0A' || colors.textPrimary === '#FFFFFF';
+  // isDark is passed explicitly (audit M10) — no hex-value sniffing.
+  const isDark = resolveIsDark(colors);
   if (isDark) {
     return {
       bg: 'rgba(255,255,255,0.04)',
@@ -83,11 +94,12 @@ function computeGlow(colors: GradientColorSource) {
 // ============================================================================
 
 export function useGradients() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const colorSource: GradientColorSource = { ...colors, isDark };
   return {
-    gradients: computeGradients(colors),
-    glass: computeGlass(colors),
-    glow: computeGlow(colors),
+    gradients: computeGradients(colorSource),
+    glass: computeGlass(colorSource),
+    glow: computeGlow(colorSource),
   };
 }
 

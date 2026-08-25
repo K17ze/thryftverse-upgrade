@@ -47,8 +47,8 @@ export function CommerceDetailFreshnessBanner({
         style={({ pressed }) => [
           styles.container,
           {
-            backgroundColor: colors.danger + '12',
-            borderColor: colors.danger + '30',
+            backgroundColor: colors.dangerSubtle,
+            borderColor: colors.dangerBorder,
           },
           pressed && { opacity: 0.6 },
         ]}
@@ -104,8 +104,8 @@ export function CommerceDetailFreshnessBanner({
         style={[
           styles.container,
           {
-            backgroundColor: colors.warning + '12',
-            borderColor: colors.warning + '30',
+            backgroundColor: colors.warningSubtle,
+            borderColor: colors.warningBorder,
           },
         ]}
       >
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   subtitle: {
     fontSize: Type.meta.size,

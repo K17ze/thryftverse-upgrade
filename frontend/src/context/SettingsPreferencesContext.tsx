@@ -29,6 +29,11 @@ interface SettingsPreferencesContextValue {
   isHydrated: boolean;
   analyticsOptOut: boolean;
   developerMode: boolean;
+  biometricEnabled: boolean;
+  biometricLoginEnabled: boolean;
+  personalizedAds: boolean;
+  recommendationPersonalization: boolean;
+  thirdPartySharing: boolean;
   setLanguage: (language: SupportedLanguageOption) => void;
   setEmailNotificationsEnabled: (enabled: boolean) => void;
   toggleEmailNotifications: () => void;
@@ -44,6 +49,11 @@ interface SettingsPreferencesContextValue {
   toggleAnalyticsOptOut: () => void;
   setDeveloperMode: (enabled: boolean) => void;
   toggleDeveloperMode: () => void;
+  setBiometricEnabled: (enabled: boolean) => void;
+  setBiometricLoginEnabled: (enabled: boolean) => void;
+  setPersonalizedAds: (enabled: boolean) => void;
+  setRecommendationPersonalization: (enabled: boolean) => void;
+  setThirdPartySharing: (enabled: boolean) => void;
 }
 
 const DEFAULT_LANGUAGE = LANGUAGE_OPTIONS[0];
@@ -64,6 +74,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   );
   const [analyticsOptOut, setAnalyticsOptOutState] = React.useState(false);
   const [developerMode, setDeveloperModeState] = React.useState(false);
+  const [biometricEnabled, setBiometricEnabledState] = React.useState(true);
+  const [biometricLoginEnabled, setBiometricLoginEnabledState] = React.useState(false);
+  const [personalizedAds, setPersonalizedAdsState] = React.useState(false);
+  const [recommendationPersonalization, setRecommendationPersonalizationState] = React.useState(true);
+  const [thirdPartySharing, setThirdPartySharingState] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
 
   React.useEffect(() => {
@@ -86,6 +101,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setPushNotificationToggles(storedPushToggles);
         setAnalyticsOptOutState(settingsPreferences.analyticsOptOut);
         setDeveloperModeState(settingsPreferences.developerMode);
+        setBiometricEnabledState(settingsPreferences.biometricEnabled);
+        setBiometricLoginEnabledState(settingsPreferences.biometricLoginEnabled);
+        setPersonalizedAdsState(settingsPreferences.personalizedAds);
+        setRecommendationPersonalizationState(settingsPreferences.recommendationPersonalization);
+        setThirdPartySharingState(settingsPreferences.thirdPartySharing);
         // Sync the telemetry module so opt-out is respected before the
         // first React re-render commits.
         setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
@@ -121,10 +141,15 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       filterPresets,
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
+      biometricLoginEnabled,
+      personalizedAds,
+      recommendationPersonalization,
+      thirdPartySharing,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, biometricLoginEnabled, personalizedAds, recommendationPersonalization, thirdPartySharing, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -227,6 +252,26 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setDeveloperModeState((prev) => !prev);
   }, []);
 
+  const setBiometricEnabled = React.useCallback((enabled: boolean) => {
+    setBiometricEnabledState(enabled);
+  }, []);
+
+  const setBiometricLoginEnabled = React.useCallback((enabled: boolean) => {
+    setBiometricLoginEnabledState(enabled);
+  }, []);
+
+  const setPersonalizedAds = React.useCallback((enabled: boolean) => {
+    setPersonalizedAdsState(enabled);
+  }, []);
+
+  const setRecommendationPersonalization = React.useCallback((enabled: boolean) => {
+    setRecommendationPersonalizationState(enabled);
+  }, []);
+
+  const setThirdPartySharing = React.useCallback((enabled: boolean) => {
+    setThirdPartySharingState(enabled);
+  }, []);
+
   const pushEnabledCount = React.useMemo(
     () => countEnabledPushNotificationToggles(pushNotificationToggles),
     [pushNotificationToggles]
@@ -245,6 +290,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       isHydrated,
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
+      biometricLoginEnabled,
+      personalizedAds,
+      recommendationPersonalization,
+      thirdPartySharing,
       setLanguage,
       setEmailNotificationsEnabled,
       toggleEmailNotifications,
@@ -259,10 +309,20 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       toggleAnalyticsOptOut,
       setDeveloperMode,
       toggleDeveloperMode,
+      setBiometricEnabled,
+      setBiometricLoginEnabled,
+      setPersonalizedAds,
+      setRecommendationPersonalization,
+      setThirdPartySharing,
     }),
     [
       analyticsOptOut,
       developerMode,
+      biometricEnabled,
+      biometricLoginEnabled,
+      personalizedAds,
+      recommendationPersonalization,
+      thirdPartySharing,
       emailNotificationsEnabled,
       filterPresets,
       isHydrated,
@@ -276,6 +336,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setAllPushNotificationToggles,
       setAnalyticsOptOutPref,
       setDeveloperMode,
+      setBiometricEnabled,
+      setBiometricLoginEnabled,
+      setPersonalizedAds,
+      setRecommendationPersonalization,
+      setThirdPartySharing,
       setMySizes,
       setPushNotificationToggle,
       setQuietHours,

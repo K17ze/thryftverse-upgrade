@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -16,7 +16,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { CURRENCIES } from '../constants/currencies';
+import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { COPY } from '../constants/copy';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -29,8 +29,10 @@ import {
   getStripeConnectStatus,
   getIzeFxQuote,
   listPayoutAccounts,
+  listPayoutRequests,
   getWalletSnapshot,
   PayoutAccountPayload,
+  PayoutRequestPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { Typography, Space, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
@@ -50,6 +52,10 @@ import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { createStableId } from '../utils/createStableId';
+import { t } from '../i18n';
+
 
 type WithdrawStep = 'form' | 'confirm' | 'success';
 
@@ -60,7 +66,55 @@ interface WithdrawSuccessData {
   createdAt: string;
 }
 
+// Honest payout status labeling. The backend distinguishes `processing`
+// (Stripe Connect transfer initiated, bank payout not yet confirmed) from
+// `paid` (bank terminal evidence confirmed). We must never show "Paid" until
+// the bank has confirmed — see AGENTS.md §2 (fix at source of truth) and the
+// honest-status upgrade spec.
+type PayoutStatus = PayoutRequestPayload['status'];
+
+interface PayoutStatusConfig {
+  label: string;
+  subtitle: string;
+  colorKey: 'warning' | 'success' | 'danger' | 'textMuted';
+}
+
+const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
+  requested: {
+    label: t('withdraw.status.pending'),
+    subtitle: t('withdraw.status.awaitingReview'),
+    colorKey: 'textMuted',
+  },
+  processing: {
+    label: t('withdraw.status.processing'),
+    subtitle: t('withdraw.status.transferInitiated'),
+    colorKey: 'warning',
+  },
+  paid: {
+    label: t('withdraw.status.paid'),
+    subtitle: t('withdraw.status.bankConfirmed'),
+    colorKey: 'success',
+  },
+  failed: {
+    label: t('withdraw.status.failed'),
+    subtitle: t('withdraw.status.transferCouldNotComplete'),
+    colorKey: 'danger',
+  },
+  cancelled: {
+    label: t('withdraw.status.cancelled'),
+    subtitle: '',
+    colorKey: 'textMuted',
+  },
+};
+
+function resolvePayoutStatusConfig(status: PayoutStatus): PayoutStatusConfig {
+  return PAYOUT_STATUS_CONFIG[status] ?? PAYOUT_STATUS_CONFIG.requested;
+}
+
+type WithdrawalsLoadState = 'idle' | 'loading' | 'loaded' | 'error';
+
 export default function WithdrawScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -69,12 +123,15 @@ export default function WithdrawScreen() {
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
   const [isConnectingPayout, setIsConnectingPayout] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [successData, setSuccessData] = useState<WithdrawSuccessData | null>(null);
+  const [withdrawals, setWithdrawals] = useState<PayoutRequestPayload[]>([]);
+  const [withdrawalsLoadState, setWithdrawalsLoadState] = useState<WithdrawalsLoadState>('idle');
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
@@ -183,6 +240,42 @@ export default function WithdrawScreen() {
     };
   }, [currentUser?.id]);
 
+  const loadWithdrawals = useCallback(async (userId: string) => {
+    setWithdrawalsLoadState('loading');
+    try {
+      const items = await listPayoutRequests(userId, { limit: 10 });
+      // Most-recent first — backend may already order these, but enforce
+      // a stable client-side order so the surface is predictable.
+      const sorted = [...items].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setWithdrawals(sorted);
+      setWithdrawalsLoadState('loaded');
+    } catch {
+      setWithdrawalsLoadState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const hydrateWithdrawals = async () => {
+      if (!currentUser?.id) {
+        setWithdrawals([]);
+        setWithdrawalsLoadState('idle');
+        return;
+      }
+      if (isCancelled) return;
+      await loadWithdrawals(currentUser.id);
+    };
+
+    void hydrateWithdrawals();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser?.id, loadWithdrawals]);
+
   const numericAmountDisplay = Number(amount) || 0;
   const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, goldRates).toFixed(2));
   const exceedsBalance = numericAmount > availableBalance;
@@ -210,21 +303,21 @@ export default function WithdrawScreen() {
       return {
         name:
           payoutAccount.status === 'active'
-            ? 'Connected payout profile'
-            : 'Payout verification pending',
+            ? t('withdraw.payout.connectedProfile')
+            : t('withdraw.payout.verificationPending'),
         details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}`,
       };
     }
 
     if (!allowBankAccounts) {
       return {
-        name: 'Bank payouts unavailable in your region',
+        name: t('withdraw.payout.bankUnavailable'),
         details: 'Country policy will route withdrawals through supported payout rails.',
       };
     }
 
     return {
-      name: 'Connect a payout profile',
+      name: t('withdraw.form.connectPayoutProfile'),
       details: 'Verify your identity and bank details to enable payouts',
     };
   }, [allowBankAccounts, payoutAccount]);
@@ -273,7 +366,7 @@ export default function WithdrawScreen() {
 
     if (!connectStatus.payoutsEnabled) {
       throw new Error(
-        'Payout setup is not complete yet. Finish the required verification steps, then refresh your payout profile.'
+        t('withdraw.error.payoutSetupIncomplete')
       );
     }
 
@@ -301,7 +394,7 @@ export default function WithdrawScreen() {
     }
 
     if (activeAccount.status !== 'active') {
-      throw new Error('Payouts are not enabled for this profile yet.');
+      throw new Error(t('withdraw.error.payoutsNotEnabled'));
     }
 
     setPayoutAccount(activeAccount);
@@ -387,6 +480,10 @@ export default function WithdrawScreen() {
     }
 
     haptic.patterns.save();
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createStableId('payout');
+    }
+    const idempotencyKey = idempotencyKeyRef.current;
     setIsWithdrawing(true);
     try {
       const { account: payoutProfile, capabilities: activeCapabilities } = await ensurePayoutAccount();
@@ -429,7 +526,7 @@ export default function WithdrawScreen() {
               payoutAccountId: payoutProfile.id,
               amountGbp,
               amountCurrency: 'GBP',
-              idempotencyKey: `payout_${currentUser.id}_${Date.now()}`,
+              idempotencyKey,
               metadata: {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
@@ -441,7 +538,7 @@ export default function WithdrawScreen() {
               payoutAccountId: payoutProfile.id,
               amount: payoutAmount,
               amountCurrency: payoutCurrency,
-              idempotencyKey: `payout_${currentUser.id}_${Date.now()}`,
+              idempotencyKey,
               metadata: {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
@@ -463,7 +560,11 @@ export default function WithdrawScreen() {
         createdAt: payoutResponse.payoutRequest.createdAt,
       });
       haptic.success();
+      idempotencyKeyRef.current = null;
       setStep('success');
+      // Refresh recent withdrawals so the new request appears with its
+      // honest status (processing/pending) immediately.
+      void loadWithdrawals(currentUser.id);
     } catch (error) {
       const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
       const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
@@ -573,17 +674,17 @@ export default function WithdrawScreen() {
               Withdrawal requested
             </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-              {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
+              {formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} is on its way
             </Text>
           </View>
 
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
               <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
               <FlagshipMetricLine label="Requested" value={formattedDate} separated />
-              <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
+              <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
             </FlagshipFormSection>
           </View>
 
@@ -629,7 +730,7 @@ export default function WithdrawScreen() {
               accessibilityLabel={
                 isWithdrawing
                   ? 'Processing withdrawal'
-                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
               }
               accessibilityHint="Submits your withdrawal request"
             />
@@ -652,11 +753,11 @@ export default function WithdrawScreen() {
         >
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal summary">
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} />
-              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, 'GBP', { displayMode: 'fiat' })} separated />
-              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} emphasis separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} />
+              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} emphasis separated />
               <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
-              <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
+              <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
             </FlagshipFormSection>
           </View>
 
@@ -667,6 +768,14 @@ export default function WithdrawScreen() {
                 Withdrawals are processed from completed sale proceeds. This action cannot be undone.
               </Text>
             </View>
+            {rateUpdatedAt && currencyCode !== 'GBP' && (
+              <View style={styles.rateTimestampRow}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
+                  Reference rate as of {new Date(rateUpdatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       </FlagshipScreen>
@@ -686,7 +795,7 @@ export default function WithdrawScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       stickyFooter={
         <>
-          {/* Estimated arrival — clear, prominent disclosure per spec */}
+          {/* Estimated arrival — honest, non-decorative disclosure */}
           <View style={[styles.arrivalRow, { borderColor: colors.border }]}>
             <View style={styles.arrivalLeft}>
               <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
@@ -695,10 +804,12 @@ export default function WithdrawScreen() {
               </Text>
             </View>
             <Text style={[styles.arrivalValue, { color: colors.textPrimary }]}>
-              3–5 working days
+              1–3 business days
             </Text>
           </View>
-          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds.</Text>
+          <Text style={styles.feeText}>
+            Transfers to your bank typically arrive in 1–3 business days. Status updates when the bank confirms.
+          </Text>
           <AppButton
             title={`Review withdrawal`}
             onPress={handleReview}
@@ -707,7 +818,7 @@ export default function WithdrawScreen() {
             style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
             titleStyle={styles.primaryText}
             accessibilityLabel={
-              `Review withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+              `Review withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
             }
             accessibilityHint="Proceeds to the confirmation step"
           />
@@ -734,7 +845,7 @@ export default function WithdrawScreen() {
           <View style={{ marginTop: Space.md }}>
             <FlagshipMetricLine
               label="Available to withdraw"
-              value={formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
+              value={formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
               emphasis
             />
           </View>
@@ -754,7 +865,7 @@ export default function WithdrawScreen() {
               accessibilityHint="Enter the amount to withdraw from your available balance"
             />
           </View>
-          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
+          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
@@ -772,7 +883,7 @@ export default function WithdrawScreen() {
                 accessibilityLabel={
                   payoutAccount?.status === 'active'
                     ? 'Refresh verified payout profile'
-                    : 'Connect verified payout profile'
+                    : t('withdraw.form.connectVerifiedPayoutProfile')
                 }
                 accessibilityHint="Opens secure payout onboarding when verification is required"
               />
@@ -786,7 +897,7 @@ export default function WithdrawScreen() {
                   accessibilityLabel={
                     payoutAccount?.status === 'active'
                       ? 'Refresh payout profile'
-                      : 'Connect payout profile'
+                      : t('withdraw.form.connectPayoutProfileLabel')
                   }
                   accessibilityHint="Checks payout verification and opens any required onboarding steps"
                 >
@@ -805,6 +916,96 @@ export default function WithdrawScreen() {
                 </AnimatedPressable>
               ) : (
                 <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
+              )}
+            </FlagshipFormSection>
+          </View>
+
+          {/* Recent withdrawals — honest payout status.
+              Flat list, hairline separators, colored dot + text.
+              No card-on-card, no decorative pills. */}
+          <View>
+            <FlagshipFormSection variant="flat" title="Recent withdrawals">
+              {withdrawalsLoadState === 'loading' && (
+                <Text
+                  style={[styles.withdrawalsStatusText, { color: colors.textMuted }]}
+                  accessibilityLabel="Loading recent withdrawals"
+                >
+                  Loading…
+                </Text>
+              )}
+
+              {withdrawalsLoadState === 'error' && (
+                <AnimatedPressable
+                  onPress={() => currentUser?.id && loadWithdrawals(currentUser.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading recent withdrawals"
+                >
+                  <Text style={[styles.withdrawalsStatusText, { color: colors.textSecondary }]}>
+                    Could not load withdrawals — tap to retry
+                  </Text>
+                </AnimatedPressable>
+              )}
+
+              {withdrawalsLoadState === 'loaded' && withdrawals.length === 0 && (
+                <Text style={[styles.withdrawalsStatusText, { color: colors.textMuted }]}>
+                  No withdrawals yet
+                </Text>
+              )}
+
+              {withdrawalsLoadState === 'loaded' && withdrawals.length > 0 && (
+                <View>
+                  {withdrawals.map((item, index) => {
+                    const statusConfig = resolvePayoutStatusConfig(item.status);
+                    const statusColor = colors[statusConfig.colorKey];
+                    const isLast = index === withdrawals.length - 1;
+                    const formattedDate = new Date(item.createdAt).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    });
+                    return (
+                      <View
+                        key={item.id}
+                        style={[
+                          styles.withdrawalRow,
+                          !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                        ]}
+                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
+                      >
+                        <View style={styles.withdrawalLeft}>
+                          <Text
+                            style={[styles.withdrawalAmount, { color: colors.textPrimary }]}
+                            numberOfLines={1}
+                          >
+                            {formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                          </Text>
+                          <Text style={[styles.withdrawalDate, { color: colors.textMuted }]}>
+                            {formattedDate}
+                          </Text>
+                        </View>
+                        <View style={styles.withdrawalRight}>
+                          <View style={styles.withdrawalStatusLine}>
+                            <View style={[styles.withdrawalDot, { backgroundColor: statusColor }]} />
+                            <Text
+                              style={[styles.withdrawalStatusLabel, { color: colors.textPrimary }]}
+                              numberOfLines={1}
+                            >
+                              {statusConfig.label}
+                            </Text>
+                          </View>
+                          {statusConfig.subtitle ? (
+                            <Text
+                              style={[styles.withdrawalStatusSubtitle, { color: colors.textMuted }]}
+                              numberOfLines={2}
+                            >
+                              {statusConfig.subtitle}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </FlagshipFormSection>
           </View>
@@ -837,15 +1038,15 @@ function createStyles(colors: ThemeColors) {
   content: { flex: 1 },
 
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.md, marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
-  currencySymbol: { fontSize: Type.priceLarge.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
-  amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
+  currencySymbol: { fontSize: Type.priceHero.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
+  amountInput: { fontSize: Type.priceHero.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
   availableText: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textSecondary,
     marginBottom: Space.sm,
     fontVariant: ['tabular-nums'],
@@ -853,20 +1054,20 @@ function createStyles(colors: ThemeColors) {
   policyLabel: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     marginBottom: Space.xs,
   },
   policyHint: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     marginBottom: Space.lg + Space.xs,
   },
@@ -875,26 +1076,26 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     marginTop: Space.xs,
     marginBottom: Space.md + 4,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.danger,
   },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm + Space.xs },
   addBankText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   railHintText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
@@ -916,30 +1117,30 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
   },
   arrivalLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   arrivalValue: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   feeText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Space.md,
   },
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+  primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
   secondaryBtn: {
     height: Space.xl + 8,
     borderRadius: Space.lg + 4,
@@ -987,6 +1188,73 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  rateTimestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.sm,
+  },
+  rateTimestampText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+
+  // ── Recent withdrawals — flat list, hairline separators ──
+  withdrawalsStatusText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
+    paddingVertical: Space.sm,
+  },
+  withdrawalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+  },
+  withdrawalLeft: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  withdrawalAmount: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+    marginBottom: 2,
+  },
+  withdrawalDate: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  withdrawalRight: {
+    alignItems: 'flex-end',
+    maxWidth: '45%',
+  },
+  withdrawalStatusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: 2,
+  },
+  withdrawalDot: {
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+  },
+  withdrawalStatusLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  withdrawalStatusSubtitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+    textAlign: 'right',
   },
   });
 }

@@ -139,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     opacity: 0.5,
   },
   btnText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   btnTextPrimary: {

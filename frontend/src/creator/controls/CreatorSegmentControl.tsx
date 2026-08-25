@@ -32,7 +32,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, IconGrammar } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -186,14 +186,14 @@ export function CreatorSegmentControl({
                 {segment.glyph && (
                   <CreatorGlyph
                     name={segment.glyph}
-                    size={16}
+                    size={IconGrammar.metadata}
                     color={isActive ? colors.textPrimary : colors.textSecondary}
                   />
                 )}
                 {segment.icon && !segment.glyph && (
                   <Ionicons
                     name={segment.icon as React.ComponentProps<typeof Ionicons>['name']}
-                    size={16}
+                    size={IconGrammar.metadata}
                     color={isActive ? colors.textPrimary : colors.textSecondary}
                   />
                 )}

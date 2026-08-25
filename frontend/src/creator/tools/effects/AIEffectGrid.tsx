@@ -19,6 +19,7 @@ import { View, Text, StyleSheet, Pressable, FlatList, type ViewStyle } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 
 import { Space, Radius, Stroke, FontFamily, FontSize, Control, Type } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -273,7 +274,7 @@ export function AIEffectGrid({
             >
               <Ionicons
                 name={tab.icon}
-                size={14}
+                size={IconGrammar.badge}
                 color={isActive ? colors.brand : colors.textSecondary}
               />
               <Text
@@ -338,7 +339,7 @@ export function AIEffectGrid({
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="bulb-outline" size={28} color={colors.textMuted} />
+            <Ionicons name="bulb-outline" size={IconGrammar.hero} color={colors.textMuted} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
               {activeTab === 'ml'
                 ? 'ML effects require an on-device model'

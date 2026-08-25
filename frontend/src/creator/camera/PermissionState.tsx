@@ -81,12 +81,21 @@ export function PermissionState({
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
           onPress={onEnable}
+          accessibilityRole="button"
+          accessibilityLabel={isDenied ? 'Open camera settings' : 'Enable camera'}
+          accessibilityHint={
+            isDenied
+              ? 'Opens device settings so you can allow camera access'
+              : 'Requests permission to use the camera'
+          }
         >
-          <Text style={styles.btnText}>Enable Camera</Text>
+          <Text style={styles.btnText}>{isDenied ? 'Open Settings' : 'Enable Camera'}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
           onPress={onGallery}
+          accessibilityRole="button"
+          accessibilityLabel="Use gallery instead"
         >
           <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
         </Pressable>
@@ -133,7 +142,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   btnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textInverse,
   },
   galleryFallbackBtn: {

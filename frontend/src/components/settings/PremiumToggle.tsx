@@ -16,11 +16,14 @@ interface PremiumToggleProps {
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
+  /** Accessibility label — should include the setting name and current state. */
+  accessibilityLabel?: string;
 }
 
-export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
+export function PremiumToggle({ value, onValueChange, disabled = false, accessibilityLabel }: PremiumToggleProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
@@ -51,7 +54,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-      accessibilityLabel={value ? 'Toggle on' : 'Toggle off'}
+      accessibilityLabel={accessibilityLabel ?? (value ? 'Toggle on' : 'Toggle off')}
       style={({ pressed }) => [{ opacity: disabled ? 0.5 : 1 }, pressed && { opacity: 0.6 }]}
     >
       <Reanimated.View style={[styles.track, trackStyle]}>
@@ -61,7 +64,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   track: {
     width: 50,
     height: 28,
@@ -73,8 +76,8 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: Radius.lg,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: colors.surfaceElevated,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,

@@ -57,14 +57,17 @@ export function VerificationBadge({ tier, compact = false }: VerificationBadgePr
 
 /**
  * Resolve the highest verification tier from a seller trust summary.
- * Falls back to `verified` boolean for backward compatibility.
+ * Falls back to `verified` boolean for backward compatibility — the legacy
+ * `verified` flag on SellerTrustSummary represents seller verification (from
+ * the /sellers/:id endpoint), NOT email verification, so it maps to the
+ * 'seller' tier. Email verification must never be used as a trust badge.
  */
 export function resolveVerificationTier(
   verified?: boolean,
   verificationTier?: VerificationTier,
 ): VerificationTier | null {
   if (verificationTier) return verificationTier;
-  if (verified) return 'email';
+  if (verified) return 'seller';
   return null;
 }
 

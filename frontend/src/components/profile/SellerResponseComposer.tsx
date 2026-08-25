@@ -101,7 +101,7 @@ export function SellerResponseComposer({
           <View style={styles.guidanceBox}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.guidanceText}>
-              Keep it professional and thank the buyer. Your response is public.
+              Your response is public. Address the transaction factually.
             </Text>
           </View>
 
@@ -109,7 +109,7 @@ export function SellerResponseComposer({
           <View style={styles.inputCard}>
             <TextInput
               style={styles.input}
-              placeholder="Thank your buyer and address their feedback..."
+              placeholder="Address the buyer's feedback..."
               placeholderTextColor={colors.textMuted}
               multiline
               textAlignVertical="top"
@@ -147,7 +147,7 @@ function createStyles(colors: ThemeColors) {
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     backgroundColor: colors.background,
@@ -159,7 +159,7 @@ function createStyles(colors: ThemeColors) {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,
@@ -195,10 +195,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   guidanceBox: {
     flexDirection: 'row',

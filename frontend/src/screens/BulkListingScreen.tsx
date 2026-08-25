@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps, type RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -33,14 +34,17 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
 import {
+
   validateBulkListing,
   submitBulkListings,
   type BulkListingItem,
   type BulkListingResult,
 } from '../services/bulkListingApi';
+import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BulkListing'>;
 
@@ -298,7 +302,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             <Text style={[styles.bulkActionText, { color: canPublish ? colors.success : colors.textMuted }]}>Publish all</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.danger + '40' }, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.dangerBorder }, pressed && { opacity: 0.6 }]}
             onPress={clearAll}
             disabled={isPublishing}
             accessibilityRole="button"
@@ -452,11 +456,12 @@ const BulkRow = React.memo(function BulkRow({
 }: RowProps) {
   const meta = STATUS_META[item.status];
   const statusColor = colors[meta.colorKey];
+  const reducedMotion = useReducedMotion();
   const rotate = useSharedValue(expanded ? 1 : 0);
 
   React.useEffect(() => {
-    rotate.value = withTiming(expanded ? 1 : 0, { duration: 200 });
-  }, [expanded, rotate]);
+    rotate.value = withTiming(expanded ? 1 : 0, { duration: reducedMotion ? 0 : Motion.duration.normal });
+  }, [expanded, rotate, reducedMotion]);
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value * 180}deg` }],
@@ -844,11 +849,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     pricePrefix: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     rowPriceInput: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       padding: 0,
       minWidth: Space.xxl + Space.xs,
@@ -905,7 +910,7 @@ function createStyles(colors: ThemeColors) {
       ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.18)',
+      backgroundColor: colors.overlay,
     },
     progressCard: {
       flexDirection: 'row',
@@ -993,7 +998,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     pickerLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     pickerValueRow: {
@@ -1002,7 +1007,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
     },
     pickerValue: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
     },
     formErrorList: {

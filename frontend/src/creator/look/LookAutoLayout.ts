@@ -335,12 +335,19 @@ function computePlacements(
  * `rotation` on every media layer. Non-media layers are returned untouched
  * (same reference). Media layers that cannot be placed keep their geometry.
  *
+ * Per §8.3: auto-layout NEVER silently moves a manually positioned object
+ * after the creator has edited. Layers with `manuallyPositioned: true` are
+ * skipped — only auto-layout-eligible media layers are rearranged. The
+ * layout is computed across the eligible subset and their placements are
+ * slotted into the available canvas regions.
+ *
  * The layout is computed in normalized 0–1 space; `canvasSize` is used to
  * convert physical spacing (8pt) into normalized fractions and to compute
  * aspect-ratio-aware heights for the masonry style.
  *
- * zIndex is reassigned for media layers in source order so later layers
- * render above earlier ones (important for the collage style).
+ * zIndex is reassigned for eligible media layers in source order so later
+ * layers render above earlier ones (important for the collage style).
+ * Manually-positioned layers keep their existing zIndex.
  */
 export function autoLayout(
   layers: CreatorLayer[],
@@ -352,7 +359,10 @@ export function autoLayout(
   const media: MediaPlacement[] = [];
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
-    if (layer.type === 'media') {
+    if (layer.type === 'media' && !layer.manuallyPositioned) {
+      // Skip manually-positioned layers (§8.3: never silently move
+      // a manually positioned object after the creator has edited).
+      // manuallyPositioned is optional — undefined is treated as false.
       media.push({ layer, index: i, aspect: resolveAspect(layer) });
     }
   }

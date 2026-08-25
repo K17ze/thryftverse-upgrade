@@ -72,3 +72,63 @@ are implemented and evidenced:
 5. Shadow the challenger; compare parity, quality, latency, and drift.
 6. Promote only through a versioned experiment and retain the v2 baseline for
    immediate rollback.
+
+## LightGBM ranking challenger (Phase 2b+2c)
+
+The service now supports an optional LightGBM shadow challenger that scores
+candidates alongside the heuristic champion without affecting user-facing
+responses.
+
+### Training pipeline
+
+```bash
+# Generate synthetic training data (for pipeline testing)
+python -m scripts.generate_synthetic_training_data \
+    --output data/ --n-requests 100 --n-candidates 20
+
+# Train both LambdaRank and XE-NDCG-MART, evaluate against heuristic
+python -m scripts.train_ranking_model \
+    --train-data data/train.jsonl \
+    --eval-data data/eval.jsonl \
+    --output artifacts/
+
+# Build real training data from Postgres event tables
+python -m scripts.build_dataset \
+    --start-date 2026-07-01 --end-date 2026-08-01 \
+    --label-window-hours 72 --output data/train.jsonl
+```
+
+The training CLI:
+- trains both `lambdarank` and `rank_xendcg` objectives
+- evaluates each against the heuristic baseline using graded NDCG@K, MRR, Recall@K
+- saves the winning model with a SHA256-validated manifest and model card
+- the model card records metrics, feature importance, lineage, and safety metadata
+
+### Shadow scoring
+
+Load a trained artifact as a shadow challenger:
+
+```bash
+# Admin-gated load (requires ADMIN_SERVICE_TOKEN)
+curl -X POST http://localhost:8000/shadow/load \
+    -H "x-admin-service-token: $ADMIN_SERVICE_TOKEN" \
+    -d '{"model_path": "artifacts/model.txt", "manifest_path": "artifacts/model.manifest.json"}'
+
+# Check shadow status and telemetry
+curl http://localhost:8000/shadow/status
+
+# Unload
+curl -X POST http://localhost:8000/shadow/unload \
+    -H "x-admin-service-token: $ADMIN_SERVICE_TOKEN"
+```
+
+When a shadow model is loaded:
+- `/recommendations` scores with both champion and challenger
+- the user-facing response is always the heuristic champion's ranking
+- shadow scores appear in `diagnostics.shadow_scoring` for offline comparison
+- the health endpoint reports `shadow_model_loaded` and `shadow_model_version`
+- `capability_level` becomes `trained_model` when a shadow is active
+
+The shadow model never affects the user-facing response. If it fails to load
+or errors during scoring, the error is logged and the champion continues
+serving normally.

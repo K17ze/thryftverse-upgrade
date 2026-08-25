@@ -1,37 +1,34 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
-import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
+import { useIsGuest } from '../store/useStore';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { CachedImage } from '../components/CachedImage';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
+import { useTabScroll } from '../context/TabScrollContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
 
-import HomeScreen from '../screens/HomeScreen';
-import SearchScreen from '../screens/SearchScreen';
-import InboxScreen from '../screens/InboxScreen';
-import MyProfileScreen from '../screens/MyProfileScreen';
-
 const Tab = createBottomTabNavigator<TabParamList>();
 
 // Tab bar geometry — these are deliberate layout values, not token candidates.
-// They are tuned for the Liquid Glass tab bar with 24pt icons.
-const NAV_HEIGHT = 60;
+// Tuned for the Liquid Glass tab bar with 24pt icons + 10pt labels below.
+const NAV_HEIGHT = 68;
 // Create button: 52pt hit area (exceeds 44pt minimum), 40pt visible control
 const CREATE_HIT_SIZE = 52;
 const CREATE_CONTROL_SIZE = 40;
@@ -62,7 +59,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
           accessibilityLabel={`${badgeLabel} unread`}
         >
-          <Text style={tabStyles.badgeText}>{badgeLabel}</Text>
+          <Text style={[tabStyles.badgeText, { color: colors.surface }]} maxFontSizeMultiplier={1.3}>{badgeLabel}</Text>
         </View>
       )}
     </View>
@@ -78,6 +75,7 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
   const { colors } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
   const userAvatar = useStore((s) => s.userAvatar);
+  const isGuest = useIsGuest();
   const avatarUri = userAvatar ?? currentUser?.avatar ?? null;
   const displayName = currentUser?.displayName ?? currentUser?.username ?? '';
   const initials = displayName
@@ -87,6 +85,25 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
     .slice(0, 2)
     .join('')
     .toUpperCase() || '?';
+
+  // Guest mode: show a person icon instead of the avatar/initials fallback.
+  // The Profile tab becomes a "Sign in" entry point for unauthenticated
+  // users — clear recognition over the ambiguous '?' placeholder.
+  if (isGuest) {
+    return (
+      <View
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        style={tabStyles.tabIconWrap}
+      >
+        <Ionicons
+          name={focused ? 'person' : 'person-outline'}
+          size={24}
+          color={color}
+        />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -105,7 +122,7 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
         />
       ) : (
         <View style={[tabStyles.avatarFallback, { backgroundColor: colors.borderSubtle }]}>
-          <Text style={[tabStyles.avatarFallbackText, { color: colors.textMuted }]}>{initials}</Text>
+          <Text style={[tabStyles.avatarFallbackText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{initials}</Text>
         </View>
       )}
     </View>
@@ -171,12 +188,49 @@ const CreateTabButton = ({
   );
 };
 
+/**
+ * Scroll-aware tab bar wrapper. Reads the `tabBarVisible` SharedValue from
+ * TabScrollContext (written by HomeScreen on scroll) and animates the tab
+ * bar's `translateY` with a bounce-free spring. When the value is `false`
+ * the bar slides down by its full height; when `true` it returns to 0.
+ *
+ * The inner `BottomTabBar` retains all existing styling, badges, and the
+ * Liquid Glass backdrop — this wrapper only adds the scroll-driven
+ * hide/show transform on an absolutely-positioned container.
+ */
+function AnimatedTabBar(props: BottomTabBarProps) {
+  const { tabBarVisible } = useTabScroll();
+  const { spring } = useMotionConfig();
+  const insets = useSafeAreaInsets();
+  const hideOffset = NAV_HEIGHT + insets.bottom;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const targetY = tabBarVisible.value ? 0 : hideOffset;
+    return {
+      transform: [{ translateY: withSpring(targetY, spring.glide) }],
+    };
+  });
+
+  return (
+    <Reanimated.View
+      style={[
+        { position: 'absolute', bottom: 0, left: 0, right: 0 },
+        animatedStyle,
+      ]}
+    >
+      <BottomTabBar {...props} />
+    </Reanimated.View>
+  );
+}
+
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors, isDark } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
+  const isGuest = useIsGuest();
+  const { requireAuth } = useSignupWall();
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
   const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
@@ -201,6 +255,9 @@ export default function TabNavigator() {
   }, []);
 
   const handleCreatePress = useCallback(() => {
+    // Guest gating: creating listings requires an account. Show the soft
+    // signup wall instead of opening the CreatorStudio modal.
+    if (!requireAuth('create_listing')) return;
     haptic.light();
     // Opens CreatorStudio directly as a modal overlay with the camera/gallery
     // entry screen shown (openEntry). This removes the redundant CreateCamera
@@ -210,22 +267,32 @@ export default function TabNavigator() {
       type: persistedCreateMode,
       openEntry: true,
     });
-  }, [haptic, navigation, persistedCreateMode]);
+  }, [haptic, navigation, persistedCreateMode, requireAuth]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Tab.Navigator
+        tabBar={(props) => <AnimatedTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          tabBarShowLabel: false,
+          // Labels visible — recognition over recall (research doc §2, §4.1).
+          // Create stays label-less via its custom tabBarButton (no label prop).
+          tabBarShowLabel: true,
           tabBarHideOnKeyboard: true,
+          // Compact 10pt label below each icon. Active/inactive tint is
+          // controlled by tabBarActiveTintColor / tabBarInactiveTintColor.
+          tabBarLabelStyle: {
+            fontSize: Type.meta.size,
+            fontFamily: Typography.family.medium,
+            letterSpacing: Type.meta.letterSpacing,
+            marginTop: Space.xs,
+          },
           // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
           // devices (BlurView fallback elsewhere). No floating pill, no
           // solid background — the glass IS the background.
           tabBarStyle: {
-            position: 'absolute',
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: colors.border,
             backgroundColor: 'transparent',
@@ -256,6 +323,13 @@ export default function TabNavigator() {
               e.preventDefault?.();
               return;
             }
+            // Guest mode: Inbox and Profile are gated (signup wall / auth
+            // landing). The per-screen listener calls preventDefault, so the
+            // tab does not switch — skip the tab-switch haptic and do not
+            // update lastTabRef to avoid a phantom switch signal.
+            if (isGuest && (currentTab === 'Inbox' || currentTab === 'Profile')) {
+              return;
+            }
             if (currentTab !== lastTabRef.current) {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
@@ -265,8 +339,10 @@ export default function TabNavigator() {
       >
         <Tab.Screen
           name="Home"
-          component={HomeScreen}
+          getComponent={() => require('./tabStacks/HomeStack').HomeStack}
           options={{
+            tabBarLabel: 'Home',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
             ),
@@ -275,8 +351,10 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Explore"
-          component={SearchScreen}
+          getComponent={() => require('./tabStacks/ExploreStack').ExploreStack}
           options={{
+            tabBarLabel: 'Explore',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
             ),
@@ -285,7 +363,7 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Create"
-          component={View}
+          getComponent={() => View}
           options={{
             tabBarButton: (props: BottomTabBarButtonProps) => (
               <CreateTabButton
@@ -309,8 +387,10 @@ export default function TabNavigator() {
         />
         <Tab.Screen
           name="Inbox"
-          component={InboxScreen}
+          getComponent={() => require('./tabStacks/InboxStack').InboxStack}
           options={{
+            tabBarLabel: 'Inbox',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 name={focused ? 'paper-plane' : 'paper-plane-outline'}
@@ -323,18 +403,49 @@ export default function TabNavigator() {
               ? `Inbox, ${inboxBadgeCount > 99 ? '99+' : inboxBadgeCount} unread`
               : 'Inbox',
           }}
+          // Guest gating: messaging requires an account. Intercept the tab
+          // press and show the soft signup wall instead of opening the inbox.
+          listeners={
+            isGuest
+              ? {
+                  tabPress: (e) => {
+                    e.preventDefault();
+                    requireAuth('message_seller');
+                  },
+                }
+              : undefined
+          }
         />
         <Tab.Screen
           name="Profile"
-          component={MyProfileScreen}
+          getComponent={() => require('./tabStacks/ProfileStack').ProfileStack}
           options={{
+            // Guest mode: the Profile tab becomes a "Sign in" entry point.
+            tabBarLabel: isGuest ? 'Sign in' : 'Profile',
+            freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <ProfileTabIcon color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: currentUser?.displayName
-              ? `Profile, ${currentUser.displayName}`
-              : 'Profile',
+            tabBarAccessibilityLabel: isGuest
+              ? 'Sign in'
+              : currentUser?.displayName
+                ? `Profile, ${currentUser.displayName}`
+                : 'Profile',
           }}
+          // Guest gating: tapping the Profile tab navigates directly to the
+          // auth landing screen — a clear, self-explanatory sign-in entry
+          // point rather than a gated wall.
+          listeners={
+            isGuest
+              ? {
+                  tabPress: (e) => {
+                    e.preventDefault();
+                    haptic.light();
+                    navigation.navigate('AuthLanding');
+                  },
+                }
+              : undefined
+          }
         />
       </Tab.Navigator>
 
@@ -348,6 +459,7 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 0,
+    minHeight: 44,
   },
   tabIconWrap: {
     alignItems: 'center',
@@ -369,7 +481,6 @@ const tabStyles = StyleSheet.create({
     borderWidth: 1.5,
   },
   badgeText: {
-    color: '#fff',
     fontSize: 10,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,

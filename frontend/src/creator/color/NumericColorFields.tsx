@@ -19,7 +19,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   rgbToHsv,
@@ -263,7 +263,7 @@ export function NumericColorFields({
       >
         <Ionicons
           name={showAdvanced ? 'chevron-up-outline' : 'chevron-down-outline'}
-          size={16}
+          size={IconGrammar.metadata}
           color={colors.textSecondary}
         />
         <Text style={styles.advancedLabel}>Advanced</Text>
@@ -309,8 +309,8 @@ function useNumericStyles(colors: ThemeColors) {
         },
         inputLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           color: colors.textSecondary,
           textTransform: 'uppercase',
         },
@@ -343,8 +343,8 @@ function useNumericStyles(colors: ThemeColors) {
         },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           color: colors.textMuted,
           textTransform: 'uppercase',
         },

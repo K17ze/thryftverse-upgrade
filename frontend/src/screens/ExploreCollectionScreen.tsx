@@ -132,13 +132,13 @@ export default function ExploreCollectionScreen() {
         header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
       >
         <View style={styles.loadingWrap}>
-          <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: Space.md }} />
+          <SkeletonLoader width={120} height={18} borderRadius={Radius.md} style={{ marginBottom: Space.md }} />
           <View style={styles.loadingGrid}>
             {Array.from({ length: 4 }).map((_, i) => (
               <View key={i} style={styles.loadingCard}>
                 <SkeletonLoader width="100%" height={180} borderRadius={Radius.md} />
-                <SkeletonLoader width="60%" height={14} borderRadius={6} style={{ marginTop: Space.sm }} />
-                <SkeletonLoader width="40%" height={14} borderRadius={6} style={{ marginTop: Space.xs }} />
+                <SkeletonLoader width="60%" height={14} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
               </View>
             ))}
           </View>

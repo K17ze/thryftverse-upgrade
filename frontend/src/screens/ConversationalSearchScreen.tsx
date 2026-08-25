@@ -34,6 +34,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { TypingIndicator } from '../components/TypingIndicator';
 import { AITrustSignal, type AIConfidence } from '../components/ai/AITrustSignal';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -244,7 +245,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   const renderAssistantMessage = useCallback(
     (message: ChatMessage) => {
       const chips = message.filterResults ? buildFilterChips(message.filterResults) : [];
-      const hasResults = message.estimatedMatchCount !== undefined && message.estimatedMatchCount > 0;
+      const hasResults = !!message.filterResults && chips.length > 0;
       // Confidence is derived from the number of matched keywords (honest
       // heuristic — the service uses deterministic keyword matching, not an
       // LLM). 3+ matches = high, 1–2 = medium, 0 = low.
@@ -298,7 +299,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 onPress={() => handleViewResults(message.filterResults!)}
                 activeOpacity={0.85}
                 hapticFeedback="light"
-                accessibilityLabel={`View ${message.estimatedMatchCount} results in browse`}
+                accessibilityLabel={`View results in browse`}
                 accessibilityHint="Opens the browse screen with the matched filters applied"
                 accessibilityRole="button"
               >
@@ -542,27 +543,16 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       />
 
       {/* ── Header ── */}
-      <View style={[localStyles.header, { borderBottomColor: colors.border }]}>
-        <AnimatedPressable
-          style={localStyles.backBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-          accessibilityRole="button"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={localStyles.headerTitleWrap}>
-          <Text
-            style={[localStyles.headerTitle, { color: colors.textPrimary }]}
-            accessibilityRole="header"
-          >
-            Ask ThryftVerse
-          </Text>
-        </View>
-        <View style={localStyles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Ask ThryftVerse"
+        backIcon="arrow-back"
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      />
 
       {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
       {CONVERSATIONAL_SEARCH_DEMO_MODE && (
@@ -577,7 +567,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            AI search is in demo mode — using keyword matching. Full AI coming soon.
+            Keyword matching — we extract filters from your description.
           </Text>
         </View>
       )}
@@ -702,35 +692,6 @@ const localStyles = StyleSheet.create({
     flex: 1,
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  headerSpacer: {
-    width: Control.hit,
-  },
-
   // Demo mode banner
   demoBanner: {
     flexDirection: 'row',
@@ -849,10 +810,10 @@ const localStyles = StyleSheet.create({
     minHeight: Control.hit,
   },
   viewResultsText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 
   // Refinement suggestions
@@ -942,10 +903,10 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   suggestionChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   // Error state
@@ -973,10 +934,10 @@ const localStyles = StyleSheet.create({
     marginTop: Space.sm,
   },
   retryBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 
   // Input bar

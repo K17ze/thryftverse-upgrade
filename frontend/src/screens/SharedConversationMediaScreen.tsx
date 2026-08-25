@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Control, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -25,6 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia
 const GAP = 2;
 const COLS = 3;
 const FILTER_THRESHOLD = 6;
+const CHECK_SIZE = 22;
 
 type MediaItem = {
   id: string;
@@ -46,19 +47,16 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const conversations = useStore((state) => state.conversations);
+  const replaceConversationMessages = useStore((state) => state.replaceConversationMessages);
   const conversation = useMemo(
     () => conversations.find((c) => c.id === conversationId),
     [conversations, conversationId]
   );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
-
-  useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => setLoading(false), 1);
-    return () => clearTimeout(t);
-  }, [conversationId]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const allMedia = useMemo<MediaItem[]>(() => {
     if (!conversation?.messages?.length) return [];
@@ -95,6 +93,51 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     });
   };
 
+  const enterSelectionMode = (item: MediaItem) => {
+    haptic.medium();
+    setSelectionMode(true);
+    setSelectedIds(new Set([item.id]));
+  };
+
+  const toggleSelection = (item: MediaItem) => {
+    haptic.selection();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) {
+        next.delete(item.id);
+      } else {
+        next.add(item.id);
+      }
+      return next;
+    });
+  };
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleDelete = () => {
+    if (selectedIds.size === 0 || !conversation) return;
+    haptic.heavy();
+    const remaining = conversation.messages.filter(
+      (m) => !selectedIds.has(m.id)
+    );
+    replaceConversationMessages(conversationId, remaining);
+    exitSelectionMode();
+  };
+
+  // Exit selection mode on back when active
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (selectionMode) {
+        e.preventDefault();
+        exitSelectionMode();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, selectionMode, exitSelectionMode]);
+
   const subtitle =
     allMedia.length > 0
       ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'}`
@@ -117,47 +160,120 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     );
   };
 
-  const renderItem = ({ item }: { item: MediaItem }) => (
-    <AnimatedPressable
-      style={[styles.thumbWrap, { width: thumbSize, height: thumbSize }]}
-      onPress={() => handlePress(item)}
-      activeOpacity={0.85}
-      scaleValue={0.96}
-      hapticFeedback="light"
-      accessibilityLabel={item.isVideo ? 'View shared video' : 'View shared photo'}
-      accessibilityRole="button"
-    >
-      {item.isVideo ? (
-        <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-          <Ionicons name="videocam" size={24} color={colors.textSecondary} />
-        </View>
-      ) : (
-        <CachedImage
-          uri={item.mediaUri}
-          style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
-          contentFit="cover"
-        />
-      )}
-      {item.isVideo && (
-        <View style={styles.videoBadge}>
-          <Ionicons name="play" size={12} color={colors.textInverse} />
-        </View>
-      )}
-    </AnimatedPressable>
+  const renderItem = ({ item }: { item: MediaItem }) => {
+    const selected = selectedIds.has(item.id);
+    return (
+      <AnimatedPressable
+        style={[
+          styles.thumbWrap,
+          { width: thumbSize, height: thumbSize },
+          selectionMode && selected && styles.thumbSelected,
+        ]}
+        onPress={() =>
+          selectionMode ? toggleSelection(item) : handlePress(item)
+        }
+        onLongPress={() =>
+          selectionMode ? undefined : enterSelectionMode(item)
+        }
+        activeOpacity={0.85}
+        scaleValue={0.96}
+        hapticFeedback="light"
+        accessibilityLabel={
+          selectionMode
+            ? `${selected ? 'Deselect' : 'Select'} ${item.isVideo ? 'video' : 'photo'}`
+            : item.isVideo
+              ? 'View shared video'
+              : 'View shared photo'
+        }
+        accessibilityHint={
+          selectionMode ? 'Double tap to toggle selection' : undefined
+        }
+        accessibilityRole="button"
+        accessibilityState={selectionMode ? { selected } : undefined}
+      >
+        {item.isVideo ? (
+          <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
+            <Ionicons name="videocam" size={24} color={colors.textSecondary} />
+          </View>
+        ) : (
+          <CachedImage
+            uri={item.mediaUri}
+            style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+            contentFit="cover"
+          />
+        )}
+        {item.isVideo && !selectionMode && (
+          <View style={styles.videoBadge}>
+            <Ionicons name="play" size={12} color={colors.scrimTextPrimary} />
+          </View>
+        )}
+        {selectionMode && (
+          <View style={styles.checkOverlay}>
+            <View
+              style={[
+                styles.checkCircle,
+                selected
+                  ? styles.checkCircleFilled
+                  : styles.checkCircleEmpty,
+              ]}
+            >
+              {selected && (
+                <Ionicons
+                  name="checkmark"
+                  size={14}
+                  color={colors.textInverse}
+                />
+              )}
+            </View>
+          </View>
+        )}
+      </AnimatedPressable>
+    );
+  };
+
+  const selectionHeader = (
+    <FlagshipHeader
+      title={`${selectedIds.size} selected`}
+      onBack={exitSelectionMode}
+      backIcon="close"
+      rightAction={
+        <AnimatedPressable
+          onPress={handleDelete}
+          disabled={selectedIds.size === 0}
+          style={styles.deleteBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Delete selected media"
+          accessibilityHint={`Removes ${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}`}
+          scaleValue={0.96}
+          hapticFeedback="medium"
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={Control.icon}
+            color={selectedIds.size === 0 ? colors.textMuted : colors.danger}
+          />
+        </AnimatedPressable>
+      }
+    />
   );
 
   return (
     <FlagshipScreen
-      header={(
-        <FlagshipHeader
-          title="Shared media"
-          subtitle={subtitle}
-          onBack={() => navigation.goBack()}
-        />
-      )}
+      header={
+        selectionMode ? (
+          selectionHeader
+        ) : (
+          <FlagshipHeader
+            title="Shared media"
+            subtitle={subtitle}
+            onBack={() => navigation.goBack()}
+          />
+        )
+      }
       scrollEnabled={false}
     >
-      {showFilter && !loading && (
+      {showFilter && !loading && !selectionMode && (
         <View style={styles.filterRow}>
           {(['all', 'photos', 'videos'] as Filter[]).map((f) => {
             const active = filter === f;
@@ -266,6 +382,11 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
+    thumbSelected: {
+      borderColor: colors.brand,
+      borderWidth: Stroke.emphasis,
+      opacity: 0.7,
+    },
     thumb: {
       borderRadius: Radius.sm,
     },
@@ -283,7 +404,38 @@ function createStyles(colors: ThemeColors) {
       width: Space.lg + 4,
       height: Space.lg + 4,
       borderRadius: Radius.xl,
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkOverlay: {
+      position: 'absolute',
+      top: Space.xs,
+      right: Space.xs,
+      width: CHECK_SIZE,
+      height: CHECK_SIZE,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkCircle: {
+      width: CHECK_SIZE,
+      height: CHECK_SIZE,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: Stroke.standard,
+    },
+    checkCircleEmpty: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.scrimTextPrimary,
+    },
+    checkCircleFilled: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+    deleteBtn: {
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
     },

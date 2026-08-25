@@ -30,6 +30,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
   const total = summary.reviewCount;
   const distMap = new Map<number, number>();
   for (const d of summary.distribution) distMap.set(d.rating, d.count);
+  const asOfText = summary.asOf ? formatShortDate(summary.asOf) : '';
 
   return (
     <View style={styles.reviewSummary}>
@@ -41,7 +42,9 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
               <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={13} color={colors.brand} />
             ))}
           </View>
-          <Text style={styles.reviewSummaryCount}>{total} review{total !== 1 ? 's' : ''}</Text>
+          <Text style={styles.reviewSummaryCount}>
+            {total} verified review{total !== 1 ? 's' : ''}
+          </Text>
         </View>
         <View style={styles.reviewSummaryDist}>
           {[5, 4, 3, 2, 1].map((star) => {
@@ -60,7 +63,9 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
           })}
         </View>
       </View>
-      <Text style={styles.reviewSummaryContext}>Reputation from completed orders</Text>
+      {asOfText ? (
+        <Text style={styles.reviewSummaryAsOf}>Updated {asOfText}</Text>
+      ) : null}
     </View>
   );
 }
@@ -73,6 +78,8 @@ interface ProfileReviewRowProps {
   onOpenPhoto?: (photoUrls: string[], index: number) => void;
   /** Called when the seller wants to respond to this review (only for own profile) */
   onRespond?: (reviewId: string, reviewerName: string, rating: number) => void;
+  /** Called when a non-seller viewer wants to report this review */
+  onReport?: (reviewId: string) => void;
 }
 
 /**
@@ -90,6 +97,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   onOpenListing,
   onOpenPhoto,
   onRespond,
+  onReport,
 }: ProfileReviewRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -181,11 +189,11 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         </View>
       )}
 
-      {/* Seller response */}
+      {/* Seller response — indented typography with a hairline left rule,
+          not a card container. The response is subordinate to the review. */}
       {sellerResponse && (
         <View style={styles.sellerResponseBox}>
           <View style={styles.sellerResponseHeader}>
-            <Ionicons name="storefront-outline" size={12} color={colors.textSecondary} />
             <Text style={styles.sellerResponseLabel}>Seller's response</Text>
             {responseDate ? <Text style={styles.sellerResponseDate}>{responseDate}</Text> : null}
           </View>
@@ -226,6 +234,20 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <Text style={styles.reviewListingTitle} numberOfLines={1}>{item.listing.title}</Text>
         </Pressable>
       ) : null}
+
+      {/* Report link — muted text, subordinate to content. Only for non-seller viewers. */}
+      {onReport ? (
+        <View style={styles.reportRow}>
+          <Pressable
+            style={({ pressed }) => [styles.reportLink, pressed && { opacity: 0.6 }]}
+            onPress={() => onReport(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Report this review"
+          >
+            <Text style={styles.reportLinkText}>Report</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -241,16 +263,16 @@ function createStyles(colors: ThemeColors) {
   },
   reviewSummaryTop: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   reviewSummaryAvg: { alignItems: 'center', minWidth: 80 },
-  reviewSummaryAvgValue: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceLarge.letterSpacing, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  reviewSummaryAvgValue: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceHero.letterSpacing, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   reviewSummaryStars: { flexDirection: 'row', gap: Space.xs / 4, marginTop: Space.xs / 2 },
   reviewSummaryCount: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs / 2 },
   reviewSummaryDist: { flex: 1, gap: Space.xs },
+  reviewSummaryAsOf: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
   distStar: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.textSecondary, width: Space.sm },
   distTrack: { flex: 1, height: 3, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   distFill: { height: '100%', backgroundColor: colors.brand, borderRadius: Radius.full },
   distCount: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, width: Space.xl, textAlign: 'right', fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  reviewSummaryContext: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   reviewRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md + 2,
@@ -261,10 +283,10 @@ function createStyles(colors: ThemeColors) {
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm + 2, marginBottom: Space.sm },
   reviewAvatar: { width: 40, height: 40, borderRadius: Radius.full },
   reviewAvatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  reviewAvatarInitials: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  reviewAvatarInitials: { fontSize: Type.caption.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   reviewIdentityCol: { flex: 1, gap: Space.xs / 2 },
   reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
-  reviewName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1, lineHeight: Type.bodyEmphasis.lineHeight },
+  reviewName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1, lineHeight: Type.bodyStrong.lineHeight },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2, flexShrink: 0 },
   verifiedBadgeText: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.success, letterSpacing: 0.15 },
   reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 },
@@ -275,21 +297,21 @@ function createStyles(colors: ThemeColors) {
   photoOverflowOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoOverflowText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, color: '#fff' },
+  photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.scrimTextPrimary },
   sellerResponseBox: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md - 2,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
+    paddingLeft: Space.sm + 2,
     marginTop: Space.sm,
-    gap: Space.xs + 1,
+    gap: Space.xs,
   },
-  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
-  sellerResponseLabel: { fontSize: Type.metaElevated.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1, letterSpacing: Type.metaElevated.letterSpacing },
+  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  sellerResponseLabel: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1 },
   sellerResponseDate: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
   sellerResponseText: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight },
   respondBtn: {
@@ -303,10 +325,13 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: `${colors.brand}12`,
     alignSelf: 'flex-start',
   },
-  respondBtnText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.brand },
+  respondBtnText: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.brand },
   reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.sm, paddingVertical: Space.xs },
   reviewListingPressed: { opacity: 0.6 },
   reviewListingThumb: { width: 28, height: 28, borderRadius: Radius.sm },
   reviewListingTitle: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  reportRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: Space.xs },
+  reportLink: { paddingVertical: Space.xs / 2, paddingHorizontal: Space.xs },
+  reportLinkText: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
   });
 }

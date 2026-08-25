@@ -78,6 +78,10 @@ interface PosterReactionReplyBarProps {
   viewerCount?: number;
   /** Share callback — opens the system share sheet or in-app share target. */
   onShare?: () => void;
+  /** Save/bookmark callback — toggles saved state for the story. */
+  onSave?: () => void;
+  /** Whether the story is currently saved by the viewer. */
+  isSaved?: boolean;
 }
 
 export function PosterReactionReplyBar({
@@ -91,6 +95,8 @@ export function PosterReactionReplyBar({
   onShowActivity,
   viewerCount,
   onShare,
+  onSave,
+  isSaved,
 }: PosterReactionReplyBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -149,10 +155,10 @@ export function PosterReactionReplyBar({
       setShowReactions(true);
       // Spring in — Reanimated with spring config
       trayScaleSV.value = withSpring(1, spring.entrance as SpringConfig);
-      trayOpacitySV.value = withTiming(1, { duration: 150, easing: ReEasing.out(ReEasing.ease) });
+      trayOpacitySV.value = withTiming(1, { duration: Motion.duration.fast, easing: ReEasing.out(ReEasing.ease) });
     } else {
       // Fade out then hide — use setTimeout to hide after the animation completes
-      trayOpacitySV.value = withTiming(0, { duration: 120 });
+      trayOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       setTimeout(() => {
         setShowReactions(false);
         trayScaleSV.value = 0;
@@ -416,6 +422,24 @@ export function PosterReactionReplyBar({
           </AnimatedPressable>
         )}
 
+        {/* Save — bookmark the story for later viewing (Instagram pattern).
+            Only show when there is no active reply text to avoid crowding. */}
+        {!replyText.trim() && onSave && (
+          <AnimatedPressable
+            style={styles.iconBtn}
+            onPress={onSave}
+            scaleValue={0.97}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save story'}
+            accessibilityHint="Bookmarks this story for later viewing"
+            accessibilityState={{ selected: !!isSaved }}
+          >
+            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={Control.icon} color="#fff" />
+          </AnimatedPressable>
+        )}
+
         {/* Share — secondary action, restrained.
             Only show when there is no active reply text to avoid crowding. */}
         {!replyText.trim() && onShare && (
@@ -579,7 +603,7 @@ function createStyles(colors: any) {
       fontSize: Type.body.size,
     },
     quickReplyText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: 'rgba(255,255,255,0.9)',
     },
@@ -638,7 +662,7 @@ function createStyles(colors: any) {
       paddingVertical: 0,
       color: 'rgba(255,255,255,0.95)',
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     replyCounter: {
       position: 'absolute',

@@ -22,6 +22,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -92,6 +93,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 }
 
 export default function MarketLedgerScreen() {
+  useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
@@ -194,24 +196,6 @@ export default function MarketLedgerScreen() {
     navigation.navigate('Portfolio');
   }, [navigation]);
 
-  // ── Loading state (initial sync, no entries yet) ──
-  if (isSyncingLedger && entries.length === 0) {
-    return (
-      <FlagshipScreen
-        header={
-          <FlagshipHeader
-            title="Ledger"
-            subtitle="Market activity and trade history"
-            onBack={handleBack}
-          />
-        }
-        scrollEnabled={false}
-      >
-        <CoOwnActivitySkeleton />
-      </FlagshipScreen>
-    );
-  }
-
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible ledger rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
@@ -252,16 +236,25 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [
-    getEntryCashflow,
-    formatCoOwnIze,
-    formatMoney,
-    formatSignedMoney,
-    relativeTime,
-    haptics,
-    navigation,
-    resolveCommerceDestination,
-  ]);
+  }, [navigation]);
+
+  // ── Loading state (initial sync, no entries yet) ──
+  if (isSyncingLedger && entries.length === 0) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Ledger"
+            subtitle="Market activity and trade history"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
+        <CoOwnActivitySkeleton />
+      </FlagshipScreen>
+    );
+  }
 
   return (
     <FlagshipScreen
@@ -334,10 +327,10 @@ export default function MarketLedgerScreen() {
             <View style={styles.loadingWrap}>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={styles.loadingRow}>
-                  <SkeletonLoader width={36} height={36} borderRadius={8} />
+                  <SkeletonLoader width={36} height={36} borderRadius={Radius.md} />
                   <View style={{ flex: 1, marginLeft: Space.sm }}>
-                    <SkeletonLoader width="60%" height={14} borderRadius={7} />
-                    <SkeletonLoader width="40%" height={10} borderRadius={5} style={{ marginTop: 6 }} />
+                    <SkeletonLoader width="60%" height={14} borderRadius={Radius.md} />
+                    <SkeletonLoader width="40%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
                   </View>
                 </View>
               ))}
@@ -387,9 +380,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   summaryStatValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   summaryStatDivider: {
     width: Stroke.standard,

@@ -17,6 +17,8 @@ export interface ReviewPromptSheetProps {
   sellerName?: string;
   onClose: () => void;
   onWriteReview: (rating?: number) => void;
+  /** Called when the user taps "Maybe later" — defers the prompt to a better moment. */
+  onDefer?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -28,6 +30,7 @@ export function ReviewPromptSheet({
   sellerName,
   onClose,
   onWriteReview,
+  onDefer,
 }: ReviewPromptSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -45,8 +48,12 @@ export function ReviewPromptSheet({
 
   const handleSkip = useCallback(() => {
     haptics.tap();
-    onClose();
-  }, [onClose]);
+    if (onDefer) {
+      onDefer();
+    } else {
+      onClose();
+    }
+  }, [onClose, onDefer]);
 
   const ratingLabel = selectedRating > 0
     ? ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][selectedRating - 1]
@@ -65,7 +72,7 @@ export function ReviewPromptSheet({
         accessibilityLabel="Close review prompt"
         accessibilityRole="button"
       >
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="button">
           <View style={styles.handle} />
 
           {/* Header */}
@@ -155,7 +162,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     backgroundColor: colors.background,
@@ -167,7 +174,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,

@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -20,6 +21,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -89,6 +91,11 @@ export interface LookSourceTrayProps {
     snapshotImageUrl?: string;
     snapshotPriceGbp?: number;
   }, dropPosition: { x: number; y: number }) => void;
+  /** Set of listing IDs already on the canvas. Items in this set show
+   *  a subtle "On canvas" indicator and tapping them offers "Add again"
+   *  instead of silently duplicating (§8.3: dedup — same source item
+   *  offers "use another photo" instead of silent duplication). */
+  onCanvasListingIds?: Set<string>;
 }
 
 type TabKey = 'foryou' | 'closet' | 'listings' | 'search';
@@ -117,6 +124,8 @@ interface DraggableProductCardProps {
   previewVisible: SharedValue<number>;
   trayYSV: SharedValue<number>;
   colors: ThemeColors;
+  /** Whether this item is already on the canvas (dedup indicator). */
+  onCanvas: boolean;
 }
 
 const DraggableProductCard = React.memo(function DraggableProductCard({
@@ -129,6 +138,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
   previewVisible,
   trayYSV,
   colors,
+  onCanvas,
 }: DraggableProductCardProps) {
   const tapGesture = useMemo(
     () =>
@@ -172,7 +182,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
     <GestureDetector gesture={composedGesture}>
       <View
         style={styles.itemCard}
-        accessibilityLabel={`Add ${item.title} to look`}
+        accessibilityLabel={`Add ${item.title} to look${onCanvas ? ' — already on canvas' : ''}`}
         accessibilityHint="Tap to add or drag onto the canvas"
         accessibilityRole="button"
       >
@@ -184,17 +194,21 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           />
         ) : (
           <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.standard} color={colors.textMuted} />
           </View>
         )}
+        {/* Dedup indicator — subtle dot on items already on canvas */}
+        {onCanvas && (
+          <View style={[styles.onCanvasDot, { backgroundColor: colors.brand }]} />
+        )}
         <Text
-          style={[styles.itemTitle, { color: colors.textPrimary }]}
+          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}
           numberOfLines={1}
         >
           {item.title}
         </Text>
         {item.priceGbp !== undefined && (
-          <Text style={[styles.itemPrice, { color: colors.brand }]}>
+          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.brand }]}>
             £{item.priceGbp.toFixed(0)}
           </Text>
         )}
@@ -212,13 +226,14 @@ export function LookSourceTray({
   expanded,
   onToggle,
   onDropProduct,
+  onCanvasListingIds,
 }: LookSourceTrayProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const motionConfig = useMotionConfig();
   const currentUser = useStore((state) => state.currentUser);
   const savedProductIds = useStore((state) => state.savedProducts);
-  const { listings } = useBackendData();
+  const { listings, lastError, isSyncing } = useBackendData();
 
   const [activeTab, setActiveTab] = useState<TabKey>('foryou');
   const [searchQuery, setSearchQuery] = useState('');
@@ -359,7 +374,34 @@ export function LookSourceTray({
   }, [expanded, measureTray, motionConfig.isReducedMotion]);
 
   // ── Tap add: add item + auto-collapse ──
+  // Per §8.3: dedup — if the item is already on the canvas, offer
+  // "Add again" instead of silently duplicating.
   const handleItemPress = useCallback((item: TrayItem) => {
+    const isDuplicate = onCanvasListingIds?.has(item.id) ?? false;
+    if (isDuplicate) {
+      haptic.light();
+      Alert.alert(
+        'Already on canvas',
+        `"${item.title}" is already in your look. Add it again?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Add Again',
+            onPress: () => {
+              haptic.selection();
+              onAddItem({
+                listingId: item.id,
+                snapshotTitle: item.title,
+                snapshotImageUrl: item.imageUrl ?? undefined,
+                snapshotPriceGbp: item.priceGbp,
+              });
+              if (expandedRef.current) onToggle();
+            },
+          },
+        ],
+      );
+      return;
+    }
     haptic.selection();
     onAddItem({
       listingId: item.id,
@@ -371,7 +413,7 @@ export function LookSourceTray({
     if (expandedRef.current) {
       onToggle();
     }
-  }, [haptic, onAddItem, onToggle]);
+  }, [haptic, onAddItem, onToggle, onCanvasListingIds]);
 
   // ── Drag start: set dragging item for floating preview ──
   const handleDragStart = useCallback((_item: TrayItem) => {
@@ -420,7 +462,7 @@ export function LookSourceTray({
   const isEmpty = currentItems.length === 0 && !isSearching;
 
   const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'foryou', label: 'Discover', icon: 'sparkles-outline' },
+    { key: 'foryou', label: 'Discover', icon: 'compass-outline' },
     { key: 'closet', label: 'Closet', icon: 'heart-outline' },
     { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
     { key: 'search', label: 'Search', icon: 'search-outline' },
@@ -490,12 +532,12 @@ export function LookSourceTray({
           accessibilityHint="Toggles the source tray visibility"
           accessibilityRole="button"
         >
-          <Ionicons name="bag-outline" size={20} color={colors.textSecondary} />
+          <Ionicons name="bag-outline" size={IconGrammar.standard} color={colors.textSecondary} />
           <Text style={[styles.peekLabel, { color: colors.textPrimary }]}>
             Items
           </Text>
           <Reanimated.View style={chevronAnimStyle}>
-            <Ionicons name="chevron-up" size={20} color={colors.textSecondary} />
+            <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
           </Reanimated.View>
         </Pressable>
 
@@ -524,7 +566,7 @@ export function LookSourceTray({
                 >
                   <Ionicons
                     name={tab.icon}
-                    size={16}
+                    size={IconGrammar.metadata}
                     color={isActive ? colors.brand : colors.textSecondary}
                   />
                   <Text
@@ -547,7 +589,7 @@ export function LookSourceTray({
           {/* Search input (only on search tab) */}
           {activeTab === 'search' && (
             <View style={[styles.searchRow, { borderBottomColor: colors.border }]}>
-              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+              <Ionicons name="search-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <TextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
                 placeholder="Search products..."
@@ -565,22 +607,33 @@ export function LookSourceTray({
                   accessibilityLabel="Clear search"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  <Ionicons name="close-circle" size={IconGrammar.metadata} color={colors.textMuted} />
                 </Pressable>
               )}
             </View>
           )}
 
-          {/* Loading state */}
-          {isSearching && (
+          {/* Loading state — search or initial backend sync */}
+          {(isSearching || (isSyncing && activeTab !== 'search' && currentItems.length === 0)) && (
             <View style={styles.stateContainer}>
               <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={[styles.stateText, { color: colors.textSecondary }]}>Searching…</Text>
+              <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+                {isSearching ? 'Searching…' : 'Loading items…'}
+              </Text>
+            </View>
+          )}
+
+          {/* Error state — backend sync failure for non-search tabs */}
+          {!isSearching && !isSyncing && lastError && activeTab !== 'search' && isEmpty && (
+            <View style={styles.stateContainer}>
+              <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+                Couldn't load items. Pull to retry.
+              </Text>
             </View>
           )}
 
           {/* Empty state — text-only, no decorative icon */}
-          {!isSearching && isEmpty && (
+          {!isSearching && !isSyncing && !(lastError && activeTab !== 'search') && isEmpty && (
             <View style={styles.stateContainer}>
               <Text style={[styles.stateText, { color: colors.textSecondary }]}>
                 {activeTab === 'foryou' && 'No recommendations available'}
@@ -593,7 +646,7 @@ export function LookSourceTray({
           )}
 
           {/* Item thumbnails — horizontal scroll with draggable cards */}
-          {!isSearching && !isEmpty && (
+          {!isSearching && !isSyncing && !isEmpty && !(lastError && activeTab !== 'search' && currentItems.length === 0) && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -611,6 +664,7 @@ export function LookSourceTray({
                   previewVisible={previewVisible}
                   trayYSV={trayYSV}
                   colors={colors}
+                  onCanvas={onCanvasListingIds?.has(item.id) ?? false}
                 />
               ))}
             </ScrollView>
@@ -631,7 +685,7 @@ export function LookSourceTray({
           />
         ) : (
           <View style={[styles.previewImage, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
         <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -775,6 +829,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
+  // ── Dedup indicator — subtle dot on items already on canvas ──
+  onCanvasDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
   itemImagePlaceholder: {
     width: 72,
     height: 72,
@@ -817,4 +882,70 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 10.5,
   },
+  // ── Source tray peek strip ──
+  peekStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+  },
+  peekThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  peekMore: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+  },
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// SourceTrayPeek — a thin strip of item thumbnails that sits above the
+// tool rail, making the source tray always visible as "creative supply."
+// Tapping the strip opens the full items surface.
+//
+// Per §8.3: "source tray peeking from bottom" — the peek shows real
+// item media, not a generic label. The canvas remains dominant; the
+// peek is a 36pt strip that hints at available supply.
+// ───────────────────────────────────────────────────────────────────────────
+
+export interface SourceTrayPeekProps {
+  /** Thumbnail URIs to show in the peek strip (max 5). */
+  thumbnailUris: string[];
+  /** Called when the user taps the peek strip. */
+  onPress: () => void;
+}
+
+export function SourceTrayPeek({ thumbnailUris, onPress }: SourceTrayPeekProps) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const uris = thumbnailUris.slice(0, 5);
+  const remaining = Math.max(0, thumbnailUris.length - 5);
+
+  return (
+    <Pressable
+      onPress={() => { haptic.light(); onPress(); }}
+      style={({ pressed }) => [styles.peekStrip, pressed && { opacity: 0.6 }]}
+      accessibilityLabel="Browse items"
+      accessibilityHint="Opens the source tray to browse closet, listings, and search"
+      accessibilityRole="button"
+    >
+      {uris.map((uri, i) => (
+        <Image
+          key={`${uri}-${i}`}
+          source={{ uri }}
+          style={styles.peekThumb}
+          resizeMode="cover"
+        />
+      ))}
+      {remaining > 0 && (
+        <Text style={[styles.peekMore, { color: colors.textSecondary }]}>
+          +{remaining}
+        </Text>
+      )}
+    </Pressable>
+  );
+}

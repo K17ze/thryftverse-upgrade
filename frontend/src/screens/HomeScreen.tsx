@@ -20,7 +20,6 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -33,15 +32,15 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
 import { fetchLooksFromApi } from '../services/looksApi';
-import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { openProfile } from '../navigation/openProfile';
-import { useStore } from '../store/useStore';
+import { useStore, useIsGuest } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
@@ -53,22 +52,24 @@ import { useViewabilityPlayback } from '../hooks/useViewabilityPlayback';
 import { HorizontalRail } from '../components/HorizontalRail';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
-import { SharedTransitionView } from '../components/SharedTransitionView';
-import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
 import { getBackendSyncStatus } from '../utils/syncStatus';
-import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
+import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, FontFamily, Stroke, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { markInteractive } from '../platform/monitoring';
+import { useFeatureFlag } from '../analytics';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 
 // Lazy-load the monitoring module at call time to avoid circular import
 // issues where the static binding may be undefined during initial module
@@ -119,46 +120,14 @@ const AnimatedFlashList: any = Platform.OS === 'web'
       React.ComponentProps<typeof FlashList<FeedDataItem>> & { ref?: React.Ref<any> }
     >;
 
-type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
-
-const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
-  'new-listing': 'new listing',
-  'live-auction': 'auction',
-  'co-own-launching': 'co-own launch',
-  'sold-recently': 'sold recently',
-};
-
-// Trend clips removed — demo-only content, not real data
-
-type ExploreTile = {
-  id: string;
-  type: 'listing' | 'clip' | 'posters';
-  mediaType: 'image' | 'video';
-  mediaUri: string;
-  posterUri?: string;
-  likes: number;
-  routeId?: string;
-  sellerId?: string;
-  price?: number;
-  caption: string;
-  category?: string;
-  aspectRatio: number;
-  isSaved?: boolean;
-  /** When true, this tile spans both columns as a wider editorial card.
-   *  Per spec 11: asymmetric rhythm — 6-12 normal tiles, one larger
-   *  featured unit, continue feed. Breaks the uniform grid silhouette. */
-  featured?: boolean;
-};
-
 /**
- * Feed data union: Home discovery card VMs (listing tiles) or posters rail
+ * Feed data union: Home discovery card VMs (listing tiles) or looks rail
  * markers. The FlashList renders both through the same masonry path.
  * The `type` field discriminates the two variants — VMs do not carry it.
+ * Posters rail renders in the ListHeaderComponent (above the grid) so it
+ * is visible in the first viewport — aligned with Instagram/Pinterest 2026
+ * story-tray placement.
  */
-interface PosterRailMarker {
-  id: string;
-  type: 'posters';
-}
 
 /**
  * Look feed marker — an authored interruption rail of Looks interspersed
@@ -179,26 +148,11 @@ interface LookFeedMarker {
   }>;
 }
 
-type FeedDataItem = HomeDiscoveryItemVM | PosterRailMarker | LookFeedMarker;
-
-function isPosterMarker(item: FeedDataItem): item is PosterRailMarker {
-  return (item as PosterRailMarker).type === 'posters';
-}
+type FeedDataItem = HomeDiscoveryItemVM | LookFeedMarker;
 
 function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
   return (item as LookFeedMarker).type === 'looks';
 }
-
-type StoryBubble = {
-  id: string;
-  userId: string;
-  username: string;
-  avatar: string;
-  posterId?: string;
-  isNew: boolean;
-  status: StoryStatus;
-  isSaved?: boolean;
-};
 
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
   const { colors } = useAppTheme();
@@ -252,175 +206,36 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   );
 });
 
-function ListingMediaPlaceholder({ category }: { category?: string }) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const normalized = category?.toLowerCase() ?? '';
-  const icon: React.ComponentProps<typeof Ionicons>['name'] = normalized.includes('shoe')
-    ? 'footsteps-outline'
-    : normalized.includes('bag')
-      ? 'bag-handle-outline'
-      : normalized.includes('jewel') || normalized.includes('watch')
-        ? 'diamond-outline'
-        : 'shirt-outline';
-
-  // Neutral fallback art — flat canvas + category icon, no decorative orbs
-  // or gradients (audit §01: anti-AI art direction; fallback art made neutral).
-  // Uses the same quiet surface tokens as the rest of the feed so a missing
-  // image recedes rather than becoming a decorative element.
-  // No icon circle — the glyph sits directly on the flat canvas (anti-AI:
-  // icon circles with no state/function reason).
-  return (
-    <View
-      style={styles.listingMediaPlaceholder}
-      accessibilityLabel="Product image unavailable"
-      accessibilityRole="image"
-    >
-      <Ionicons name={icon} size={32} color={colors.textMuted} />
-    </View>
-  );
-}
-
-interface ExploreGridItemProps {
-  item: ExploreTile;
-  tileWidth: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formatPrice: (...args: any[]) => string;
-  onPress: (routeId: string | undefined) => void;
-  onLongPress: (item: ExploreTile) => void;
-  onPressSellerProfile: (sellerId: string) => void;
-  sellerUsername?: string | null;
-  sellerAvatar?: string | null;
-  /** Viewability-driven playback: only the most-visible video plays. */
-  shouldPlay?: boolean;
-  /** When true, show seller name overlay instead of likes count (Following mode). */
-  showSellerName?: boolean;
-}
-
-const ExploreGridItem = React.memo(function ExploreGridItem({
-  item,
-  tileWidth,
-  formatPrice,
-  onPress,
-  onLongPress,
-  onPressSellerProfile,
-  sellerUsername,
-  sellerAvatar,
-  shouldPlay = false,
-  showSellerName = false,
-}: ExploreGridItemProps) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const sharedTag = item.mediaType === 'image' && item.routeId
-    ? `image-${item.routeId}-0`
-    : undefined;
-  const mediaHeight = Math.round(tileWidth * item.aspectRatio);
-  const toggleWishlist = useStore((state) => state.toggleWishlist);
-  const haptic = useHaptic();
-
-  const handleDoubleTapLike = React.useCallback(() => {
-    if (item.routeId) {
-      toggleWishlist(item.routeId);
-      ProductAnalytics.itemSave(item.routeId);
-      haptic.success();
-    }
-  }, [item.routeId, toggleWishlist, haptic]);
-
-  // Deterministic feed display role: media is primary, price is overlaid,
-  // and ONE interaction signal is shown as a compact overlay.
-  // Following mode → seller name (context: you know this seller).
-  // For You mode → likes count (context: social proof for discovery).
-  // Seller avatar, condition badges, title text are removed from the tile
-  // so media dominates at thumbnail size.
-  // Seller profile navigation is preserved via the peek modal + ItemDetail.
-  const showLikes = !showSellerName && item.likes > 0;
-  const sellerName = showSellerName && sellerUsername ? `@${sellerUsername}` : null;
-  void onPressSellerProfile; // preserved in API, not rendered on tile
-  void sellerAvatar;
-
-  return (
-    <View style={[styles.exploreItemBox, { width: tileWidth }]}>
-      <AnimatedPressable
-        style={[styles.exploreMediaWrap, { height: mediaHeight }]}
-        onPress={() => onPress(item.routeId)}
-        onLongPress={() => onLongPress(item)}
-        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}${sellerName ? `, by ${sellerName}` : showLikes ? `, ${item.likes} likes` : ''}`}
-        accessibilityRole="button"
-        accessibilityHint="Opens item details. Long press to preview this listing"
-      >
-        <DoubleTapHeart
-          isLiked={item.isSaved || false}
-          onLike={handleDoubleTapLike}
-        >
-          <SharedTransitionView
-            style={styles.exploreSharedMedia}
-            sharedTransitionTag={sharedTag}
-          >
-            {item.mediaUri ? (
-              <CanonicalMediaPreview
-                uri={item.mediaUri}
-                posterUri={item.posterUri}
-                style={styles.exploreImage}
-                shouldPlay={shouldPlay}
-                contentFit="cover"
-                focalPoint={getCategoryFocalPoint(item.category)}
-                isVisible
-                showPlayBadge
-                downscaleWidth={Math.round(tileWidth)}
-              />
-            ) : (
-              <ListingMediaPlaceholder category={item.category} />
-            )}
-          </SharedTransitionView>
-        </DoubleTapHeart>
-
-        {/* Bottom gradient + price overlay — media-first, price as secondary signal */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.62)']}
-          style={styles.exploreBottomScrim}
-          pointerEvents="none"
-        />
-        <View style={styles.explorePriceOverlay} pointerEvents="none">
-          <Text style={styles.explorePriceOverlayText} numberOfLines={1}>
-            {formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}
-          </Text>
-        </View>
-
-        {/* ONE interaction signal: likes count (For You) or seller name (Following), top-right */}
-        {sellerName ? (
-          <View style={styles.exploreSellerBadge} pointerEvents="none">
-            <Text style={styles.exploreSellerBadgeText} numberOfLines={1}>
-              {sellerName}
-            </Text>
-          </View>
-        ) : showLikes ? (
-          <View style={styles.exploreLikesBadge} pointerEvents="none">
-            <Ionicons name="heart" size={10} color="#fff" style={styles.exploreLikesGlyph} />
-            <Text style={styles.exploreLikesText} numberOfLines={1}>
-              {item.likes > 999 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
-            </Text>
-          </View>
-        ) : null}
-      </AnimatedPressable>
-    </View>
-  );
-});
-
 export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
+  // Home is nested HomeStack → BottomTabs → RootStack. Global overlays are
+  // owned by RootStack and must not be dispatched into the tab-local stack.
+  const rootNavigation = navigation
+    .getParent()
+    ?.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
-  const currentUser = useStore((state) => state.currentUser);
+  const isGuest = useIsGuest();
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const reducedMotionEnabled = useReducedMotion();
   const { spring } = useMotionConfig();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
+  const { isOffline } = useConnectivity();
+  useVisuallyComplete('Home');
+
+  // Feature flags — additive enhancements gated by PostHog. Both default to
+  // false (current behaviour) when PostHog is not configured.
+  // - new_home_feed: shows an editorial section header introducing the feed.
+  // - live_shopping_enabled: shows a Live shopping badge in the header.
+  const newHomeFeedEnabled = useFeatureFlag('new_home_feed');
+  const liveShoppingEnabled = useFeatureFlag('live_shopping_enabled');
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
@@ -463,17 +278,15 @@ export default function HomeScreen() {
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
 
-      // Spring the header towards the scroll-derived target height. The spring
-      // is triggered from the scroll worklet so a new animation is only created
-      // when the target actually changes — Reanimated coalesces concurrent
-      // springs on the same shared value, so this remains performant.
-      const targetHeight = interpolate(
+      // Direct shared value assignment — continuous scroll motion should
+      // use interpolation, not springs. Springs on continuously changing
+      // values create lag and jank (AGENTS.md P1-UI-3).
+      headerHeightSV.value = interpolate(
         e.contentOffset.y,
         [0, 120],
         [headerExpandedHeight, headerCollapsedHeight],
         Extrapolation.CLAMP,
       );
-      headerHeightSV.value = withSpring(targetHeight, spring.entrance);
 
       if (e.contentOffset.y > lastScrollY.value + 5 && e.contentOffset.y > 80) {
         tabBarVisible.value = false;
@@ -611,6 +424,7 @@ export default function HomeScreen() {
   }, [scrollRef]);
 
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     void followingFeed.refresh();
@@ -635,7 +449,7 @@ export default function HomeScreen() {
   // surfacing an error (looks are not core to the commerce feed).
   const [feedLooks, setFeedLooks] = React.useState<LookFeedMarker['looks']>([]);
 
-  React.useEffect(() => {
+  const loadPostersAndLooks = React.useCallback(() => {
     let mounted = true;
     setPostersLoading(true);
     fetchPosterStories({ active: true, limit: 20 })
@@ -661,6 +475,19 @@ export default function HomeScreen() {
       .catch(() => { /* silent fail — looks are optional enrichment */ });
     return () => { mounted = false; };
   }, []);
+
+  React.useEffect(() => {
+    const cleanup = loadPostersAndLooks();
+    return cleanup;
+  }, [loadPostersAndLooks]);
+
+  // Refetch posters and looks on focus so newly published content appears
+  // in the feed without requiring a manual pull-to-refresh.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPostersAndLooks();
+    }, [loadPostersAndLooks]),
+  );
 
   const feedStatus = React.useMemo(
     () =>
@@ -763,32 +590,20 @@ export default function HomeScreen() {
 
   // Posters rail injected into the feed after 4 items (2 rows in 2-column
   // grid) so the first viewport shows header + tabs + media — nothing else.
-  // The posters rail appears as a full-span item as the user scrolls down,
-  // preserving the feature while keeping the first viewport media-first
-  // (spec: "First viewport: compact header, For You/Following tabs, first
-  // media row — nothing else").
-  const POSTERS_INJECT_INDEX = 4;
-  // Looks rail injected further down than the posters rail to create a
-  // natural rhythm: posters interrupt early (index 4), looks interrupt
-  // later (index 12, ~6 rows of products) so the feed reads as authored
-  // interruptions rather than a flat product list.
+  // Posters rail renders in the ListHeaderComponent (above the grid) so it
+  // is visible in the first viewport — aligned with Instagram/Pinterest 2026
+  // story-tray placement. The rail is a compact horizontal scroll that does
+  // not displace the first media row significantly.
+  // Looks rail injected as a full-span item further down the feed to create
+  // an authored interruption (~6 rows of products) so the feed reads as
+  // curated rhythm rather than a flat product list.
   const LOOKS_INJECT_INDEX = 12;
   const hasPosters = !postersLoading && realPosters.length > 0;
   const feedGridData = React.useMemo<FeedDataItem[]>(() => {
     if (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) return [];
     if (activeFeedData.length === 0) return [];
     const result: FeedDataItem[] = [...activeFeedData];
-    // Posters rail — inject after the first 2 rows (index 4)
-    if (hasPosters && result.length > POSTERS_INJECT_INDEX) {
-      result.splice(POSTERS_INJECT_INDEX, 0, {
-        id: 'posters_rail',
-        type: 'posters',
-      });
-    }
     // Looks rail — inject as an authored interruption further down the feed.
-    // Spliced after the posters rail so the index is relative to the
-    // already-injected list. Only inject when there is enough content to
-    // justify the interruption (more than 12 items post-posters-injection).
     if (feedLooks.length > 0 && result.length > LOOKS_INJECT_INDEX) {
       result.splice(LOOKS_INJECT_INDEX, 0, {
         id: 'feed-looks-rail',
@@ -797,7 +612,7 @@ export default function HomeScreen() {
       } as LookFeedMarker);
     }
     return result;
-  }, [activeFeedData, hasPosters, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
+  }, [activeFeedData, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
 
   // EAS Observe: record TTI once the home feed has real content rendered for
   // the first time. Only the first markInteractive() call across the whole app
@@ -841,9 +656,6 @@ export default function HomeScreen() {
     if (postersLoading) {
       return (
         <View style={styles.postersSection}>
-          <View style={styles.posterSectionHeading}>
-            <Text style={styles.posterSectionTitle}>Posters</Text>
-          </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
               <PremiumSkeletonTile
@@ -862,10 +674,6 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.postersSection}>
-        <View style={styles.posterSectionHeading}>
-          <Text style={styles.posterSectionTitle}>Posters</Text>
-        </View>
-
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
@@ -889,33 +697,64 @@ export default function HomeScreen() {
               accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
               accessibilityHint="Opens poster story viewer"
             >
-              <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
-                <PosterStoryArtwork story={story} />
-                <View style={styles.posterShade} />
+              {isUnwatched ? (
+                <LinearGradient
+                  colors={[colors.brand, colors.discovery]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.posterTileGradientRing}
+                >
+                  <View style={styles.posterTileInner}>
+                    <PosterStoryArtwork story={story} />
+                    <View style={styles.posterShade} />
 
-                <View style={styles.posterCreatorOverlay}>
-                  <Text style={styles.posterCreatorName} numberOfLines={1}>
-                    @{story.creator.username ?? story.creatorId}
-                  </Text>
-                  <View
-                    style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                    accessible={false}
-                  />
+                    <View style={styles.posterCreatorOverlay}>
+                      <Text style={styles.posterCreatorName} numberOfLines={1} maxFontSizeMultiplier={1.5}>
+                        @{story.creator.username ?? story.creatorId}
+                      </Text>
+                      <View
+                        style={styles.posterFreshDot}
+                        accessible={false}
+                      />
+                    </View>
+
+                    {story.totalFrameCount > 1 && (
+                      <View style={styles.frameCountBadge} accessible={false}>
+                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                        <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                      </View>
+                    )}
+
+                    {showUnwatchedBadge && (
+                      <View style={styles.unwatchedBadge} accessible={false}>
+                        <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
+                      </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.posterTile, styles.posterTileSeen]}>
+                  <PosterStoryArtwork story={story} />
+                  <View style={styles.posterShade} />
+
+                  <View style={styles.posterCreatorOverlay}>
+                    <Text style={styles.posterCreatorName} numberOfLines={1} maxFontSizeMultiplier={1.5}>
+                      @{story.creator.username ?? story.creatorId}
+                    </Text>
+                    <View
+                      style={styles.posterSeenDot}
+                      accessible={false}
+                    />
+                  </View>
+
+                  {story.totalFrameCount > 1 && (
+                    <View style={styles.frameCountBadge} accessible={false}>
+                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                      <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                    </View>
+                  )}
                 </View>
-
-                {story.totalFrameCount > 1 && (
-                  <View style={styles.frameCountBadge} accessible={false}>
-                    <Ionicons name="layers" size={10} color={colors.textInverse} />
-                    <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
-                  </View>
-                )}
-
-                {showUnwatchedBadge && (
-                  <View style={styles.unwatchedBadge} accessible={false}>
-                    <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
-                  </View>
-                )}
-              </View>
+              )}
             </AnimatedPressable>
             );
             });
@@ -998,18 +837,13 @@ export default function HomeScreen() {
     setPeekItem(item);
   }, [haptic]);
 
-  const handleSellerProfilePress = React.useCallback((sellerId: string) => {
-    haptic.light(); // ELEVATED: Light haptic on seller interaction
-    openProfile(navigation, sellerId, currentUser?.id);
-  }, [navigation, haptic, currentUser?.id]);
-
   // FlashList v2 performance: getItemType for heterogeneous row recycling.
   // FeedDataItem has two variants: 'listing' (discovery VM) and 'posters'
   // (rail marker). FlashList recycles cells of the same type, avoiding
   // layout thrash when switching between item geometries.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.2)
   const getItemType = React.useCallback(
-    (item: FeedDataItem) => (isPosterMarker(item) ? 'posters' : isLookMarker(item) ? 'looks' : 'listing'),
+    (item: FeedDataItem) => (isLookMarker(item) ? 'looks' : 'listing'),
     [],
   );
 
@@ -1019,21 +853,13 @@ export default function HomeScreen() {
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderFeedItem = React.useCallback(
     ({ item, index }: { item: FeedDataItem; index: number }) => {
-      // Posters rail — full-span item injected after the first 2 rows
-      if (isPosterMarker(item)) {
-        return (
-          <View style={styles.flashListItem}>
-            {renderPosters()}
-          </View>
-        );
-      }
       // Looks rail — authored interruption of Look thumbnails
       if (isLookMarker(item)) {
         return (
           <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
             <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
-                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }}>
+                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
                   Looks to shop
                 </Text>
               </View>
@@ -1042,7 +868,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={look.id}
                     onPress={() => { haptic.light(); navigation.navigate('LookDetail', { lookId: look.id }); }}
-                    style={{ width: 120, borderRadius: 12, overflow: 'hidden' }}
+                    style={{ width: 120, borderRadius: Radius.lg, overflow: 'hidden' }}
                     accessibilityRole="button"
                     accessibilityLabel={`Open Look${look.title ? ` ${look.title}` : ''}${look.taggedCount ? `, ${look.taggedCount} tagged items` : ''}`}
                     accessibilityHint="Opens Look details"
@@ -1054,8 +880,8 @@ export default function HomeScreen() {
                       downscaleWidth={120}
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
-                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontFamily: Typography.family.semibold }}>
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: 10, fontFamily: Typography.family.semibold }}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -1109,13 +935,38 @@ export default function HomeScreen() {
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
-            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Thryftverse</Text>
+            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
+            {isGuest ? (
+              <Pressable
+                onPress={() => navigation.navigate('AuthLanding')}
+                hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+                accessibilityRole="link"
+                accessibilityLabel="Browsing as guest. Tap to sign in."
+                accessibilityHint="Opens the sign-in screen"
+              >
+                <Text style={styles.guestLabel} maxFontSizeMultiplier={1.2}>
+                  Browsing as guest · Sign in
+                </Text>
+              </Pressable>
+            ) : null}
           </Reanimated.View>
 
           <View style={styles.headerRight}>
+            {liveShoppingEnabled ? (
+              <AnimatedPressable
+                style={styles.liveBadge}
+                onPress={() => navigation.navigate('LiveShopping')}
+                accessibilityLabel="Live shopping — watch live streams"
+                accessibilityRole="button"
+                accessibilityHint="Opens live shopping"
+              >
+                <View style={styles.liveDot} pointerEvents="none" accessible={false} />
+                <Text style={styles.liveBadgeText}>Live</Text>
+              </AnimatedPressable>
+            ) : null}
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('Sell')}
+              onPress={() => { if (!requireAuth('create_listing')) return; navigation.navigate('Sell'); }}
               accessibilityLabel="List an item"
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
@@ -1124,10 +975,10 @@ export default function HomeScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('GlobalSearch')}
-              accessibilityLabel="Search listings"
+              onPress={() => rootNavigation?.navigate('MainTabs', { screen: 'Explore' })}
+              accessibilityLabel="Search and discover"
               accessibilityRole="button"
-              accessibilityHint="Opens global search"
+              accessibilityHint="Opens search and discovery"
             >
               <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
@@ -1141,7 +992,7 @@ export default function HomeScreen() {
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
-                  <Text style={styles.notificationBadgeText}>
+                  <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
                     {notificationCount > 99 ? '99+' : notificationCount}
                   </Text>
                 </View>
@@ -1155,6 +1006,7 @@ export default function HomeScreen() {
       <AnimatedFlashList
         ref={scrollRef}
         data={feedGridData}
+        masonry
         numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
@@ -1170,8 +1022,8 @@ export default function HomeScreen() {
         getItemType={getItemType}
         renderItem={renderFeedItem}
         overrideItemLayout={(layout: { span?: number }, item: FeedDataItem) => {
-          // Featured tiles, posters rail and looks rail span both columns
-          if (isPosterMarker(item) || isLookMarker(item)) {
+          // Featured tiles and looks rail span both columns
+          if (isLookMarker(item)) {
             layout.span = 2;
           } else {
             layout.span = item.featured ? 2 : 1;
@@ -1199,11 +1051,11 @@ export default function HomeScreen() {
                       : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
                     accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
+                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                       {label}
                     </Text>
                     {option === 'following' && followingFeed.listings.length > 0 ? (
-                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
+                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={1.5}>
                         {followingFeed.listings.length}
                       </Text>
                     ) : null}
@@ -1212,6 +1064,24 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {/* New home feed editorial header — gated by the new_home_feed
+                feature flag. Additive enhancement; absent when the flag is
+                off (current behaviour). Introduces the feed with a curated
+                editorial label so the surface reads as authored, not as a
+                generic product grid. */}
+            {newHomeFeedEnabled ? (
+              <View style={styles.editorialHeader}>
+                <Text style={styles.editorialEyebrow} numberOfLines={1}>
+                  Editor’s picks
+                </Text>
+                <Text style={styles.editorialTitle} numberOfLines={1}>
+                  Today’s drops, handpicked
+                </Text>
+              </View>
+            ) : null}
+
+            {hasPosters ? renderPosters() : null}
 
             {renderNewListingsBanner()}
 
@@ -1223,6 +1093,10 @@ export default function HomeScreen() {
                 telemetryContext="home_feed_sync"
                 containerStyle={styles.feedStatusBanner}
               />
+            ) : null}
+
+            {isOffline && feedGridData.length > 0 ? (
+              <OfflineBanner onRetry={() => void handleRefresh()} />
             ) : null}
 
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
@@ -1267,7 +1141,14 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13 }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
+            </View>
+          ) : !hasMore && feedGridData.length > 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
+              <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
+                You've reached the end
+              </Text>
             </View>
           ) : null
         }
@@ -1296,7 +1177,7 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close preview"
         >
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]} />
 
           {peekItem ? (
             <Pressable
@@ -1316,7 +1197,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.peekMeta}>
-                <Text style={styles.peekTitle} numberOfLines={1}>{peekItem.identity.primary}</Text>
+                <Text style={styles.peekTitle} numberOfLines={1} maxFontSizeMultiplier={1.3}>{peekItem.identity.primary}</Text>
 
                 <View style={styles.peekActionsRow}>
                   <AppButton
@@ -1398,16 +1279,69 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     color: colors.textPrimary,
   },
-  brandSubtitle: {
-    marginTop: 2,
+  // Guest indicator — a small, restrained text label below the brand title.
+  // Not a banner; communicates state and provides a sign-in entry point.
+  guestLabel: {
     fontSize: 11,
-    fontFamily: FontFamily.regular,
-    letterSpacing: 0.25,
-    color: colors.textSecondary,
+    lineHeight: 14,
+    fontFamily: FontFamily.medium,
+    letterSpacing: 0.1,
+    color: colors.textMuted,
+    marginTop: 1,
   },
   headerRight: {
     flexDirection: 'row',
     gap: 2,
+  },
+  // Live shopping badge — additive entry point gated by the
+  // live_shopping_enabled feature flag. A compact pill with a live dot so
+  // it reads as a status indicator, not decorative chrome.
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+    height: 28,
+    paddingHorizontal: Space.sm,
+    marginRight: Space.xxs,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    backgroundColor: `${colors.danger}14`,
+    alignSelf: 'center',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    backgroundColor: colors.danger,
+  },
+  liveBadgeText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.danger,
+    letterSpacing: 0.2,
+  },
+  // New home feed editorial header — additive section gated by the
+  // new_home_feed feature flag. An eyebrow + title pair that introduces the
+  // feed with an authored, curated voice.
+  editorialHeader: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    gap: Space.xxs,
+  },
+  editorialEyebrow: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.brand,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  editorialTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: colors.textPrimary,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   headerBtn: {
     width: 44,
@@ -1440,12 +1374,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingBottom: 120,
   },
   feedTabBar: {
-    minHeight: 46,
+    minHeight: 44,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: Space.lg,
+    gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -1527,241 +1461,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  sectionTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
-  sectionHint: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    color: colors.textMuted,
-    letterSpacing: 0.22,
-  },
-
-  storiesSection: {
-    paddingTop: Space.xs + Space.xxs,
-    paddingBottom: Space.sm + Space.xs,
-  },
-  storiesScroll: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm + Space.xs,
-  },
-  storyCreateWrap: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyCreateRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-    marginBottom: 6,
-  },
-  storyItem: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyRingGradient: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    position: 'relative',
-  },
-  storyRingGradientMuted: {
-    opacity: 0.64,
-  },
-  storyRingInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  storyAvatarWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-  },
-  storyAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 27,
-  },
-  storyPulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.brand,
-    position: 'absolute',
-    right: 1,
-    top: 1,
-    borderWidth: 1,
-    borderColor: colors.background,
-  },
-  storyName: {
-    fontSize: 10,
-    fontFamily: FontFamily.medium,
-    color: colors.textSecondary,
-    width: 66,
-    textAlign: 'center',
-  },
-  storyStatus: {
-    marginTop: 2,
-    fontSize: 9,
-    fontFamily: FontFamily.regular,
-    color: colors.textMuted,
-    width: 66,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.24,
-  },
-
-  looksSection: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  looksRail: {
-    paddingHorizontal: Space.md,
-    gap: Space.smMd,
-  },
-  lookCard: {
-    width: SCREEN_WIDTH * 0.82,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookImageWrap: {
-    width: '100%',
-    height: 280,
-  },
-  lookFeedRow: {
-    paddingHorizontal: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-  lookFeedCard: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookFeedImageWrap: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-  },
-  lookImage: {
-    width: '100%',
-    height: '100%',
-  },
-  lookOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  lookOwnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  lookOwnerAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  lookOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
-  lookOwnerName: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-  },
-  lookTitle: {
-    color: colors.textInverse,
-    fontSize: 21,
-    fontFamily: FontFamily.extrabold,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-  },
-  lookDescription: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    fontFamily: FontFamily.medium,
-    marginTop: 2,
-  },
-  lookMetaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  lookMetaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.34)',
-  },
-  lookMetaText: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-  },
-  lookTime: {
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    marginLeft: 'auto',
-  },
-
   postersSection: {
     marginTop: 0,
     paddingBottom: Space.sm,
-  },
-  posterSectionHeading: {
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs + 2,
-  },
-  // Poster rail label: quiet eyebrow (meta/uppercase/muted) so "Explore"
-  // remains the single dominant heading and the poster rail reads as a
-  // supporting module. Avoids competing same-size headings in the first
-  // viewport (AGENTS.md §4 text budget: max 3 type sizes + 1 eyebrow).
-  posterSectionTitle: {
-    color: colors.textMuted,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1784,14 +1486,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
   },
-  posterTileUnseen: {
-    borderWidth: 2,
-    borderColor: colors.brand,
+  // Gradient ring for unwatched stories — Instagram-style gradient border
+  // using brand + discovery accent colors. 2pt padding creates the ring
+  // thickness (Stroke.emphasis = 2, reserved for focus/selection per
+  // AGENTS.md §4 stroke grammar). The inner tile clips artwork to the
+  // sheetDialog radius while the outer gradient uses sheetDialog + 2.
+  posterTileGradientRing: {
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: RadiusRoleValue.sheetDialog + Stroke.emphasis,
+    padding: Stroke.emphasis,
   },
-  // No decorative glow shadow — the 2pt brand border is the selection
-  // signal (AGENTS.md §4: 2pt reserved for focus/selection; composition
-  // over decoration).
-  posterTileRing: {
+  posterTileInner: {
+    flex: 1,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.surfaceAlt,
   },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1809,7 +1520,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   posterTextArtworkCopy: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.bold,
@@ -1818,7 +1529,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: colors.overlay,
   },
   posterAvatarOverlay: {
     position: 'absolute',
@@ -1826,25 +1537,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: colors.textInverse,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    borderColor: colors.scrimTextPrimary,
+    ...Elevation.floating,
   },
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1859,25 +1566,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterOwnerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerName: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 8,
     fontFamily: FontFamily.medium,
     flex: 1,
@@ -1886,13 +1593,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
+    backgroundColor: colors.overlay,
+    borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
   posterExpiryText: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     fontFamily: FontFamily.bold,
   },
@@ -1903,10 +1610,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 8,
     paddingVertical: 7,
-    backgroundColor: 'rgba(0,0,0,0.44)',
+    backgroundColor: colors.overlay,
   },
   posterCaption: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: FontFamily.medium,
@@ -1922,11 +1629,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 6,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.58)',
+    backgroundColor: colors.overlay,
   },
   posterCreatorName: {
     flex: 1,
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: FontFamily.semibold,
@@ -1938,13 +1645,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8,
+    backgroundColor: colors.overlay,
+    borderRadius: Radius.md,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
   frameCountBadgeText: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     fontFamily: FontFamily.bold,
   },
@@ -1953,7 +1660,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -1965,169 +1672,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterFreshDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.border,
   },
 
-  masonryGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-    alignItems: 'flex-start',
-  },
-  masonryColumn: {
-    flex: 1,
-    gap: Space.sm,
-  },
   flashListItem: {
     paddingHorizontal: Space.xs,
     paddingBottom: GRID_GAP,
   },
-  exploreItemBox: {
-    backgroundColor: colors.background,
-    // Pinterest feel: no border, no shadow — image is the card
-  },
-  exploreMediaWrap: {
-    position: 'relative',
-    borderRadius: RadiusRoleValue.sheetDialog,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
-  exploreSharedMedia: {
-    ...StyleSheet.absoluteFill,
-  },
-  exploreImage: {
-    width: '100%',
-    height: '100%',
-  },
-  listingMediaPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
-  exploreDetails: {
-    display: 'none',
-  },
-  exploreTitle: {
-    display: 'none',
-  },
-  explorePrice: {
-    display: 'none',
-  },
-  exploreSellerRow: {
-    display: 'none',
-  },
-  exploreSellerAvatar: {
-    display: 'none',
-  },
-  exploreSellerAvatarFallback: {
-    display: 'none',
-  },
-  exploreSellerText: {
-    display: 'none',
-  },
-  // Bottom gradient scrim for price overlay legibility. Height tuned to
-  // the 15pt overlay price so the scrim covers the text zone without
-  // over-darkening shorter cards (spec §06: price visually quieter than
-  // imagery but stronger than metadata).
-  exploreBottomScrim: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-  },
-  explorePriceOverlay: {
-    position: 'absolute',
-    bottom: Space.sm - 2,
-    left: Space.xs + 1,
-    right: Space.xs + 1,
-  },
-  // Price overlay: 15pt semibold (bodyStrong) — quieter than the 20pt
-  // priceList used on PDP/Browse info sections, appropriate for a card
-  // overlay where media must dominate (spec §06 micro-detail pass).
-  explorePriceOverlayText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  // Likes badge — compact interaction signal, top-right
-  exploreLikesBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: Space.xs + 1,
-    paddingVertical: 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  exploreLikesGlyph: {
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  exploreLikesText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: '#fff',
-    letterSpacing: 0.1,
-    fontVariant: ['tabular-nums'],
-  },
-  // Seller name badge — compact overlay for Following mode (replaces likes)
-  exploreSellerBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    paddingHorizontal: Space.xs + 1,
-    paddingVertical: 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  exploreSellerBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    color: '#fff',
-    letterSpacing: 0.1,
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    width: 28,
-    height: 28,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bigHeartLayer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'none',
-    zIndex: 4,
-  },
   exploreLoadingGrid: {
     flexDirection: 'row',
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     gap: Space.sm,
   },
   exploreLoadingColumn: {
@@ -2143,7 +1704,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
   },
   peekCard: {
     width: '100%',
@@ -2173,12 +1734,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
-  peekSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    fontFamily: FontFamily.regular,
-    color: colors.textSecondary,
-  },
   peekActionsRow: {
     marginTop: 14,
     flexDirection: 'row',
@@ -2204,7 +1759,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {

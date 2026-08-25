@@ -74,6 +74,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -239,8 +240,8 @@ function ImagePage({
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withSpring(0, Motion.spring.settle);
+        translateY.value = withSpring(0, Motion.spring.settle);
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -249,15 +250,15 @@ function ImagePage({
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withSpring(tx, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityX });
+      translateY.value = withSpring(ty, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityY });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
+        scale.value = withSpring(1, Motion.spring.press);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         savedScale.value = 1;
@@ -266,7 +267,7 @@ function ImagePage({
         runOnJS(setIsZoomed)(false);
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withSpring(target, Motion.spring.success);
         savedScale.value = target;
         runOnJS(setIsZoomed)(true);
         if (onDoubleTap) runOnJS(onDoubleTap)();
@@ -524,7 +525,7 @@ const videoControlStyles = StyleSheet.create({
     marginTop: -28,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -816,13 +817,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   dot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
     width: 14,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   indexText: {

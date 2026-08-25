@@ -92,7 +92,7 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
             backgroundColor: 'transparent',
             borderWidth: 0,
             borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
-            borderRadius: 0,
+            borderRadius: Radius.none,
             paddingHorizontal: 0,
           };
         case 'filled':
@@ -183,7 +183,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.md,
   },
   label: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -210,7 +210,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   input: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     paddingVertical: 14,
     textAlignVertical: 'center',

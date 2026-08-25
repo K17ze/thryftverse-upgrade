@@ -8,7 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
@@ -309,7 +309,7 @@ function createStyles(colors: ThemeColors) {
   filterText: {
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   filterTextSelected: {
     color: colors.textPrimary,
@@ -332,13 +332,13 @@ function createStyles(colors: ThemeColors) {
   agentName: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   agentDescription: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   agentMeta: {
     flexDirection: 'row',
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
   skeletonIcon: {
     width: Control.chromeCompact,
     height: Control.hit,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   skeletonCopy: {
@@ -392,7 +392,7 @@ function createStyles(colors: ThemeColors) {
   },
   skeletonLine: {
     height: 12,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   });

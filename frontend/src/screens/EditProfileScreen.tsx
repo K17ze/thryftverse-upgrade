@@ -398,7 +398,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
     },
     identityAvatarText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       textAlign: 'center',
@@ -410,11 +410,11 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs / 4,
     },
     identityName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     identityHandle: {
       fontSize: Type.caption.size,
@@ -438,11 +438,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
     },
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       marginBottom: Space.sm,
     },
 
@@ -454,11 +454,11 @@ function createStyles(colors: ThemeColors) {
       marginBottom: 0,
     },
     fieldLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       marginBottom: Space.xs + 2,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
     },
     fieldSurface: {
       borderRadius: Radius.lg,

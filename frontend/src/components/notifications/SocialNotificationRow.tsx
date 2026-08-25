@@ -10,8 +10,6 @@ import {
 import {
   Space,
   Radius,
-  Stroke,
-  Control,
   Type,
   FontFamily,
 } from '../../theme/designTokens';
@@ -62,22 +60,20 @@ export function SocialNotificationRow({
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${description}, ${time}${onActorPress ? '. Tap to open' : ''}`;
 
-  // Leading: actor avatar with unread ring
+  // Leading: actor avatar (unread state shown via dot in the base)
   const leading = (
     <View style={styles.avatarWrap}>
-      <View style={[styles.avatarRing, isUnread && styles.avatarRingUnread]}>
-        {actor?.avatarUrl ? (
-          <CachedImage
-            uri={actor.avatarUrl}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Ionicons name="person" size={18} color={colors.textSecondary} />
-          </View>
-        )}
-      </View>
+      {actor?.avatarUrl ? (
+        <CachedImage
+          uri={actor.avatarUrl}
+          style={styles.avatar}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[styles.avatar, styles.avatarFallback]}>
+          <Ionicons name="person" size={18} color={colors.textSecondary} />
+        </View>
+      )}
     </View>
   );
 
@@ -105,7 +101,7 @@ export function SocialNotificationRow({
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
         {event.title || actorName}
       </Text>
-      <Text style={[styles.body, isUnread && styles.bodyUnread]} numberOfLines={2}>
+      <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
     </NotificationRowBase>
@@ -130,23 +126,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    avatarRing: {
+    avatar: {
       width: 44,
       height: 44,
-      borderRadius: Radius.full,
-      borderWidth: 0,
-      borderColor: 'transparent',
-      overflow: 'hidden',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    avatarRingUnread: {
-      borderWidth: Stroke.emphasis - 0.5,
-      borderColor: colors.brand,
-    },
-    avatar: {
-      width: 40,
-      height: 40,
       borderRadius: Radius.full,
     },
     avatarFallback: {
@@ -155,10 +137,11 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     title: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyLarge.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
+      lineHeight: Type.bodyLarge.lineHeight,
+      paddingRight: Space.xxl + Space.sm,
     },
     titleUnread: {
       color: colors.textPrimary,
@@ -169,10 +152,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
-    },
-    bodyUnread: {
-      color: colors.textPrimary,
-      fontFamily: FontFamily.medium,
     },
   });
 }

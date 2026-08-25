@@ -15,7 +15,7 @@ export function LookDetailSkeleton() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Hero — matches heroWrap: SCREEN_W x SCREEN_W * 1.15 */}
-      <SkeletonLoader width={SCREEN_W} height={SCREEN_W * 1.15} borderRadius={0} />
+      <SkeletonLoader width={SCREEN_W} height={SCREEN_W * 1.15} borderRadius={Radius.none} />
 
       {/* Info section — matches infoSection padding/gap */}
       <View style={styles.infoSection}>

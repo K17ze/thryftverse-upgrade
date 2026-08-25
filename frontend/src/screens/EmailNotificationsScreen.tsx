@@ -11,21 +11,16 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Switch,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import {
   fetchEmailPreferences,
   updateEmailPreferences,
@@ -101,6 +96,14 @@ const GROUPS: CategoryGroup[] = [
         description: 'When a followed seller posts a new item',
         icon: 'person-add',
         iconColor: 'discovery',
+        defaultEnabled: true,
+      },
+      {
+        key: 'auctionAlerts',
+        label: 'Auction alerts',
+        description: 'Outbid, auction ending, and auction won alerts',
+        icon: 'trophy-outline',
+        iconColor: 'bronze',
         defaultEnabled: true,
       },
     ],
@@ -191,13 +194,11 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     }
   };
 
-  // Count enabled categories for hero summary
-  const allCategories = GROUPS.flatMap(g => g.categories);
-  const enabledCount = allCategories.filter(c => preferences?.[c.key] ?? c.defaultEnabled).length;
-
   if (isLoading) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}
+      >
         <FlagshipState variant="loading" />
       </FlagshipScreen>
     );
@@ -211,88 +212,48 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => {
+              setIsRefreshing(true);
+              void load();
+            }}
+            tintColor={colors.textSecondary}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero summary — visual identity */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="mail" size={22} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Email preferences</Text>
-                <Text style={styles.heroSubtitle}>
-                  {enabledCount} of {allCategories.length} categories active
-                </Text>
-              </View>
-            </View>
-          </View>
-
         {error && !preferences ? (
           <EmptyState
             icon="cloud-offline-outline"
             title="Couldn't load preferences"
             subtitle={error}
             ctaLabel="Retry"
-            onCtaPress={() => { setIsLoading(true); void load(); }}
+            onCtaPress={() => {
+              setIsLoading(true);
+              void load();
+            }}
           />
         ) : (
-          GROUPS.map((group, groupIdx) => (
-            <View
-              key={group.title}
-            >
-              {/* Section header */}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{group.title}</Text>
-                <Text style={styles.sectionDescription}>{group.description}</Text>
-              </View>
-
-              {/* Grouped card with category rows */}
-              <View style={styles.categoriesList}>
-                {group.categories.map((category, catIdx) => {
-                  const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
-                  const isUpdating = updatingKeys.has(category.key);
-                  const isLocked = category.locked;
-                  const iconColor = category.iconColor ? colors[category.iconColor] : colors.textSecondary;
-                  return (
-                    <View
-                      key={category.key}
-                      style={[
-                        styles.categoryRow,
-                        catIdx < group.categories.length - 1 && styles.categoryRowBorder,
-                      ]}
-                    >
-                      {/* Coloured icon badge — visual identity per category */}
-                      <View style={[styles.categoryIcon, { backgroundColor: iconColor + '18' }]}>
-                        <Ionicons name={category.icon} size={20} color={iconColor} />
-                      </View>
-                      <View style={styles.categoryInfo}>
-                        <View style={styles.categoryLabelRow}>
-                          <Text style={styles.categoryLabel}>{category.label}</Text>
-                          {isLocked && (
-                            <View style={styles.lockedBadge}>
-                              <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                              <Text style={styles.lockedText}>Always on</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.categoryDescription}>{category.description}</Text>
-                      </View>
-                      <Switch
-                        value={isEnabled}
-                        onValueChange={(v) => handleToggle(category, v)}
-                        disabled={isUpdating || isLocked}
-                        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                        thumbColor="#fff"
-                        accessibilityRole="switch"
-                        accessibilityLabel={category.label}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
+          GROUPS.map((group) => (
+            <SettingsSection key={group.title} title={group.title} description={group.description} noCard>
+              {group.categories.map((category, idx) => (
+                <SettingsRow
+                  key={category.key}
+                  icon={category.icon}
+                  iconColor={category.iconColor ? colors[category.iconColor] : undefined}
+                  title={category.label}
+                  subtitle={category.description}
+                  value={category.locked ? 'Always on' : undefined}
+                  toggleValue={preferences?.[category.key] ?? category.defaultEnabled}
+                  onToggle={(v) => handleToggle(category, v)}
+                  disabled={updatingKeys.has(category.key) || category.locked}
+                  isFirst={idx === 0}
+                  isLast={idx === group.categories.length - 1}
+                />
+              ))}
+            </SettingsSection>
           ))
         )}
 
@@ -307,120 +268,5 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
-    // Hero summary
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
-      marginTop: Space.sm,
-    },
-    heroIconRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
-
-    // Section headers
-    sectionHeader: {
-      marginTop: Space.lg,
-      marginBottom: Space.sm,
-      paddingHorizontal: Space.xs,
-    },
-    sectionTitle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
-      opacity: 0.7,
-    },
-    sectionDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs / 2,
-    },
-
-    // Category cards
-    categoriesList: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      overflow: 'hidden',
-    },
-    categoryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      gap: Space.md,
-    },
-    categoryRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    categoryIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    categoryInfo: { flex: 1 },
-    categoryLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    categoryLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    lockedBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs - 1,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.xs + 2,
-      paddingVertical: Space.xs / 2,
-    },
-    lockedText: {
-      fontSize: Type.meta.size - 1,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
-    categoryDescription: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs - 1,
-      lineHeight: Type.caption.lineHeight,
-    },
   });
 }

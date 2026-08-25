@@ -42,6 +42,32 @@ export interface SettingsPreferences {
    * Defaults to false so ordinary consumers never see developer tooling.
    */
   developerMode: boolean;
+  /**
+   * Biometric auth gating — when true (default), sensitive screens
+   * (wallet, payments, withdrawals, account deletion) require Face ID /
+   * Touch ID / fingerprint re-authentication before revealing content.
+   * When false, the biometric gate is skipped and content is shown with
+   * a truthful warning. The user can disable this if their device
+   * biometrics are unreliable or they prefer password-only auth.
+   */
+  biometricEnabled: boolean;
+  /**
+   * When true, returning users with a stored auth snapshot must pass
+   * Face ID / Touch ID / fingerprint before the app restores their session.
+   * This is distinct from `biometricEnabled` (which gates sensitive actions
+   * while already in the app). Opt-in — defaults to false so users who
+   * have never enabled it are not surprised by a biometric prompt at launch.
+   */
+  biometricLoginEnabled: boolean;
+  /**
+   * Device-local privacy preferences. These toggles are persisted to
+   * AsyncStorage so they survive app restarts. They are not synced to a
+   * backend account profile — the banner in DataPrivacyScreen is truthful
+   * about this device-local scope.
+   */
+  personalizedAds: boolean;
+  recommendationPersonalization: boolean;
+  thirdPartySharing: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -55,6 +81,7 @@ export interface PushNotificationDefinition {
 
 export const PUSH_NOTIFICATION_DEFINITIONS: PushNotificationDefinition[] = [
   { key: 'orderUpdates', label: 'Order updates', subtitle: 'Shipping and delivery status changes', icon: 'cube-outline', group: 'orders' },
+  { key: 'auctionAlerts', label: 'Auction alerts', subtitle: 'Outbid, auction ending, and auction won alerts', icon: 'trophy-outline', group: 'orders' },
   { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'pricetags-outline', group: 'orders' },
   { key: 'priceDrops', label: 'Price drops', subtitle: 'For items on your wishlist', icon: 'pricetag-outline', group: 'orders' },
   { key: 'messages', label: 'New messages', subtitle: 'When someone sends you a message', icon: 'chatbubble-outline', group: 'social' },
@@ -102,6 +129,11 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   filterPresets: [],
   analyticsOptOut: false,
   developerMode: false,
+  biometricEnabled: true,
+  biometricLoginEnabled: false,
+  personalizedAds: false,
+  recommendationPersonalization: true,
+  thirdPartySharing: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -168,6 +200,26 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.developerMode === 'boolean'
           ? parsed.developerMode
           : DEFAULT_SETTINGS_PREFERENCES.developerMode,
+      biometricEnabled:
+        typeof parsed.biometricEnabled === 'boolean'
+          ? parsed.biometricEnabled
+          : DEFAULT_SETTINGS_PREFERENCES.biometricEnabled,
+      biometricLoginEnabled:
+        typeof parsed.biometricLoginEnabled === 'boolean'
+          ? parsed.biometricLoginEnabled
+          : DEFAULT_SETTINGS_PREFERENCES.biometricLoginEnabled,
+      personalizedAds:
+        typeof parsed.personalizedAds === 'boolean'
+          ? parsed.personalizedAds
+          : DEFAULT_SETTINGS_PREFERENCES.personalizedAds,
+      recommendationPersonalization:
+        typeof parsed.recommendationPersonalization === 'boolean'
+          ? parsed.recommendationPersonalization
+          : DEFAULT_SETTINGS_PREFERENCES.recommendationPersonalization,
+      thirdPartySharing:
+        typeof parsed.thirdPartySharing === 'boolean'
+          ? parsed.thirdPartySharing
+          : DEFAULT_SETTINGS_PREFERENCES.thirdPartySharing,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

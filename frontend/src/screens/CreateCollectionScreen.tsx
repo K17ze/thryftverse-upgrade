@@ -26,6 +26,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import type { Listing } from '../domain';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -190,7 +191,7 @@ export default function CreateCollectionScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.flatSection}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -203,7 +204,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.flatSection}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -303,7 +304,7 @@ export default function CreateCollectionScreen() {
                         {item.title}
                       </Text>
                       <Text style={[styles.itemCardPrice, { color: colors.textMuted }]} numberOfLines={1}>
-                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                        {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                       </Text>
                     </View>
                   </Pressable>
@@ -411,6 +412,14 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
+  },
+  // Flat section — no card background, hairline separator.
+  // Anti-AI-slop: avoids generic dashboard silhouette of stacked equal-weight cards.
+  flatSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   label: {
     fontSize: Type.caption.size,

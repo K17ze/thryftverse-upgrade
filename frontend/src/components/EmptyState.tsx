@@ -267,7 +267,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   iconRing: {
     width: 96,
     height: 96,
-    borderRadius: 48,
+    borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
@@ -278,7 +278,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   iconRingCompact: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     marginBottom: Space.sm,
   },
   title: {
@@ -302,8 +302,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     maxWidth: 260,
   },
   subtitleCompact: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 1,
     maxWidth: 310,
   },
   hintWrap: {
@@ -334,7 +334,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.xl,
   },
   ctaText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
     color: colors.background,
@@ -380,7 +380,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderColor: colors.border,
   },
   chipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

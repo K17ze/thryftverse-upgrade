@@ -409,9 +409,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   lastPriceValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   lastPriceAge: {

@@ -21,6 +21,10 @@ export type NotificationEventType =
   | 'auction_outbid'
   | 'auction_won'
   | 'auction_ending_soon'
+  | 'new_follower'
+  | 'price_drop'
+  | 'new_listing_from_followed_seller'
+  | 'safety_outcome'
   | 'generic';
 
 export type NotificationPushCategory =
@@ -30,6 +34,7 @@ export type NotificationPushCategory =
   | 'followers'
   | 'orderUpdates'
   | 'priceDrops'
+  | 'auctionAlerts'
   | 'news';
 
 export interface NotificationRoute {
@@ -422,6 +427,33 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
     aggregationTemplate: auctionAggregation,
     objectExtractor: auctionObjectExtractor,
   },
+  new_follower: {
+    semanticRole: 'social',
+    attention: 'info',
+    requiresAction: false,
+    aggregationTemplate: noAggregation,
+    objectExtractor: (payload) => {
+      const followerId = payloadString(payload, 'followerId') ?? payloadString(payload, 'actorUserId');
+      if (followerId) {
+        return { type: 'poster', id: followerId, label: payloadString(payload, 'followerUsername') };
+      }
+      return undefined;
+    },
+  },
+  price_drop: {
+    semanticRole: 'commerce',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: listingAggregation,
+    objectExtractor: listingObjectExtractor,
+  },
+  new_listing_from_followed_seller: {
+    semanticRole: 'social',
+    attention: 'info',
+    requiresAction: false,
+    aggregationTemplate: listingAggregation,
+    objectExtractor: listingObjectExtractor,
+  },
   generic: {
     semanticRole: 'system',
     attention: 'info',
@@ -439,6 +471,13 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
         walletObjectExtractor(payload)
       );
     },
+  },
+  safety_outcome: {
+    semanticRole: 'system',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: (payload) => payloadString(payload, 'caseId') ?? null,
+    objectExtractor: () => undefined,
   },
 };
 
@@ -509,8 +548,11 @@ export function resolveNotificationPriority(eventType: NotificationEventType): N
 export function resolveNotificationCategory(eventType: NotificationEventType): NotificationPushCategory | null {
   if (eventType === 'chat_message') return 'messages';
   if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'orderUpdates';
-  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'priceDrops';
+  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
   if (eventType === 'review_received') return 'wishlist';
+  if (eventType === 'new_follower') return 'followers';
+  if (eventType === 'price_drop') return 'priceDrops';
+  if (eventType === 'new_listing_from_followed_seller') return 'followers';
   return null;
 }
 
@@ -589,6 +631,12 @@ export async function markNotificationRead(eventId: string): Promise<void> {
 export async function markAllNotificationsRead(): Promise<void> {
   await fetchJson<{ ok: true }>('/notifications/read-all', {
     method: 'POST',
+  });
+}
+
+export async function deleteNotificationEvent(eventId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/notifications/events/${encodeURIComponent(eventId)}`, {
+    method: 'DELETE',
   });
 }
 

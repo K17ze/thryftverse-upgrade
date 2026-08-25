@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Type , Space, Radius  } from '../../theme/designTokens';
+import { Type, Space } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Headline } from '../ui/Text';
 
@@ -102,10 +102,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

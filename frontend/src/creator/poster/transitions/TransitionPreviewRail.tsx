@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { TransitionPreset } from './TransitionTypes';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { Space, Radius, Stroke, FontFamily, FontSize, LetterSpacing } from '../../../theme/designTokens';
+import { Space, Radius, Stroke, FontFamily, FontSize, LetterSpacing, IconGrammar } from '../../../theme/designTokens';
 
 export interface TransitionPreviewRailProps {
   presets: TransitionPreset[];
@@ -90,7 +90,7 @@ export function TransitionPreviewRail({
                 </View>
                 <Ionicons
                   name="chevron-forward"
-                  size={10}
+                  size={IconGrammar.badge}
                   color={colors.textMuted}
                   style={styles.thumbArrow}
                 />
@@ -108,7 +108,7 @@ export function TransitionPreviewRail({
             )}
             <Ionicons
               name={preset.icon}
-              size={22}
+              size={IconGrammar.standard}
               color={selected ? colors.brand : colors.textPrimary}
             />
             <Text

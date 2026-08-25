@@ -15,6 +15,10 @@ export interface ProfileUser {
   role: string;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +35,10 @@ export interface PublicProfileUser {
   coverVideo: string | null;
   role: string;
   emailVerified: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt: string;
 }
 
@@ -145,6 +153,40 @@ export async function unblockUser(userId: string): Promise<{ isBlocked: boolean 
   return { isBlocked: response.isBlocked };
 }
 
+// ── Appeal (DSA Article 20) ───────────────────────────────────────────
+
+export interface DecisionSummary {
+  id: string;
+  decision: string;
+  userReasonCode: string;
+  summary: string;
+  decidedAt: string;
+  durationKind: 'permanent' | 'temporary';
+  durationUntil: string | null;
+  withinComplaintWindow: boolean;
+}
+
+export async function fetchDecisionSummary(decisionId: string): Promise<DecisionSummary> {
+  const response = await fetchJson<{ ok: boolean; decision: DecisionSummary }>(
+    `/appeals/${encodeURIComponent(decisionId)}`,
+    { method: 'GET' },
+  );
+  return response.decision;
+}
+
+export async function appealDecisionOnApi(
+  decisionId: string,
+  grounds: string,
+  evidenceUris?: string[],
+): Promise<{ ok: boolean; appealId: string }> {
+  const body: Record<string, unknown> = { decisionId, grounds };
+  if (evidenceUris && evidenceUris.length > 0) body.evidence_uris = evidenceUris;
+  return fetchJson<{ ok: boolean; appealId: string }>('/appeals', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 // ── Report ───────────────────────────────────────────────────────────
 
 export type ReportReason =
@@ -154,18 +196,26 @@ export type ReportReason =
   | 'unresponsive'
   | 'harassment'
   | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
   | 'other';
 
 export async function reportUser(
   userId: string,
   reason: ReportReason,
-  details?: string
+  details?: string,
+  evidenceUris?: string[]
 ): Promise<{ reportId: string }> {
   const response = await fetchJson<{ ok: boolean; reportId: string }>(
     `/users/${encodeURIComponent(userId)}/report`,
     {
       method: 'POST',
-      body: JSON.stringify({ reason, details: details ?? undefined }),
+      body: JSON.stringify({ reason, details: details ?? undefined, evidence_uris: evidenceUris }),
     }
   );
   return { reportId: response.reportId };
@@ -178,6 +228,10 @@ export interface FollowListUser {
   username: string;
   displayName: string | null;
   avatar: string | null;
+  /** Whether the authenticated viewer currently follows this user. */
+  isFollowing?: boolean;
+  /** Whether the viewer and this user follow each other (mutual). */
+  isMutual?: boolean;
 }
 
 export async function fetchFollowCounts(userId: string): Promise<{ followerCount: number; followingCount: number }> {
@@ -212,6 +266,8 @@ export interface UserSearchResult {
   username: string;
   displayName: string | null;
   avatar: string | null;
+  /** Present on authenticated search responses; optional for local adapters. */
+  isFollowing?: boolean;
 }
 
 export async function searchUsers(query: string, limit?: number): Promise<UserSearchResult[]> {

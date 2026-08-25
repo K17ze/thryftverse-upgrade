@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Image,
-  ActivityIndicator,
   TextInput,
   Pressable,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { FlagshipState } from '../components/flagship/FlagshipState';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -310,7 +310,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           style={[styles.textInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface }]}
           value={disableRecoveryCode}
           onChangeText={setDisableRecoveryCode}
-          placeholder="XXXX-XXXX"
+          placeholder="XXXX-XXXX-XXXX-XXXX"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="characters"
           editable={!isDisabling}
@@ -332,8 +332,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       <View style={styles.qrContainer}>
         {isLoadingEnrollment ? (
           <View style={styles.qrLoading}>
-            <ActivityIndicator color={colors.textPrimary} size="large" />
-            <Text style={[styles.qrLoadingText, { color: colors.textMuted }]}>Generating secure secret…</Text>
+            <FlagshipState variant="loading" title="Generating secure secret…" />
           </View>
         ) : qrDataUrl ? (
           <View style={[styles.qrFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -649,7 +648,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.caps + 1.18,
     minHeight: Space.xxl,
@@ -780,7 +779,7 @@ function createStyles(colors: ThemeColors) {
   },
   recoveryCodeValue: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.caps + 1.18,
   },

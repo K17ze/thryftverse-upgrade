@@ -1,16 +1,12 @@
 /**
- * Video — drop-in compatibility shim for `expo-av`'s `Video` component.
+ * Video — drop-in compatibility shim for the legacy `expo-av` `Video` component.
  *
  * Why this exists:
- *   `expo-av` was removed from Expo Go in SDK 54. Importing `Video` from
- *   `expo-av` triggers `requireNativeModule('ExponentAV')` at module-load time,
- *   which throws synchronously when the native module is missing — crashing
- *   the JS bundle right after the splash screen in Expo Go.
- *
- *   This wrapper exposes the same surface (`Video` + `ResizeMode`) that the
- *   rest of the codebase already consumes, but is internally implemented on
- *   top of `expo-video` (the SDK 54 replacement), so existing call sites stay
- *   unchanged.
+ *   `expo-av` was fully removed in Expo SDK 55. The video playback
+ *   functionality was replaced by `expo-video` (SDK 54+). This wrapper
+ *   exposes the same surface (`Video` + `ResizeMode`) that the rest of the
+ *   codebase already consumes, but is internally implemented on top of
+ *   `expo-video`, so existing call sites stay unchanged.
  */
 import React, { useEffect, useMemo } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle, ImageStyle } from 'react-native';
@@ -41,8 +37,16 @@ export interface VideoProps {
   onLoad?: () => void;
   onReadyForDisplay?: () => void;
   onError?: (error: unknown) => void;
-  /** Legacy `expo-av` prop — toggles native playback controls on/off. */
+  /** Legacy `expo-av`-style prop — toggles native playback controls on/off. */
   useNativeControls?: boolean;
+  /** Accessibility role for screen readers (e.g. 'image'). */
+  accessibilityRole?: 'image' | 'button' | 'link' | 'none';
+  /** Accessibility label describing the video for screen readers. */
+  accessibilityLabel?: string;
+  /** Legacy `expo-av`-style status callback — fires periodically with position/duration. */
+  onPlaybackStatusUpdate?: (status: { positionMillis: number; durationMillis: number; isPlaying: boolean }) => void;
+  /** Exposes the underlying expo-video player instance to the parent for seeking. */
+  playerRef?: React.MutableRefObject<any>;
 }
 
 function resolveSourceUri(source: VideoProps['source']): string | null {
@@ -96,6 +100,10 @@ export const Video: React.FC<VideoProps> = ({
   onReadyForDisplay,
   onError,
   useNativeControls = false,
+  accessibilityRole,
+  accessibilityLabel,
+  onPlaybackStatusUpdate,
+  playerRef,
 }) => {
   const sourceUri = useMemo(() => resolveSourceUri(source), [source]);
 
@@ -110,6 +118,32 @@ export const Video: React.FC<VideoProps> = ({
       onError?.(error);
     }
   });
+
+  useEffect(() => {
+    if (playerRef) {
+      playerRef.current = player;
+    }
+  }, [player, playerRef]);
+
+  useEffect(() => {
+    if (!player || !onPlaybackStatusUpdate || !shouldPlay) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      try {
+        onPlaybackStatusUpdate({
+          positionMillis: (player.currentTime ?? 0) * 1000,
+          durationMillis: (player.duration ?? 0) * 1000,
+          isPlaying: shouldPlay,
+        });
+      } catch (error) {
+        onError?.(error);
+      }
+    }, 200);
+
+    return () => clearInterval(intervalId);
+  }, [player, shouldPlay, onPlaybackStatusUpdate, onError]);
 
   useEffect(() => {
     if (!player) {

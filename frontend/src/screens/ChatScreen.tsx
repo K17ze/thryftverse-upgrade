@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Alert,
   Pressable,
-  ActivityIndicator,
   Dimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -41,6 +40,7 @@ import { useStore } from "../store/useStore";
 
 import {
   clearComposerStateOnApi,
+  reportConversationOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
@@ -52,8 +52,6 @@ import { useHaptic } from "../hooks/useHaptic";
 import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
-
-import { TypingIndicator } from "../components/chat/TypingIndicator";
 
 import { MessageBubble } from "../components/chat/MessageBubble";
 
@@ -127,6 +125,8 @@ import { t } from "../i18n";
 
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 
+import { useVisuallyComplete } from "../performance/visuallyComplete";
+
 import {
   useConversationMessages,
   useConversationComposer,
@@ -136,6 +136,8 @@ import {
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
 } from "../hooks/chat";
+import { useTypingIndicator } from "../services/realtimeClient";
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 // ─── Composer-stack contextual resolver ───────────────────────────────
@@ -223,6 +225,7 @@ const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
+  useVisuallyComplete('Chat');
 
   const styles = useMemo(() => StyleSheet.create({
     screenRoot: {
@@ -388,20 +391,6 @@ export default function ChatScreen({ navigation, route }: Props) {
       fontSize: Type.meta.size,
       color: colors.textPrimary,
       fontFamily: Typography.family.semibold,
-    },
-
-    typingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      gap: Space.xs + 1,
-    },
-
-    typingText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
     },
 
     unreadDividerWrap: {
@@ -653,9 +642,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
 
-  // Messages that have been toggled to show a translated view
-  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(new Set());
-
   // Messages where the off-platform payment warning has been dismissed
   const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
 
@@ -665,7 +651,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     new Set(),
   );
 
-  const [isTyping, setIsTyping] = useState(false);
+  const isTyping = useTypingIndicator(conversationId);
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -680,6 +666,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     syncError,
     isOffline,
     showScrollToBottom,
+    unreadBelowCount,
     recentlyDeleted,
     composerSending,
     listRef,
@@ -732,9 +719,32 @@ export default function ChatScreen({ navigation, route }: Props) {
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  // Track which message IDs have already been rendered so only genuinely
+  // new messages (added after initial load) get the bubble enter animation.
+  // On the first render where messages exist, all are marked as known so
+  // historical messages never animate on mount (AGENTS.md §16). The ref is
+  // updated after each render via the effect below.
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  const knownInitializedRef = useRef(false);
+  if (!knownInitializedRef.current && messages.length > 0) {
+    knownMessageIdsRef.current = new Set(messages.map((m) => m.id));
+    knownInitializedRef.current = true;
+  }
+  useEffect(() => {
+    if (messages.length > 0) {
+      knownMessageIdsRef.current = new Set(messages.map((m) => m.id));
+    }
+  }, [messages]);
+  const isNewMessage = useCallback(
+    (id: string) => !knownMessageIdsRef.current.has(id),
+    [],
+  );
+
   const {
     input,
     setInput,
+    setTypingInput,
+    notifyStoppedTyping,
     replyTo,
     setReplyTo,
     attachmentPickerVisible,
@@ -785,8 +795,9 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
+    notifyStoppedTyping();
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo]);
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -797,7 +808,10 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   useEffect(() => {
-    setIsTyping(false);
+    // Reset new-message tracking so the new conversation's historical
+    // messages do not trigger bubble enter animations.
+    knownMessageIdsRef.current = new Set(messagesRef.current.map((m) => m.id));
+    knownInitializedRef.current = messagesRef.current.length > 0;
   }, [conversationId]);
 
   // Reset per-session dismissals when the conversation changes.
@@ -1293,12 +1307,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             offer={msg.offer}
-            formattedPrice={formatFromFiat(msg.offer!.price, "GBP", {
+            formattedPrice={formatFromFiat(msg.offer!.price, DEFAULT_CURRENCY_CODE, {
               displayMode: "fiat",
             })}
             formattedOriginalPrice={formatFromFiat(
-              msg.offer!.originalPrice,
-              "GBP",
+              msg.offer!.originalPrice, DEFAULT_CURRENCY_CODE,
               { displayMode: "fiat" },
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
@@ -1361,7 +1374,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             timestamp={isLastInCluster ? formatMessageTime(msg.date) : undefined}
-            isTranslated={translatedMessageIds.has(msg.id)}
             isAgent={msg.isAgent}
             agentAvatar={msg.agentAvatar}
             isDraft={msg.isAgent && msg.status === "draft"}
@@ -1443,6 +1455,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
+            isNew={isNewMessage(msg.id)}
           />
           {!isMedia && !isVoice &&
             (() => {
@@ -1504,13 +1517,15 @@ export default function ChatScreen({ navigation, route }: Props) {
       partnerProfile?.avatar ||
       partnerSummary?.avatar ||
       null
-    : null;
+    : conversation?.avatar ?? null;
   const topBarTitle = isGroup
     ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
-  const topBarSubtitle = isGroup
-    ? `${conversation?.participantIds?.length ?? 0} members`
-    : t('chat.marketplaceChatLabel');
+  const topBarSubtitle = isTyping
+    ? 'typing…'
+    : isGroup
+      ? `${conversation?.participantIds?.length ?? 0} members`
+      : t('chat.marketplaceChatLabel');
   const topBarInitials = isGroup
     ? (conversation?.title
         ?.split(" ")
@@ -1636,7 +1651,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           avatarUrl={avatarUri}
           initials={topBarInitials}
           variant={isGroup ? "group" : "dm"}
-          isVerified={!isGroup && (partnerProfile?.emailVerified === true || partnerSummary?.emailVerified === true)}
+          isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
           onBack={() => navigation.goBack()}
           onSearch={() => {
             if (isSearchActive) {
@@ -1742,7 +1757,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <ChatListingContextBar
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
             title={linkedListing.title}
-            price={formatFromFiat(linkedListing.price, "GBP", {
+            price={formatFromFiat(linkedListing.price, DEFAULT_CURRENCY_CODE, {
               displayMode: "fiat",
             })}
             availability={linkedListing.isSold ? "Sold" : "Available"}
@@ -1868,6 +1883,44 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityLiveRegion="polite"
               onScroll={handleMessageListScroll}
               scrollEventThrottle={200}
+              // FlashList v2 rendering tuning (LIST_RENDERING_POLICY.md §2.4).
+              //
+              // `inverted` is intentionally NOT applied here. The scroll
+              // management is split between this screen and the
+              // useConversationMessages hook (out of scope for this change):
+              //   - renderMessage uses messages[index-1]/messages[index+1]
+              //     for cluster detection, dateSeparatorIndices.has(index),
+              //     and unreadDividerIndex === index — all keyed to the
+              //     chronological array order.
+              //   - The hook owns scrollToMessage / search scrollToIndex
+              //     (indices into the chronological array), scrollToEnd /
+              //     scrollToBottom, and handleMessageListScroll's "near
+              //     bottom" detection (contentSize - offset - layout < 150),
+              //     whose coordinate math flips under `inverted`.
+              // Reversing the data array to satisfy `inverted` would desync
+              // every one of those index/coordinate lookups. Per the task's
+              // escape clause for complex scroll management, `inverted` is
+              // skipped and only the tuning props are applied.
+              //
+              // FlashList v2 (2.0.2) does not expose the v1 props
+              // `windowSize` / `maxToRenderPerBatch`. The v2-native
+              // equivalents are used instead:
+              //   - drawDistance (v2 default 250dp) controls how far beyond
+              //     the viewport items are rendered — the v2 counterpart of
+              //     `windowSize`. 1200dp gives a chat-tuned buffer (~1.5
+              //     screens each side) that smooths fast scroll without
+              //     over-allocating.
+              //   - overrideProps.initialDrawBatchSize (v2 default 2) is the
+              //     v2 counterpart of `maxToRenderPerBatch` and caps the
+              //     first render batch.
+              drawDistance={1200}
+              overrideProps={{ initialDrawBatchSize: 6 }}
+              // P0.6: Preserve scroll anchor when older messages are
+              // prepended via cursor pagination. This keeps the user's
+              // current viewing position stable instead of jumping to top.
+              maintainVisibleContentPosition={{
+                autoscrollToTopThreshold: 0,
+              }}
             />
           ) : (
             <View style={styles.emptyStateWrap}>
@@ -1888,12 +1941,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             { paddingBottom: Math.max(insets.bottom, Space.sm) + Space.sm },
           ]}
         >
-          {isTyping ? (
-            <View style={styles.typingRow}>
-              <TypingIndicator />
-              <Text style={styles.typingText}>typing…</Text>
-            </View>
-          ) : null}
           {/* P0-8: Composer-stack height enforcement. Multiple contextual
               banners can stack above the input bar (reply, reactions,
               offline, undo). On small devices the stack can push the input
@@ -2031,7 +2078,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           <ChatComposerBar
             value={input}
-            onChangeText={setInput}
+            onChangeText={setTypingInput}
             onSend={handleSend}
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
             onCameraPress={() => handleAttachmentSelect("camera")}
@@ -2132,6 +2179,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         <ScrollToBottomFAB
           visible={showScrollToBottom}
+          unreadCount={unreadBelowCount}
           onPress={scrollToBottom}
         />
 
@@ -2162,9 +2210,18 @@ export default function ChatScreen({ navigation, route }: Props) {
                   handleRetrySendMessage(selectedMessage.id);
                 }
                 break;
-              case "report":
-                show("Report submitted. Thank you.", "success");
+              case "report": {
+                const reportMessageId = selectedMessage.id;
+                const reportKey = `rpt_${conversationId}_${reportMessageId}`;
+                reportConversationOnApi(conversationId, 'other', undefined, reportMessageId, reportKey)
+                  .then(() => {
+                    show("Report submitted. Thank you.", "success");
+                  })
+                  .catch(() => {
+                    show("Failed to submit report. Please try again.", "error");
+                  });
                 break;
+              }
               case "askAgent": {
                 // Spec 16: long press message → Ask agent about this.
                 // Pre-fill the composer with the message text so the user can
@@ -2179,19 +2236,6 @@ export default function ChatScreen({ navigation, route }: Props) {
                 }
                 break;
               }
-              case "translate": {
-                setTranslatedMessageIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(selectedMessage.id)) {
-                    next.delete(selectedMessage.id);
-                  } else {
-                    next.add(selectedMessage.id);
-                    show("Showing translated message. Tap 'Show original' to revert.", "info");
-                  }
-                  return next;
-                });
-                break;
-              }
               default:
                 break;
             }
@@ -2202,7 +2246,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
-          isTranslated={selectedMessage ? translatedMessageIds.has(selectedMessage.id) : false}
         />
       </View>
     </SafeAreaView>

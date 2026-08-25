@@ -241,7 +241,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginRight: Space.xs / 2,
     },
     sectionTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -286,7 +286,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.xs,
     },
     summaryTitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },

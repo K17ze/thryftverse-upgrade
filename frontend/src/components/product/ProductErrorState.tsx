@@ -67,8 +67,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
 });

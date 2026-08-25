@@ -2,11 +2,12 @@ import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  SectionList,
   StyleSheet,
   RefreshControl,
   Pressable,
+  Animated,
 } from 'react-native';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -15,11 +16,9 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
-import { AvatarRing } from '../components/chat/AvatarRing';
-import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BottomSheet } from '../components/BottomSheet';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -32,15 +31,24 @@ import {
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotificationEvent,
   upgradeToV2,
 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import {
+  SocialNotificationRow,
+  CommerceNotificationRow,
+  AuctionNotificationRow,
+  FinancialNotificationRow,
+  SystemNotificationRow,
+} from '../components/notifications';
 
 import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -76,7 +84,18 @@ type NotificationCard = {
   aggregatedCount?: number;
   /** Actor names for aggregated notifications (first few). */
   aggregatedActors?: string[];
+  /** V2 structured event — passed to role-specific row presenters. */
+  v2Event: NotificationEventV2;
 };
+
+/**
+ * Flattened list item used by FlashList. Each section header becomes a
+ * `'header'` item followed by its `'item'` rows, so FlashList can recycle
+ * cells by type via `getItemType`.
+ */
+type NotificationListItem =
+  | { type: 'header'; sectionTitle: string; unreadCount: number; isAttention: boolean; itemCount: number }
+  | { type: 'item'; card: NotificationCard };
 
 type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
@@ -93,19 +112,17 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'auction', label: 'Auctions' },
 ];
 
+// Primary pill-style filter tabs — always visible at the top of the list.
+// The most useful commerce/social filters get direct one-tap access; the
+// remaining filters stay behind the overflow funnel icon.
+const PRIMARY_FILTERS: { key: NotificationFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'order', label: 'Purchases' },
+];
+
 function filterLabelForKey(key: NotificationFilter): string {
   return OVERFLOW_FILTERS.find((f) => f.key === key)?.label ?? 'All';
-}
-
-function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const candidate = payload[key];
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate;
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -131,6 +148,10 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   auction_outbid: 'auction',
   auction_won: 'auction',
   auction_ending_soon: 'auction',
+  new_follower: 'generic',
+  price_drop: 'price',
+  new_listing_from_followed_seller: 'new_item',
+  safety_outcome: 'generic',
   generic: 'generic', // resolved further by objectRef below
 };
 
@@ -174,27 +195,30 @@ function resolveCardType(v2Event: NotificationEventV2): NotificationCardType {
 function formatRelativeTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return 'Just now';
+    return 'now';
   }
 
   const diffMs = Date.now() - parsed.getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
   if (minutes < 1) {
-    return 'Just now';
+    return 'now';
   }
 
   if (minutes < 60) {
-    return `${minutes} min ago`;
+    return `${minutes}m`;
   }
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours}h ago`;
+    return `${hours}h`;
   }
 
   const days = Math.floor(hours / 24);
+  if (days === 1) {
+    return 'Yesterday';
+  }
   if (days < 7) {
-    return `${days} day${days === 1 ? '' : 's'} ago`;
+    return `${days}d`;
   }
 
   return parsed.toLocaleDateString(undefined, {
@@ -228,6 +252,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     aggregationKey: v2.aggregationKey,
     attention: v2.attention,
     objectRef: v2.objectRef,
+    v2Event: v2,
   };
 }
 
@@ -306,6 +331,10 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       aggregatedCount: count,
       aggregatedActors: uniqueActorNames.slice(0, 5),
       read: group.every((n) => n.read),
+      v2Event: {
+        ...primary.v2Event,
+        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null,
+      },
     });
   }
 
@@ -385,13 +414,14 @@ export default function NotificationsScreen() {
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [hasMore, setHasMore] = React.useState(false);
-  const hasShownSyncErrorRef = React.useRef(false);
+  const [hasSyncError, setHasSyncError] = React.useState(false);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
 
   const quietActive = isQuietHoursActive(quietHours);
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const reducedMotion = useReducedMotion();
 
   const syncNotifications = React.useCallback(
     async (options?: { silent?: boolean }) => {
@@ -404,16 +434,16 @@ export default function NotificationsScreen() {
         setNotifications(items.map(mapEventToCard));
         setCursor(nextCursor);
         setHasMore(!!nextCursor);
-        hasShownSyncErrorRef.current = false;
+        setHasSyncError(false);
       } catch {
-        hasShownSyncErrorRef.current = true;
+        setHasSyncError(true);
       } finally {
         if (!options?.silent) {
           setIsLoading(false);
         }
       }
     },
-    [show]
+    []
   );
 
   const loadMore = React.useCallback(
@@ -447,15 +477,16 @@ export default function NotificationsScreen() {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleRefresh = React.useCallback(async () => {
+    haptics.press();
     setIsRefreshing(true);
     try {
       const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
       setNotifications(items.map(mapEventToCard));
       setCursor(nextCursor);
       setHasMore(!!nextCursor);
-      hasShownSyncErrorRef.current = false;
+      setHasSyncError(false);
     } catch {
-      hasShownSyncErrorRef.current = true;
+      setHasSyncError(true);
     } finally {
       setIsRefreshing(false);
     }
@@ -470,6 +501,36 @@ export default function NotificationsScreen() {
   const sections = React.useMemo(
     () => groupNotifications(aggregateNotifications(filteredNotifications)),
     [filteredNotifications]
+  );
+
+  // Flatten sections into a single array so FlashList can recycle cells.
+  // Each section becomes a header item followed by its data items.
+  const flattenedData = React.useMemo(() => {
+    const items: NotificationListItem[] = [];
+    for (const section of sections) {
+      items.push({
+        type: 'header',
+        sectionTitle: section.title,
+        unreadCount: section.unreadCount,
+        isAttention: !!section.isAttention,
+        itemCount: section.data.length,
+      });
+      for (const card of section.data) {
+        items.push({ type: 'item', card });
+      }
+    }
+    return items;
+  }, [sections]);
+
+  const getItemType = useCallback(
+    (item: NotificationListItem) => item.type,
+    []
+  );
+
+  const keyExtractor = useCallback(
+    (item: NotificationListItem) =>
+      item.type === 'header' ? `header-${item.sectionTitle}` : item.card.id,
+    []
   );
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
@@ -508,38 +569,67 @@ export default function NotificationsScreen() {
   );
 
   const renderSwipeRightAction = React.useCallback(
-    (notification: NotificationCard) => {
+    (notification: NotificationCard, progress: Animated.AnimatedInterpolation<number>) => {
       if (notification.read) return <View style={{ width: 0, height: Space.xxl + Space.xl }} />;
+      // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
+      // Collapsed to no scale when reduced motion is enabled.
+      const iconScale = reducedMotion
+        ? 1
+        : progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.8, 1.0],
+            extrapolate: 'clamp',
+          });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
-            <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+            <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+            </Animated.View>
             <Text style={styles.swipeReadText}>Read</Text>
           </View>
         </View>
       );
     },
-    []
+    [colors.success, reducedMotion]
   );
 
   const renderSwipeLeftAction = React.useCallback(
-    () => (
-      <View style={styles.swipeActionContainer}>
-        <View style={styles.swipeDeleteAction}>
-          <Ionicons name="trash-outline" size={20} color={colors.danger} />
-          <Text style={styles.swipeDeleteText}>Clear</Text>
+    (progress: Animated.AnimatedInterpolation<number>) => {
+      // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
+      // Collapsed to no scale when reduced motion is enabled.
+      const iconScale = reducedMotion
+        ? 1
+        : progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.8, 1.0],
+            extrapolate: 'clamp',
+          });
+      return (
+        <View style={styles.swipeActionContainer}>
+          <View style={styles.swipeDeleteAction}>
+            <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            </Animated.View>
+            <Text style={styles.swipeDeleteText}>Clear</Text>
+          </View>
         </View>
-      </View>
-    ),
-    []
+      );
+    },
+    [colors.danger, reducedMotion]
   );
 
   const handleSwipeDismiss = React.useCallback(
     (notification: NotificationCard) => {
+      const previousNotifications = notifications;
       setNotifications((previous) => previous.filter((item) => item.id !== notification.id));
       haptics.tap();
+      void deleteNotificationEvent(notification.id).catch(() => {
+        setNotifications(previousNotifications);
+        show('Could not delete this notification', 'error');
+      });
     },
-    []
+    [notifications, show]
   );
 
   const handleMarkAllAsRead = React.useCallback(async () => {
@@ -592,136 +682,98 @@ export default function NotificationsScreen() {
     [navigation, show]
   );
 
+  const renderNotificationRow = useCallback(
+    (item: NotificationCard) => {
+      const v2Event = item.v2Event;
+      const inAttention = item.requiresAction;
+      const onPress = () => handleOpenNotification(item);
+
+      switch (v2Event.semanticRole) {
+        case 'social':
+          return (
+            <SocialNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              aggregatedActors={item.aggregatedActors}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onActorPress={
+                item.actorUserId
+                  ? () => openProfile(navigation, item.actorUserId!, currentUser?.id)
+                  : undefined
+              }
+            />
+          );
+        case 'commerce':
+          return (
+            <CommerceNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+            />
+          );
+        case 'auction':
+          return (
+            <AuctionNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onAction={onPress}
+            />
+          );
+        case 'financial':
+          return (
+            <FinancialNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+            />
+          );
+        case 'system':
+        default:
+          return (
+            <SystemNotificationRow
+              event={v2Event}
+              time={item.time}
+              aggregatedCount={item.aggregatedCount}
+              inAttentionSection={inAttention}
+              onPress={onPress}
+              onAction={onPress}
+            />
+          );
+      }
+    },
+    [handleOpenNotification, navigation, currentUser?.id]
+  );
+
   const renderNotificationCard = useCallback(({ item }: { item: NotificationCard; index: number }) => {
-    const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
-    const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-    const actorHandle = item.actorUsername ?? actorUserId ?? null;
-    const visualUri = item.itemImage || item.actorAvatar || '';
-
     return (
-        <Swipeable
-          ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
-          renderRightActions={() => renderSwipeRightAction(item)}
-          renderLeftActions={() => renderSwipeLeftAction()}
-          onSwipeableRightOpen={() => {
-            void handleSwipeMarkRead(item);
-            swipeableRefs.current[item.id]?.close();
-          }}
-          onSwipeableLeftOpen={() => {
-            handleSwipeDismiss(item);
-            swipeableRefs.current[item.id]?.close();
-          }}
-          rightThreshold={80}
-          leftThreshold={80}
-          overshootRight={false}
-          overshootLeft={false}
-        >
-        <View
-          style={[
-            styles.notifCard,
-            !item.read && styles.notifCardUnread,
-            item.attention === 'critical' && styles.notifCardCritical,
-            item.attention === 'action' && !item.read && styles.notifCardAction,
-          ]}
-        >
-          {item.attention === 'critical' ? <View style={styles.notifAccentCritical} /> : null}
-          {item.attention === 'action' && !item.read ? <View style={styles.notifAccentAction} /> : null}
-          {!item.read && item.attention !== 'critical' && item.attention !== 'action' ? <View style={styles.unreadDot} /> : null}
-          <AnimatedPressable
-            style={styles.notifMainTap}
-            activeOpacity={0.8}
-            onPress={() => handleOpenNotification(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
-          >
-            <View style={styles.notifImageWrap}>
-              <SharedTransitionView
-                style={styles.notifImageShared}
-                sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
-              >
-                <CachedImage
-                  uri={visualUri}
-                  style={styles.notifImage}
-                  contentFit="cover"
-                  emptyIcon="notifications-outline"
-                  emptyLabel={item.title || 'Notification'}
-                />
-              </SharedTransitionView>
-            </View>
-
-            <View style={styles.notifBody}>
-              {item.title ? (
-                <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-              ) : null}
-              <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={item.title ? 2 : 3}>
-                {item.body || item.text}
-              </Text>
-              <View style={styles.notifMetaRow}>
-                {item.aggregatedCount && item.aggregatedCount > 1 ? (
-                  <View style={styles.notifAggregatedRow}>
-                    {item.actorAvatar ? (
-                      <CachedImage
-                        uri={item.actorAvatar}
-                        style={styles.notifAggregatedAvatar}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={styles.notifAggregatedAvatarFallback}>
-                        <Ionicons name="person" size={10} color={colors.textSecondary} />
-                      </View>
-                    )}
-                    <View style={styles.notifAggregatedCountBadge}>
-                      <Text style={styles.notifAggregatedCountText}>
-                        +{item.aggregatedCount - 1}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-                <Text style={styles.notifTime}>{item.time}</Text>
-              </View>
-            </View>
-          </AnimatedPressable>
-
-          {actorUserId && actorHandle ? (
-            <View style={styles.notifActionRow}>
-              <AnimatedPressable
-                style={styles.notifActorChip}
-                onPress={() => openProfile(navigation, actorUserId, currentUser?.id)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Open @${actorHandle} profile`}
-                accessibilityHint="Shows sender profile details"
-              >
-                <AvatarRing
-                  uri={item.actorAvatar ?? undefined}
-                  size={28}
-                  isUnread={!item.read}
-                />
-                <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={styles.notifMessageBtn}
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
-                    focusQuery: actorHandle,
-                    partnerUserId: actorUserId,
-                    itemId: listingId,
-                  })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Message @${actorHandle}`}
-                accessibilityHint="Opens chat with this user"
-              >
-                <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
-              </AnimatedPressable>
-            </View>
-          ) : null}
-        </View>
-        </Swipeable>
+      <Swipeable
+        ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
+        renderRightActions={(progress) => renderSwipeRightAction(item, progress)}
+        renderLeftActions={(progress) => renderSwipeLeftAction(progress)}
+        onSwipeableRightOpen={() => {
+          void handleSwipeMarkRead(item);
+          swipeableRefs.current[item.id]?.close();
+        }}
+        onSwipeableLeftOpen={() => {
+          handleSwipeDismiss(item);
+          swipeableRefs.current[item.id]?.close();
+        }}
+        rightThreshold={80}
+        leftThreshold={80}
+        overshootRight={false}
+        overshootLeft={false}
+      >
+        {renderNotificationRow(item)}
+      </Swipeable>
     );
   }, [
     swipeableRefs,
@@ -729,11 +781,52 @@ export default function NotificationsScreen() {
     renderSwipeLeftAction,
     handleSwipeMarkRead,
     handleSwipeDismiss,
-    handleOpenNotification,
-    navigation,
-    colors,
-    styles,
+    renderNotificationRow,
   ]);
+
+  const renderSectionHeader = useCallback(
+    (item: {
+      sectionTitle: string;
+      unreadCount: number;
+      isAttention: boolean;
+      itemCount: number;
+    }) => {
+      const { sectionTitle, unreadCount, isAttention, itemCount } = item;
+      return (
+        <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
+          {isAttention ? (
+            <View style={styles.sectionAttentionLeading}>
+              <Ionicons name="alert-circle" size={13} color={colors.danger} />
+              <Text style={[styles.sectionTitle, styles.sectionTitleAttention]}>{sectionTitle}</Text>
+            </View>
+          ) : (
+            <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+          )}
+          {isAttention && itemCount > 0 ? (
+            <Text style={styles.sectionAttentionHint}>
+              {itemCount} {itemCount === 1 ? 'item' : 'items'} need{itemCount === 1 ? 's' : ''} your response
+            </Text>
+          ) : null}
+          {unreadCount > 0 ? (
+            <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
+              <Text style={[styles.sectionCountText, isAttention && styles.sectionCountTextAttention]}>{unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+    },
+    [styles, colors.danger]
+  );
+
+  const renderListItem = useCallback<ListRenderItem<NotificationListItem>>(
+    ({ item }) => {
+      if (item.type === 'header') {
+        return renderSectionHeader(item);
+      }
+      return renderNotificationCard({ item: item.card, index: 0 });
+    },
+    [renderSectionHeader, renderNotificationCard]
+  );
 
   return (
     <FlagshipScreen
@@ -784,31 +877,56 @@ export default function NotificationsScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
 
-      {/* Active filter chip — shown only when a filter is applied (attention-first hierarchy) */}
-      {activeFilter !== 'all' ? (
-        <View style={styles.activeFilterChipRow}>
-          <Pressable
-            style={styles.activeFilterChip}
-            onPress={() => { haptics.tap(); setActiveFilter('all'); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Clear filter: ${filterLabelForKey(activeFilter)}`}
-          >
-            <Text style={styles.activeFilterChipText} numberOfLines={1}>
-              {filterLabelForKey(activeFilter)}
-            </Text>
-            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-          </Pressable>
-        </View>
-      ) : null}
+      {/* Primary filter tabs — pill-style, always visible */}
+      <View
+        style={styles.filterTabRow}
+        accessibilityRole="tablist"
+        accessibilityLabel="Notification filters"
+      >
+        {PRIMARY_FILTERS.map((filter) => {
+          const isActive = activeFilter === filter.key;
+          const count = filterCounts[filter.key] ?? 0;
+          return (
+            <AnimatedPressable
+              key={filter.key}
+              style={[
+                styles.filterTab,
+                isActive && styles.filterTabActive,
+              ]}
+              onPress={() => { haptics.tap(); setActiveFilter(filter.key); }}
+              activeOpacity={0.7}
+              scaleValue={0.96}
+              hapticFeedback="light"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${filter.label} filter${count > 0 ? `, ${count} items` : ''}`}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  isActive && styles.filterTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {filter.label}
+              </Text>
+              {count > 0 ? (
+                <Text style={[styles.filterTabCount, isActive && styles.filterTabCountActive]}>
+                  {count > 99 ? '99+' : count}
+                </Text>
+              ) : null}
+            </AnimatedPressable>
+          );
+        })}
+      </View>
 
       {/* Unread summary + quiet hours indicator */}
       {unreadCount > 0 || quietActive ? (
         <View style={styles.summaryBannerRow}>
           {unreadCount > 0 ? (
             <View style={styles.unreadSummaryBadge}>
-              <View style={styles.unreadSummaryDot} />
               <Text style={styles.unreadSummaryText}>
-                {unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
+                {unreadCount > 99 ? '99+' : unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
               </Text>
             </View>
           ) : null}
@@ -830,12 +948,25 @@ export default function NotificationsScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
+      {/* Sync error banner — visible when refresh fails but cached notifications exist */}
+      {hasSyncError && notifications.length > 0 ? (
+        <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
+          <SyncRetryBanner
+            message="Couldn't refresh notifications. Showing cached items."
+            onRetry={() => void syncNotifications()}
+            isRetrying={isLoading}
+            telemetryContext="notifications_sync"
+          />
+        </View>
+      ) : null}
+
+      <FlashList
+        data={flattenedData}
+        keyExtractor={keyExtractor}
+        getItemType={getItemType}
+        renderItem={renderListItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -846,26 +977,19 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title, unreadCount, isAttention } }) => (
-          <View style={styles.sectionHeaderRow}>
-            {isAttention ? (
-              <Ionicons name="alert-circle" size={14} color={colors.danger} style={styles.sectionAttentionIcon} />
-            ) : null}
-            <Text style={[styles.sectionTitle, isAttention && styles.sectionTitleAttention]}>{title}</Text>
-            {unreadCount > 0 ? (
-              <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
-                <Text style={styles.sectionCountText}>{unreadCount}</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
-        // Performance: notification lists can grow long; clip off-screen
-        // items and cap the render batch to keep scroll at 58+ fps.
-        removeClippedSubviews
-        windowSize={7}
-        maxToRenderPerBatch={6}
-        initialNumToRender={8}
-        renderItem={renderNotificationCard}
+        // Performance: notification lists can grow long; cap the render
+        // batch to keep scroll at 58+ fps. FlashList recycles cells by
+        // type via getItemType (header vs item) for efficient pooling.
+        //
+        // FlashList v2 (2.0.2) does not expose the v1 props
+        // `windowSize` / `maxToRenderPerBatch`. The v2-native equivalents:
+        //   - drawDistance controls how far beyond the viewport items are
+        //     rendered — the v2 counterpart of `windowSize`. 2000dp gives
+        //     a generous buffer (~2.5 screens each side) for smooth scroll.
+        //   - overrideProps.initialDrawBatchSize caps the first render
+        //     batch — the v2 counterpart of `maxToRenderPerBatch`.
+        drawDistance={2000}
+        overrideProps={{ initialDrawBatchSize: 6 }}
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
@@ -880,7 +1004,7 @@ export default function NotificationsScreen() {
                 </View>
               ))}
             </View>
-          ) : hasShownSyncErrorRef.current && notifications.length === 0 ? (
+          ) : hasSyncError && notifications.length === 0 ? (
             <EmptyState
               density="compact"
               icon="cloud-offline-outline"
@@ -901,10 +1025,18 @@ export default function NotificationsScreen() {
           ) : (
             <EmptyState
               density="compact"
-              icon="checkmark-done-outline"
+              graphic={
+                <View style={styles.caughtUpGraphic}>
+                  <View style={styles.caughtUpRing} />
+                  <Ionicons name="checkmark" size={30} color={colors.brand} style={styles.caughtUpCheck} />
+                </View>
+              }
               title="You're all caught up"
-              subtitle="We'll let you know when there's something new."
-              iconColor={colors.textMuted}
+              subtitle="Nothing needs your attention right now."
+              hint="Explore new arrivals while you're here."
+              ctaLabel="Discover listings"
+              onCtaPress={() => navigation.navigate('MainTabs')}
+              iconColor={colors.brand}
             />
           )
         }
@@ -938,18 +1070,20 @@ export default function NotificationsScreen() {
             const isActive = activeFilter === filter.key;
             const count = filterCounts[filter.key] ?? 0;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={filter.key}
-                style={({ pressed }) => [
+                style={[
                   styles.overflowRow,
                   isActive && { backgroundColor: `${colors.brand}0A` },
-                  pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => {
                   haptics.tap();
                   setActiveFilter(filter.key);
                   setOverflowVisible(false);
                 }}
+                activeOpacity={0.7}
+                scaleValue={0.96}
+                hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
                 accessibilityState={{ selected: isActive }}
@@ -973,7 +1107,7 @@ export default function NotificationsScreen() {
                     <Ionicons name="checkmark" size={18} color={colors.brand} />
                   ) : null}
                 </View>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -997,95 +1131,46 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
 
-  filterTabsRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  filterTabsContent: {
+  filterTabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
-    gap: Space.lg,
-  },
-  filterTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: Control.hit + 2,
-    position: 'relative',
-  },
-  filterTabActive: {
-    backgroundColor: 'transparent',
-  },
-  filterTabContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-  },
-  filterTabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  filterTabCount: {
-    minWidth: Space.md + 2,
-    height: Space.md + 2,
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xs + 1,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  filterTabCountActive: {
-    backgroundColor: `${colors.brand}20`,
-    borderColor: `${colors.brand}40`,
-  },
-  filterTabCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
-  filterTabCountTextActive: {
-    color: colors.brand,
-  },
-  filterTabTextActive: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  filterTabIndicator: {
-    position: 'absolute',
-    bottom: -StyleSheet.hairlineWidth,
-    left: 0,
-    right: 0,
-    height: Stroke.emphasis,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
-
-  activeFilterChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
     paddingBottom: Space.xs,
   },
-  activeFilterChip: {
+  filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
+    gap: Space.xs + 1,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+  },
+  filterTabActive: {
+    backgroundColor: colors.surfaceAlt,
     borderColor: colors.border,
   },
-  activeFilterChipText: {
+  filterTabText: {
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  filterTabTextActive: {
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+  },
+  filterTabCount: {
+    fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  filterTabCountActive: {
+    color: colors.brand,
   },
 
   swipeActionContainer: {
@@ -1174,183 +1259,86 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md + 4,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
   },
-  sectionAttentionIcon: {
-    marginRight: -Space.xs / 2,
+  sectionHeaderRowAttention: {
+    backgroundColor: colors.dangerSubtle,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    marginLeft: 0,
+  },
+  sectionAttentionLeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  sectionAttentionHint: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginLeft: Space.xs,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
+    textTransform: 'uppercase',
   },
   sectionTitleAttention: {
     color: colors.danger,
+    fontSize: Type.caption.size,
+    textTransform: 'none',
+    fontFamily: Typography.family.bold,
   },
   sectionCountBadge: {
     minWidth: Space.md + 4,
     height: Space.md + 4,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    backgroundColor: colors.brand,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionCountBadgeAttention: {
     backgroundColor: colors.danger,
+    borderColor: 'transparent',
   },
   sectionCountText: {
     fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.bold,
-    color: colors.background,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  sectionCountTextAttention: {
+    color: colors.textInverse,
   },
 
-  notifCard: {
-    backgroundColor: colors.background,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  notifCardUnread: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  notifCardCritical: {
-    backgroundColor: `${colors.danger}0A`,
-  },
-  notifCardAction: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  notifAccentCritical: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: Stroke.emphasis,
-    backgroundColor: colors.danger,
-  },
-  notifAccentAction: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: Stroke.emphasis,
-    backgroundColor: colors.brand,
-  },
-  notifMainTap: {
-    padding: Space.md,
-    flexDirection: 'row',
-    gap: Space.sm + 2,
-    alignItems: 'center',
-  },
-
-  unreadDot: {
-    position: 'absolute',
-    top: Control.iconCompact,
-    left: Space.sm,
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
-
-  notifImageWrap: {
-    width: Space.xxl + Space.xs, height: Space.xxl + Space.xs, borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
-  notifImageShared: {
-    ...StyleSheet.absoluteFill,
-  },
-  notifImage: { width: '100%', height: '100%' },
-
-  notifBody: { flex: 1 },
-  notifTitle: {
-    color: colors.textSecondary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs / 2,
-  },
-  notifTitleUnread: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  notifText: {
-    color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight, marginBottom: Space.sm,
-  },
-  notifTextUnread: { color: colors.textPrimary, fontFamily: Typography.family.medium },
-
-  notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  notifTime: { fontSize: Type.caption.size, color: colors.textMuted, fontFamily: Typography.family.regular },
-  notifAggregatedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  notifAggregatedAvatar: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-    marginRight: -(Space.sm - Space.xs / 2),
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-  },
-  notifAggregatedAvatarFallback: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-    marginRight: -(Space.sm - Space.xs / 2),
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-    backgroundColor: colors.surfaceAlt,
+  // Crafted "all caught up" graphic — a ring with a checkmark, authored
+  // rather than a generic outline icon in a grey circle.
+  caughtUpGraphic: {
+    width: 64,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  notifAggregatedCountBadge: {
-    minWidth: Space.md + 4,
-    height: Space.md + 4,
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xs + 2,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.surface,
-  },
-  notifAggregatedCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
-    color: colors.background,
-  },
-  notifActionRow: {
-    marginTop: 0,
-    marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
   },
-  notifActorChip: {
-    flex: 1,
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: 0,
+  caughtUpRing: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+    opacity: 0.5,
   },
-  notifActorText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
-  notifMessageBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
+  caughtUpCheck: {
+    marginTop: 2,
   },
 
   notificationSkeletonList: {
@@ -1374,7 +1362,7 @@ function createStyles(colors: ThemeColors) {
   },
   overflowSheetTitle: {
     fontSize: Type.title.size,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginBottom: Space.sm,
   },

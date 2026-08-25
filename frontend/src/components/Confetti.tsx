@@ -9,10 +9,11 @@ import Reanimated, {
   withSequence,
   runOnJS,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Motion } from '../theme/motionTokens';
 
 const { width, height } = Dimensions.get('window');
-
-const COLORS = ['#d7b98f', '#E06666', '#C9A46A', '#ffffff'];
 
 interface ParticleProps {
   x: number;
@@ -30,32 +31,32 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 
   useEffect(() => {
     // Pop out
-    scale.value = withDelay(delay, withTiming(1, { duration: 200 }));
+    scale.value = withDelay(delay, withTiming(1, { duration: Motion.duration.normal }));
 
     // Spread and fall
     translateX.value = withDelay(
       delay,
-      withTiming(x, { duration: 800, easing: Easing.out(Easing.cubic) })
+      withTiming(x, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) })
     );
 
     translateY.value = withDelay(
       delay,
       withSequence(
-        withTiming(-y, { duration: 300, easing: Easing.out(Easing.quad) }),
-        withTiming(height, { duration: 1500, easing: Easing.in(Easing.quad) })
+        withTiming(-y, { duration: Motion.duration.slow, easing: Easing.out(Easing.quad) }),
+        withTiming(height, { duration: Motion.duration.crawl, easing: Easing.in(Easing.quad) })
       )
     );
 
     // Spin
     rotate.value = withDelay(
       delay,
-      withTiming(Math.random() * 720, { duration: 1800 })
+      withTiming(Math.random() * 720, { duration: Motion.duration.crawl })
     );
 
     // Fade out
     opacity.value = withDelay(
       delay + 1000,
-      withTiming(0, { duration: 800 })
+      withTiming(0, { duration: Motion.duration.crawl })
     );
   }, []);
 
@@ -86,11 +87,14 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 }
 
 export function Confetti({ count = 40 }: { count?: number }) {
+  const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const confettiColors = [colors.antiqueGold, colors.danger, colors.bronze, colors.surfaceElevated];
   const particles = Array.from({ length: count }).map((_, i) => ({
     id: i,
     x: (Math.random() - 0.5) * width,
     y: Math.random() * 200 + 50,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
     delay: Math.random() * 200,
   }));
 
@@ -101,7 +105,12 @@ export function Confetti({ count = 40 }: { count?: number }) {
     return () => clearTimeout(t);
   }, []);
 
-  if (!active) return null;
+  // Reduced motion: confetti is purely decorative celebratory motion
+  // involving scaling, rotation, and translation — all prohibited under
+  // reduced motion (§2.5: "remove parallax/scaling/rotation"). Render
+  // nothing so the success moment is communicated via haptics and UI
+  // state changes instead.
+  if (!active || reducedMotion) return null;
 
   return (
     <View style={{ position: 'absolute', top: height * 0.4, left: width / 2, zIndex: 100 }} pointerEvents="none">

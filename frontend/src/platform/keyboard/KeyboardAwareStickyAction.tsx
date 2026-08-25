@@ -6,6 +6,7 @@ import {
 } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 export interface KeyboardAwareStickyActionProps {
   children: React.ReactNode;
@@ -31,6 +32,8 @@ export function KeyboardAwareStickyAction({
   keyboardShouldPersistTaps,
 }: KeyboardAwareStickyActionProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sticky = stickyAction ?? action;
 
   return (
@@ -53,7 +56,8 @@ export function KeyboardAwareStickyAction({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -67,6 +71,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    borderTopColor: colors.borderSubtle,
   },
-});
+  });
+}

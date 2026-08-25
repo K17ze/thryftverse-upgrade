@@ -81,7 +81,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
   },
   statusText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -114,7 +114,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
   },
   actionText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

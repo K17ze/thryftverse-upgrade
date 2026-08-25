@@ -11,21 +11,17 @@ import Reanimated, {
   interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActiveTheme, Colors } from '../constants/colors';
 
-import { Space } from '../theme/designTokens';
-// ELEVATED: Flagship shimmer with brand tint
-const IS_LIGHT = ActiveTheme === 'light';
-const BASE_BG = Colors.surface;
+import { Space, Radius } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 
 // Multi-layer shimmer: white sweep + subtle brand glow
-const SHIMMER_WAVE = IS_LIGHT
-  ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']
-  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'];
+const SHIMMER_WAVE_LIGHT = ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)'];
+const SHIMMER_WAVE_DARK = ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'];
 
-const BRAND_TINT = IS_LIGHT
-  ? ['rgba(201,162,39,0)', 'rgba(201,162,39,0.08)', 'rgba(201,162,39,0)']
-  : ['rgba(212,168,83,0)', 'rgba(212,168,83,0.06)', 'rgba(212,168,83,0)'];
+const BRAND_TINT_LIGHT = ['rgba(201,162,39,0)', 'rgba(201,162,39,0.08)', 'rgba(201,162,39,0)'];
+const BRAND_TINT_DARK = ['rgba(212,168,83,0)', 'rgba(212,168,83,0.06)', 'rgba(212,168,83,0)'];
 
 interface SkeletonProps {
   width: number | `${number}%`;
@@ -36,7 +32,15 @@ interface SkeletonProps {
   reducedMotion?: boolean;
 }
 
-export function SkeletonLoader({ width, height, borderRadius = 8, style, reducedMotion = false }: SkeletonProps) {
+export function SkeletonLoader({ width, height, borderRadius = Radius.md, style, reducedMotion: reducedMotionProp = false }: SkeletonProps) {
+  // OR the prop with the system/in-app setting so all consumers automatically
+  // get reduced-motion compliance even when they don't pass the prop (§2.5).
+  const systemReducedMotion = useReducedMotion();
+  const { colors, isDark } = useAppTheme();
+  const reducedMotion = reducedMotionProp || systemReducedMotion;
+  const baseBg = colors.surface;
+  const shimmerWave = isDark ? SHIMMER_WAVE_DARK : SHIMMER_WAVE_LIGHT;
+  const brandTint = isDark ? BRAND_TINT_DARK : BRAND_TINT_LIGHT;
   const translateX = useSharedValue(-400);
   const breathe = useSharedValue(1);
   const brandTranslate = useSharedValue(-400);
@@ -51,6 +55,11 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style, reduced
     }
 
     // Primary wave sweep
+    // NOTE: 1600ms/1800ms durations are intentional long-loop shimmer cycles.
+    // Motion.duration.crawl (600ms) is too fast for a full sweep across the
+    // skeleton width — it would strobe. These remain as documented exceptions
+    // to the motion token system (AGENTS.md §17: "No local magic values unless
+    // interaction physics require them and are documented").
     translateX.value = withRepeat(
       withSequence(
         withTiming(500, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
@@ -100,7 +109,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style, reduced
           width: width as DimensionValue,
           height,
           borderRadius,
-          backgroundColor: BASE_BG,
+          backgroundColor: baseBg,
           overflow: 'hidden',
         },
         breatheStyle,
@@ -111,7 +120,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style, reduced
       {reducedMotion ? null : (
         <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
           <LinearGradient
-            colors={SHIMMER_WAVE as [string, string, string]}
+            colors={shimmerWave as [string, string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={{ width: 280, height: '100%' }}
@@ -123,7 +132,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style, reduced
       {reducedMotion ? null : (
         <Reanimated.View style={[StyleSheet.absoluteFill, brandWaveStyle]}>
           <LinearGradient
-            colors={BRAND_TINT as [string, string, string]}
+            colors={brandTint as [string, string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={{ width: 200, height: '100%' }}
@@ -141,9 +150,9 @@ export function ProductGridSkeleton({ columns = 2, count = 6 }: { columns?: numb
     <View style={gridStyles.container}>
       {items.map((i) => (
         <View key={i} style={[gridStyles.card, { width: `${(100 / columns) - 3}%` }]}>
-          <SkeletonLoader width="100%" height={180} borderRadius={14} />
-          <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: 10 }} />
-          <SkeletonLoader width="40%" height={10} borderRadius={6} style={{ marginTop: 6 }} />
+          <SkeletonLoader width="100%" height={180} borderRadius={Radius.lg} />
+          <SkeletonLoader width="60%" height={12} borderRadius={Radius.sm} style={{ marginTop: 10 }} />
+          <SkeletonLoader width="40%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
         </View>
       ))}
     </View>
@@ -157,8 +166,8 @@ export function StoriesRowSkeleton({ count = 5 }: { count?: number }) {
     <View style={storiesStyles.container}>
       {items.map((i) => (
         <View key={i} style={storiesStyles.item}>
-          <SkeletonLoader width={68} height={68} borderRadius={34} />
-          <SkeletonLoader width={48} height={8} borderRadius={4} style={{ marginTop: 6 }} />
+          <SkeletonLoader width={68} height={68} borderRadius={Radius.full} />
+          <SkeletonLoader width={48} height={8} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
         </View>
       ))}
     </View>
@@ -172,12 +181,12 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
     <View>
       {items.map((i) => (
         <View key={i} style={convoStyles.row}>
-          <SkeletonLoader width={50} height={50} borderRadius={25} />
+          <SkeletonLoader width={50} height={50} borderRadius={Radius.full} />
           <View style={convoStyles.textCol}>
-            <SkeletonLoader width="55%" height={12} borderRadius={6} />
-            <SkeletonLoader width="80%" height={10} borderRadius={6} style={{ marginTop: Space.sm }} />
+            <SkeletonLoader width="55%" height={12} borderRadius={Radius.sm} />
+            <SkeletonLoader width="80%" height={10} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
           </View>
-          <SkeletonLoader width={36} height={10} borderRadius={5} />
+          <SkeletonLoader width={36} height={10} borderRadius={Radius.sm} />
         </View>
       ))}
     </View>
@@ -186,20 +195,22 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
 
 /** Skeleton composite: profile hero placeholder */
 export function ProfileSkeleton() {
+  const { colors } = useAppTheme();
+  const profileStyles = React.useMemo(() => createProfileStyles(colors), [colors]);
   return (
     <View style={profileStyles.container}>
-      <SkeletonLoader width="100%" height={160} borderRadius={0} />
+      <SkeletonLoader width="100%" height={160} borderRadius={Radius.none} />
       <View style={profileStyles.avatarRow}>
-        <SkeletonLoader width={84} height={84} borderRadius={42} style={profileStyles.avatar} />
+        <SkeletonLoader width={84} height={84} borderRadius={Radius.full} style={profileStyles.avatar} />
       </View>
       <View style={profileStyles.info}>
-        <SkeletonLoader width={140} height={16} borderRadius={8} />
-        <SkeletonLoader width={100} height={12} borderRadius={6} style={{ marginTop: 10 }} />
+        <SkeletonLoader width={140} height={16} borderRadius={Radius.md} />
+        <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} style={{ marginTop: 10 }} />
         <View style={profileStyles.statsRow}>
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
-          <SkeletonLoader width={60} height={28} borderRadius={8} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
+          <SkeletonLoader width={60} height={28} borderRadius={Radius.md} />
         </View>
       </View>
     </View>
@@ -221,10 +232,10 @@ const convoStyles = StyleSheet.create({
   textCol: { flex: 1 },
 });
 
-const profileStyles = StyleSheet.create({
+const createProfileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {},
   avatarRow: { alignItems: 'flex-start', paddingHorizontal: 20, marginTop: -42 },
-  avatar: { borderWidth: 3, borderColor: Colors.background },
+  avatar: { borderWidth: 3, borderColor: colors.background },
   info: { paddingHorizontal: 20, marginTop: 12 },
   statsRow: { flexDirection: 'row', gap: 14, marginTop: Space.md },
 });

@@ -104,7 +104,7 @@ export function CoOwnConciergeCTA({
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
+        <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
           <Ionicons name={config.icon} size={20} color={colors.brand} />
         </View>
         <View style={styles.headerText}>
@@ -144,7 +144,7 @@ export function CoOwnConciergeCTA({
 
       {/* Auction info */}
       {nextAuctionLabel && (
-        <View style={[styles.auctionCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+        <View style={[styles.auctionCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
           <View style={styles.auctionHeader}>
             <Ionicons name="time-outline" size={14} color={colors.warning} />
             <Text style={[styles.auctionTitle, { color: colors.warning }]}>Next call auction</Text>
@@ -230,10 +230,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   assetTitle: {
     fontSize: Type.caption.size,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   contextValue: {
@@ -282,10 +282,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   auctionTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   auctionTime: {
     fontSize: Type.body.size,

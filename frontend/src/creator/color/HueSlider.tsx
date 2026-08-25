@@ -13,7 +13,7 @@
  * onCommit fires once on gesture end.
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { StyleSheet, View, LayoutChangeEvent } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -56,7 +56,11 @@ export function HueSlider({
 }: HueSliderProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
-  const layoutRef = useRef({ width });
+  // Shared value (not useRef) so the worklet can read the measured width
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const layoutWidth = useSharedValue(width);
 
   const SLIDER_HEIGHT = 28;
   const THUMB_SIZE = 24;
@@ -70,10 +74,8 @@ export function HueSlider({
   }, [hue, width, thumbX]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    layoutRef.current = {
-      width: e.nativeEvent.layout.width,
-    };
-  }, []);
+    layoutWidth.value = e.nativeEvent.layout.width;
+  }, [layoutWidth]);
 
   // Pan gesture
   const panGesture = React.useMemo(() => {
@@ -81,7 +83,7 @@ export function HueSlider({
       .activateAfterLongPress(0)
       .onBegin((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const ratio = Math.max(0, Math.min(1, e.x / w));
         const h = ratio * 360;
         thumbX.value = ratio * w;
@@ -89,7 +91,7 @@ export function HueSlider({
       })
       .onChange((e) => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const ratio = Math.max(0, Math.min(1, e.x / w));
         const h = ratio * 360;
         thumbX.value = ratio * w;
@@ -97,12 +99,12 @@ export function HueSlider({
       })
       .onEnd(() => {
         'worklet';
-        const w = layoutRef.current.width;
+        const w = layoutWidth.value;
         const ratio = Math.max(0, Math.min(1, thumbX.value / w));
         const h = ratio * 360;
         runOnJS(onCommit)(h);
       });
-  }, [thumbX, onChange, onCommit]);
+  }, [thumbX, onChange, onCommit, layoutWidth]);
 
   // Animated thumb style
   const thumbStyle = useAnimatedStyle(() => {

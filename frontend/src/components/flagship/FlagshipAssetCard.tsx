@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
+import { getCategoryFocalPoint } from '../../utils/media';
 
 interface FlagshipAssetCardProps {
   imageUri?: string | null;
@@ -37,17 +39,33 @@ export function FlagshipAssetCard({
   const statusColor =
     status === 'active' ? colors.success : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
 
+  const cardLabel = `${name}, ${unitPrice} per unit, ${yourUnits} of ${totalUnits} units owned (${ownershipPct}%)`;
+
   return (
-    <Pressable onPress={onPress} style={styles.root}>
+    <Pressable
+      onPress={onPress}
+      style={styles.root}
+      accessibilityRole="button"
+      accessibilityLabel={cardLabel}
+      accessibilityHint="View asset details"
+    >
       <View style={styles.imageWrap}>
         {imageUri ? (
-          <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
+          <CachedImage
+            uri={imageUri}
+            style={styles.image}
+            contentFit="cover"
+            transition={Motion.transitions.mediaLoad.duration}
+            focalPoint={getCategoryFocalPoint('art')}
+            accessibilityRole="image"
+            accessibilityLabel={name}
+          />
         ) : (
-          <View style={[styles.image, styles.imageFallback]}>
-            <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+          <View style={[styles.image, styles.imageFallback]} accessibilityElementsHidden>
+            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
-        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} accessibilityElementsHidden />
       </View>
 
       <View style={styles.content}>
@@ -60,7 +78,7 @@ export function FlagshipAssetCard({
           <Text style={styles.perUnit}>/ unit</Text>
         </View>
 
-        <View style={styles.ownershipRow}>
+        <View style={styles.ownershipRow} accessibilityElementsHidden>
           <View style={styles.ownershipBarBg}>
             <View
               style={[
@@ -69,14 +87,20 @@ export function FlagshipAssetCard({
               ]}
             />
           </View>
-          <Text style={styles.ownershipText}>
-            {yourUnits} / {totalUnits} ({ownershipPct}%)
-          </Text>
         </View>
+        <Text style={styles.ownershipText}>
+          {yourUnits} / {totalUnits} ({ownershipPct}%)
+        </Text>
       </View>
 
       {onAction && actionLabel && (
-        <Pressable onPress={(e) => { e.stopPropagation(); onAction(); }} style={styles.actionBtn}>
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onAction(); }}
+          style={styles.actionBtn}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          accessibilityHint={`Perform ${actionLabel.toLowerCase()} on ${name}`}
+        >
           <Text style={styles.actionLabel}>{actionLabel}</Text>
         </Pressable>
       )}
@@ -84,7 +108,7 @@ export function FlagshipAssetCard({
   );
 }
 
-const IMAGE_SIZE = 80;
+const IMAGE_SIZE = ThumbSize.lg;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
@@ -116,11 +140,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: Space.xs,
+    right: Space.xs,
     width: 10,
     height: 10,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     borderWidth: 2,
     borderColor: colors.surface,
   },
@@ -128,7 +152,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     marginLeft: Space.sm,
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs / 2,
   },
   name: {
     fontSize: Type.body.size,
@@ -139,10 +163,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
+    gap: Space.xs / 2,
   },
   unitPrice: {
-    fontSize: Type.price.size,
+    fontSize: Type.priceList.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
@@ -153,18 +177,18 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary,
   },
   ownershipRow: {
-    marginTop: 2,
-    gap: 4,
+    marginTop: Space.xs / 2,
+    gap: Space.xs / 2,
   },
   ownershipBarBg: {
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   ownershipBarFill: {
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
   },
   ownershipText: {
     fontSize: Type.meta.size,
@@ -173,9 +197,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   actionBtn: {
     marginLeft: Space.sm,
-    paddingHorizontal: 14,
-    minHeight: 44,
-    paddingVertical: 10,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
     alignItems: 'center',

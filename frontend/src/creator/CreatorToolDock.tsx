@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,15 +8,17 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
+  withSequence,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { withAlpha } from '../components/poster/shared/colorUtils';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { ToolButton, type RailTool } from './dock/ToolButton';
 import type { CreatorLayer } from './composition';
@@ -76,7 +78,7 @@ export function CreatorToolDock({
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { spring, duration } = useMotionConfig();
+  const { spring } = useMotionConfig();
   const isLook = (documentType ?? document.type) === 'look';
   const isPoster = (documentType ?? document.type) === 'poster';
   const [secondaryExpanded, setSecondaryExpanded] = useState(false);
@@ -84,42 +86,42 @@ export function CreatorToolDock({
   const [secondaryWidth, setSecondaryWidth] = useState(0);
 
   // ── Shared values for animations ──────────────────────────────────
-  const dockTranslateY = useSharedValue(reduceMotion ? 0 : 120);
-  const dockOpacity = useSharedValue(reduceMotion ? 1 : 0);
+  const dockTranslateY = useSharedValue(0);
+  const dockOpacity = useSharedValue(0); // starts invisible — refined mount fade-in
+  const toolListOpacity = useSharedValue(1); // context transition refresh
   const secondaryExpandSV = useSharedValue(0); // 0 = collapsed, 1 = expanded
-  const contextTransitionSV = useSharedValue(0); // 0 = settled, animates on context change
   const prevSelectionModeRef = useRef(false);
 
   const isSelectionMode = !!selectedLayer;
 
-  // ── Dock slide-in animation on mount ──────────────────────────────
-  // Uses the entrance spring token — smooth, confident sheet/modal motion.
+  // ── Refined mount animation: clean opacity fade-in (200ms, ease-out) ──
+  // No slide, no spring, no haptic — just a premium fade. Flagship apps use
+  // refined motion, not no motion. Respects reduceMotion.
   useEffect(() => {
     if (reduceMotion) {
-      dockTranslateY.value = 0;
       dockOpacity.value = 1;
     } else {
-      dockTranslateY.value = withSpring(0, spring.entrance);
-      const fadeMs = (duration as { normal: number }).normal;
-      dockOpacity.value = withTiming(1, { duration: fadeMs, easing: Easing.out(Easing.cubic) });
+      dockOpacity.value = withTiming(1, { duration: 200 });
     }
-    haptic.light();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Contextual tool switching: spring transition on selection change ──
-  // Uses the press spring token — slightly softer, for context transitions.
+  // ── Refined context transition: subtle opacity refresh (0.5→1, 150ms) ──
+  // When the tool context changes (selection mode vs idle), the tool list
+  // fades briefly then restores — a quiet "refresh" feel without the old
+  // jarring slide. Respects reduceMotion.
   useEffect(() => {
-    if (prevSelectionModeRef.current !== isSelectionMode) {
-      prevSelectionModeRef.current = isSelectionMode;
-      if (!reduceMotion) {
-        contextTransitionSV.value = 0;
-        contextTransitionSV.value = withSpring(1, spring.press);
-        haptic.light();
-      }
+    if (prevSelectionModeRef.current === isSelectionMode) return;
+    prevSelectionModeRef.current = isSelectionMode;
+    if (reduceMotion) {
+      toolListOpacity.value = 1;
+    } else {
+      toolListOpacity.value = withSequence(
+        withTiming(0.5, { duration: 75 }),
+        withTiming(1, { duration: 150 }),
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSelectionMode]);
+  }, [isSelectionMode, reduceMotion, toolListOpacity]);
 
   // ── Secondary expand/collapse animation ───────────────────────────
   // Uses the lift spring token — playful but controlled card lift motion.
@@ -236,16 +238,15 @@ export function CreatorToolDock({
     overflow: 'hidden' as const,
   }));
 
-  // ── Context transition: subtle slide + fade on tool set change ─────
-  const contextStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: 8 * (1 - contextTransitionSV.value) }],
-    opacity: contextTransitionSV.value,
-  }));
-
-  // ── Dock slide-in style ────────────────────────────────────────────
+  // ── Dock style (refined mount fade-in + static translate) ─────────
   const dockStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dockTranslateY.value }],
     opacity: dockOpacity.value,
+  }));
+
+  // ── Tool list opacity — context transition refresh ────────────────
+  const toolListAnimStyle = useAnimatedStyle(() => ({
+    opacity: toolListOpacity.value,
   }));
 
   const handleSecondaryLayout = useCallback((e: LayoutChangeEvent) => {
@@ -259,13 +260,13 @@ export function CreatorToolDock({
   const renderToolList = () => {
     if (isSelectionMode || !hasDivider) {
       return (
-        <Reanimated.View style={contextStyle}>
+        <React.Fragment>
           {tools.map(renderTool)}
-        </Reanimated.View>
+        </React.Fragment>
       );
     }
     return (
-      <Reanimated.View style={contextStyle}>
+      <React.Fragment>
         {primaryTools.map(renderTool)}
         {showSecondaryToggle && (
           <>
@@ -285,7 +286,7 @@ export function CreatorToolDock({
             >
               <Ionicons
                 name={secondaryExpanded ? 'chevron-back-outline' : 'chevron-forward-outline'}
-                size={20}
+                size={IconGrammar.standard}
                 color={floating ? colors.textInverse : colors.textSecondary}
               />
             </PressScale>
@@ -301,7 +302,7 @@ export function CreatorToolDock({
             </Reanimated.View>
           </>
         )}
-      </Reanimated.View>
+      </React.Fragment>
     );
   };
 
@@ -331,10 +332,10 @@ export function CreatorToolDock({
               borderWidth: StyleSheet.hairlineWidth,
               borderColor: colors.glassBorder,
               shadowColor: colors.shadow,
-              shadowOpacity: 0.3,
-              shadowRadius: 20,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 12,
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 6,
               minHeight: 64,
               paddingHorizontal: Space.sm,
             },
@@ -343,9 +344,11 @@ export function CreatorToolDock({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.scrollContent, { gap: toolGap }]}
+            contentContainerStyle={styles.scrollContent}
           >
-            {renderToolList()}
+            <Reanimated.View style={[styles.toolListWrap, { gap: toolGap }, toolListAnimStyle]}>
+              {renderToolList()}
+            </Reanimated.View>
           </ScrollView>
         </LiquidGlassBackdrop>
       ) : (
@@ -353,14 +356,16 @@ export function CreatorToolDock({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.scrollContent, { gap: toolGap }]}
+            contentContainerStyle={styles.scrollContent}
           >
-            {renderToolList()}
+            <Reanimated.View style={[styles.toolListWrap, { gap: toolGap }, toolListAnimStyle]}>
+              {renderToolList()}
+            </Reanimated.View>
           </ScrollView>
           {/* Subtle right-edge gradient fade indicating horizontal overflow */}
           <LinearGradient
             pointerEvents="none"
-            colors={[`${colors.surface}00`, colors.surface]}
+            colors={[withAlpha(colors.surface, 0), colors.surface]}
             style={styles.fadeRight}
           />
         </View>
@@ -375,7 +380,7 @@ export function CreatorToolDock({
           accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? colors.textInverse : colors.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={IconGrammar.hero} color={floating ? colors.textInverse : colors.textSecondary} />
         </PressScale>
         {/* Publish button — always visible, floating or solid */}
         <PressScale
@@ -437,27 +442,25 @@ function buildDefaultTools(
   if (isPoster) {
     // Poster: Instagram Stories pattern.
     // Primary tools (Text, Stickers, Draw, Music) are always visible with
-    // filled icon backgrounds. Secondary sticker tools follow a divider and
-    // are icon-only, keeping the dock minimal and contextual.
+    // filled icon backgrounds. The 13 former secondary sticker-type buttons
+    // (Mention, Item, Look, Vote, Quiz, Question, Location, Hashtag, Link,
+    // Countdown, GIF) are collapsed behind the single Stickers entry — the
+    // sticker picker sheet hosts the sub-type browser, not the dock. This
+    // is the Snapchat/Instagram pattern: the dock shows ≤4 primary creative
+    // tools; sticker variants live inside the sticker picker. The former
+    // 13-button secondary tray was a "prove every feature exists" dock that
+    // violated Hick's Law and read as an AI-assembled toolbar.
     return [
       // ── Primary (always visible) ──
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
       { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), primary: true },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw'), primary: true },
       { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music'), primary: true },
-      // ── Secondary (sticker tray) ──
-      { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
+      // ── Secondary ──
+      // Only Item (product tagging) and Add Page remain at the dock level —
+      // they are distinct creative intents, not sticker variants. Everything
+      // else is reachable via the Stickers picker.
       { icon: 'pricetag-outline', label: 'Item', action: () => onToolPress('product') },
-      { icon: 'shirt-outline', label: 'Look', action: () => onToolPress('look') },
-      { icon: 'bar-chart-outline', label: 'Vote', action: () => onToolPress('vote') },
-      { icon: 'help-circle-outline', label: 'Quiz', action: () => onToolPress('quiz') },
-      { icon: 'chatbubble-outline', label: 'Question', action: () => onToolPress('question') },
-      { icon: 'location-outline', label: 'Location', action: () => onToolPress('location') },
-      { icon: 'pricetags-outline', label: 'Hashtag', action: () => onToolPress('hashtag') },
-      { icon: 'link-outline', label: 'Link', action: () => onToolPress('link') },
-      { icon: 'time-outline', label: 'Countdown', action: () => onToolPress('countdown') },
-      { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
-      // Page management stays accessible at the end of the secondary tray.
       ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
     ];
   }
@@ -603,6 +606,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.xs,
   },
+  // ── Tool list wrapper — carries the context transition opacity ──
+  // A row container so the gap applies between tools, not between the
+  // wrapper and the ScrollView content container.
+  toolListWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   // ── Expand/collapse toggle for secondary tools ──
   // 44pt hit target showing only a 20pt chevron — transparent by default
   // per the containment rule (ordinary controls default to transparent).
@@ -667,6 +677,6 @@ const styles = StyleSheet.create({
   },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

@@ -13,6 +13,7 @@ import Reanimated, {
   withSpring,
   cancelAnimation,
   Easing,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -23,16 +24,34 @@ import {
   ColorMatrix as SkiaColorMatrix,
   Mask as SkiaMask,
   useImage as useSkiaImage,
+  useVideo as useSkiaVideo,
   Fit as SkiaFit,
+  fitbox as skiaFitbox,
+  rect as skiaRect,
 } from '@shopify/react-native-skia';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
-import { getVisibleLayersSorted } from './composition';
+import { getVisibleLayersSorted, hasFullBleedMedia, isDefaultBackground } from './composition';
+// Scene evaluator + render profiles — the single pure owner of scene state
+// (AGENTS.md §6.3). The canvas evaluates the scene once per render and
+// passes resolved per-layer data (effect graph, Skia-video-frame gating)
+// down to the layer renderers.
+import {
+  evaluateScene,
+  type ResolvedLayer,
+  type ResolvedScene,
+} from './engine/evaluateScene';
+import {
+  getRenderProfile,
+  type RenderProfile,
+  type RenderProfileId,
+} from './engine/renderProfiles';
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
@@ -54,6 +73,7 @@ import {
 } from '../components/poster/shared/layerAccents';
 import { ContextMenu, type ContextMenuAction } from '../components/poster/shared/ContextMenu';
 import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
+import { GestureBadge } from './surfaces/GestureBadge';
 
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -80,6 +100,18 @@ export interface CreatorCanvasProps {
   selectedLayerIds?: string[];
   onLayerPress?: (layerId: string) => void;
   onCanvasPress?: () => void;
+  /** Fires when the user long-presses the canvas background (not a layer).
+   *  Used by the host to drive the Lightroom-style compare-to-original: while
+   *  the long-press is held, the host sets `compareOriginal` to true and the
+   *  canvas renders the selected media layer without effects/filters. */
+  onCanvasLongPress?: () => void;
+  /** Fires when the long-press is released (touch up). The host sets
+   *  `compareOriginal` back to false. */
+  onCanvasLongPressEnd?: () => void;
+  /** When true, media layers render without their effect stack (color
+   *  matrices, LUTs, blur, vignette) — the "original" image. Used for the
+   *  Lightroom long-press compare pattern. */
+  compareOriginal?: boolean;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
   onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onLayerDoubleTap?: (layerId: string) => void;
@@ -113,6 +145,20 @@ export interface CreatorCanvasProps {
    *  temporal visibility, keyframe evaluation, and overlay time ranges.
    *  When absent, layers render in their static (non-temporal) state. */
   currentTimeMs?: number;
+  /** Shared value that the canvas sets to 1 during an active layer
+   *  manipulation gesture (pan/pinch/rotate) and 0 when idle. The parent
+   *  can drive chrome-recedes-during-manipulation from this value. */
+  manipulationActiveSV?: SharedValue<number>;
+  /** Mirrors manipulation state to React-owned chrome so hit testing changes
+   *  in the same gesture lifecycle as the Reanimated fade. */
+  onManipulationChange?: (active: boolean) => void;
+  /** Shared value the canvas sets to 1 while the actively dragged layer's
+   *  center is inside the bottom trash zone, 0 when outside/idle. The parent
+   *  renders the TrashZone overlay driven by this value. */
+  isInTrashZoneSV?: SharedValue<number>;
+  /** Fires when the dragged layer's center enters the trash zone (with the
+   *  layer id). Used by the parent to trigger a medium haptic. */
+  onTrashZoneEnter?: (layerId: string) => void;
 }
 
 export function CreatorCanvas({
@@ -125,6 +171,9 @@ export function CreatorCanvas({
   selectedLayerIds,
   onLayerPress,
   onCanvasPress,
+  onCanvasLongPress,
+  onCanvasLongPressEnd,
+  compareOriginal,
   onLayerTransformChange,
   onLayerDoubleTap,
   onLayerLongPress,
@@ -140,11 +189,56 @@ export function CreatorCanvas({
   safeZoneBottom = 0,
   playbackClock = null,
   currentTimeMs,
+  manipulationActiveSV,
+  onManipulationChange,
+  isInTrashZoneSV,
+  onTrashZoneEnter,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
+
+  // ── Scene evaluation pipeline (AGENTS.md §6.3) ───────────────────
+  // The canvas evaluates the scene once per render through the pure
+  // evaluateScene function. The resolved scene carries per-layer effect
+  // graphs, transforms, and the Skia-video-frame gating decision. Layer
+  // renderers consume the resolved data instead of re-deriving it, so
+  // edit / preview / viewer / thumbnail / export all share one evaluator.
+  //
+  // The render profile is derived from `mode`: edit/preview use the editor
+  // column, view uses the viewer column. The profile gates capabilities —
+  // e.g. skiaVideoFrames is only live when the registry says so for the
+  // active column AND the platform meets Android API 26+.
+  const renderProfileId: RenderProfileId = mode === 'view' ? 'viewer' : mode;
+  const renderProfile: RenderProfile = useMemo(
+    () => getRenderProfile(renderProfileId),
+    [renderProfileId],
+  );
+  const resolvedScene: ResolvedScene = useMemo(
+    () =>
+      evaluateScene({
+        document,
+        page,
+        timeMs: currentTimeMs,
+        viewport: { width: canvasWidth, height: canvasHeight },
+        profile: renderProfile,
+        compareOriginal,
+      }),
+    [document, page, currentTimeMs, canvasWidth, canvasHeight, renderProfile, compareOriginal],
+  );
+  // Lookup: layerId → resolved layer, so LayerRenderer/MediaLayerContent
+  // can read their effect graph and Skia-video gating without re-evaluating.
+  const resolvedByLayerId = useMemo(() => {
+    const map = new Map<string, ResolvedLayer>();
+    for (const rl of resolvedScene.layers) map.set(rl.layer.id, rl);
+    return map;
+  }, [resolvedScene]);
+
+  // Track whether a compare-to-original long-press is active so onPressOut
+  // only fires the end callback when a compare was actually in progress
+  // (not on a regular tap release).
+  const comparingRef = React.useRef(false);
 
   // Context menu state — long-press opens an ActionSheet with layer actions.
   // The per-layer gesture composition calls onContextMenu(layer) to set this;
@@ -191,7 +285,20 @@ export function CreatorCanvas({
   const contextMenuAccent = contextMenuLayer ? getLayerAccentColor(contextMenuLayer.type) : undefined;
 
   const renderBackground = () => {
+    // When a full-bleed media layer is present AND the background is still
+    // the factory default (no user customisation), skip the background fill.
+    // The media IS the canvas surface — edits land directly on it, not on
+    // an intermediate card. This is the Snapchat/Instagram architecture:
+    // SCREEN = MEDIA, edits are siblings on the media, chrome floats over.
+    // A user-customised background (gradient, image, non-default color) is
+    // still rendered — the user chose it.
+    if (hasFullBleedMedia(page) && isDefaultBackground(canvas.background, document.type)) {
+      return null;
+    }
     if (canvas.background.type === 'color') {
+      // 'transparent' is a valid RN color — renders nothing, lets the
+      // workspace/screen background show through (correct for letterboxed
+      // media in 'contain' mode).
       return <View style={[StyleSheet.absoluteFill, { backgroundColor: canvas.background.value }]} />;
     }
     if (canvas.background.type === 'gradient' && canvas.background.secondaryValue) {
@@ -255,7 +362,28 @@ export function CreatorCanvas({
       {renderBackground()}
 
       {mode === 'edit' && (
-        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Canvas background, tap to deselect" accessibilityHint="Taps the canvas to deselect the current layer" accessibilityRole="button" />
+        <Pressable
+          style={styles.backgroundPressLayer}
+          onPress={onCanvasPress}
+          onLongPress={() => {
+            if (onCanvasLongPress) {
+              comparingRef.current = true;
+              onCanvasLongPress();
+            }
+          }}
+          onPressOut={() => {
+            // If a compare-to-original long-press is active, end it on touch-up.
+            if (comparingRef.current) {
+              comparingRef.current = false;
+              onCanvasLongPressEnd?.();
+            }
+          }}
+          delayLongPress={300}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Canvas background, tap to deselect, long-press to compare original"
+          accessibilityHint="Taps the canvas to deselect the current layer. Long-press to temporarily hide effects and compare against the original."
+          accessibilityRole="button"
+        />
       )}
 
       {visibleLayers.map((layer) => {
@@ -271,6 +399,7 @@ export function CreatorCanvas({
           key={layer.id}
           layer={layer}
           siblingLayers={visibleLayers.filter((l) => l.id !== layer.id)}
+          resolvedLayer={resolvedByLayerId.get(layer.id)}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
@@ -291,6 +420,11 @@ export function CreatorCanvas({
           onToggleLock={onLayerToggleLock}
           playbackClock={playbackClock}
           currentTimeMs={currentTimeMs}
+          manipulationActiveSV={manipulationActiveSV}
+          onManipulationChange={onManipulationChange}
+          isInTrashZoneSV={isInTrashZoneSV}
+          onTrashZoneEnter={onTrashZoneEnter}
+          compareOriginal={compareOriginal}
         />
         );
       })}
@@ -352,8 +486,8 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
     }
     // One-time entrance: fade in + scale from 0.9 → 1.0, then stop.
     // No continuous pulsing (AGENTS.md §17).
-    scaleSV.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
-    opacitySV.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    scaleSV.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.cubic) });
+    opacitySV.value = withTiming(1, { duration: Motion.duration.slow, easing: Easing.out(Easing.ease) });
     return () => {
       cancelAnimation(scaleSV);
       cancelAnimation(opacitySV);
@@ -369,7 +503,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
     <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, tap a tool to start" accessibilityRole="text">
       <View style={styles.emptyStateIconWrap}>
         <Reanimated.View style={animatedIconStyle}>
-          <Ionicons name="add-circle-outline" size={64} color="rgba(255,255,255,0.4)" />
+          <Ionicons name="add-circle-outline" size={IconGrammar.hero} color="rgba(255,255,255,0.4)" aria-hidden={true} />
         </Reanimated.View>
       </View>
       <Text style={styles.emptyStateTitle}>
@@ -385,6 +519,11 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 interface LayerRendererProps {
   layer: CreatorLayer;
   siblingLayers: CreatorLayer[];
+  /** Resolved scene data for this layer from evaluateScene. Carries the
+   *  effect graph and Skia-video-frame gating decision so the renderer
+   *  does not re-derive them. Optional — absent when the layer was filtered
+   *  out by the evaluator (e.g. temporally invisible in a static context). */
+  resolvedLayer?: ResolvedLayer;
   canvasWidth: number;
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
@@ -409,15 +548,28 @@ interface LayerRendererProps {
   playbackClock?: PlaybackClock | null;
   /** Current playback time (ms) — used for temporal visibility and keyframe evaluation. */
   currentTimeMs?: number;
+  /** Shared value set to 1 during active gesture, 0 when idle. */
+  manipulationActiveSV?: SharedValue<number>;
+  onManipulationChange?: (active: boolean) => void;
+  /** Shared value set to 1 while the dragged layer is in the trash zone. */
+  isInTrashZoneSV?: SharedValue<number>;
+  /** Fires when the dragged layer's center enters the trash zone. */
+  onTrashZoneEnter?: (layerId: string) => void;
+  /** When true, media layers render without effects (compare-to-original). */
+  compareOriginal?: boolean;
 }
 
 const SNAP_THRESHOLD = 0.02;
 const SAFE_MARGIN = 0.05;
 const ROTATION_SNAP_DEG = 15;
+// Drag-to-trash: normalized y (0–1) past which the bottom trash zone
+// activates. 0.85 = lower 15% of the canvas (Snapchat/Instagram pattern).
+const TRASH_ZONE_THRESHOLD = 0.85;
 
 const LayerRenderer = React.memo(function LayerRenderer({
   layer,
   siblingLayers,
+  resolvedLayer,
   canvasWidth,
   canvasHeight,
   mode,
@@ -432,8 +584,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onMultiDragUpdate,
   onMultiDragCommit,
   onContextMenu,
+  onDelete,
   playbackClock,
   currentTimeMs,
+  manipulationActiveSV,
+  onManipulationChange,
+  isInTrashZoneSV,
+  onTrashZoneEnter,
+  compareOriginal,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -470,6 +628,10 @@ const LayerRenderer = React.memo(function LayerRenderer({
   const handleScale = useSharedValue(0.8);
   // Gesture lift shadow — increases during active gesture
   const liftSV = useSharedValue(0);
+  // Trash-zone drag-to-delete — tracks whether the dragged layer's center
+  // was inside the trash zone on the previous update, so we only fire the
+  // enter haptic / callback on the rising edge (not every frame).
+  const wasInTrashZoneSV = useSharedValue(0);
 
   useEffect(() => {
     if (isSelected) {
@@ -586,6 +748,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onStart(() => {
           startX.value = translateX.value;
           startY.value = translateY.value;
+          if (manipulationActiveSV) manipulationActiveSV.value = 1;
+          if (onManipulationChange) runOnJS(onManipulationChange)(true);
+          // Reset trash-zone tracking at the start of every drag.
+          wasInTrashZoneSV.value = 0;
+          if (isInTrashZoneSV) isInTrashZoneSV.value = 0;
           runOnJS(handlePress)();
           runOnJS(setShowGuides)(true);
           if (isMultiSelectActive && onMultiDragStart) {
@@ -597,9 +764,37 @@ const LayerRenderer = React.memo(function LayerRenderer({
           translateY.value = startY.value + e.translationY;
           if (isMultiSelectActive && onMultiDragUpdate) {
             runOnJS(onMultiDragUpdate)(e.translationX / canvasWidth, e.translationY / canvasHeight);
+          } else if (isInTrashZoneSV) {
+            // Drag-to-trash (Snapchat/Instagram pattern): when the layer's
+            // center passes the bottom threshold, mark it as inside the
+            // trash zone. Rising edge fires the enter haptic + parent
+            // callback; falling edge clears the highlight.
+            const normY = (startY.value + e.translationY) / canvasHeight;
+            const inside = normY > TRASH_ZONE_THRESHOLD ? 1 : 0;
+            if (inside !== wasInTrashZoneSV.value) {
+              wasInTrashZoneSV.value = inside;
+              isInTrashZoneSV.value = inside;
+              if (inside === 1 && onTrashZoneEnter) {
+                runOnJS(onTrashZoneEnter)(layer.id);
+              }
+            }
           }
         })
         .onEnd((e) => {
+          // Capture trash-zone state before resetting.
+          const wasInTrash = wasInTrashZoneSV.value === 1;
+          wasInTrashZoneSV.value = 0;
+          if (isInTrashZoneSV) isInTrashZoneSV.value = 0;
+          // Drag-to-trash commit: if the layer was released inside the
+          // trash zone, delete it instead of committing the position.
+          if (!isMultiSelectActive && wasInTrash && onDelete) {
+            runOnJS(haptic.heavy)();
+            runOnJS(onDelete)(layer.id);
+            runOnJS(setShowGuides)(false);
+            runOnJS(setSmartGuides)({ vertical: [], horizontal: [] });
+            runOnJS(setCenterGuideVisible)(false);
+            return;
+          }
           if (isMultiSelectActive && onMultiDragCommit) {
             // Multi-select: the parent commits positions for ALL selected
             // layers (including this one) in a single history entry.
@@ -612,8 +807,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
             const finalY = startY.value + e.translationY;
             runOnJS(handlePositionCommit)(finalX, finalY);
           }
+        })
+        .onFinalize(() => {
+          if (manipulationActiveSV) manipulationActiveSV.value = 0;
+          if (onManipulationChange) runOnJS(onManipulationChange)(false);
         }),
-    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight]
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight, manipulationActiveSV, onManipulationChange, isInTrashZoneSV, onTrashZoneEnter, onDelete, haptic]
   );
 
   const pinchGesture = useMemo(
@@ -622,6 +821,8 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .enabled(mode === 'edit' && !layer.locked)
         .onStart(() => {
           startScale.value = scaleSV.value;
+          if (manipulationActiveSV) manipulationActiveSV.value = 1;
+          if (onManipulationChange) runOnJS(onManipulationChange)(true);
         })
         .onUpdate((e) => {
           scaleSV.value = startScale.value * e.scale;
@@ -630,8 +831,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onEnd(() => {
           runOnJS(setGestureBadge)(null);
           runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
+        })
+        .onFinalize(() => {
+          if (manipulationActiveSV) manipulationActiveSV.value = 0;
+          if (onManipulationChange) runOnJS(onManipulationChange)(false);
         }),
-    [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit]
+    [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit, manipulationActiveSV, onManipulationChange]
   );
 
   const rotationGesture = useMemo(
@@ -640,6 +845,8 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .enabled(mode === 'edit' && !layer.locked)
         .onStart(() => {
           startRotation.value = rotationSV.value;
+          if (manipulationActiveSV) manipulationActiveSV.value = 1;
+          if (onManipulationChange) runOnJS(onManipulationChange)(true);
         })
         .onUpdate((e) => {
           // Convert gesture radians to degrees at the boundary
@@ -650,8 +857,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onEnd(() => {
           runOnJS(setGestureBadge)(null);
           runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
+        })
+        .onFinalize(() => {
+          if (manipulationActiveSV) manipulationActiveSV.value = 0;
+          if (onManipulationChange) runOnJS(onManipulationChange)(false);
         }),
-    [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit]
+    [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit, manipulationActiveSV, onManipulationChange]
   );
 
   const tapGesture = useMemo(
@@ -776,7 +987,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return opacity;
   }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers);
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers, compareOriginal, resolvedLayer);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -870,52 +1081,57 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   if (mode === 'edit') {
     return (
-      <GestureDetector gesture={composedGesture}>
-        <Reanimated.View
-          style={animatedStyle}
-          accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
-          accessibilityRole="adjustable"
-          accessibilityHint="Drag to move, pinch to resize, rotate to rotate, double-tap to edit, long-press for options"
-        >
-          <View style={[styles.layerInner, { borderRadius: layerRadius }]}>
-            {content}
-          </View>
-          {/* Animated selection border — fades in with spring */}
-          {isSelected && (
-            <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
-          )}
-          {/* Selection handles — draggable corner + rotation handles.
-              Hidden in multi-select mode; only the primary shows handles. */}
-          {isSelected && !isMultiSelectActive && (
-            <SelectionHandles
-              handleScaleSV={handleScale}
-              colors={colors}
-              layerLocked={layer.locked}
-              scaleSV={scaleSV}
-              rotationSV={rotationSV}
-              onScaleChange={(s) => setGestureBadge(`${Math.round(s * 100)}%`)}
-              onRotationChange={(r) => setGestureBadge(`${r}°`)}
-              onCommit={() => {
-                setGestureBadge(null);
-                handleTransformCommit(scaleSV.value, rotationSV.value);
-              }}
-            />
-          )}
-          {/* Locked badge */}
-          {isSelected && layer.locked && (
-            <View style={[styles.lockedBadge, { backgroundColor: colors.warning }]} pointerEvents="none" accessibilityLabel="Layer locked" accessibilityRole="image">
-              <Ionicons name="lock-closed" size={10} color="#fff" />
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <GestureDetector gesture={composedGesture}>
+          <Reanimated.View
+            style={animatedStyle}
+            accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
+            accessibilityRole="adjustable"
+            accessibilityHint="Drag to move, pinch to resize, rotate to rotate, double-tap to edit, long-press for options"
+          >
+            <View style={[styles.layerInner, { borderRadius: layerRadius }]}>
+              {content}
             </View>
-          )}
-          {/* Gesture feedback badge */}
-          {gestureBadge && (
-            <View style={[styles.gestureBadge, { backgroundColor: colors.surfaceElevated }]} pointerEvents="none" accessibilityLabel={`Transform ${gestureBadge}`} accessibilityRole="text">
-              <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
-            </View>
-          )}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} centerGuideVisible={centerGuideVisible} />}
-        </Reanimated.View>
-      </GestureDetector>
+            {/* Animated selection border — fades in with spring */}
+            {isSelected && (
+              <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
+            )}
+            {/* Selection handles — draggable corner + rotation handles.
+                Hidden in multi-select mode; only the primary shows handles. */}
+            {isSelected && !isMultiSelectActive && (
+              <SelectionHandles
+                handleScaleSV={handleScale}
+                colors={colors}
+                layerLocked={layer.locked}
+                scaleSV={scaleSV}
+                rotationSV={rotationSV}
+                onScaleChange={(s) => setGestureBadge(`${Math.round(s * 100)}%`)}
+                onRotationChange={(r) => setGestureBadge(`${r}°`)}
+                onCommit={() => {
+                  setGestureBadge(null);
+                  handleTransformCommit(scaleSV.value, rotationSV.value);
+                }}
+              />
+            )}
+            {/* Locked badge */}
+            {isSelected && layer.locked && (
+              <View style={[styles.lockedBadge, { backgroundColor: colors.warning }]} pointerEvents="none" accessibilityLabel="Layer locked" accessibilityRole="image">
+                <Ionicons name="lock-closed" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
+              </View>
+            )}
+            {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} centerGuideVisible={centerGuideVisible} />}
+          </Reanimated.View>
+        </GestureDetector>
+        {/* Gesture feedback badge — floating pill near the manipulated layer
+            (Snapchat/Instagram pattern). Positioned by shared values so it
+            tracks the layer center in real-time during drag/pinch/rotate.
+            Visual-only — pointerEvents="none". */}
+        <GestureBadge
+          badgeText={gestureBadge}
+          positionXSv={translateX}
+          positionYSv={translateY}
+        />
+      </View>
     );
   }
 
@@ -998,10 +1214,12 @@ function renderLayerContent(
   playbackClock?: PlaybackClock | null,
   currentTimeMs?: number,
   siblingLayers?: CreatorLayer[],
+  compareOriginal?: boolean,
+  resolvedLayer?: ResolvedLayer,
 ): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -1043,6 +1261,175 @@ function renderLayerContent(
   }
 }
 
+// ── Skia video frame layer ──────────────────────────────────────────
+// Renders a video through Skia's useVideo hook so the current frame is a
+// SkImage inside a Canvas — enabling the same ColorMatrix / Mask / shader
+// pipeline used for images. This path is gated by the render profile's
+// skiaVideoFrames + videoEffects capabilities (both hidden in the registry
+// today). useVideo is a React hook, so this must be its own component —
+// it cannot be called conditionally inside MediaLayerContent.
+//
+// API (react-native-skia 2.6.2+, stable):
+//   const { currentFrame, currentTime, duration, framerate, rotation, size }
+//     = useVideo(uri, { paused, seek, looping, volume });
+//   currentFrame is a SharedValue<SkImage | null> — render via <SkiaImage>.
+function SkiaVideoLayerContent({
+  layer,
+  width,
+  height,
+  effectGraph,
+  shouldPlay,
+  isMuted,
+  isLooping,
+  volume,
+  onError,
+  colors,
+}: {
+  layer: Extract<CreatorLayer, { type: 'media' }>;
+  width: number;
+  height: number;
+  effectGraph?: import('./engine/evaluateScene').ResolvedEffectGraph;
+  shouldPlay: boolean;
+  isMuted: boolean;
+  isLooping: boolean;
+  volume: number;
+  onError: () => void;
+  colors: ThemeColors;
+}) {
+  const { payload } = layer;
+  const paused = useSharedValue(!shouldPlay);
+  const looping = useSharedValue(isLooping);
+
+  // Keep the paused shared value in sync with the shouldPlay prop. useVideo
+  // reads `paused` as a shared value so changes do not re-instantiate the
+  // video decoder.
+  useEffect(() => {
+    paused.value = !shouldPlay;
+  }, [shouldPlay, paused]);
+  useEffect(() => {
+    looping.value = isLooping;
+  }, [isLooping, looping]);
+
+  // useVideo is the stable Skia video decode hook. It returns the current
+  // frame as a SharedValue<SkImage | null>. When the URI is invalid or the
+  // platform cannot decode, currentFrame stays null and we fall back to
+  // the thumbnail / error state.
+  const { currentFrame, rotation, size } = useSkiaVideo(payload.mediaUri, {
+    paused,
+    looping,
+    volume,
+  });
+
+  const contentFitMap: Record<string, SkiaFit> = {
+    cover: 'cover',
+    contain: 'contain',
+    fill: 'fill',
+  };
+  const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
+  const hasColorMatrix = !!effectGraph?.colorMatrix && effectGraph.colorMatrix.length === 20;
+  const maskUri = effectGraph?.maskUri ?? layer.maskRef ?? null;
+  const skiaMaskImage = useSkiaImage(maskUri);
+  const hasMask = !!skiaMaskImage;
+
+  // Rotation + scale correction via Skia's fitbox (per the official Skia
+  // video docs). useVideo returns a rotation of 0/90/180/270 and the source
+  // dimensions; fitbox computes the matrix that maps the source rect into
+  // the destination rect with the correct rotation and aspect-fit.
+  const videoTransform = useMemo(() => {
+    if (!rotation || (size.width === 0 && size.height === 0)) return undefined;
+    const src = skiaRect(0, 0, size.width, size.height);
+    const dst = skiaRect(0, 0, width, height);
+    return skiaFitbox(fit === 'cover' ? 'cover' : 'contain', src, dst, rotation);
+  }, [rotation, size.width, size.height, width, height, fit]);
+
+  // Thumbnail fallback while the first frame decodes (or when the platform
+  // cannot decode the video through Skia).
+  const [showThumbnail, setShowThumbnail] = useState(true);
+  useAnimatedReaction(
+    () => currentFrame.value,
+    (frame) => {
+      if (frame !== null && showThumbnail) runOnJS(setShowThumbnail)(false);
+    },
+    [showThumbnail],
+  );
+
+  // If after a reasonable delay no frame has decoded, surface the error so
+  // the parent can fall back to the native VideoView.
+  useEffect(() => {
+    if (showThumbnail) {
+      const t = setTimeout(() => {
+        // If we still have no frame, treat as a decode error so the caller
+        // can fall back. This is conservative — Skia video decode failing
+        // should not leave a blank surface.
+        onError();
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [showThumbnail, onError]);
+
+  return (
+    <>
+      {showThumbnail && payload.thumbnailUri && (
+        <CachedImage
+          uri={payload.thumbnailUri}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      )}
+      <SkiaCanvas style={{ width, height }} accessibilityLabel="Video media layer with effects" accessibilityRole="image">
+        {hasMask && skiaMaskImage ? (
+          <SkiaMask
+            mode="alpha"
+            mask={
+              <SkiaImage
+                image={skiaMaskImage}
+                x={0}
+                y={0}
+                width={width}
+                height={height}
+                fit={fit}
+              />
+            }
+          >
+            <SkiaImage
+              image={currentFrame}
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fit={fit}
+              transform={videoTransform}
+            >
+              {hasColorMatrix && (
+                <SkiaColorMatrix matrix={effectGraph!.colorMatrix!} />
+              )}
+            </SkiaImage>
+          </SkiaMask>
+        ) : (
+          <SkiaImage
+            image={currentFrame}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit={fit}
+            transform={videoTransform}
+          >
+            {hasColorMatrix && (
+              <SkiaColorMatrix matrix={effectGraph!.colorMatrix!} />
+            )}
+          </SkiaImage>
+        )}
+      </SkiaCanvas>
+      <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
+        <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
+      </View>
+    </>
+  );
+}
+
 function MediaLayerContent({
   layer,
   width,
@@ -1050,6 +1437,8 @@ function MediaLayerContent({
   playbackClock,
   currentTimeMs,
   siblingLayers,
+  compareOriginal,
+  resolvedLayer,
 }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
@@ -1057,11 +1446,25 @@ function MediaLayerContent({
   playbackClock?: PlaybackClock | null;
   currentTimeMs?: number;
   siblingLayers?: CreatorLayer[];
+  compareOriginal?: boolean;
+  resolvedLayer?: ResolvedLayer;
 }) {
+  const { colors } = useAppTheme();
   const { payload } = layer;
   const [videoError, setVideoError] = React.useState(false);
   const hasPlaybackClock = !!playbackClock;
   const timeMs = currentTimeMs ?? 0;
+
+  // ── Scene-evaluator gating (AGENTS.md §6.3) ─────────────────────
+  // The resolved scene carries the authoritative decision on whether this
+  // video layer should render through Skia video frames (useVideo) with
+  // per-pixel effects, or fall back to the native VideoView without
+  // effects. This is gated by the render profile's skiaVideoFrames +
+  // videoEffects capabilities — both hidden in the registry today, so the
+  // native path is preserved. When the capabilities flip to supported,
+  // the Skia video path activates automatically.
+  const useSkiaVideoFrames = resolvedLayer?.useSkiaVideoFrames ?? false;
+  const resolvedEffectGraph = resolvedLayer?.effectGraph;
 
   // ── Effect evaluation ───────────────────────────────────────────
   // Evaluate the clip's own effect stack, then merge any active adjustment
@@ -1074,6 +1477,10 @@ function MediaLayerContent({
   //   - blur radii take the maximum
   //   - vignette / grain amounts are summed (clamped to 0..1)
   const evaluatedEffect = useMemo<EvaluatedEffect>(() => {
+    // Compare-to-original: when the user long-presses the canvas background,
+    // skip all effect evaluation so they see the ungraded image (Lightroom
+    // long-press compare pattern — recognition over recall, AGENTS.md §4).
+    if (compareOriginal) return {};
     const clipEffects = payload.effects ?? [];
     // Resolve active adjustment layers from the sibling set at the current
     // time. siblingLayers excludes this clip but includes adjustment layers
@@ -1130,7 +1537,7 @@ function MediaLayerContent({
     if (hasBlur && blurRadius > 0) result.blurRadius = blurRadius;
     if (hasVignette && vignetteAmount > 0) result.vignetteAmount = Math.min(1, vignetteAmount);
     return result;
-  }, [payload.effects, siblingLayers, timeMs, layer.id]);
+  }, [payload.effects, siblingLayers, timeMs, layer.id, compareOriginal]);
 
   const hasColorMatrix = !!evaluatedEffect?.colorMatrix && evaluatedEffect.colorMatrix.length === 20;
 
@@ -1171,6 +1578,29 @@ function MediaLayerContent({
   // playback state as props.
 
   if (payload.mediaType === 'video' && !videoError) {
+    // Skia video frame path: when the render profile supports
+    // skiaVideoFrames, decode the video via useVideo and render the
+    // current frame as a Skia image inside a Canvas — the same
+    // ColorMatrix / Mask / shader pipeline used for images. This is
+    // gated by the capability registry (skiaVideoFrames + videoEffect
+    // both hidden today), so the native VideoView path below remains
+    // the live path until the capabilities are flipped to supported.
+    if (useSkiaVideoFrames) {
+      return (
+        <SkiaVideoLayerContent
+          layer={layer}
+          width={width}
+          height={height}
+          effectGraph={resolvedEffectGraph}
+          shouldPlay={shouldPlay}
+          isMuted={isMuted}
+          isLooping={isLooping}
+          volume={volume}
+          onError={() => setVideoError(true)}
+          colors={colors}
+        />
+      );
+    }
     return (
       <>
         {payload.thumbnailUri && !hasPlaybackClock && (
@@ -1190,20 +1620,16 @@ function MediaLayerContent({
           isLooping={isLooping}
           onError={() => setVideoError(true)}
         />
-        {/* Video effects: documented as needing Skia video integration.
-            The current expo-video VideoView renders natively and cannot
-            be wrapped in a Skia Canvas. For now, video effects are
-            applied via a CSS filter fallback (opacity/blur) or deferred
-            to the export pipeline. Image effects are fully rendered
-            via Skia below. */}
-        {evaluatedEffect?.blurRadius && evaluatedEffect.blurRadius > 0 && (
-          <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
-            pointerEvents="none"
-          />
-        )}
+        {/* Video effects: the native expo-video VideoView renders natively
+            and cannot be wrapped in a Skia Canvas, so per-pixel effects
+            (color matrix, mask, shader) are NOT applied on this path.
+            The scene evaluator returns no effect graph for video layers
+            when the videoEffect capability is hidden (§6.4 — no
+            metadata-only effect is advertised as a visible result). The
+            Skia video frame path above renders the full effect graph
+            when the capability is supported. */}
         <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
-          <Ionicons name="videocam" size={12} color="#fff" />
+          <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
         </View>
       </>
     );
@@ -1306,13 +1732,13 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       return;
     }
     if (animation === 'fade') {
-      animOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.out(Easing.ease) });
       setTypewriterText(payload.text);
     } else if (animation === 'slide') {
       animTranslateY.value = 24;
       animOpacity.value = 0;
-      animOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
-      animTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.ease) });
+      animTranslateY.value = withTiming(0, { duration: Motion.duration.slower, easing: Easing.out(Easing.exp) });
       setTypewriterText(payload.text);
     } else if (animation === 'bounce') {
       animOpacity.value = 1;
@@ -1389,16 +1815,16 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       // Playfair Display Regular — editorial serif for a restrained,
       // non-template feel (replaces round script Pacifico)
       fontFamily: 'PlayfairDisplay_400Regular',
-      fontSize: Type.bodyEmphasis.size + 6,
-      lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
+      fontSize: Type.bodyStrong.size + 6,
+      lineHeight: (Type.bodyStrong.size + 6) * 1.2,
       letterSpacing: 0.5,
     },
     deco: {
       // Anton — strong display (replaces retro Lobster for a more
       // cohesive, less template-like feel)
       fontFamily: 'Anton_400Regular',
-      fontSize: Type.bodyEmphasis.size + 2,
-      lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
+      fontSize: Type.bodyStrong.size + 2,
+      lineHeight: (Type.bodyStrong.size + 2) * 1.3,
       letterSpacing: 1.5,
     },
     poster: {
@@ -1420,8 +1846,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       // (replaces generic Dancing Script for a more editorial feel)
       fontFamily: 'PlayfairDisplay_400Regular',
       fontStyle: 'italic',
-      fontSize: Type.bodyEmphasis.size + 2,
-      lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
+      fontSize: Type.bodyStrong.size + 2,
+      lineHeight: (Type.bodyStrong.size + 2) * 1.4,
     },
   };
 
@@ -1545,7 +1971,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       accessibilityRole="link"
     >
       <View style={productStyles.row}>
-        <Ionicons name="pricetag" size={12} color="#fff" />
+        <Ionicons name="pricetag" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
         <Text style={productStyles.title} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
       </View>
       {payload.snapshotPriceGbp !== undefined && (
@@ -1570,7 +1996,7 @@ function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'loo
   const { payload } = layer;
   return (
     <View style={lookStyles.container} accessibilityLabel={`Look, ${payload.snapshotCaption || 'View look'}`} accessibilityRole="link">
-      <Ionicons name="shirt-outline" size={12} color="#fff" />
+      <Ionicons name="shirt-outline" size={IconGrammar.badge} color="#fff" aria-hidden={true} />
       <Text style={lookStyles.text} numberOfLines={1}>{payload.snapshotCaption || 'View look'}</Text>
     </View>
   );
@@ -1596,7 +2022,7 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
         <Text style={voteStyles.question}>{payload.question}</Text>
         {hasTimer && (
           <View style={voteStyles.timerBadge}>
-            <Ionicons name="timer-outline" size={10} color="#fff" />
+            <Ionicons name="timer-outline" size={IconGrammar.badge} color="#fff" aria-hidden={true} />
             <Text style={voteStyles.timerText}>{timerLabel}</Text>
           </View>
         )}
@@ -1636,7 +2062,7 @@ function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'qui
               </Text>
               {isCorrect && (
                 <View style={quizStyles.correctBadge}>
-                  <Ionicons name="checkmark" size={12} color="#1a1a1a" />
+                  <Ionicons name="checkmark" size={IconGrammar.badge} color="#1a1a1a" aria-hidden={true} />
                 </View>
               )}
             </View>
@@ -1656,10 +2082,10 @@ function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
     <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]} accessibilityLabel={`Question box, ${payload.prompt}`} accessibilityRole="search">
       <Text style={questionStyles.prompt}>{payload.prompt}</Text>
       <View style={questionStyles.inputAffordance}>
-        <Ionicons name="chatbubbles-outline" size={14} color="rgba(255,255,255,0.5)" />
+        <Ionicons name="chatbubbles-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.5)" aria-hidden={true} />
         <Text style={questionStyles.placeholder}>{payload.placeholder}</Text>
         <View style={questionStyles.sendHint}>
-          <Ionicons name="arrow-up" size={10} color="rgba(255,255,255,0.4)" />
+          <Ionicons name="arrow-up" size={IconGrammar.badge} color="rgba(255,255,255,0.4)" aria-hidden={true} />
         </View>
       </View>
     </View>
@@ -1715,7 +2141,7 @@ function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type:
   return (
     <View style={[countdownStyles.container, { backgroundColor: payload.color }]} accessibilityLabel={`Countdown, ${payload.label}, ${timeStr}`} accessibilityRole="timer">
       <View style={countdownStyles.iconRow}>
-        <Ionicons name="time-outline" size={12} color={payload.textColor} />
+        <Ionicons name="time-outline" size={IconGrammar.badge} color={payload.textColor} aria-hidden={true} />
         <Text style={countdownStyles.label}>{payload.label}</Text>
       </View>
       <Text style={countdownStyles.time}>{timeStr}</Text>
@@ -1948,7 +2374,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
           justifyContent: 'center',
           alignItems: 'center',
         }}>
-          <Ionicons name="musical-notes" size={18} color="rgba(201,164,106,0.8)" />
+          <Ionicons name="musical-notes" size={IconGrammar.metadata} color="rgba(201,164,106,0.8)" aria-hidden={true} />
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
@@ -1969,7 +2395,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         justifyContent: 'center',
         alignItems: 'center',
       }}>
-        <Ionicons name="play" size={10} color="#fff" />
+        <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
       </View>
     </View>
   );
@@ -1989,7 +2415,7 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
       backgroundColor: payload.backgroundColor,
       minWidth: 120,
     }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
-      <Ionicons name="link-outline" size={16} color={payload.textColor} />
+      <Ionicons name="link-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
         {payload.ctaText}
       </Text>
@@ -2011,7 +2437,7 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       backgroundColor: 'rgba(0,0,0,0.6)',
       minWidth: 100,
     }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
-      <Ionicons name="location-outline" size={16} color="#fff" />
+      <Ionicons name="location-outline" size={IconGrammar.metadata} color="#fff" aria-hidden={true} />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
         {payload.placeName}
       </Text>
@@ -2060,7 +2486,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
       minWidth: 80,
     }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
-      <Ionicons name="time-outline" size={16} color={payload.textColor} />
+      <Ionicons name="time-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
       <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
         {timeStr}
       </Text>
@@ -2244,7 +2670,7 @@ function SelectionHandles({
       <GestureDetector gesture={rotationPan}>
         <Reanimated.View style={[hitZone, { top: -50, left: '50%', marginLeft: -22 }]} accessibilityLabel="Rotation handle" accessibilityRole="adjustable" accessibilityHint="Drag to rotate the layer">
           <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none">
-            <Ionicons name="refresh" size={10} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} />
+            <Ionicons name="refresh" size={IconGrammar.badge} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} aria-hidden={true} />
           </View>
         </Reanimated.View>
       </GestureDetector>
@@ -2356,27 +2782,6 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
-  },
-  // Gesture feedback badge
-  gestureBadge: {
-    position: 'absolute',
-    top: -32,
-    left: '50%',
-    marginLeft: -32,
-    width: 64,
-    height: 24,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  gestureBadgeText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
   },
   // Locked badge
   lockedBadge: {
@@ -2704,7 +3109,7 @@ const questionStyles = StyleSheet.create({
   prompt: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     marginBottom: Space.sm,
   },
   inputAffordance: {

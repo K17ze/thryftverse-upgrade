@@ -8,19 +8,12 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 const { height, width } = Dimensions.get('window');
-const IS_LIGHT = ActiveTheme === 'light';
-const OVERLAY_BG = IS_LIGHT ? 'rgba(14, 12, 10, 0.34)' : 'rgba(0,0,0,0.6)';
-const SHEET_BG = Colors.surfaceAlt;
-const HANDLE_BG = Colors.border;
-const SEARCH_BG = Colors.surfaceAlt;
-const SEARCH_BORDER = Colors.border;
-const OPTION_BORDER = Colors.border;
 
 interface Props {
   visible: boolean;
@@ -33,6 +26,8 @@ interface Props {
 }
 
 export function BottomSheetPicker({ visible, onClose, title, options, selectedValue, onSelect, searchable }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
@@ -97,7 +92,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 9999 }]} pointerEvents="box-none">
-      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: OVERLAY_BG }, overlayStyle]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, overlayStyle]}>
         <AnimatedPressable
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -118,11 +113,11 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
 
           {searchable && (
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color={Colors.textMuted} />
+              <Ionicons name="search" size={20} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search..."
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
@@ -141,7 +136,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                   onPress={() => handleSelect(opt)}
                 >
                   <Text style={[styles.optionText, selectedValue === opt && styles.optionTextActive]}>{opt}</Text>
-                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />}
+                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} />}
                 </AnimatedPressable>
               ))
             )}
@@ -152,39 +147,39 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,
     width: width,
     height: height,
-    backgroundColor: SHEET_BG,
+    backgroundColor: colors.surfaceAlt,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 20,
   },
   handleContainer: { alignItems: 'center', paddingVertical: 14 },
-  handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: HANDLE_BG },
+  handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: colors.border },
   header: { alignItems: 'center', marginBottom: 12 },
-  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: 0.08 },
+  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, letterSpacing: 0.08 },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: SEARCH_BG,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 0.5,
-    borderColor: SEARCH_BORDER,
+    borderColor: colors.border,
     marginHorizontal: 20,
     paddingHorizontal: Space.md,
     height: 50,
-    borderRadius: 25,
+    borderRadius: Radius.full,
     marginBottom: Space.md,
   },
-  searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.bodyLarge.size, letterSpacing: 0.08 },
+  searchInput: { flex: 1, marginLeft: 10, color: colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.body.size, letterSpacing: 0.08 },
 
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
@@ -195,10 +190,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.md,
     borderBottomWidth: 0.5,
-    borderBottomColor: OPTION_BORDER,
+    borderBottomColor: colors.border,
   },
-  optionText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
-  optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.brand },
+  optionText: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textPrimary, letterSpacing: 0.08 },
+  optionTextActive: { fontFamily: Typography.family.semibold, color: colors.brand },
 
-  noResultsText: { textAlign: 'center', color: Colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
+  noResultsText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
 });

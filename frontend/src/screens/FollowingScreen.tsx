@@ -2,13 +2,13 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -95,8 +95,8 @@ export default function FollowingScreen() {
     [navigation, currentUser?.id]
   );
 
-  const renderItem = useCallback(
-    ({ item }: { item: FollowListUser }) => {
+  const renderItem: ListRenderItem<FollowListUser> = useCallback(
+    ({ item }) => {
       const name = item.displayName || item.username || 'Thryft user';
       const initials = getInitials(name);
       const isSelf = item.id === currentUser?.id;
@@ -123,12 +123,19 @@ export default function FollowingScreen() {
             )}
           </View>
           <View style={styles.identityCol}>
-            <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.displayName} numberOfLines={1}>{name}</Text>
+              {item.isMutual ? (
+                <View style={styles.mutualBadge}>
+                  <Text style={styles.mutualBadgeText}>Mutual</Text>
+                </View>
+              ) : null}
+            </View>
             {item.username ? (
               <Text style={styles.handle} numberOfLines={1}>@{item.username}</Text>
             ) : null}
           </View>
-          {!isSelf ? <FollowButton userId={item.id} colors={colors} styles={styles} /> : null}
+          {!isSelf ? <FollowButton userId={item.id} serverIsFollowing={item.isFollowing} colors={colors} styles={styles} /> : null}
         </Pressable>
       );
     },
@@ -190,7 +197,7 @@ export default function FollowingScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
-      <FlatList
+      <FlashList
         data={filteredItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -199,6 +206,7 @@ export default function FollowingScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
+        drawDistance={250}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -255,15 +263,17 @@ export default function FollowingScreen() {
 /** Compact follow/unfollow button for list rows. */
 function FollowButton({
   userId,
+  serverIsFollowing,
   colors,
   styles,
 }: {
   userId: string;
+  serverIsFollowing?: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
   const followMutation = useFollowMutation(userId);
-  const isFollowing = followMutation.variables ?? true;
+  const isFollowing = followMutation.variables ?? serverIsFollowing ?? false;
 
   const handlePress = useCallback(() => {
     haptics.tap();
@@ -336,10 +346,22 @@ function createStyles(colors: ThemeColors) {
     avatarWrap: {},
     avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
     avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    avatarInitials: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+    avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
     identityCol: { flex: 1 },
-    displayName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-    handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+    displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1 },
+    mutualBadge: {
+      paddingHorizontal: Space.xs + 1,
+      paddingVertical: 1,
+      borderRadius: Radius.sm,
+      backgroundColor: `${colors.brand}15`,
+    },
+    mutualBadgeText: {
+      fontSize: Type.caption.size - 1,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+    },
+    handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
     followBtn: {
       minWidth: Control.hit + Space.sm,
       height: Control.hit - 4,
@@ -357,7 +379,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
     },
     followBtnText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     notFollowingBtnText: {

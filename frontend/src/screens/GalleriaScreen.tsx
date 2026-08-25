@@ -6,8 +6,8 @@ import {
   Dimensions,
   RefreshControl,
   ImageStyle,
-  ScrollView,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +25,8 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   fetchGalleriaCollections,
   fetchGalleriaEditorials,
@@ -62,22 +64,16 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // ---------------------------------------------------------------------------
 const HeroEditorialCard = React.memo(function HeroEditorialCard({
   editorial,
-  onPress,
 }: {
   editorial: GalleriaEditorial;
-  onPress: () => void;
 }) {
   const styles = useStyles();
 
   return (
-    <AnimatedPressable
+    <View
       style={styles.heroContainer}
-      onPress={onPress}
-      activeOpacity={0.92}
-      scaleValue={0.99}
-      accessibilityRole="button"
+      accessibilityRole="image"
       accessibilityLabel={`Editorial: ${editorial.title}`}
-      accessibilityHint="Opens the editorial piece"
     >
       <CachedImage
         uri={editorial.heroImage}
@@ -101,7 +97,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
           {editorial.author} · {editorial.readTime}
         </Text>
       </View>
-    </AnimatedPressable>
+    </View>
   );
 });
 
@@ -267,12 +263,10 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 // ---------------------------------------------------------------------------
 const EditorialListItem = React.memo(function EditorialListItem({
   editorial,
-  onPress,
   isLast,
   size = 'standard',
 }: {
   editorial: GalleriaEditorial;
-  onPress: () => void;
   isLast: boolean;
   size?: 'large' | 'standard';
 }) {
@@ -283,13 +277,9 @@ const EditorialListItem = React.memo(function EditorialListItem({
 
   return (
     <View style={[styles.editorialItem, isLast && styles.editorialItemLast]}>
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.94}
-        scaleValue={0.99}
-        accessibilityRole="button"
+      <View
+        accessibilityRole="image"
         accessibilityLabel={`Editorial: ${editorial.title}`}
-        accessibilityHint="Opens the editorial piece"
       >
         <View style={[styles.editorialHeroWrap, { height: heroHeight }]}>
           <CachedImage
@@ -327,7 +317,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
             </Text>
           </View>
         </View>
-      </AnimatedPressable>
+      </View>
       {!isLast && <View style={styles.editorialSeparator} />}
     </View>
   );
@@ -464,6 +454,7 @@ export default function GalleriaScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
 
   const [collections, setCollections] = useState<GalleriaCollection[]>([]);
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
@@ -515,17 +506,6 @@ export default function GalleriaScreen() {
     [haptic, navigation],
   );
 
-  const handleEditorialPress = useCallback(
-    (editorial: GalleriaEditorial) => {
-      haptic.selection();
-      // Editorials are demo-only — no dedicated detail screen yet.
-      // Tapping is truthful: the action is acknowledged via haptic and
-      // the demo badge communicates the state. A real editorial reader
-      // screen will be added when the CMS backend is wired.
-    },
-    [haptic],
-  );
-
   const handleAssetPress = useCallback(
     (asset: GalleriaFeaturedAsset) => {
       haptic.selection();
@@ -544,9 +524,177 @@ export default function GalleriaScreen() {
   const remainingEditorials = editorials.slice(1);
   const featuredCollection = collections[0] ?? null;
   const railCollections = collections.slice(1);
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(featuredAssets),
-    [featuredAssets],
+  // ── FlashList masonry callbacks ──
+  const keyExtractor = useCallback(
+    (item: GalleriaFeaturedAsset) => item.id,
+    [],
+  );
+
+  const renderMasonryItem = useCallback(
+    ({ item, index }: { item: GalleriaFeaturedAsset; index: number }) => (
+      <View style={{ paddingHorizontal: MASONRY_GAP / 2, paddingBottom: MASONRY_GAP, width: '100%' }}>
+        <FeaturedAssetCard
+          asset={item}
+          onPress={() => handleAssetPress(item)}
+          testID={index === 0 ? 'golden-coown-first-asset' : undefined}
+        />
+      </View>
+    ),
+    [handleAssetPress],
+  );
+
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }) => {
+      layout.span = 1;
+    },
+    [],
+  );
+
+  const listHeader = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
+        {/* ── Honest demo indicator (AGENTS.md §11) ── */}
+        {GALLERIA_DEMO_MODE && (
+          <View style={styles.demoBadgeRow}>
+            <View style={styles.demoBadgeDot} />
+            <Text style={styles.demoBadgeText}>Demo content</Text>
+          </View>
+        )}
+
+        {/* ── Section 1: Hero editorial ── */}
+        {loading ? (
+          <HeroSkeleton />
+        ) : heroEditorial ? (
+          <HeroEditorialCard
+            editorial={heroEditorial}
+          />
+        ) : null}
+
+        {/* ── Section 2: Curated Collections — featured + rail ── */}
+        {loading ? (
+          <CollectionRailSkeleton />
+        ) : collections.length > 0 ? (
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
+            <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
+            {featuredCollection && (
+              <FeaturedCollectionCard
+                collection={featuredCollection}
+                onPress={() => handleCollectionPress(featuredCollection)}
+              />
+            )}
+            {railCollections.length > 0 && (
+              <HorizontalRail
+                contentContainerStyle={styles.railContent}
+                showsHorizontalScrollIndicator={false}
+                accessibilityLabel="Curated collections rail"
+              >
+                {railCollections.map((col) => (
+                  <CollectionRailCard
+                    key={col.id}
+                    collection={col}
+                    onPress={() => handleCollectionPress(col)}
+                  />
+                ))}
+              </HorizontalRail>
+            )}
+          </Reanimated.View>
+        ) : null}
+
+        {/* ── Section 3: Featured Assets — header + loading skeleton ── */}
+        {loading ? (
+          <>
+            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+            <FeaturedMasonrySkeleton />
+          </>
+        ) : featuredAssets.length > 0 ? (
+          <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+        ) : null}
+      </View>
+    ),
+    [
+      loading,
+      heroEditorial,
+      collections,
+      featuredCollection,
+      railCollections,
+      featuredAssets.length,
+      reducedMotion,
+      styles,
+      handleCollectionPress,
+    ],
+  );
+
+  const listFooter = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
+        {/* ── Section 4: Editorial list ── */}
+        {loading ? (
+          <>
+            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <EditorialSkeleton />
+            <EditorialSkeleton />
+          </>
+        ) : remainingEditorials.length > 0 ? (
+          <>
+            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            {remainingEditorials.map((ed, idx) => (
+              <EditorialListItem
+                key={ed.id}
+                editorial={ed}
+                isLast={idx === remainingEditorials.length - 1}
+                size={idx === 0 ? 'large' : 'standard'}
+              />
+            ))}
+          </>
+        ) : !loading && heroEditorial === null ? (
+          <>
+            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <EmptyState
+              density="compact"
+              icon="book-outline"
+              title="No editorials available"
+              subtitle="Our editors are preparing new stories. Check back soon."
+            />
+          </>
+        ) : null}
+
+        {/* ── Section 5: Creative Tools — Poster Studio CTA ── */}
+        <View style={styles.stylingToolsWrap}>
+          <SectionHeader eyebrow="CREATIVE TOOLS" title="Make it yours" />
+          <AnimatedPressable
+            style={styles.moodboardCtaCard}
+            onPress={() => { haptic.selection(); navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true }); }}
+            activeOpacity={0.92}
+            scaleValue={0.98}
+            accessibilityRole="button"
+            accessibilityLabel="Open Poster Studio"
+            accessibilityHint="Create posters, looks, and moodboard collages"
+          >
+            <View style={styles.moodboardCtaIconWrap}>
+              <Ionicons name="create-outline" size={22} color={colors.brand} />
+            </View>
+            <View style={styles.moodboardCtaCopy}>
+              <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
+                Poster Studio
+              </Text>
+              <Text style={styles.moodboardCtaSubtitle} numberOfLines={2}>
+                Create posters, looks & moodboard collages
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </AnimatedPressable>
+        </View>
+      </View>
+    ),
+    [
+      loading,
+      remainingEditorials,
+      heroEditorial,
+      styles,
+      colors,
+      haptic,
+      navigation,
+    ],
   );
 
   // ── Error state ──
@@ -593,17 +741,26 @@ export default function GalleriaScreen() {
       {/* Offline banner */}
       {isOffline && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
           <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
         </View>
       )}
 
-      <ScrollView
+      <FlashList
+        data={loading ? [] : featuredAssets}
+        masonry
+        numColumns={MASONRY_COLUMN_COUNT}
+        renderItem={renderMasonryItem}
+        keyExtractor={keyExtractor}
+        overrideItemLayout={overrideItemLayout}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        contentContainerStyle={{
+          paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
+          paddingTop: insets.top + Space.sm,
+          paddingBottom: Space.xxl,
+        }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + Space.sm },
-        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -613,143 +770,7 @@ export default function GalleriaScreen() {
             progressBackgroundColor="transparent"
           />
         }
-      >
-        {/* ── Honest demo indicator (AGENTS.md §11) ── */}
-        {GALLERIA_DEMO_MODE && (
-          <View style={styles.demoBadgeRow}>
-            <View style={styles.demoBadgeDot} />
-            <Text style={styles.demoBadgeText}>Demo content</Text>
-          </View>
-        )}
-
-        {/* ── Section 1: Hero editorial ── */}
-        {loading ? (
-          <HeroSkeleton />
-        ) : heroEditorial ? (
-          <HeroEditorialCard
-            editorial={heroEditorial}
-            onPress={() => handleEditorialPress(heroEditorial)}
-          />
-        ) : null}
-
-        {/* ── Section 2: Curated Collections — featured + rail ── */}
-        {loading ? (
-          <CollectionRailSkeleton />
-        ) : collections.length > 0 ? (
-          <View style={styles.sectionWrap}>
-            <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
-            {featuredCollection && (
-              <FeaturedCollectionCard
-                collection={featuredCollection}
-                onPress={() => handleCollectionPress(featuredCollection)}
-              />
-            )}
-            {railCollections.length > 0 && (
-              <HorizontalRail
-                contentContainerStyle={styles.railContent}
-                showsHorizontalScrollIndicator={false}
-                accessibilityLabel="Curated collections rail"
-              >
-                {railCollections.map((col) => (
-                  <CollectionRailCard
-                    key={col.id}
-                    collection={col}
-                    onPress={() => handleCollectionPress(col)}
-                  />
-                ))}
-              </HorizontalRail>
-            )}
-          </View>
-        ) : null}
-
-        {/* ── Section 3: Featured Assets masonry ── */}
-        {loading ? (
-          <>
-            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
-            <FeaturedMasonrySkeleton />
-          </>
-        ) : featuredAssets.length > 0 ? (
-          <>
-            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
-            <View style={styles.masonryGrid}>
-              {masonryColumns.map((columnItems, colIdx) => (
-                <View
-                  key={colIdx}
-                  style={[styles.masonryColumn, { width: MASONRY_COL_WIDTH }]}
-                >
-                  {columnItems.map((asset, assetIdx) => (
-                    <FeaturedAssetCard
-                      key={asset.id}
-                      asset={asset}
-                      onPress={() => handleAssetPress(asset)}
-                      testID={colIdx === 0 && assetIdx === 0 ? 'golden-coown-first-asset' : undefined}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Section 4: Editorial list ── */}
-        {loading ? (
-          <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
-            <EditorialSkeleton />
-            <EditorialSkeleton />
-          </>
-        ) : remainingEditorials.length > 0 ? (
-          <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
-            {remainingEditorials.map((ed, idx) => (
-              <EditorialListItem
-                key={ed.id}
-                editorial={ed}
-                onPress={() => handleEditorialPress(ed)}
-                isLast={idx === remainingEditorials.length - 1}
-                size={idx === 0 ? 'large' : 'standard'}
-              />
-            ))}
-          </>
-        ) : !loading && heroEditorial === null ? (
-          <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
-            <EmptyState
-              density="compact"
-              icon="book-outline"
-              title="No editorials available"
-              subtitle="Our editors are preparing new stories. Check back soon."
-            />
-          </>
-        ) : null}
-
-        {/* ── Section 5: Creative Tools — Poster Studio CTA ── */}
-        <View style={styles.stylingToolsWrap}>
-          <SectionHeader eyebrow="CREATIVE TOOLS" title="Make it yours" />
-          <AnimatedPressable
-            style={styles.moodboardCtaCard}
-            onPress={() => { haptic.selection(); navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true }); }}
-            activeOpacity={0.92}
-            scaleValue={0.98}
-            accessibilityRole="button"
-            accessibilityLabel="Open Poster Studio"
-            accessibilityHint="Create posters, looks, and moodboard collages"
-          >
-            <View style={styles.moodboardCtaIconWrap}>
-              <Ionicons name="create-outline" size={22} color={colors.brand} />
-            </View>
-            <View style={styles.moodboardCtaCopy}>
-              <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
-                Poster Studio
-              </Text>
-              <Text style={styles.moodboardCtaSubtitle} numberOfLines={2}>
-                Create posters, looks & moodboard collages
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </AnimatedPressable>
-        </View>
-      </ScrollView>
+      />
     </View>
   );
 }
@@ -810,7 +831,7 @@ function useStyles() {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.medium,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
         },
         // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
@@ -846,26 +867,26 @@ function useStyles() {
           width: Space.xs + 2,
           height: Space.xs + 2,
           borderRadius: Radius.full,
-          backgroundColor: colors.textInverse,
+          backgroundColor: colors.scrimTextPrimary,
         },
         heroEyebrow: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          color: colors.scrimTextPrimary,
+          letterSpacing: Type.label.letterSpacing,
           opacity: 0.9,
         },
         heroTitle: {
           fontSize: Type.priceList.size,
           lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: -0.5,
         },
         heroMeta: {
           fontSize: Type.body.size,
           fontFamily: Typography.family.medium,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.75,
         },
         // ── Section wrappers ──
@@ -881,7 +902,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           marginBottom: Space.xs,
         },
         sectionTitle: {
@@ -925,15 +946,15 @@ function useStyles() {
         featuredCollectionTheme: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          color: colors.scrimTextPrimary,
+          letterSpacing: Type.label.letterSpacing,
           opacity: 0.85,
         },
         featuredCollectionTitle: {
           fontSize: Type.priceList.size,
           lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: -0.5,
         },
         featuredCollectionCuratorRow: {
@@ -950,7 +971,7 @@ function useStyles() {
         featuredCollectionCurator: {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.medium,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.8,
         },
         collectionCard: {
@@ -984,15 +1005,15 @@ function useStyles() {
         collectionTheme: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.85,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.1,
+          letterSpacing: Type.label.letterSpacing - 0.1,
         },
         collectionTitle: {
           fontSize: Type.subtitle.size,
           lineHeight: Type.subtitle.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: Type.subtitle.letterSpacing,
         },
         collectionMeta: {
@@ -1041,22 +1062,22 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.2,
+          letterSpacing: Type.label.letterSpacing - 0.2,
         },
         assetTitle: {
-          fontSize: Type.bodyEmphasis.size,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          fontSize: Type.bodyStrong.size,
+          lineHeight: Type.bodyStrong.lineHeight,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
         },
         assetValuation: {
-          fontSize: Type.bodyLarge.size,
-          lineHeight: Type.bodyLarge.size - 2,
+          fontSize: Type.body.size,
+          lineHeight: Type.body.size - 2,
           fontFamily: Typography.family.bold,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.bodyLarge.letterSpacing,
+          letterSpacing: Type.body.letterSpacing,
         },
         // ── Editorial list ──
         editorialItem: {
@@ -1091,9 +1112,9 @@ function useStyles() {
         editorialReadTime: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.2,
-          backgroundColor: 'rgba(0,0,0,0.45)',
+          color: colors.scrimTextPrimary,
+          letterSpacing: Type.label.letterSpacing - 0.2,
+          backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2,
           borderRadius: Radius.sm,
@@ -1172,8 +1193,8 @@ function useStyles() {
           gap: Space.xs / 2,
         },
         moodboardCtaTitle: {
-          fontSize: Type.bodyEmphasis.size,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          fontSize: Type.bodyStrong.size,
+          lineHeight: Type.bodyStrong.lineHeight,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,

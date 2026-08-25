@@ -34,6 +34,7 @@ import {
   type CoOwnPriceAlert,
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
 
@@ -46,6 +47,7 @@ function formatDate(iso: string): string {
 }
 
 export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -317,7 +319,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityRole="button"
                           accessibilityLabel={`View asset, triggered alert ${alert.condition} ${formatGbp(alert.targetPriceGbpMinor)}`}
                         >
-                          <View style={[styles.conditionBadge, { backgroundColor: colors.warning + '18' }]}>
+                          <View style={[styles.conditionBadge, { backgroundColor: colors.warningSubtle }]}>
                             <Ionicons name="checkmark" size={16} color={colors.warning} />
                           </View>
                           <View style={styles.alertText}>
@@ -362,12 +364,12 @@ function createStyles(colors: ThemeColors) {
 
     // Section headers — flat, no count badge dashboard
     sectionTitle: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
-      lineHeight: Type.metaElevated.lineHeight,
+      letterSpacing: Type.label.letterSpacing,
+      lineHeight: Type.label.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.sm,
       paddingHorizontal: Space.xs,
@@ -402,17 +404,17 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       lineHeight: Type.meta.lineHeight,
     },
     alertPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     alertDate: {
       fontSize: Type.meta.size,

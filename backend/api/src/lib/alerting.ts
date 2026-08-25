@@ -9,7 +9,8 @@ export type OpsAlertCode =
   | 'payment_failure_spike'
   | 'payout_backlog'
   | 'shipment_stall'
-  | 'reconciliation_critical';
+  | 'reconciliation_critical'
+  | 'safeguarding_shortfall';
 
 export interface OpsAlert {
   code: OpsAlertCode;

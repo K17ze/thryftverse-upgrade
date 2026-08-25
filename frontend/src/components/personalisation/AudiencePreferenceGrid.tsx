@@ -105,7 +105,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   tileLabel: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: 2,
@@ -114,7 +114,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
   },
   tileSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     lineHeight: 17,

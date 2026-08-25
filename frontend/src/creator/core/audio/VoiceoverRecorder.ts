@@ -3,20 +3,8 @@
  *
  * Per spec 09_POSTER_TIMELINE_CAMERA_AUDIO §10 (P1: voiceover).
  *
- * DEPENDENCY NOTE (AGENTS.md §11 — truthful UI):
- * This project does NOT currently include `expo-av` or `expo-audio` in
- * package.json. The voiceover recording feature requires a native audio
- * recording module to function. This class provides the full API surface
- * so the UI can be built against it, but the actual recording methods
- * throw a truthful error explaining the missing dependency.
- *
- * When `expo-audio` (or `expo-av`) is added to the project, replace the
- * stub implementations in `startRecording` / `stopRecording` with the
- * real API calls. The `VoiceoverClip` type and the public method signatures
- * will remain stable — only the internal implementation changes.
- *
- * Migration guide (expo-audio, SDK 57):
- *   import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio';
+ * Native dependency: expo-audio (SDK 57).
+ *   import { AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
  *   await AudioModule.requestRecordingPermissionsAsync();
  *   await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
  *   recorder.record();
@@ -24,11 +12,25 @@
  *   await recorder.stop();
  *   const uri = recorder.uri;
  *
- * Metering (expo-av Audio.Recording):
- *   const status = await recording.getStatusAsync();
+ * This class uses the imperative expo-audio API (AudioModule.AudioRecorder)
+ * rather than the useAudioRecorder hook, because it is a plain class
+ * instance managed via useRef in VoiceoverRecorderSheet — not a React
+ * component that can call hooks. The recorder is created lazily on first
+ * recording and released in dispose().
+ *
+ * Metering (expo-audio AudioRecorder):
+ *   const status = recorder.getStatus();
  *   // status.metering: -160..0 dBFS → normalize to 0..1
  *   const level = Math.pow(10, status.metering / 20); // 0..1
  */
+
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  type AudioRecorder,
+  type RecordingOptions,
+} from 'expo-audio';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -54,19 +56,31 @@ export type MeteringListener = (level: number) => void;
 
 /**
  * Error thrown when voiceover recording is attempted without the required
- * native dependency. This is a truthful error — we do not fabricate a
- * recording or pretend the feature works.
+ * native dependency. With expo-audio installed this is only thrown when
+ * the native module fails to link (e.g., running in Expo Go without a
+ * development build).
  */
 export class VoiceoverDependencyError extends Error {
   constructor() {
     super(
-      'Voiceover recording requires expo-audio (or expo-av) to be installed. ' +
-        'Add "expo-audio" to package.json and rebuild the native app to enable ' +
-        'this feature.',
+      'Voiceover recording requires expo-audio to be installed and linked. ' +
+        'Ensure "expo-audio" is in package.json and rebuild the native app ' +
+        'with a development build to enable this feature.',
     );
     this.name = 'VoiceoverDependencyError';
   }
 }
+
+// ── Recording options ────────────────────────────────────────────────
+
+/**
+ * High-quality recording preset with metering enabled for live waveform
+ * visualization. expo-audio saves to the app's cache directory by default.
+ */
+const RECORDING_OPTIONS: RecordingOptions = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+};
 
 // ── Recorder ─────────────────────────────────────────────────────────
 
@@ -80,6 +94,7 @@ export class VoiceoverDependencyError extends Error {
  *   const clip = await recorder.stopRecording();  // returns VoiceoverClip
  *   // or:
  *   await recorder.cancelRecording();  // discards the recording
+ *   recorder.dispose();  // release native resources when done
  *
  * The recorder tracks internal state to prevent invalid transitions.
  */
@@ -90,6 +105,7 @@ export class VoiceoverRecorder {
   private _accumulatedMs = 0;
   private _meteringListeners = new Set<MeteringListener>();
   private _meteringInterval: ReturnType<typeof setInterval> | null = null;
+  private _recorder: AudioRecorder | null = null;
 
   /** Whether a recording is currently in progress (not paused). */
   get isRecording(): boolean {
@@ -112,16 +128,19 @@ export class VoiceoverRecorder {
 
   /**
    * Check whether the required native dependency is available.
-   * Returns false when expo-audio / expo-av is not installed.
+   * Returns true when expo-audio is installed and the native module is
+   * linked. Returns false when running in an environment without the
+   * native module (e.g., Expo Go without a development build).
    *
    * The UI should call this before showing the record button and present
    * an honest disabled state when it returns false (AGENTS.md §11).
    */
   static isAvailable(): boolean {
-    // expo-audio and expo-av are not in package.json.
-    // When one is added, attempt a dynamic import here and return true
-    // if the module loads successfully.
-    return false;
+    try {
+      return AudioModule?.AudioRecorder != null;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -146,10 +165,8 @@ export class VoiceoverRecorder {
     if (!VoiceoverRecorder.isAvailable()) {
       throw new VoiceoverDependencyError();
     }
-    // When expo-audio is available:
-    //   const { status } = await AudioModule.requestRecordingPermissionsAsync();
-    //   return status === 'granted';
-    return false;
+    const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+    return granted;
   }
 
   /**
@@ -165,13 +182,21 @@ export class VoiceoverRecorder {
       throw new Error('Recording is already in progress.');
     }
 
-    // When expo-audio is available:
-    //   await AudioModule.setAudioModeAsync({
-    //     allowsRecordingIOS: true,
-    //     playsInSilentModeIOS: true,
-    //   });
-    //   await this._recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-    //   this._recorder.record();
+    // Configure the audio session for recording.
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: true,
+      interruptionMode: 'doNotMix',
+    });
+
+    // Create the native recorder lazily if this is the first recording.
+    if (!this._recorder) {
+      this._recorder = new AudioModule.AudioRecorder({});
+    }
+
+    // Prepare the recorder with high-quality options + metering.
+    await this._recorder.prepareToRecordAsync(RECORDING_OPTIONS);
+    this._recorder.record();
 
     this._isRecording = true;
     this._isPaused = false;
@@ -186,8 +211,7 @@ export class VoiceoverRecorder {
    */
   async pauseRecording(): Promise<void> {
     if (!this._isRecording || this._isPaused) return;
-    // When expo-audio is available:
-    //   await this._recorder.pause();
+    this._recorder?.pause();
     this._accumulatedMs += Date.now() - this._startTime;
     this._isPaused = true;
     this._stopMeteringPolling();
@@ -198,8 +222,7 @@ export class VoiceoverRecorder {
    */
   async resumeRecording(): Promise<void> {
     if (!this._isRecording || !this._isPaused) return;
-    // When expo-audio is available:
-    //   this._recorder.record();
+    this._recorder?.record();
     this._isPaused = false;
     this._startTime = Date.now();
     this._startMeteringPolling();
@@ -218,10 +241,8 @@ export class VoiceoverRecorder {
       throw new Error('No recording is in progress.');
     }
 
-    // When expo-audio is available:
-    //   await this._recorder.stop();
-    //   const uri = this._recorder.uri;
-    //   const durationMs = (this._recorder.durationMs ?? 0) * 1000;
+    // Stop the native recorder and capture the URI.
+    await this._recorder?.stop();
 
     if (!this._isPaused) {
       this._accumulatedMs += Date.now() - this._startTime;
@@ -232,12 +253,11 @@ export class VoiceoverRecorder {
     this._isPaused = false;
     this._accumulatedMs = 0;
 
-    // This URI would come from the recorder. Since the dependency is not
-    // available, we never reach this line in practice (the dependency error
-    // is thrown above). The structure is here for the migration.
+    const uri = this._recorder?.uri ?? '';
+
     const clip: VoiceoverClip = {
       id: `voiceover_${Date.now()}`,
-      uri: '',
+      uri,
       durationMs,
       recordedAt: Date.now(),
     };
@@ -261,14 +281,31 @@ export class VoiceoverRecorder {
     }
 
     if (this._isRecording) {
-      // When expo-audio is available:
-      //   await this._recorder.stop();
-      //   // Delete the temp file
+      await this._recorder?.stop().catch(() => {
+        // Stopping a cancelled recording may reject if the recorder
+        // was never fully prepared — ignore.
+      });
       this._isRecording = false;
       this._isPaused = false;
       this._accumulatedMs = 0;
       this._stopMeteringPolling();
     }
+  }
+
+  /**
+   * Release the native recorder and free resources.
+   * Call this when the VoiceoverRecorder is no longer needed (e.g.,
+   * when the hosting component unmounts). Safe to call multiple times.
+   */
+  dispose(): void {
+    this._stopMeteringPolling();
+    if (this._recorder) {
+      this._recorder.release();
+      this._recorder = null;
+    }
+    this._isRecording = false;
+    this._isPaused = false;
+    this._accumulatedMs = 0;
   }
 
   // ── Metering polling ────────────────────────────────────────────────
@@ -282,18 +319,14 @@ export class VoiceoverRecorder {
     this._stopMeteringPolling();
     if (!VoiceoverRecorder.isAvailable()) return;
 
-    // When expo-av is available:
-    //   this._meteringInterval = setInterval(async () => {
-    //     const status = await this._recorder.getStatusAsync();
-    //     if (status.isRecording && status.metering != null) {
-    //       // metering is -160..0 dBFS → normalize to 0..1
-    //       const level = Math.pow(10, status.metering / 20);
-    //       this._emitMetering(Math.max(0, Math.min(1, level)));
-    //     }
-    //   }, 60);
     this._meteringInterval = setInterval(() => {
-      // Placeholder: real metering wired in the migration above.
-      this._emitMetering(0);
+      if (!this._recorder) return;
+      const status = this._recorder.getStatus();
+      if (status.isRecording && status.metering != null) {
+        // metering is -160..0 dBFS → normalize to 0..1
+        const level = Math.pow(10, status.metering / 20);
+        this._emitMetering(Math.max(0, Math.min(1, level)));
+      }
     }, 60);
   }
 

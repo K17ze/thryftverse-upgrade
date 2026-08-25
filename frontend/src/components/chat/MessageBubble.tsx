@@ -1,8 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  withTiming,
+  withSpring,
+  type EntryExitAnimationFunction,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 
@@ -34,8 +41,10 @@ interface MessageBubbleProps {
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
   showAvatar?: boolean;
-  /** When true, shows a "Translated" badge above the message text */
-  isTranslated?: boolean;
+  /** When true, the bubble fades in + scales up on mount (new messages only).
+   *  Historical messages pass `false` so they do not re-animate on scroll or
+   *  initial load (AGENTS.md §16). */
+  isNew?: boolean;
   /** When true, renders a subtle AI visual distinction (neutral icon, tinted bubble, AI badge). */
   isAgent?: boolean;
   /** Ionicon name for the agent avatar glyph — used when isAgent is true. */
@@ -71,7 +80,7 @@ function MessageBubbleBase({
   isFirstInCluster = true,
   isLastInCluster = true,
   showAvatar = false,
-  isTranslated = false,
+  isNew = false,
   isAgent = false,
   agentAvatar,
   isDraft = false,
@@ -84,7 +93,45 @@ function MessageBubbleBase({
   onReplyPress,
 }: MessageBubbleProps) {
   const { colors, isDark } = useAppTheme();
+  const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // Bubble enter animation — fade in + scale-up (spring, 250ms).
+  // Only applied to genuinely new messages; historical messages pass
+  // isNew=false so they never re-animate on scroll or initial mount
+  // (AGENTS.md §16, WhatsApp 2026 bubble animation).
+  const bubbleEntering: EntryExitAnimationFunction | undefined =
+    motionEnabled && isNew
+      ? () => {
+          'worklet';
+          return {
+            animations: {
+              opacity: withTiming(1, { duration: Motion.duration.normal }),
+              transform: [{ scale: withSpring(1, spring.settle) }],
+            },
+            initialValues: {
+              opacity: 0,
+              transform: [{ scale: 0.92 }],
+            },
+          };
+        }
+      : undefined;
+
+  // Reaction badge pop-in — spring-scale (0.8 → 1.0, 200ms).
+  // Matches iMessage tapback pop. Respects reduced-motion (no animation).
+  const reactionEntering: EntryExitAnimationFunction | undefined = motionEnabled
+    ? () => {
+        'worklet';
+        return {
+          animations: {
+            transform: [{ scale: withSpring(1, spring.tap) }],
+          },
+          initialValues: {
+            transform: [{ scale: 0.8 }],
+          },
+        };
+      }
+    : undefined;
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
   const isMedia = !!mediaUri;
@@ -96,38 +143,38 @@ function MessageBubbleBase({
       : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
   const metaColor = isMe ? `${colors.textInverse}80` : colors.textMuted;
-  const bubbleBorder = isAgent && !isMe ? `${colors.brand}26` : undefined;
+  const bubbleBorder = undefined;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
   const isBottom = !isFirstInCluster && isLastInCluster;
 
-  // WhatsApp 2026 style: softer, rounder bubbles with asymmetric tail radius
+  // WhatsApp 2026 style: fully-rounded 20px bubbles with asymmetric tail radius
   const meRadius = isStandalone
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
+    ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
     : isTop
-    ? { borderTopRightRadius: Radius.lg, borderBottomRightRadius: Radius.lg }
+    ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.chat }
     : isBottom
     ? { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.sm }
-    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.lg };
+    : { borderTopRightRadius: Radius.sm, borderBottomRightRadius: Radius.chat };
 
   const themRadius = isStandalone
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.sm }
+    ? { borderTopLeftRadius: Radius.chat, borderBottomLeftRadius: Radius.sm }
     : isTop
-    ? { borderTopLeftRadius: Radius.lg, borderBottomLeftRadius: Radius.lg }
+    ? { borderTopLeftRadius: Radius.chat, borderBottomLeftRadius: Radius.chat }
     : isBottom
     ? { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.sm }
-    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.lg };
+    : { borderTopLeftRadius: Radius.sm, borderBottomLeftRadius: Radius.chat };
 
   // Media radius — WhatsApp 2026: no visible frame, media IS the bubble
   const mediaRadius = isStandalone
     ? isMe
-      ? { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.lg, borderBottomRightRadius: Radius.sm }
-      : { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.lg }
-    : { borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, borderBottomLeftRadius: Radius.lg, borderBottomRightRadius: Radius.lg };
+      ? { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
+      : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.chat }
+    : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.chat };
 
   return (
-    <View style={[styles.row, isMe && styles.rowRight]}>
+    <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
       {showAvatar && !isMe ? (
         isAgent ? (
           <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
@@ -162,6 +209,7 @@ function MessageBubbleBase({
         <Pressable
           onLongPress={onLongPress}
           delayLongPress={350}
+          accessibilityLabel="Message"
           style={({ pressed }) => [
             styles.bubble,
             isMe ? styles.bubbleMe : isAgent ? styles.bubbleAgent : styles.bubbleThem,
@@ -171,9 +219,10 @@ function MessageBubbleBase({
             isDraft && styles.bubbleDraft,
             !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
+        accessibilityRole="button"
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]} accessibilityRole="button">
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -184,7 +233,7 @@ function MessageBubbleBase({
           ) : null}
 
           {mediaUri ? (
-            <Pressable onPress={onMediaPress} style={styles.mediaWrap}>
+            <Pressable onPress={onMediaPress} style={styles.mediaWrap} accessibilityRole="button" accessibilityLabel="Media Press">
               <CachedImage
                 uri={mediaUri}
                 style={[styles.mediaImage, mediaRadius]}
@@ -216,12 +265,6 @@ function MessageBubbleBase({
 
           {text ? (
             <>
-              {isTranslated ? (
-                <View style={styles.translatedBadge}>
-                  <Ionicons name="language" size={10} color={metaColor} />
-                  <Text style={[styles.translatedLabel, { color: metaColor }]}>Translated</Text>
-                </View>
-              ) : null}
               {isDraft ? (
                 <View style={styles.draftBadge}>
                   <Ionicons name="create-outline" size={10} color={colors.textMuted} />
@@ -262,7 +305,7 @@ function MessageBubbleBase({
         </Pressable>
 
         {hasFailed && onRetry ? (
-          <Pressable onPress={onRetry} style={styles.retryBadge}>
+          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button">
             <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
@@ -301,17 +344,17 @@ function MessageBubbleBase({
         ) : null}
 
         {reactions && reactions.length > 0 ? (
-          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]}>
+          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button">
             {reactions.slice(0, 3).map((r, i) => (
-              <View key={i} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
+              <Reanimated.View key={i} entering={reactionEntering} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                 {r.count > 1 ? <Text style={styles.reactionCount}>{r.count}</Text> : null}
-              </View>
+              </Reanimated.View>
             ))}
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </Reanimated.View>
   );
 }
 
@@ -354,7 +397,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: 28,
   },
   bubbleColumn: {
-    maxWidth: '78%',
+    maxWidth: '75%',
     gap: 3,
   },
   senderLabelRow: {
@@ -382,7 +425,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   bubble: {
     paddingHorizontal: Space.sm + 2,
@@ -400,7 +443,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   bubbleAgent: {
     alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
   },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,
@@ -426,7 +468,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   draftLabel: {
     fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   draftConfirmBadge: {
     flexDirection: 'row',
@@ -465,16 +507,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
-  },
-  translatedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: Space.xs,
-  },
-  translatedLabel: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
   },
   metaRow: {
     flexDirection: 'row',
@@ -515,13 +547,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.xs,
@@ -576,7 +608,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.brand}12`,
   },
   reactionEmoji: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   reactionCount: {
     fontSize: Type.meta.size,

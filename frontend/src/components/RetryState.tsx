@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography, Type, Space } from '../theme/designTokens';
+import { Typography, Type, Space, Radius } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface RetryStateProps {
@@ -53,20 +53,20 @@ function createStyles(colors: ThemeColors) {
     iconBox: {
       width: 120,
       height: 120,
-      borderRadius: 60,
+      borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: Space.lg,
     },
     title: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginBottom: 12,
     },
     subtext: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textAlign: 'center',
@@ -77,11 +77,11 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.textPrimary,
       paddingHorizontal: 40,
       paddingVertical: 18,
-      borderRadius: 30,
+      borderRadius: Radius.xxl,
     },
     retryBtnText: {
       color: colors.background,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
     },
   });

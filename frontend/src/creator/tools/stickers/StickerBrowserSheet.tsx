@@ -35,7 +35,7 @@ import {
   ScrollView,
   Pressable,
   FlatList,
-  Dimensions,
+  useWindowDimensions,
   Animated,
   type TextStyle,
   type ViewStyle,
@@ -49,11 +49,13 @@ import {
   FontFamily,
   Control,
   Stroke,
+  IconGrammar,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { Motion } from '../../../theme/motionTokens';
 import {
   STICKER_CATEGORIES,
   AUTO_STICKER_CATEGORY,
@@ -98,14 +100,6 @@ export interface StickerBrowserSheetProps {
 // ── Geometry ─────────────────────────────────────────────────────────
 
 const GRID_COLUMNS = 4;
-const { width: SCREEN_W } = Dimensions.get('window');
-/** Square cell side: screen width minus sheet padding and inter-cell gaps. */
-const CELL_SIZE = Math.floor(
-  (SCREEN_W - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-);
-/** 44pt minimum touch target, but never smaller than the visible cell. */
-const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
-
 // ── Sheet ────────────────────────────────────────────────────────────
 
 export function StickerBrowserSheet({
@@ -124,7 +118,8 @@ export function StickerBrowserSheet({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
 
   // Pin mode is only available when the parent provides onPinSticker.
   const pinModeSupported = !!onPinSticker;
@@ -149,14 +144,14 @@ export function StickerBrowserSheet({
         Animated.spring(underlineLeft, {
           toValue: layout.x,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
         Animated.spring(underlineWidth, {
           toValue: layout.width,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
       ]).start();
     },
@@ -251,7 +246,7 @@ export function StickerBrowserSheet({
   const keyExtractor = useCallback((item: StickerDef) => item.id, []);
 
   return (
-    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
+    <SheetContainer visible={visible} onClose={handleClose} compact>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -468,7 +463,7 @@ const StickerCell = React.memo(function StickerCell({
         ) : sticker.iconRef ? (
           <Ionicons
             name={sticker.iconRef}
-            size={28}
+            size={IconGrammar.hero}
             color={isInteractive ? colors.brand : colors.textPrimary}
           />
         ) : null}
@@ -484,7 +479,13 @@ const StickerCell = React.memo(function StickerCell({
 
 // ── Styles ───────────────────────────────────────────────────────────
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
+  /** Square cell side: screen width minus sheet padding and inter-cell gaps. */
+  const CELL_SIZE = Math.floor(
+    (screenWidth - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+  );
+  /** 44pt minimum touch target, but never smaller than the visible cell. */
+  const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
   return StyleSheet.create({
     container: {
       flex: 1,

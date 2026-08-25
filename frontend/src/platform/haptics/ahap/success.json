@@ -1,0 +1,29 @@
+{
+  "Version": 1.0,
+  "Metadata": {
+    "Project": "ThryftVerse",
+    "Description": "Success — rising double-tap for positive outcomes"
+  },
+  "Pattern": [
+    {
+      "Event": {
+        "EventType": "HapticTransient",
+        "Time": 0.0,
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.4 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.4 }
+        ]
+      }
+    },
+    {
+      "Event": {
+        "EventType": "HapticTransient",
+        "Time": 0.12,
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 1.0 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.85 }
+        ]
+      }
+    }
+  ]
+}

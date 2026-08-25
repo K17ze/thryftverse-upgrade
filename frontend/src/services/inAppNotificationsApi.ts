@@ -5,19 +5,20 @@
  * banners/toasts. This is the presentation layer for real-time notification UX:
  * priority-based ordering, max 3 concurrent banners, and type-aware auto-dismiss.
  *
- * Demo mode: NOTIFICATION_DEMO_MODE is true. All notifications surfaced through
- * this service are mock/illustrative and are clearly labelled with isDemo: true
- * (per AGENTS.md §11 — truthful UI). No notification is persisted or sent to a
- * backend in demo mode.
+ * In production, persisted notifications (order updates, safety outcomes, etc.)
+ * are fetched from the backend via notificationsApi and surfaced as banners
+ * through `surfacePersistedNotifications`. In dev mode, notifications created
+ * locally via `showNotification` are labelled isDemo: true (per AGENTS.md §11).
  */
 
 import { makeStableId } from '../utils/createStableId';
+import { listNotificationEvents, markNotificationRead } from './notificationsApi';
 
 // ---------------------------------------------------------------------------
 // Demo mode flag
 // ---------------------------------------------------------------------------
 
-/** When true, all notifications surfaced by this service are mock/illustrative. */
+/** When true, locally-created notifications are labelled isDemo (dev only). */
 export const NOTIFICATION_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
@@ -260,10 +261,75 @@ export function subscribe(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Persisted notification bridge
+// ---------------------------------------------------------------------------
+//
+// Fetches unread notifications from the backend API and surfaces them as
+// in-app banners. This closes the loop for safety outcome notifications —
+// when a moderator decides a case, the reporter sees the outcome as a banner.
+//
+// Already-surfaced event IDs are tracked to avoid re-surfacing on repeated
+// calls (e.g. from a polling hook).
+
+const surfacedEventIds = new Set<string>();
+
+function mapEventTypeToBannerType(eventType: string): NotificationType {
+  if (eventType === 'safety_outcome') return 'info';
+  if (eventType.startsWith('order_') || eventType === 'refund_completed') return 'order';
+  if (eventType === 'chat_message') return 'message';
+  if (eventType.startsWith('auction_')) return 'listing';
+  if (eventType === 'review_received') return 'listing';
+  return 'info';
+}
+
+/**
+ * Fetch unread persisted notifications from the backend and surface any
+ * not already shown as in-app banners. Returns the count of newly surfaced
+ * notifications. Each surfaced notification is marked as read on the server
+ * so it does not reappear on the next call.
+ */
+export async function surfacePersistedNotifications(): Promise<number> {
+  let surfaced = 0;
+  let cursor: string | null = null;
+
+  // Fetch up to 2 pages of recent events to catch up after backgrounding.
+  for (let page = 0; page < 2; page++) {
+    const { items, nextCursor } = await listNotificationEvents({ limit: 30, cursor });
+    for (const event of items) {
+      if (event.readAt) continue;
+      if (surfacedEventIds.has(event.id)) continue;
+
+      surfacedEventIds.add(event.id);
+      showNotification({
+        type: mapEventTypeToBannerType(event.eventType),
+        title: event.title,
+        body: event.body,
+        actionLabel: event.route ? 'View' : undefined,
+        actionTarget: event.route
+          ? `${event.route.screen}${event.route.params ? `:${JSON.stringify(event.route.params)}` : ''}`
+          : undefined,
+        priority: 'normal',
+      });
+      surfaced += 1;
+
+      // Mark as read so the unread count stays accurate.
+      markNotificationRead(event.id).catch(() => {
+        // Best-effort — the banner was already shown.
+      });
+    }
+    if (!nextCursor) break;
+    cursor = nextCursor;
+  }
+
+  return surfaced;
+}
+
 /** Test-only helper to reset internal state between tests. */
 export function __resetForTesting(): void {
   dismissTimers.forEach((timer) => clearTimeout(timer));
   dismissTimers.clear();
   queue = { active: [], pending: [] };
   subscribers.clear();
+  surfacedEventIds.clear();
 }

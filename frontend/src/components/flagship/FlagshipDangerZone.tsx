@@ -28,7 +28,7 @@ export function FlagshipDangerZone({
       style={[
         styles.root,
         {
-          backgroundColor: `${colors.danger}10`,
+          backgroundColor: colors.dangerSubtle,
           borderColor: `${colors.danger}30`,
         },
         style,
@@ -51,7 +51,7 @@ export function FlagshipDangerZone({
         <Text
           style={[
             styles.actionText,
-            { color: destructive ? '#FFFFFF' : colors.danger },
+            { color: destructive ? colors.textInverse : colors.danger },
           ]}
         >
           {actionLabel}

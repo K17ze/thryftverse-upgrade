@@ -33,10 +33,12 @@ import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
 import {
   fetchLookByIdFromApi,
   deleteLookOnApi,
-  fetchLooksFromApi,
+  fetchRelatedLooksFromApi,
+  repostLookOnApi,
   type LookApiItem,
   type LookTagApiItem,
 } from '../services/looksApi';
+import { LookMasonryGrid } from '../components/look/LookMasonryGrid';
 import {
   fetchPublicProfileAggregate,
   followUser,
@@ -49,6 +51,9 @@ import {
   type ProductReference,
   type ProductReferenceKind,
 } from '../platform/product/openProductDetail';
+import { ApiRequestError } from '../lib/apiClient';
+import { CreatorCanvas } from '../creator/CreatorCanvas';
+import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -104,7 +109,10 @@ export default function LookDetailScreen() {
 
   const [look, setLook] = useState<LookApiItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{
+    kind: 'not-found' | 'connection';
+    message: string;
+  } | null>(null);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -113,15 +121,27 @@ export default function LookDetailScreen() {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [heroAspectRatio, setHeroAspectRatio] = useState<number>(AspectRatio.marketplace);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
+  const [mediaRetryNonce, setMediaRetryNonce] = useState(0);
 
   // Creator relationship — fetched so the Follow button reflects server truth.
   const [creatorProfile, setCreatorProfile] = useState<PublicProfileAggregate | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
-  // More from creator — related looks rail (same creator, excluding this look).
-  const [moreLooks, setMoreLooks] = useState<LookApiItem[]>([]);
-  const [moreLooksLoading, setMoreLooksLoading] = useState(false);
+  // Related looks — Pinterest-style "More to explore" masonry grid below the
+  // look detail. Uses the backend /looks/:lookId/related endpoint with tag-
+  // overlap ranking and cursor pagination for infinite scroll. Replaces the
+  // former two horizontal rails (more-from-creator + similar-looks) with a
+  // single dense masonry grid that flows directly from the detail.
+  const [relatedLooks, setRelatedLooks] = useState<LookApiItem[]>([]);
+  const [relatedCursor, setRelatedCursor] = useState<string | null>(null);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedLoadingMore, setRelatedLoadingMore] = useState(false);
+  const [relatedHasMore, setRelatedHasMore] = useState(true);
+
+  // Repost — lightweight re-publish with attribution to the original creator.
+  const [repostBusy, setRepostBusy] = useState(false);
 
   const isOwner = look?.creatorId === currentUser?.id;
 
@@ -134,10 +154,23 @@ export default function LookDetailScreen() {
         setLook(res.look);
         setCommentCount(res.look.commentCount);
       } else {
-        setLoadError(res.error ?? 'Look not found');
+        setLoadError({
+          kind: 'not-found',
+          message: res.error ?? 'This look may have been removed or is unavailable.',
+        });
       }
-    } catch {
-      setLoadError('Failed to load look');
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        setLoadError({
+          kind: 'not-found',
+          message: 'This look may have been removed or is unavailable.',
+        });
+      } else {
+        setLoadError({
+          kind: 'connection',
+          message: 'Check your connection and try again.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -147,8 +180,8 @@ export default function LookDetailScreen() {
     loadLook();
   }, [loadLook]);
 
-  // Fetch the creator's public profile (for follow state + provenance) and a
-  // small batch of their other published looks. These run after the look loads.
+  // Fetch the creator's public profile (for follow state + provenance) and
+  // the related-looks masonry grid. These run after the look loads.
   useEffect(() => {
     if (!look?.creator?.id) return;
     const creatorId = look.creator.id;
@@ -158,30 +191,67 @@ export default function LookDetailScreen() {
       .then((agg) => {
         if (cancelled) return;
         setCreatorProfile(agg);
-        setIsFollowing(agg.viewer.isFollowing);
+        setIsFollowing(agg.viewer?.isFollowing ?? false);
       })
       .catch(() => {
         // Profile fetch is non-fatal — the Follow button simply stays in its
         // default resting state.
       });
 
-    setMoreLooksLoading(true);
-    fetchLooksFromApi({ creatorId, status: 'published', limit: 12 })
+    // Related looks — server-ranked by tag overlap, cursor-paginated for
+    // infinite scroll. Replaces the former two horizontal rails with a single
+    // Pinterest-style masonry grid that flows directly from the detail.
+    setRelatedLoading(true);
+    setRelatedLooks([]);
+    setRelatedCursor(null);
+    setRelatedHasMore(true);
+    fetchRelatedLooksFromApi(look.id, { limit: 24 })
       .then((res) => {
         if (cancelled) return;
-        setMoreLooks(res.items.filter((l) => l.id !== look.id).slice(0, 8));
+        setRelatedLooks(res.items);
+        setRelatedCursor(res.nextCursor ?? null);
+        setRelatedHasMore(!!res.nextCursor);
       })
       .catch(() => {
-        // Non-fatal — rail is simply hidden.
+        // Non-fatal — grid is simply hidden.
       })
       .finally(() => {
-        if (!cancelled) setMoreLooksLoading(false);
+        if (!cancelled) setRelatedLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
   }, [look]);
+
+  // Infinite-scroll: load more related looks when the user nears the bottom.
+  const loadMoreRelated = useCallback(async () => {
+    if (relatedLoadingMore || relatedLoading || !relatedHasMore || !relatedCursor) return;
+    setRelatedLoadingMore(true);
+    try {
+      const res = await fetchRelatedLooksFromApi(look!.id, { cursor: relatedCursor, limit: 24 });
+      setRelatedLooks((prev) => [...prev, ...res.items]);
+      setRelatedCursor(res.nextCursor ?? null);
+      setRelatedHasMore(!!res.nextCursor);
+    } catch {
+      // Non-fatal — stop pagination on error.
+      setRelatedHasMore(false);
+    } finally {
+      setRelatedLoadingMore(false);
+    }
+  }, [relatedLoadingMore, relatedLoading, relatedHasMore, relatedCursor, look]);
+
+  // Detect when the user scrolls near the bottom to trigger pagination.
+  const handleScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
+      const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      if (distanceFromBottom < 600) {
+        loadMoreRelated();
+      }
+    },
+    [loadMoreRelated]
+  );
 
   const handleShare = useCallback(async () => {
     haptic.light();
@@ -204,6 +274,7 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
+      sourceMode: 'edit',
     });
   }, [look, isOwner, navigation, haptic]);
 
@@ -215,8 +286,38 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
+      sourceMode: 'remix',
     });
   }, [look, navigation, haptic]);
+
+  // Repost — lightweight re-publish with attribution to the original creator.
+  // Creates a new look owned by the reposter that references the source via
+  // source_look_id. The media and tags are copied; attribution is preserved.
+  const handleRepost = useCallback(async () => {
+    if (!look) return;
+    if (!currentUser?.id) {
+      show('Sign in to repost looks', 'info');
+      navigation.navigate('Login');
+      return;
+    }
+    if (repostBusy) return;
+    if (isOwner) {
+      show('You can\'t repost your own look', 'info');
+      return;
+    }
+    haptic.medium();
+    setRepostBusy(true);
+    try {
+      const res = await repostLookOnApi(look.id);
+      if (res.ok) {
+        show('Reposted to your profile', 'success');
+      }
+    } catch {
+      show('Unable to repost this look', 'error');
+    } finally {
+      setRepostBusy(false);
+    }
+  }, [look, currentUser, isOwner, repostBusy, haptic, show, navigation]);
 
   const handleReport = useCallback(() => {
     if (!look?.creator?.id) return;
@@ -339,7 +440,18 @@ export default function LookDetailScreen() {
     return [{ id: 'media-0', uri: look.mediaUrl, isVideo }];
   }, [look]);
 
-  const heroHeight = SCREEN_W / heroAspectRatio;
+  const compositionDocument = useMemo<CreatorDocument | null>(() => {
+    if (!look?.compositionDocument) return null;
+    const parsed = safeValidateDocument(look.compositionDocument);
+    const candidate = parsed.data;
+    if (!parsed.success || !candidate || candidate.type !== 'look' || !candidate.pages[0]) {
+      return null;
+    }
+    return candidate;
+  }, [look?.compositionDocument]);
+
+  const resolvedHeroAspectRatio = compositionDocument?.canvas.aspectRatio || heroAspectRatio;
+  const heroHeight = SCREEN_W / resolvedHeroAspectRatio;
 
   const tags: HydratedLookTag[] = (look?.tags ?? []) as HydratedLookTag[];
 
@@ -347,16 +459,16 @@ export default function LookDetailScreen() {
   const captionIsLong = captionText.length > 140;
 
   const creatorDisplayName =
-    creatorProfile?.user.displayName || look?.creator.username || 'unknown';
+    creatorProfile?.user?.displayName || look?.creator.username || 'unknown';
   const creatorHandle = look?.creator.username ?? 'unknown';
-  const followerCount = creatorProfile?.stats.followerCount;
+  const followerCount = creatorProfile?.stats?.followerCount;
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
         <ScrollView
@@ -370,19 +482,20 @@ export default function LookDetailScreen() {
   }
 
   if (!look || loadError) {
+    const canRetry = loadError?.kind === 'connection';
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
         <EmptyState
-          icon="images-outline"
-          title="Look not found"
-          subtitle={loadError ?? 'This look may have been removed or is unavailable.'}
-          ctaLabel="Back to Explore"
-          onCtaPress={() => navigation.goBack()}
+          icon={canRetry ? 'cloud-offline-outline' : 'images-outline'}
+          title={canRetry ? "Couldn't load this look" : 'Look not found'}
+          subtitle={loadError?.message ?? 'This look may have been removed or is unavailable.'}
+          ctaLabel={canRetry ? 'Try again' : 'Back to Explore'}
+          onCtaPress={canRetry ? loadLook : () => navigation.goBack()}
         />
       </SafeAreaView>
     );
@@ -393,8 +506,8 @@ export default function LookDetailScreen() {
       {/* Floating Header — transparent 44pt hit targets; glyph legibility from
           the text-shadow scrim. No circular chrome. */}
       <View style={styles.headerRow}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color="#fff" style={styles.headerGlyph} />
+        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
+          <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -404,7 +517,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color="#fff" style={styles.headerGlyph} />
+            <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
           </AnimatedPressable>
           {isOwner && (
             <AnimatedPressable
@@ -414,7 +527,7 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit look"
             >
-              <Ionicons name="create-outline" size={20} color="#fff" style={styles.headerGlyph} />
+              <Ionicons name="create-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
             </AnimatedPressable>
           )}
           {isOwner && (
@@ -428,67 +541,110 @@ export default function LookDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="More look options"
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" style={styles.headerGlyph} />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
             </AnimatedPressable>
           )}
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* Aspect-aware media pager — height follows the media's real aspect
             ratio (defaulting to 4:5 until the first frame loads), not a fixed
             value imposed by the screen. */}
         <View style={[styles.heroWrap, { height: heroHeight }]}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-              setActiveMediaIndex(idx);
-            }}
-            accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
-          >
-            {mediaPages.map((page) => (
-              <View
-                key={page.id}
-                style={styles.heroPage}
-                accessibilityLabel={captionText || 'Look media'}
-              >
-                {page.isVideo ? (
-                  <Video
-                    source={{ uri: page.uri }}
-                    style={styles.heroImage}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay
-                    isMuted
-                    isLooping
-                    useNativeControls
-                  />
-                ) : (
-                  <ExpoImage
-                    source={{ uri: page.uri }}
-                    style={styles.heroImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    recyclingKey={page.uri}
-                    transition={reducedMotion ? 0 : 240}
-                    onLoad={(e) => {
-                      const { width, height } = e.source;
-                      if (width && height && width > 0 && height > 0) {
-                        setHeroAspectRatio((prev) =>
-                          prev === AspectRatio.marketplace ? width / height : prev
-                        );
-                      }
-                    }}
-                  />
-                )}
-              </View>
-            ))}
-          </ScrollView>
+          {compositionDocument ? (
+            <View
+              style={styles.heroPage}
+              accessibilityLabel={captionText || 'Authored Look composition'}
+            >
+              <CreatorCanvas
+                document={compositionDocument}
+                page={compositionDocument.pages[0]}
+                canvasWidth={SCREEN_W}
+                canvasHeight={heroHeight}
+                mode="view"
+              />
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                setActiveMediaIndex(idx);
+              }}
+              accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
+            >
+              {mediaPages.map((page) => (
+                <View
+                  key={page.id}
+                  style={styles.heroPage}
+                  accessibilityLabel={captionText || 'Look media'}
+                >
+                  {failedMediaIds.has(page.id) ? (
+                    <View style={styles.heroMediaError}>
+                      <Ionicons name="image-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+                      <Text style={styles.heroMediaErrorText}>Media couldn't be loaded</Text>
+                      <Pressable
+                        style={({ pressed }) => [styles.heroMediaRetry, pressed && { opacity: 0.6 }]}
+                        onPress={() => {
+                          setFailedMediaIds((current) => {
+                            const next = new Set(current);
+                            next.delete(page.id);
+                            return next;
+                          });
+                          setMediaRetryNonce((value) => value + 1);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry Look media"
+                      >
+                        <Text style={styles.heroMediaRetryText}>Try again</Text>
+                      </Pressable>
+                    </View>
+                  ) : page.isVideo ? (
+                    <Video
+                      source={{ uri: page.uri }}
+                      style={styles.heroImage}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay
+                      isMuted
+                      isLooping
+                      useNativeControls
+                    />
+                  ) : (
+                    <ExpoImage
+                      source={{ uri: page.uri }}
+                      style={styles.heroImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={`${page.uri}-${mediaRetryNonce}`}
+                      transition={reducedMotion ? 0 : 240}
+                      onLoad={(e) => {
+                        const { width, height } = e.source;
+                        if (width && height && width > 0 && height > 0) {
+                          setHeroAspectRatio((prev) =>
+                            prev === AspectRatio.marketplace ? width / height : prev
+                          );
+                        }
+                      }}
+                      onError={() => {
+                        setFailedMediaIds((current) => new Set(current).add(page.id));
+                      }}
+                    />
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
           {/* Pager indicators — only when multiple pages exist */}
-          {mediaPages.length > 1 && (
+          {!compositionDocument && mediaPages.length > 1 && (
             <View style={styles.pagerDots} pointerEvents="none">
               {mediaPages.map((page, i) => (
                 <View
@@ -534,7 +690,7 @@ export default function LookDetailScreen() {
                         <Text style={styles.tagTooltipPrice}>£{tag.price}</Text>
                       ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
+                    <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />
                   </View>
                 )}
               </Pressable>
@@ -548,11 +704,10 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Info — editorial chapter: eyebrow + provenance, expandable caption,
-            creator row with follow. Lives below the media so it never covers
-            the creator's composition. */}
+        {/* Info — expandable caption, repost attribution, creator row with follow.
+            Lives below the media so it never covers the creator's composition.
+            No "Look" eyebrow — the media is the label. */}
         <View style={styles.infoSection}>
-          <Text style={styles.eyebrow}>Look</Text>
           {captionText ? (
             <Pressable
               onPress={() => {
@@ -579,6 +734,23 @@ export default function LookDetailScreen() {
             </Pressable>
           ) : null}
 
+          {/* Repost attribution — when this look is a repost, show a quiet
+              "Reposted from @creator" line with a link to the source creator.
+              No decorative chrome; the attribution is the signal. */}
+          {look.sourceLookId && look.sourceLook && (
+            <Pressable
+              style={styles.repostAttribution}
+              onPress={() => look.sourceLook && navigation.navigate('UserProfile', { userId: look.sourceLook.creatorId })}
+              accessibilityRole="link"
+              accessibilityLabel={`Reposted from @${look.sourceLook.creatorUsername ?? 'creator'}`}
+            >
+              <Ionicons name="repeat-outline" size={14} color={colors.textMuted} aria-hidden={true} />
+              <Text style={styles.repostAttributionText}>
+                Reposted from @{look.sourceLook.creatorUsername ?? 'creator'}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             style={styles.creatorRow}
             onPress={handleCreatorPress}
@@ -595,7 +767,7 @@ export default function LookDetailScreen() {
                   recyclingKey={look.creator.avatar}
                 />
               ) : (
-                <Ionicons name="person-circle" size={36} color={colors.textMuted} />
+                <Ionicons name="person-circle" size={28} color={colors.textMuted} aria-hidden={true} />
               )}
             </View>
             <View style={styles.creatorInfo}>
@@ -646,10 +818,34 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Object actions — Remix + Report, semantically labelled. Save and
-            Share live in the social row above; these are the look-level
-            actions that don't belong there. */}
+        {/* Object actions — Repost + Remix + Report, semantically labelled.
+            Repost is the primary distributive action (preserves attribution);
+            Remix is the derivative action (opens creator studio); Report is
+            the safety action. Save and Share live in the social row above. */}
         <View style={styles.actionRow}>
+          {!isOwner && (
+            <>
+              <AnimatedPressable
+                style={styles.actionBtn}
+                onPress={handleRepost}
+                activeOpacity={0.85}
+                disabled={repostBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Repost this look"
+                accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
+              >
+                {repostBusy ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                    <Text style={styles.actionBtnLabel}>Repost</Text>
+                  </>
+                )}
+              </AnimatedPressable>
+              <View style={styles.actionDivider} />
+            </>
+          )}
           <AnimatedPressable
             style={styles.actionBtn}
             onPress={handleRemix}
@@ -658,7 +854,7 @@ export default function LookDetailScreen() {
             accessibilityLabel="Remix this look"
             accessibilityHint="Opens the creator studio seeded from this look"
           >
-            <Ionicons name="color-wand-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
             <Text style={styles.actionBtnLabel}>Remix</Text>
           </AnimatedPressable>
           <View style={styles.actionDivider} />
@@ -670,7 +866,7 @@ export default function LookDetailScreen() {
             accessibilityLabel="Report this look"
             accessibilityHint="Reports the creator of this look"
           >
-            <Ionicons name="flag-outline" size={20} color={colors.danger} />
+            <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
             <Text style={[styles.actionBtnLabel, { color: colors.danger }]}>Report</Text>
           </AnimatedPressable>
         </View>
@@ -710,7 +906,7 @@ export default function LookDetailScreen() {
                         />
                       ) : (
                         <View style={styles.trayImgEmpty}>
-                          <Ionicons name="pricetag" size={20} color={colors.textMuted} />
+                          <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} aria-hidden={true} />
                         </View>
                       )}
                       {tag.isSold && <View style={styles.traySoldScrim} />}
@@ -730,41 +926,29 @@ export default function LookDetailScreen() {
           </View>
         )}
 
-        {/* More from creator — related looks rail. Truthful: only the creator's
-            other published looks, fetched from the API. */}
-        {(moreLooks.length > 0 || moreLooksLoading) && (
-          <View style={styles.traySection}>
-            <View style={styles.trayHeader}>
-              <Text style={styles.trayTitle}>More from @{creatorHandle}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
-              {moreLooksLoading ? (
-                <View style={styles.moreLoading}>
-                  <ActivityIndicator size="small" color={colors.textMuted} />
-                </View>
-              ) : (
-                moreLooks.map((other) => (
-                  <AnimatedPressable
-                    key={other.id}
-                    style={styles.moreCard}
-                    onPress={() => handleMoreLookPress(other)}
-                    activeOpacity={0.9}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Look by @${other.creator.username ?? 'unknown'}${other.caption ? `, ${other.caption}` : ''}`}
-                  >
-                    <View style={styles.moreImgWrap}>
-                      <ExpoImage
-                        source={{ uri: other.mediaUrl }}
-                        style={styles.moreImg}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        recyclingKey={other.mediaUrl}
-                      />
-                    </View>
-                  </AnimatedPressable>
-                ))
-              )}
-            </ScrollView>
+        {/* More to explore — Pinterest-style 2-column masonry grid of related
+            looks. Replaces the former two horizontal rails with a single dense
+            grid that flows directly from the detail. Server-ranked by tag
+            overlap with cursor pagination for infinite scroll. The grid emerges
+            from the detail with a quiet section header — no hard divider. */}
+        {(relatedLooks.length > 0 || relatedLoading) && (
+          <View style={styles.masonrySection}>
+            <Text style={styles.masonryHeader}>More to explore</Text>
+            {relatedLoading ? (
+              <View style={styles.masonryLoading}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : (
+              <LookMasonryGrid
+                looks={relatedLooks}
+                onPress={(lookId) => {
+                  haptic.light();
+                  navigation.push('LookDetail', { lookId });
+                }}
+                isLoadingMore={relatedLoadingMore}
+                testIDPrefix="look-related"
+              />
+            )}
           </View>
         )}
 
@@ -794,11 +978,12 @@ export default function LookDetailScreen() {
         animationType="slide"
         onRequestClose={() => setInspectTag(null)}
       >
-        <Pressable style={styles.inspectBackdrop} onPress={() => setInspectTag(null)}>
+        <Pressable style={styles.inspectBackdrop} onPress={() => setInspectTag(null)} accessibilityRole="button" accessibilityLabel="Close product preview">
           <Pressable
             style={styles.inspectSheet}
             onPress={(e) => e.stopPropagation()}
             accessibilityLabel="Product preview"
+          accessibilityRole="button"
           >
             {(() => {
               if (!inspectTag) return null;
@@ -820,7 +1005,7 @@ export default function LookDetailScreen() {
                         />
                       ) : (
                         <View style={styles.inspectImgEmpty}>
-                          <Ionicons name="pricetag" size={28} color={colors.textMuted} />
+                          <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} aria-hidden={true} />
                         </View>
                       )}
                       {inspectTag.isSold && <View style={styles.traySoldScrim} />}
@@ -848,7 +1033,7 @@ export default function LookDetailScreen() {
                     <Text style={styles.inspectCtaText}>
                       {ref ? 'View details' : 'Unavailable'}
                     </Text>
-                    <Ionicons name="arrow-forward" size={18} color={colors.textInverse} />
+                    <Ionicons name="arrow-forward" size={18} color={colors.textInverse} aria-hidden={true} />
                   </AnimatedPressable>
                 </>
               );
@@ -864,11 +1049,12 @@ export default function LookDetailScreen() {
         animationType="fade"
         onRequestClose={() => setOverflowVisible(false)}
       >
-        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)}>
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)} accessibilityRole="button" accessibilityLabel="Close menu">
           <Pressable
             style={styles.overflowSheet}
             onPress={(e) => e.stopPropagation()}
             accessibilityRole="menu"
+            accessibilityLabel="Look options menu"
           >
             <Pressable
               style={styles.overflowItem}
@@ -876,7 +1062,7 @@ export default function LookDetailScreen() {
               accessibilityRole="menuitem"
               accessibilityLabel="Edit look"
             >
-              <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+              <Ionicons name="create-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
               <Text style={styles.overflowItemText}>Edit look</Text>
             </Pressable>
             <View style={styles.overflowDivider} />
@@ -886,7 +1072,7 @@ export default function LookDetailScreen() {
               accessibilityRole="menuitem"
               accessibilityLabel="Delete look"
             >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Ionicons name="trash-outline" size={20} color={colors.danger} aria-hidden={true} />
               <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
             </Pressable>
           </Pressable>
@@ -946,6 +1132,30 @@ function createStyles(colors: ThemeColors) {
     },
     heroPage: { width: SCREEN_W, height: '100%' },
     heroImage: { width: '100%', height: '100%' },
+    heroMediaError: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+    },
+    heroMediaErrorText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+    },
+    heroMediaRetry: {
+      minHeight: 48,
+      paddingHorizontal: Space.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroMediaRetryText: {
+      color: colors.textPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
     heroGradient: {
       position: 'absolute',
       bottom: 0,
@@ -967,10 +1177,10 @@ function createStyles(colors: ThemeColors) {
       width: Space.sm,
       height: Space.xxs,
       borderRadius: Space.xxs,
-      backgroundColor: 'rgba(255,255,255,0.45)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     pagerDotActive: {
-      backgroundColor: '#fff',
+      backgroundColor: colors.scrimTextPrimary,
       width: Space.sm + Space.xs,
     },
 
@@ -990,19 +1200,19 @@ function createStyles(colors: ThemeColors) {
       width: Space.xl - Space.xs,
       height: Space.xl - Space.xs,
       borderRadius: Radius.xl,
-      backgroundColor: 'rgba(0,0,0,0.28)',
+      backgroundColor: colors.overlay,
     },
     hotspotDot: {
       width: Space.sm + Space.xs,
       height: Space.sm + Space.xs,
       borderRadius: Radius.md,
-      backgroundColor: 'rgba(255,255,255,0.92)',
+      backgroundColor: colors.scrimTextPrimary,
       borderWidth: Stroke.emphasis,
-      borderColor: 'rgba(0,0,0,0.18)',
+      borderColor: colors.overlay,
     },
     hotspotDotActive: {
       backgroundColor: colors.brand,
-      borderColor: '#fff',
+      borderColor: colors.scrimTextPrimary,
     },
     tagTooltip: {
       position: 'absolute',
@@ -1012,14 +1222,14 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: 'rgba(0,0,0,0.88)',
+      backgroundColor: colors.overlay,
       borderRadius: Radius.lg,
       padding: Space.sm,
     },
     tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
     tagTooltipText: { flex: 1, gap: Space.xxs },
-    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },
-    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
+    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.scrimTextPrimary },
+    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: colors.scrimTextSecondary },
     tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
 
     // ── Info section ──
@@ -1027,6 +1237,17 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.lg,
       gap: Space.sm,
+    },
+    repostAttribution: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    repostAttributionText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
     },
     eyebrow: {
       fontSize: Type.meta.size,
@@ -1067,7 +1288,7 @@ function createStyles(colors: ThemeColors) {
     creatorAvatarImg: { width: Space.xl + Space.sm, height: Space.xl + Space.sm, borderRadius: Radius.xxl },
     creatorInfo: { flex: 1, gap: Space.xs - 2 },
     creatorName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -1169,7 +1390,7 @@ function createStyles(colors: ThemeColors) {
     },
     traySoldScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(255,255,255,0.55)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     trayCardTitle: {
       fontSize: Type.caption.size,
@@ -1193,24 +1414,23 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
 
-    // ── More from creator rail ──
-    moreLoading: {
-      width: Space.xxl * 5 + 8,
-      height: Space.xxl * 6,
+    // ── More to explore masonry ──
+    masonrySection: {
+      marginTop: Space.xl,
+    },
+    masonryHeader: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+      paddingHorizontal: Space.md,
+      marginBottom: Space.md,
+    },
+    masonryLoading: {
+      paddingVertical: Space.xl,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    moreCard: {
-      width: Space.xxl * 5 + 8,
-    },
-    moreImgWrap: {
-      width: Space.xxl * 5 + 8,
-      height: Space.xxl * 6,
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
-    moreImg: { width: '100%', height: '100%' },
 
     // ── Inspect sheet ──
     inspectBackdrop: {
@@ -1289,7 +1509,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
     },
     inspectCtaText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textInverse,
     },

@@ -27,7 +27,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   CoOwnIssueStudioStep,
   CoOwnStickyActionDock,
@@ -55,6 +58,7 @@ export default function CreateCoOwnScreen() {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
@@ -339,7 +343,7 @@ export default function CreateCoOwnScreen() {
         <View style={styles.listingMeta}>
           <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[styles.listingPrice, { color: colors.textSecondary }]}>
-            {formatFromFiat(item.priceGbp, 'GBP', { displayMode: 'fiat' })}
+            {formatFromFiat(item.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
           </Text>
         </View>
         {selected && (
@@ -418,7 +422,7 @@ export default function CreateCoOwnScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={1}
               totalSteps={3}
@@ -459,18 +463,18 @@ export default function CreateCoOwnScreen() {
                       {selectedListing.title}
                     </Text>
                     <Text style={[styles.previewPrice, { color: colors.textSecondary }]}>
-                      {formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' })}
+                      {formatFromFiat(selectedListing.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                     </Text>
                   </View>
                 </View>
               )}
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 2: Configure units and price ── */}
         {stage === 'configure' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={2}
               totalSteps={3}
@@ -483,7 +487,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.contextInfo}>
                   <Text style={[styles.contextTitle, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
                   <Text style={[styles.contextPrice, { color: colors.textSecondary }]}>
-                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' }) : '—'}
+                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -644,7 +648,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.estimatedRow}>
                   <View>
                     <Text style={[styles.estimatedValue, { color: colors.textPrimary }]}>
-                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
                     </Text>
                     <Text style={[styles.estimatedSub, { color: colors.textMuted }]}>
                       {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} stablecoin` : ''}
@@ -659,12 +663,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               </View>
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 3: Review and issue ── */}
         {stage === 'review' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={3}
               totalSteps={3}
@@ -717,7 +721,7 @@ export default function CreateCoOwnScreen() {
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
                   <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
                   <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
+                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -725,12 +729,12 @@ export default function CreateCoOwnScreen() {
               {/* Risk disclosure */}
               <CoOwnRiskDisclosure />
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
         {stage === 'recourse' && (
-          <View>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
             <CoOwnIssueStudioStep
               stepNumber={4}
               totalSteps={4}
@@ -747,14 +751,25 @@ export default function CreateCoOwnScreen() {
                     </Text>
                     <Text style={[styles.recourseLiabilityValue, { color: colors.textPrimary }]}>
                       {estimatedValue > 0
-                        ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' })
+                        ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
                         : '—'}
                     </Text>
                   </View>
                 </View>
-                <Text style={[styles.recourseLiabilityNote, { color: colors.textSecondary }]}>
-                  If you fail to safeguard the physical asset, prove authenticity on demand, or produce the item when requested by a unit holder, you are legally liable to repay the total traded value of this asset.
-                </Text>
+                <View style={styles.recourseLiabilityBullets}>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you fail to safeguard the physical asset in the condition stated
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you cannot prove authenticity when requested by a unit holder
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2022'} If you cannot produce the physical item on demand within 14 days
+                  </Text>
+                  <Text style={[styles.recourseBulletText, { color: colors.textSecondary }]}>
+                    {'\u2192'} You are legally liable to repay the total traded value of this asset
+                  </Text>
+                </View>
               </View>
 
               {/* Obligations list */}
@@ -805,7 +820,7 @@ export default function CreateCoOwnScreen() {
                 </Text>
               </Pressable>
             </CoOwnIssueStudioStep>
-          </View>
+          </Reanimated.View>
         )}
       </ScrollView>
 
@@ -882,7 +897,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   listingTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -922,7 +937,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   previewTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -948,7 +963,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1076,7 +1091,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   stableValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewAssetCard: {
@@ -1097,7 +1112,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   reviewAssetTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1131,7 +1146,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   summaryValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     flex: 1,
     minWidth: 0,
@@ -1148,7 +1163,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalKey: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     flexShrink: 1,
     minWidth: 0,
@@ -1186,7 +1201,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: Type.priceList.letterSpacing,
   },
-  recourseLiabilityNote: {
+  recourseLiabilityBullets: {
+    gap: Space.xs,
+  },
+  recourseBulletText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.size + 6,

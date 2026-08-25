@@ -26,6 +26,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -143,7 +144,7 @@ export function AccessibilityZOrderSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Arrange
@@ -164,7 +165,7 @@ export function AccessibilityZOrderSheet({
           <View style={styles.body}>
             {/* ── Current position readout — flat with hairline ── */}
             <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
-              <Ionicons name="layers-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="layers-outline" size={IconGrammar.standard} color={colors.textMuted} />
               <Text style={[styles.readoutText, { color: colors.textPrimary }]}>
                 Position {selectedIndex + 1} of {sortedLayers.length}
               </Text>
@@ -187,7 +188,7 @@ export function AccessibilityZOrderSheet({
                   accessibilityState={{ disabled: action.disabled }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name={action.icon} size={24} color={colors.textPrimary} />
+                  <Ionicons name={action.icon} size={IconGrammar.hero} color={colors.textPrimary} />
                   <Text
                     style={[styles.actionBtnText, { color: colors.textPrimary }]}
                     numberOfLines={1}
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     textAlign: 'center',
   },
   emptySubtext: {
@@ -308,7 +309,7 @@ const styles = StyleSheet.create({
   },
   readoutText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontVariant: ['tabular-nums'],
   },
   actionGrid: {
@@ -334,8 +335,8 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.metaElevated.size,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   stackContainer: {
@@ -356,7 +357,7 @@ const styles = StyleSheet.create({
   },
   stackIndex: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     width: 24,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],

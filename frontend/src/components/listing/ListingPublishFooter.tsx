@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 
 type PublicationStage =
   | 'idle'
@@ -127,12 +127,14 @@ export function ListingPublishFooter({
           accessibilityRole="button"
           accessibilityLabel="Preview listing"
         >
+          <Ionicons name="eye-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
           <Text style={styles.previewText}>Preview</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
             styles.publishBtn,
             publishDisabled && styles.publishBtnDisabled,
+            !publishDisabled && styles.publishBtnReady,
             pressed && !publishDisabled && styles.publishBtnPressed,
           ]}
           onPress={onPublish}
@@ -144,14 +146,19 @@ export function ListingPublishFooter({
           {isPublishing ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text
-              style={[
-                styles.publishText,
-                publishDisabled && styles.publishTextDisabled,
-              ]}
-            >
-              {getPublishLabel(mode, false)}
-            </Text>
+            <>
+              {!publishDisabled && (
+                <Ionicons name="arrow-up-circle" size={18} color={colors.textInverse} style={{ marginRight: 6 }} />
+              )}
+              <Text
+                style={[
+                  styles.publishText,
+                  publishDisabled && styles.publishTextDisabled,
+                ]}
+              >
+                {getPublishLabel(mode, false)}
+              </Text>
+            </>
           )}
         </Pressable>
       </View>
@@ -195,15 +202,15 @@ function createStyles(colors: ThemeColors) {
   qualityDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   qualityLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   qualityScore: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -215,33 +222,39 @@ function createStyles(colors: ThemeColors) {
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
+    alignItems: 'center',
   },
   previewBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
   previewBtnPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
   },
   previewText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   publishBtn: {
-    flex: 1.5,
-    height: 48,
-    borderRadius: 12,
+    flex: 1.6,
+    height: 50,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  publishBtnReady: {
+    height: 52,
   },
   publishBtnPressed: {
     opacity: 0.9,
@@ -251,7 +264,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   publishText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

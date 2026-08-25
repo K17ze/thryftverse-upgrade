@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useId, useState } from 'react';
 import {
   KeyboardTypeOptions,
   StyleProp,
@@ -15,7 +15,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 
 export type AppInputAppearance = 'filled' | 'outline' | 'underline';
 
-interface AppInputProps extends Omit<TextInputProps, 'style'> {
+interface AppInputCustomProps {
   label?: string;
   helperText?: string;
   errorText?: string;
@@ -35,6 +35,11 @@ interface AppInputProps extends Omit<TextInputProps, 'style'> {
    */
   appearance?: AppInputAppearance;
 }
+
+type AppInputProps = Omit<TextInputProps, 'style'> & AppInputCustomProps & (
+  | { label: string; placeholder?: string }
+  | { label?: string; placeholder: string }
+);
 
 export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   {
@@ -57,6 +62,8 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     onFocus,
     onBlur,
     appearance = 'filled',
+    accessibilityLabel: passedAccessibilityLabel,
+    accessibilityLabelledBy: passedAccessibilityLabelledBy,
     ...rest
   },
   ref
@@ -64,6 +71,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   const { colors } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(errorText);
+  const labelId = useId();
 
   // Resolve appearance-specific styling
   const appearanceStyle = (() => {
@@ -78,15 +86,15 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
         return {
           backgroundColor: 'transparent',
           borderWidth: 0,
-          borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
-          borderRadius: 0,
+          borderBottomWidth: Stroke.standard,
+          borderRadius: Radius.none,
           paddingHorizontal: 0,
         };
       case 'filled':
       default:
         return {
           backgroundColor: colors.input,
-          borderWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+          borderWidth: Stroke.standard,
           borderRadius: Radius.lg,
         };
     }
@@ -100,7 +108,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 
   return (
     <View style={containerStyle}>
-      {label ? <Text style={[styles.label, { color: colors.textSecondary }, labelStyle]}>{label}</Text> : null}
+      {label ? <Text nativeID={labelId} style={[styles.label, { color: colors.textSecondary }, labelStyle]}>{label}</Text> : null}
       <View
         style={[
           styles.inputWrap,
@@ -122,6 +130,8 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           placeholder={placeholder}
           placeholderTextColor={placeholderTextColor ?? colors.textMuted}
           style={[styles.input, { color: colors.textPrimary }, inputStyle]}
+          accessibilityLabel={passedAccessibilityLabel ?? label ?? placeholder}
+          accessibilityLabelledBy={label ? (passedAccessibilityLabelledBy ?? labelId) : passedAccessibilityLabelledBy}
           onFocus={(e) => { setIsFocused(true); onFocus?.(e); }}
           onBlur={(e) => { setIsFocused(false); onBlur?.(e); }}
         />
@@ -136,7 +146,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     lineHeight: 18,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
@@ -161,7 +171,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },

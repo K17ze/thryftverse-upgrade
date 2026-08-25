@@ -11,29 +11,135 @@ type CreatorDocumentsRouteDependencies = {
 
 // ── Layer payload schemas (parity with frontend composition.ts) ──────
 
+// Effect node — a single adjustment/filter step in a media layer's effect stack.
+const EffectNodeSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('filter'),
+    id: z.string(),
+    amount: z.number(),
+  }),
+  z.object({
+    type: z.literal('adjust'),
+    exposure: z.number().optional(),
+    contrast: z.number().optional(),
+    highlights: z.number().optional(),
+    shadows: z.number().optional(),
+    saturation: z.number().optional(),
+    temperature: z.number().optional(),
+    tint: z.number().optional(),
+    fade: z.number().optional(),
+    vignette: z.number().optional(),
+    sharpness: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal('blur'),
+    radius: z.number(),
+  }),
+  z.object({
+    type: z.literal('vignette'),
+    amount: z.number(),
+  }),
+]);
+
+// Structured RGBA color (CreatorColor)
+const ColorSchema = z.object({
+  space: z.literal('srgb'),
+  r: z.number().min(0).max(1),
+  g: z.number().min(0).max(1),
+  b: z.number().min(0).max(1),
+  a: z.number().min(0).max(1).default(1),
+});
+
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
-  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten']).default('clean'),
-  textColor: z.string().default('#ffffff'),
+  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
+  // Canonical fill as structured RGBA
+  fill: ColorSchema.optional(),
+  // Backward compat: legacy textColor string
+  textColor: z.string().optional(),
+  // Background/pill with real color + padding + radius
+  background: z.object({
+    color: ColorSchema,
+    radius: z.number().min(0).default(4),
+    paddingX: z.number().min(0).default(8),
+    paddingY: z.number().min(0).default(4),
+  }).optional(),
+  // Backward compat: legacy backgroundColor string
   backgroundColor: z.string().optional(),
-  alignment: z.enum(['left', 'center', 'right']).default('center'),
+  // Stroke (outline)
+  stroke: z.object({
+    color: ColorSchema,
+    width: z.number().min(0).max(20).default(2),
+  }).optional(),
+  // Shadow
+  shadow: z.object({
+    color: ColorSchema,
+    blur: z.number().min(0).max(30).default(4),
+    offsetX: z.number().default(0),
+    offsetY: z.number().default(2),
+  }).optional(),
+  // Backward compat: legacy textEffect enum
+  textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
+  // Typography
+  fontFamilyId: z.string().optional(),
+  fontWeight: z.union([z.string(), z.number()]).optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  letterSpacing: z.number().optional(),
   lineHeight: z.number().min(0.8).max(3).optional(),
+  alignment: z.enum(['left', 'center', 'right', 'justify']).default('center'),
   opacity: z.number().min(0).max(1).default(1),
+  textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
+  // Animation timing for text layer entrance
+  animation: z.object({
+    type: z.enum(['fade', 'rise', 'type', 'pop', 'slide']),
+    durationMs: z.number().min(0),
+    delayMs: z.number().min(0).optional(),
+  }).optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
   mediaUri: z.string(),
+  // Durable upload evidence
+  mediaFinalizationId: z.string().optional(),
+  mediaAssetId: z.string().optional(),
   mediaType: z.enum(['image', 'video']).default('image'),
   contentFit: z.enum(['cover', 'contain', 'fill']).default('cover'),
   thumbnailUri: z.string().optional(),
+  thumbnailFinalizationId: z.string().optional(),
+  thumbnailMediaAssetId: z.string().optional(),
   videoDurationMs: z.number().nullable().optional(),
+  filterId: z.string().optional(),
+  // Timeline operations
+  trimStartMs: z.number().min(0).optional(),
+  trimEndMs: z.number().min(0).optional(),
   opacity: z.number().min(0).max(1).default(1),
+  speed: z.number().min(0.25).max(4).optional(),
+  volume: z.number().min(0).max(1).optional(),
+  // Variable speed curve
+  speedCurve: z.object({
+    points: z.array(z.object({
+      id: z.string(),
+      position: z.number().min(0).max(1),
+      speed: z.number().min(0.01).max(4),
+    })),
+    easing: z.enum(['linear', 'smooth', 'hold']),
+  }).optional(),
+  // Reverse playback
+  reversed: z.boolean().optional(),
+  // Freeze frame
+  freezeFrameMs: z.number().min(0).optional(),
+  freezeDurationMs: z.number().min(0).max(10000).optional(),
+  // Effect stack
+  effects: z.array(EffectNodeSchema).optional(),
 });
 
 const ProductLayerPayloadSchema = z.object({
   listingId: z.string().min(1),
   snapshotTitle: z.string().default(''),
   snapshotImageUrl: z.string().optional(),
+  snapshotMediaFinalizationId: z.string().optional(),
+  snapshotMediaAssetId: z.string().optional(),
   snapshotPriceGbp: z.number().optional(),
   availability: z.enum(['active', 'sold', 'deleted']).default('active'),
   hotspotLabel: z.string().optional(),
@@ -48,11 +154,80 @@ const LookLayerPayloadSchema = z.object({
   lookId: z.string().min(1),
   snapshotCaption: z.string().default(''),
   snapshotImageUrl: z.string().optional(),
+  snapshotMediaFinalizationId: z.string().optional(),
+  snapshotMediaAssetId: z.string().optional(),
 });
 
 const VoteLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
   options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
+});
+
+const QuizLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(100),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+  correctOptionId: z.string(),
+});
+
+const QuestionLayerPayloadSchema = z.object({
+  prompt: z.string().min(1).max(200),
+  placeholder: z.string().max(100).optional(),
+});
+
+const EmojiSliderLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(100),
+  emoji: z.string().default('😍'),
+});
+
+const CountdownLayerPayloadSchema = z.object({
+  label: z.string().max(50).optional(),
+  endDateTime: z.string(),
+  endLabel: z.string().max(50).optional(),
+});
+
+const DrawLayerPayloadSchema = z.object({
+  strokes: z.array(z.object({
+    points: z.array(z.object({ x: z.number(), y: z.number() })),
+    color: z.string().default('#ffffff'),
+    width: z.number().min(1).max(50).default(4),
+    opacity: z.number().min(0).max(1).default(1),
+  })),
+  width: z.number().min(1).default(1080),
+  height: z.number().min(1).default(1920),
+});
+
+const GifLayerPayloadSchema = z.object({
+  gifUri: z.string(),
+  stickerId: z.string().optional(),
+});
+
+const MusicLayerPayloadSchema = z.object({
+  trackId: z.string().min(1),
+  trackName: z.string().max(120).optional(),
+  artistName: z.string().max(120).optional(),
+  artworkUrl: z.string().optional(),
+  previewUrl: z.string().optional(),
+  startTimeMs: z.number().min(0).optional(),
+  durationMs: z.number().min(0).optional(),
+  volume: z.number().min(0).max(1).default(1),
+});
+
+const LinkLayerPayloadSchema = z.object({
+  url: z.string().url(),
+  title: z.string().max(200).optional(),
+  description: z.string().max(300).optional(),
+  imageUrl: z.string().optional(),
+});
+
+const LocationLayerPayloadSchema = z.object({
+  name: z.string().min(1).max(120),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  placeId: z.string().optional(),
+});
+
+const HashtagLayerPayloadSchema = z.object({
+  tag: z.string().min(1).max(100),
 });
 
 const DecorativeLayerPayloadSchema = z.object({
@@ -82,7 +257,17 @@ const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('mention'), payload: MentionLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('look'), payload: LookLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('quiz'), payload: QuizLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('question'), payload: QuestionLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('emojiSlider'), payload: EmojiSliderLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('countdown'), payload: CountdownLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('gif'), payload: GifLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('music'), payload: MusicLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('link'), payload: LinkLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('location'), payload: LocationLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
 ]);
 
 const CreatorPageSchema = z.object({
@@ -105,8 +290,8 @@ const creatorDocumentBodySchema = z.object({
   pages: z.array(CreatorPageSchema).min(1).max(10),
   metadata: z.object({
     title: z.string().max(120).default(''),
-    caption: z.string().max(500).default(''),
-    visibility: z.enum(['public', 'private']).default('public'),
+    caption: z.string().max(2200).default(''),
+    visibility: z.enum(['public', 'private', 'closeFriends']).default('public'),
     allowReplies: z.boolean().default(true),
     allowReactions: z.boolean().default(true),
     expiresInHours: z.number().int().min(1).max(168).optional(),

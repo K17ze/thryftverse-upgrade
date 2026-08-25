@@ -1,28 +1,27 @@
 /**
- * Search Autocomplete API — autocomplete suggestion service (mock-ready)
+ * Search Autocomplete API — autocomplete suggestion service
  *
- * This module provides the contract + heuristic implementation for
- * ThryftVerse's search autocomplete.
+ * This module provides the contract for ThryftVerse's search autocomplete.
  *
- * TRUTHFUL UI (AGENTS.md §11):
- *   The current implementation is a *heuristic/mock* service. It matches the
- *   raw query against a curated fashion/marketplace term list using prefix
- *   and fuzzy (typo-tolerance) matching — it does NOT call a real
- *   search/autocomplete backend or ML ranking model. Every response carries
- *   `isDemo: true` so the UI can honestly label the experience "Demo mode".
- *
- * When a real autocomplete backend is wired in, set
- * `AUTOCOMPLETE_DEMO_MODE = false` and replace the mock branches with real
- * fetch calls. The contract (types + function signatures) stays the same —
- * the UI layer does not need to change.
+ * Production suggestions are fetched from the backend `/search/autocomplete`
+ * endpoint via `fetchAutocompleteSuggestions`. The heuristic client-side
+ * catalogue (`fetchAutocomplete`) is retained as a resilience fallback so
+ * the typeahead never goes dark when the API is unreachable or returns an
+ * error.
  */
+
+import { fetchJson } from '../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Demo-mode flag — single source of truth
 // ---------------------------------------------------------------------------
 
-/** When true, all data returned by this service is mock/illustrative. */
-export const AUTOCOMPLETE_DEMO_MODE = __DEV__;
+/**
+ * When true, the UI shows a "Demo mode" indicator. Now that the backend
+ * endpoint is wired, this is only true in __DEV__ and only when the backend
+ * call fails and the heuristic fallback is used.
+ */
+export const AUTOCOMPLETE_DEMO_MODE = false;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -315,6 +314,71 @@ export function fetchTrendingSearches(): string[] {
 }
 
 /**
+ * Client-side spell correction using Levenshtein distance.
+ *
+ * Compares the query against the curated catalogue, trending searches, and
+ * the user's recent searches. Returns the closest term if the edit distance
+ * is small enough to plausibly be a typo (<= 30% of query length, minimum 1).
+ *
+ * Returns `null` when no confident correction is found -- the caller should
+ * only show "Did you mean?" when a suggestion exists.
+ */
+export function getSpellCorrection(
+  query: string,
+  recentSearches: string[] = [],
+): string | null {
+  const normalized = normalize(query);
+  if (normalized.length < 3) return null;
+
+  // Candidate pool: catalogue terms + trending + recent searches.
+  // De-duplicate by normalized form.
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  for (const entry of CATALOGUE) {
+    const termNorm = normalize(entry.term);
+    if (termNorm && !seen.has(termNorm)) {
+      seen.add(termNorm);
+      candidates.push(entry.term);
+    }
+  }
+  for (const term of TRENDING_SEARCHES) {
+    const termNorm = normalize(term);
+    if (termNorm && !seen.has(termNorm)) {
+      seen.add(termNorm);
+      candidates.push(term);
+    }
+  }
+  for (const term of recentSearches) {
+    const termNorm = normalize(term);
+    if (termNorm && !seen.has(termNorm)) {
+      seen.add(termNorm);
+      candidates.push(term);
+    }
+  }
+
+  const maxDist = Math.max(1, Math.ceil(normalized.length * 0.3));
+  let bestTerm: string | null = null;
+  let bestDist = Infinity;
+
+  for (const candidate of candidates) {
+    const candidateNorm = normalize(candidate);
+    // Skip exact matches -- no correction needed.
+    if (candidateNorm === normalized) continue;
+    // Only consider candidates of similar length.
+    if (Math.abs(candidateNorm.length - normalized.length) > maxDist) continue;
+
+    const dist = editDistance(normalized, candidateNorm);
+    if (dist < bestDist && dist <= maxDist) {
+      bestDist = dist;
+      bestTerm = candidate;
+    }
+  }
+
+  return bestTerm;
+}
+
+/**
  * Fetch the user's recent searches (demo mode: in-memory store).
  */
 export function fetchRecentSearches(userId: string): string[] {
@@ -333,4 +397,109 @@ export function recordSearch(query: string, userId: string): void {
   const current = recentStore.get(key) ?? [];
   const next = [trimmed, ...current.filter((s) => s !== trimmed)].slice(0, RECENT_MAX);
   recentStore.set(key, next);
+}
+
+// ---------------------------------------------------------------------------
+// Backend-backed autocomplete (production)
+// ---------------------------------------------------------------------------
+//
+// Calls GET /search/autocomplete on the ThryftVerse API. The backend has two
+// handlers for this route:
+//   - search.ts (SearchAdapter): returns suggestions as string[]
+//   - searchExtended.ts (postgres): returns suggestions as Array<{ text, type, score }>
+// Both shapes are normalised into AutocompleteSuggestion[]. On any error the
+// heuristic client-side catalogue is used as a fallback so the typeahead
+// never goes dark.
+
+/** Backend suggestion type strings → AutocompleteSuggestionType mapping. */
+function mapBackendSuggestionType(
+  type: string | undefined,
+): AutocompleteSuggestionType {
+  switch (type) {
+    case 'brand':
+      return 'brand';
+    case 'category':
+      return 'category';
+    case 'item':
+      return 'style';
+    default:
+      return 'style';
+  }
+}
+
+export interface FetchAutocompleteSuggestionsResult {
+  suggestions: AutocompleteSuggestion[];
+  /** The raw query the suggestions are for. */
+  query: string;
+  /** True when the backend call failed and the heuristic fallback was used. */
+  isDemo: boolean;
+  /** Error message when the backend call failed (and fallback was used). */
+  error?: string;
+}
+
+/**
+ * Fetch autocomplete suggestions from the backend `/search/autocomplete`
+ * endpoint. Falls back to the heuristic client-side catalogue on any error
+ * so the typeahead remains functional offline or during backend issues.
+ *
+ * @param query  The partial search string.
+ * @param userId Optional user id for recent-search enrichment (fallback only).
+ * @param limit  Maximum number of suggestions (default 8, clamped 1–20).
+ */
+export async function fetchAutocompleteSuggestions(
+  query: string,
+  userId?: string,
+  limit: number = 8,
+): Promise<FetchAutocompleteSuggestionsResult> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) {
+    return { suggestions: [], query, isDemo: false };
+  }
+
+  const params = new URLSearchParams();
+  params.set('q', trimmed);
+  params.set('limit', String(Math.min(Math.max(limit, 1), 20)));
+
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      query: string;
+      suggestions: Array<string | {
+        text: string;
+        type?: string;
+        score?: number;
+      }>;
+    }>(`/search/autocomplete?${params.toString()}`);
+
+    const suggestions: AutocompleteSuggestion[] = (payload.suggestions ?? [])
+      .map((raw) => {
+        if (typeof raw === 'string') {
+          return {
+            query: raw.trim(),
+            type: 'style' as AutocompleteSuggestionType,
+            confidence: 0.7,
+            source: 'curated' as AutocompleteSource,
+          };
+        }
+        return {
+          query: raw.text.trim(),
+          type: mapBackendSuggestionType(raw.type),
+          confidence: Number.isFinite(raw.score) ? Math.min(1, Number(raw.score) / 100) : 0.7,
+          source: 'curated' as AutocompleteSource,
+        };
+      })
+      .filter((s) => s.query.length > 0)
+      .slice(0, limit);
+
+    return { suggestions, query, isDemo: false };
+  } catch (error) {
+    // Graceful fallback to the heuristic client-side catalogue.
+    const fallback = fetchAutocomplete(query, userId);
+    return {
+      suggestions: fallback.suggestions,
+      query,
+      isDemo: true,
+      error: error instanceof Error ? error.message : 'Autocomplete request failed',
+    };
+  }
 }

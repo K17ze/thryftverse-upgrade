@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 
@@ -30,9 +31,16 @@ export function FlagshipHeroSection({
   return (
     <View style={[styles.root, { width, height }]}>
       {imageUri ? (
-        <CachedImage uri={imageUri} style={{ width, height }} contentFit="cover" transition={500} />
+        <CachedImage
+          uri={imageUri}
+          style={{ width, height }}
+          contentFit="cover"
+          transition={Motion.transitions.mediaLoad.duration}
+          accessibilityRole="image"
+          accessibilityLabel={title}
+        />
       ) : (
-        <View style={[styles.imageFallback, { width, height }]} />
+        <View style={[styles.imageFallback, { width, height }]} accessibilityElementsHidden />
       )}
 
       {/* Authored scrim — bottom-weighted for text legibility */}
@@ -40,6 +48,7 @@ export function FlagshipHeroSection({
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
         locations={[0.3, 0.6, 1.0]}
         style={[StyleSheet.absoluteFill, { width, height }]}
+        accessibilityElementsHidden
       />
 
       <View style={styles.textWrap}>
@@ -82,7 +91,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.display.size,
     lineHeight: 38,
     fontFamily: FontFamily.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: -0.5,
   },
   subtitle: {
@@ -90,7 +99,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: 22,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.88)',
+    color: colors.scrimTextSecondary,
   },
   ctaWrap: {
     marginTop: Space.md,

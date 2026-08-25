@@ -162,14 +162,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: `${colors.brand}10`,
   },
   emoji: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
   },
   count: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   plus: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   expandedDivider: {

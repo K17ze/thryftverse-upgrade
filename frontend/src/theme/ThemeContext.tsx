@@ -7,6 +7,10 @@ import {
   type ThemePreference,
 } from './themePreference';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
+import {
+  DARK_COLORS as RAW_DARK_COLORS,
+  LIGHT_COLORS as RAW_LIGHT_COLORS,
+} from '../constants/colors';
 
 export type ThemeMode = 'dark' | 'light';
 
@@ -28,22 +32,51 @@ export interface ThemeColors {
   border: string;
   borderSubtle: string;
   danger: string;
+  /** Subtle danger tint — destructive surface backgrounds, danger badges. Replaces hex-alpha. */
+  dangerSubtle: string;
   success: string;
+  /** Subtle success tint — positive surface backgrounds, success badges. Replaces hex-alpha. */
+  successSubtle: string;
   warning: string;
+  /** Subtle warning tint — cautionary surface backgrounds, warning badges. Replaces hex-alpha. */
+  warningSubtle: string;
+  /** Border-tint variants for status-colored borders. Replaces hex-alpha border concatenation. */
+  brandBorder: string;
+  warningBorder: string;
+  dangerBorder: string;
+  successBorder: string;
+  coownUpBorder: string;
+  coownDownBorder: string;
+  commerceTrustBorder: string;
   /** Co-Own financial truth — up/down movement only. Per Design.md
    * proposed-semantic: coown-up #1C5631, coown-down #5F1616.
    * Used for price deltas, position P/L, and market direction. */
   coownUp: string;
   coownDown: string;
+  /** Subtle coownUp/coownDown tints — side pills, premium/discount fills. Replaces hex-alpha. */
+  coownUpSubtle: string;
+  coownDownSubtle: string;
   /** Semantic accent colors from Design.md proposed-semantic section.
    * Used for category icon badges and contextual accents — never decorative. */
   social: string;
   discovery: string;
   commerceTrust: string;
+  /** Subtle accent tints — icon-badge fills, category backgrounds. Replaces hex-alpha. */
+  commerceTrustSubtle: string;
+  discoverySubtle: string;
+  bronzeSubtle: string;
   /** Premium accent from Design.md proposed-luxury. Used sparingly for
    * verified status, authenticated value, or curated distinction. */
   antiqueGold: string;
   bronze: string;
+  /** Text over media scrims — always white regardless of theme, because
+   *  scrims are dark-on-image in both light and dark mode. Replaces
+   *  hardcoded `#fff` / `rgba(255,255,255,0.88)` in hero/media overlays. */
+  scrimTextPrimary: string;
+  /** Secondary text over media scrims — slightly translucent white. */
+  scrimTextSecondary: string;
+  /** Tertiary text/decor over media scrims — low-opacity white for inactive dots. */
+  scrimTextTertiary: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -56,79 +89,9 @@ export interface ThemeColors {
   glassBorder: string;
 }
 
-const DARK_COLORS: ThemeColors = {
-  background: '#0A0A0A',
-  surface: '#141414',
-  surfaceAlt: '#1C1C1C',
-  surfaceRaised: '#1F1F1F',
-  surfaceElevated: '#242424',
-  brand: '#F4F0E8',
-  brandPressed: '#D8D0C3',
-  brandSubtle: 'rgba(244,240,232,0.08)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A3A3A3',
-  textMuted: '#7A7A7A', // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
-  textInverse: '#000000',
-  border: '#262626',
-  borderSubtle: '#1E1E1E',
-  danger: '#9b0202',
-  success: '#215634',
-  warning: '#D49454', // Distinct from antiqueGold — warm amber, not gold
-  coownUp: '#1C5631',
-  coownDown: '#5F1616',
-  social: '#9A6B7A',
-  discovery: '#B85566',
-  commerceTrust: '#4A7AC4',
-  antiqueGold: '#C9A46A',
-  bronze: '#8A6A3F',
-  overlay: 'rgba(0,0,0,0.6)',
-  input: '#1A1A1A',
-  inputText: '#FFFFFF',
-  row: '#141414',
-  rowPressed: '#1A1A1A',
-  tabBar: '#0A0A0A',
-  header: '#0A0A0A',
-  shadow: '#000000',
-  glassBg: 'rgba(255,255,255,0.04)',
-  glassBorder: 'rgba(255,255,255,0.08)',
-};
+const DARK_COLORS: ThemeColors = RAW_DARK_COLORS as ThemeColors;
 
-const LIGHT_COLORS: ThemeColors = {
-  background: '#FFFFFF',
-  surface: '#F5F5F5',
-  surfaceAlt: '#EFEFEF',
-  surfaceRaised: '#F2F2F2',
-  surfaceElevated: '#FFFFFF',
-  brand: '#111111',
-  brandPressed: '#333333',
-  brandSubtle: 'rgba(17,17,17,0.06)',
-  textPrimary: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#767676', // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
-  textInverse: '#FFFFFF',
-  border: '#E5E5E5',
-  borderSubtle: '#F0F0F0',
-  danger: '#9b0202',
-  success: '#215634',
-  warning: '#B8742E', // Distinct from antiqueGold — warm amber, not gold
-  coownUp: '#1C5631',
-  coownDown: '#5F1616',
-  social: '#6B3245',
-  discovery: '#7B0E1E',
-  commerceTrust: '#06489A',
-  antiqueGold: '#C9A46A',
-  bronze: '#8A6A3F',
-  overlay: 'rgba(0,0,0,0.4)',
-  input: '#FFFFFF',
-  inputText: '#000000',
-  row: '#F5F5F5',
-  rowPressed: '#EBEBEB',
-  tabBar: '#FFFFFF',
-  header: '#FFFFFF',
-  shadow: '#000000',
-  glassBg: 'rgba(0,0,0,0.04)',
-  glassBorder: 'rgba(0,0,0,0.08)',
-};
+const LIGHT_COLORS: ThemeColors = RAW_LIGHT_COLORS as ThemeColors;
 
 interface ThemeContextValue {
   themePreference: ThemePreference;

@@ -206,7 +206,7 @@ export function CoOwnRecoursePanel({
         <Pressable
           style={({ pressed }) => [
             styles.demandButton,
-            { borderColor: colors.warning, backgroundColor: colors.warning + '0F' },
+            { borderColor: colors.warning, backgroundColor: colors.warningSubtle },
             pressed && { opacity: 0.7 },
           ]}
           onPress={() => {

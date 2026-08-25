@@ -16,14 +16,17 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
+import { ConversationListSkeleton } from '../components/skeletons/ConversationListSkeleton';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
+import { deleteConversationOnApi, acceptMessageRequestOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,6 +39,7 @@ export default function MessageRequestsScreen() {
   const { colors } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
+  const conversationsLoaded = useStore((state) => state.conversationsLoaded);
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
@@ -61,17 +65,18 @@ export default function MessageRequestsScreen() {
     );
   };
 
-  const handleAccept = (id: string) => {
+  const handleAccept = async (id: string) => {
     if (pendingId) return;
     haptic.medium();
     setPendingId(id);
     setPendingAction('accept');
     try {
+      await acceptMessageRequestOnApi(id);
       acceptMessageRequest(id);
       show('Request accepted', 'success');
       navigation.navigate('Chat', { conversationId: id });
     } catch {
-      show('Could not accept this request. Try again.', 'error');
+      show('Could not accept this request. Check your connection and try again.', 'error');
     } finally {
       setPendingId(null);
       setPendingAction(null);
@@ -88,15 +93,16 @@ export default function MessageRequestsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
             setPendingId(id);
             setPendingAction('delete');
             try {
+              await deleteConversationOnApi(id, 'me');
               declineMessageRequest(id);
               show('Request deleted', 'info');
             } catch {
-              show('Could not delete this request. Try again.', 'error');
+              show('Could not delete this request. Check your connection and try again.', 'error');
             } finally {
               setPendingId(null);
               setPendingAction(null);
@@ -127,6 +133,7 @@ export default function MessageRequestsScreen() {
                 await blockUser(counterpartyId);
                 toggleBlockedUser(counterpartyId);
               }
+              await deleteConversationOnApi(id, 'me');
               declineMessageRequest(id);
               show(`${name} blocked`, 'info');
             } catch {
@@ -141,7 +148,7 @@ export default function MessageRequestsScreen() {
     );
   };
 
-  const handleReport = (id: string, name: string) => {
+  const handleReport = (id: string, _name: string) => {
     if (pendingId) return;
     haptic.light();
     const counterpartyId = resolveCounterpartyId(id);
@@ -184,11 +191,11 @@ export default function MessageRequestsScreen() {
     return (
       <View>
         <View style={styles.requestRow}>
-          {/* Identity */}
+          {/* Identity — the dominant object */}
           <View style={styles.requestIdentity}>
             <AvatarRing
               uri={avatarUri}
-              size={52}
+              size={48}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
@@ -209,37 +216,26 @@ export default function MessageRequestsScreen() {
             </View>
           </View>
 
-          {/* Listing context */}
+          {/* Marketplace context — flat hairline row, not a nested card.
+              No card-on-card: this shares the row's surface, separated by a hairline. */}
           {listing && (
-            <View style={styles.listingCard}>
+            <View style={styles.listingContext}>
               {listing.images?.[0] ? (
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
                 </View>
               )}
-              <View style={styles.listingInfo}>
-                <Caption color={colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
-                {listing.price != null && (
-                  <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
+              {listing.price != null && (
+                <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
+              )}
             </View>
           )}
 
-          {/* Safety note for non-marketplace requests */}
-          {!listing && (
-            <View style={styles.safetyNote}>
-              <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
-              <Text style={styles.safetyNoteText}>
-                If this seems suspicious, delete and block.
-              </Text>
-            </View>
-          )}
-
-          {/* Primary actions */}
+          {/* Primary actions — Accept dominates, Delete is secondary.
+              One hierarchy, not symmetry. */}
           <View style={styles.requestActions}>
             <AnimatedPressable
               style={styles.requestDecline}
@@ -269,34 +265,37 @@ export default function MessageRequestsScreen() {
             </AnimatedPressable>
           </View>
 
-          {/* Secondary actions: Block + Report */}
-          <View style={styles.secondaryActions}>
+          {/* Safety actions — quiet, low-weight text links.
+              Block is destructive (danger text), Report is secondary.
+              Not equal full-width buttons — they recede until needed. */}
+          <View style={styles.safetyActions}>
             <AnimatedPressable
               onPress={() => handleBlock(item.id, displayTitle)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
               accessibilityLabel={`Block ${displayTitle}`}
               accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
-              style={styles.secondaryBtn}
+              style={styles.safetyLink}
             >
-              <Ionicons name="ban-outline" size={14} color={colors.danger} />
-              <Text style={styles.secondaryBtnTextDanger}>Block</Text>
+              <Ionicons name="ban-outline" size={13} color={colors.danger} />
+              <Text style={styles.safetyLinkTextDanger}>Block</Text>
             </AnimatedPressable>
+            <View style={styles.safetyDivider} />
             <AnimatedPressable
               onPress={() => handleReport(item.id, displayTitle)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
               accessibilityLabel={`Report ${displayTitle}`}
-              style={styles.secondaryBtn}
+              style={styles.safetyLink}
             >
-              <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
-              <Text style={styles.secondaryBtnText}>Report</Text>
+              <Ionicons name="flag-outline" size={13} color={colors.textMuted} />
+              <Text style={styles.safetyLinkText}>Report</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -305,37 +304,26 @@ export default function MessageRequestsScreen() {
     );
   };
 
+  const showLoading = !conversationsLoaded;
+  const showEmpty = !showLoading && requestConversations.length === 0;
+
   return (
     <SafeAreaView edges={['top']} style={styles.screenRoot}>
-      <View style={styles.compactHeader}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          scaleValue={0.92}
-          hapticFeedback="light"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-          style={styles.backBtn}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Message requests</Text>
-          <Text style={styles.headerSubtitle}>
-            {requestConversations.length > 0
-              ? `${requestConversations.length} pending · Accept to chat`
-              : "People you don't follow"}
-          </Text>
-        </View>
-        <View style={styles.backBtn} />
-      </View>
-      {requestConversations.length === 0 ? (
+      <ScreenHeader
+        title="Message requests"
+        onBack={() => navigation.goBack()}
+        style={{
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      />
+      {showLoading ? (
+        <ConversationListSkeleton count={5} />
+      ) : showEmpty ? (
         <EmptyState
           icon="mail-outline"
           title="No message requests"
-          subtitle="When someone you don't follow sends you a message, it will appear here for you to review."
-          ctaLabel="Back to Inbox"
-          onCtaPress={() => navigation.goBack()}
+          subtitle="Messages from people you don't follow appear here."
         />
       ) : (
         <FlashList
@@ -383,10 +371,10 @@ const styles$inline = StyleSheet.create({
   },
   requestName: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: undefined,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   requestTime: {
     fontSize: Type.caption.size,
@@ -399,37 +387,6 @@ function createStyles(colors: ThemeColors) {
     screenRoot: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-    compactHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    backBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerTitleWrap: {
-      flex: 1,
-      alignItems: 'center',
-      gap: Space.xs / 2,
-    },
-    headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.title.fontFamily,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    headerSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
     },
     listContent: {
       paddingHorizontal: Space.md,
@@ -444,7 +401,7 @@ function createStyles(colors: ThemeColors) {
     requestIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.sm + 4,
+      gap: Space.sm + 2,
     },
     requestText: {
       flex: 1,
@@ -458,52 +415,40 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight + 2,
       marginTop: Space.xs / 2,
     },
-    listingCard: {
+    // ── Marketplace context — flat hairline row, not a nested card ──
+    listingContext: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.md,
-      padding: Space.sm,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      paddingTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
     },
     listingThumb: {
-      width: Space.xl + Space.xs + 4,
-      height: Space.xl + Space.xs + 4,
+      width: Space.xl + 4,
+      height: Space.xl + 4,
       borderRadius: Radius.sm,
     },
     listingThumbPlaceholder: {
-      width: Space.xl + Space.xs + 4,
-      height: Space.xl + Space.xs + 4,
+      width: Space.xl + 4,
+      height: Space.xl + 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surface,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    listingInfo: {
-      flex: 1,
-      gap: Space.xs / 2,
-    },
     listingTitle: {
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textSecondary,
     },
     listingPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
     },
-    safetyNote: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-    safetyNoteText: {
-      fontSize: Type.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
+    // ── Primary actions ──
     requestActions: {
       flexDirection: 'row',
       gap: Space.sm,
@@ -542,31 +487,35 @@ function createStyles(colors: ThemeColors) {
     actionDisabledBg: {
       opacity: 0.5,
     },
-    secondaryActions: {
-      flexDirection: 'row',
-      gap: Space.sm,
-    },
-    secondaryBtn: {
-      flex: 1,
+    // ── Safety actions — quiet text links, not equal buttons ──
+    safetyActions: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs + 2,
-      minHeight: Control.hit,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      gap: Space.sm,
     },
-    secondaryBtnTextDanger: {
-      fontSize: Type.caption.size,
+    safetyLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.sm,
+      minHeight: 36,
+    },
+    safetyLinkTextDanger: {
+      fontSize: Type.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.danger,
     },
-    secondaryBtnText: {
-      fontSize: Type.caption.size,
+    safetyLinkText: {
+      fontSize: Type.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textSecondary,
+      color: colors.textMuted,
+    },
+    safetyDivider: {
+      width: 1,
+      height: 14,
+      backgroundColor: colors.border,
     },
     requestSeparator: {
       height: StyleSheet.hairlineWidth,

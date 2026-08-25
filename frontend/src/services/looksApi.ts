@@ -23,7 +23,7 @@ export interface LookApiItem {
   mediaUrl: string;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
-  visibility: 'public' | 'closeFriends' | 'private';
+  visibility: 'public' | 'followers' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt?: string;
@@ -36,6 +36,14 @@ export interface LookApiItem {
   /** Versioned composition document for collage looks. When present, the
    * viewer should render this canonical composition instead of only mediaUrl. */
   compositionDocument?: unknown;
+  /** When non-null, this look is a repost of the referenced source look. */
+  sourceLookId?: string | null;
+  /** Source look attribution info (present when sourceLookId is non-null). */
+  sourceLook?: {
+    creatorId: string;
+    creatorUsername: string | null;
+    creatorAvatar: string | null;
+  } | null;
 }
 
 export interface LookApiResponse {
@@ -62,10 +70,16 @@ export interface LookCreateBody {
   title: string;
   caption?: string;
   mediaUrl: string;
-  visibility?: 'public' | 'closeFriends' | 'private';
+  /** Durable proof that the primary media PUT was verified by the backend. */
+  mediaFinalizationId?: string;
+  /** Authoritative media lifecycle row returned by upload finalization. */
+  mediaAssetId?: string;
+  mediaType?: 'image' | 'video';
+  visibility?: 'public' | 'followers' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
   compositionDocument?: unknown;
+  sourceLookId?: string;
 }
 
 export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boolean; lookId: string }> {
@@ -87,10 +101,11 @@ export async function updateLookOnApi(
   });
 }
 
-export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
+export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; sort?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
   const params = new URLSearchParams();
   if (options?.creatorId) params.set('creatorId', options.creatorId);
   if (options?.status) params.set('status', options.status);
+  if (options?.sort) params.set('sort', options.sort);
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
@@ -103,6 +118,28 @@ export async function fetchLookByIdFromApi(lookId: string): Promise<LookSingleRe
 
 export async function deleteLookOnApi(lookId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/looks/${lookId}`, { method: 'DELETE' });
+}
+
+export async function repostLookOnApi(lookId: string): Promise<{ ok: boolean; lookId: string }> {
+  return fetchJson<{ ok: boolean; lookId: string }>(`/looks/${lookId}/repost`, {
+    method: 'POST',
+  });
+}
+
+export interface LookRelatedResponse {
+  items: LookApiItem[];
+  nextCursor?: string | null;
+}
+
+export async function fetchRelatedLooksFromApi(
+  lookId: string,
+  options?: { cursor?: string; limit?: number }
+): Promise<LookRelatedResponse> {
+  const params = new URLSearchParams();
+  if (options?.cursor) params.set('cursor', options.cursor);
+  if (options?.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  return fetchJson<LookRelatedResponse>(`/looks/${lookId}/related${qs ? `?${qs}` : ''}`);
 }
 
 // ── Like ──

@@ -151,7 +151,7 @@ export function ListingQA({
           accessibilityRole="button"
           accessibilityLabel="Post question"
         >
-          <Ionicons name="send" size={16} color={askText.trim() ? '#fff' : colors.textMuted} />
+          <Ionicons name="send" size={16} color={askText.trim() ? colors.scrimTextPrimary : colors.textMuted} />
         </AnimatedPressable>
       </View>
 
@@ -268,7 +268,7 @@ function createStyles(colors: ThemeColors) {
   },
   sectionTitle: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -357,7 +357,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.brand,
   },
   qAsker: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -392,7 +392,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.success,
   },
   answerText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     lineHeight: 18,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
@@ -412,7 +412,7 @@ function createStyles(colors: ThemeColors) {
     transform: [{ scale: 0.97 }],
   },
   answerBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -444,7 +444,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.6,
   },
   cancelAnswerText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -455,9 +455,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   postAnswerText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   pendingAnswer: {
     fontSize: Type.meta.size,

@@ -6,6 +6,7 @@ import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 export interface BundleUpsellRowProps {
   /** Items from the same seller (typically more_from_seller recommendations) */
@@ -54,7 +55,7 @@ function BundleUpsellRowComponent({
 
   const showShippingMessage = shippingPayer === 'buyer';
   const bundleTotal = bundleItems.reduce((sum, i) => sum + i.price, 0);
-  const formattedBundleTotal = formatFromFiat(bundleTotal, 'GBP', { displayMode });
+  const formattedBundleTotal = formatFromFiat(bundleTotal, DEFAULT_CURRENCY_CODE, { displayMode });
 
   return (
     <View style={styles.container}>
@@ -78,7 +79,7 @@ function BundleUpsellRowComponent({
 
       <View style={styles.thumbRow}>
         {bundleItems.map((bundleItem) => {
-          const formattedPrice = formatFromFiat(bundleItem.price, 'GBP', { displayMode });
+          const formattedPrice = formatFromFiat(bundleItem.price, DEFAULT_CURRENCY_CODE, { displayMode });
           return (
             <Pressable
               key={bundleItem.id}
@@ -155,7 +156,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     letterSpacing: 0.2,
@@ -222,12 +223,12 @@ function createStyles(colors: ThemeColors) {
     borderTopColor: colors.border,
   },
   totalLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
   totalValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

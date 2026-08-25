@@ -4,6 +4,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 import { Typography, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 
@@ -28,6 +29,8 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
   cardHeight,
   gap,
 }: ProfileLookTileProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isVideo = isVideoUri(item.mediaUrl);
   const hasTags = item.tags && item.tags.length > 0;
 
@@ -65,7 +68,8 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   lookCard: {},
   lookImageWrap: { borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   lookImage: { width: '100%', height: '100%' },
@@ -77,10 +81,10 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.18,
     shadowRadius: 2,
@@ -93,7 +97,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderTopWidth: 0,
     borderBottomWidth: 0,
-    borderLeftColor: 'rgba(20,20,20,0.85)',
+    borderLeftColor: colors.textPrimary,
     marginLeft: 2,
   },
   // Small tagged-piece indicator — subtle dark dot, no text
@@ -104,8 +108,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
-});
+  });
+}
 
 export { ProfileLookTile };

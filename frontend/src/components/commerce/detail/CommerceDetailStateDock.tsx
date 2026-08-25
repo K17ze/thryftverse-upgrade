@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -77,6 +78,10 @@ export interface CommerceDetailStateDockProps {
   /** Optional shipping hint shown below the price (e.g. "+ £3.99 shipping"
    *  or "Free shipping"). */
   shippingHint?: string;
+  /** Optional low-stock indicator shown near the primary CTA (e.g.
+   *  "Only 2 left"). Only pass when real inventory data is available —
+   *  the dock never fabricates stock counts. */
+  lowStockHint?: string;
   /** When true, renders a buyer protection strip above the dock. Only
    *  render when protection is actually available. */
   showProtectionStrip?: boolean;
@@ -108,6 +113,7 @@ export function CommerceDetailStateDock({
   subtitle,
   thumbnailUri,
   shippingHint,
+  lowStockHint,
   showProtectionStrip = false,
   commerceTier,
   primaryAction,
@@ -122,6 +128,11 @@ export function CommerceDetailStateDock({
   const haptic = useHaptic();
   const safeBottom = bottomInset ?? insets.bottom;
   const { isCommerceCompact } = useBreakpoint();
+
+  // Dock surface fill — used for both the container background and the
+  // gradient elevation overlay so they stay in sync across light/dark
+  // and elevated/non-elevated states.
+  const dockBackground = elevated ? colors.surfaceElevated : colors.background;
 
   // Per spec 05 §4: auto stacks on compact widths to prevent label
   // truncation and giant pill overflow.
@@ -146,12 +157,24 @@ export function CommerceDetailStateDock({
       style={[
         styles.container,
         {
-          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
+          backgroundColor: dockBackground,
           paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
           borderTopColor: colors.border,
         },
       ]}
     >
+      {/* ── Gradient elevation overlay (top edge) ──
+          A subtle LinearGradient at the very top of the dock that fades
+          from transparent to the dock background color over ~12px. This
+          creates a premium "lift" effect (eBay/Vestiaire pattern) where
+          content scrolling under the dock fades out naturally. Sits
+          above the dock content at the top edge, pointer-events none. */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['transparent', dockBackground]}
+        locations={[0, 1]}
+        style={styles.topGradientOverlay}
+      />
       {/* ── Trust strip (top section of the unified dock) ──
           Flattened into the dock surface — no separate surface; a hairline
           borderBottom divides it from the action row.
@@ -267,6 +290,21 @@ export function CommerceDetailStateDock({
         </View>
 
         <View style={shouldStack ? styles.actionClusterStacked : styles.actionCluster}>
+          {/* ── Low-stock indicator ──
+              Subtle warning text shown above the primary CTA when real
+              inventory data indicates low stock. Only rendered when the
+              caller passes a truthful count — the dock never fabricates
+              stock. Positioned within the action cluster so it sits
+              directly beside/above the Buy Now button. */}
+          {lowStockHint && !stateBadge ? (
+            <Text
+              style={[styles.lowStockHint, { color: colors.warning }]}
+              numberOfLines={1}
+              accessibilityRole="text"
+            >
+              {lowStockHint}
+            </Text>
+          ) : null}
           {secondaryAction ? (
             <Pressable
               onPress={() => handlePress(secondaryAction)}
@@ -383,8 +421,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   protectionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   container: {
@@ -397,6 +435,19 @@ const styles = StyleSheet.create({
     // surface separating persistent action from scroll content.
     // Spec: 8px offset, 0.12 opacity, 16px radius.
     ...Elevation.floating,
+  },
+  // ── Gradient elevation overlay ──
+  // Thin gradient pinned to the top edge of the dock, fading from
+  // transparent to the dock background color over ~12px. Creates a
+  // premium "lift" effect where scroll content fades out naturally
+  // under the dock (eBay/Vestiaire pattern). pointerEvents none so it
+  // never intercepts touches on the dock content below.
+  topGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 12,
   },
   row: {
     flexDirection: 'row',
@@ -458,10 +509,10 @@ const styles = StyleSheet.create({
     // (13px) for trust copy and metadata labels. The value label
     // ("Current bid", "Your listing") is a metadata label that
     // benefits from slightly larger size for legibility in the dock.
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   actionCluster: {
     flexDirection: 'row',
@@ -502,8 +553,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   primaryActionText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // Per Design.md: secondary is a quiet text control, not a full
@@ -526,8 +577,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   secondaryActionText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   pressed: {
@@ -545,8 +596,8 @@ const styles = StyleSheet.create({
     // (13px) for trust copy and state explanations. The subtitle
     // ("Complete rights disclosure", "This item has been sold") is
     // contextual copy that benefits from the slightly larger size.
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // Shipping hint — quiet, muted, shown below the price when shipping
@@ -557,5 +608,15 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
+  },
+  // ── Low-stock indicator ──
+  // Subtle warning text shown above the primary CTA when real inventory
+  // data indicates low stock. 12sp, warning color, single line — quiet
+  // urgency that doesn't disrupt the dock layout.
+  lowStockHint: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

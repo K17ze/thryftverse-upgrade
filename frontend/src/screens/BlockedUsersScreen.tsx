@@ -20,8 +20,6 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
-const SEARCH_THRESHOLD = 8;
-
 export default function BlockedUsersScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
@@ -76,7 +74,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     }
   };
 
-  const showSearch = blockedIds.length >= SEARCH_THRESHOLD;
+  const showSearch = blockedIds.length > 0;
 
   const filteredIds = useMemo(() => {
     if (!query.trim()) return blockedIds;
@@ -159,7 +157,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         <EmptyState
           icon="shield-checkmark-outline"
           title="You haven't blocked anyone"
-          subtitle="Accounts you block will appear here and will not be able to message or find you."
+          subtitle="Blocked accounts appear here."
         />
       ) : (
         <>

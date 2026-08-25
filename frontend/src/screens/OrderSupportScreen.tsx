@@ -19,15 +19,17 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
-import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
+import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderSupport'>;
 
@@ -40,7 +42,7 @@ interface SupportTopic {
 }
 
 const ALL_SUPPORT_TOPICS: SupportTopic[] = [
-  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'delivered'] },
+  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
   { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
   { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
   { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
@@ -49,15 +51,43 @@ const ALL_SUPPORT_TOPICS: SupportTopic[] = [
   { id: 'other', icon: 'chatbubble-outline', label: 'Other issue', description: 'Something else is wrong with my order.', requiresStatus: null },
 ];
 
+/**
+ * Reason-specific evidence guidance.
+ * The report (§11.4) requires that we only ask for evidence needed by the
+ * chosen reason — no accusatory photo theatre for change-of-mind returns.
+ */
+const EVIDENCE_GUIDANCE: Record<string, { needsPhotos: boolean; hint: string }> = {
+  not_received: { needsPhotos: false, hint: '' },
+  not_as_described: { needsPhotos: true, hint: 'Attach photos showing how the item differs from the listing.' },
+  damaged: { needsPhotos: true, hint: 'Attach photos of the damage and original packaging.' },
+  wrong_item: { needsPhotos: true, hint: 'Attach photos of the received item.' },
+  return: { needsPhotos: false, hint: '' },
+  payment_issue: { needsPhotos: false, hint: '' },
+  other: { needsPhotos: false, hint: 'Photos optional.' },
+};
+
+/**
+ * One-line outcome preview shown as a final confirmation right before the
+ * submit button. Reduces uncertainty about what happens next.
+ */
+const OUTCOME_PREVIEW: Record<string, string> = {
+  not_received: "We'll contact the seller to confirm dispatch.",
+  not_as_described: "We'll compare your photos against the listing.",
+  damaged: "We'll assess the damage and arrange a resolution.",
+  wrong_item: "We'll review the photos and coordinate a return.",
+  return: "We'll review your return eligibility.",
+  payment_issue: "We'll investigate the payment discrepancy.",
+  other: 'Our team will review and respond.',
+};
+
 export default function OrderSupportScreen({ navigation, route }: Props) {
-  const { orderId } = route.params;
+  const { orderId, categoryId } = route.params;
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
 
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(categoryId ?? null);
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -88,13 +118,18 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const existingTickets = getSupportTicketsForOrder(orderId);
   const openTicket = existingTickets.find((t) => t.status === 'open');
 
-  const orderStatus = order?.status ?? 'unknown';
+  const orderStatus = normaliseOrderStatus(order?.status ?? 'unknown');
   const availableTopics = ALL_SUPPORT_TOPICS.filter((t) => {
     if (t.requiresStatus === null) return true;
     return t.requiresStatus.includes(orderStatus);
   });
 
   const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted && !isUploadingEvidence;
+
+  // Reason-specific evidence: only show the photo section when the chosen
+  // reason actually needs it (or allows it as optional for "other").
+  const evidenceConfig = selectedTopic ? EVIDENCE_GUIDANCE[selectedTopic] : null;
+  const showEvidence = !!(evidenceConfig && (evidenceConfig.needsPhotos || selectedTopic === 'other'));
 
   const handlePickEvidence = useCallback(async () => {
     if (evidenceUris.length >= 3) {
@@ -218,10 +253,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           )}
 
           <View>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
+            <Meta color={colors.textMuted} style={styles.sectionLabel}>REASON</Meta>
             <View style={styles.topicsCard}>
-              {availableTopics.map((topic) => {
+              {availableTopics.map((topic, index) => {
                 const isActive = selectedTopic === topic.id;
+                const isLast = index === availableTopics.length - 1;
                 return (
                   <AnimatedPressable
                     key={topic.id}
@@ -230,32 +266,25 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                       setSelectedTopic(topic.id);
                     }}
                     activeOpacity={0.7}
-                    scaleValue={0.98}
+                    scaleValue={0.99}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: isActive }}
                     accessibilityLabel={topic.label}
                   >
-                    <View style={[styles.topicRow, isActive && styles.topicRowActive]}>
-                      <View style={[styles.topicIcon, isActive && styles.topicIconActive]}>
-                        <Ionicons
-                          name={topic.icon}
-                          size={20}
-                          color={isActive ? colors.textInverse : colors.textSecondary}
-                        />
-                      </View>
+                    <View style={[styles.topicRow, !isLast && styles.topicRowSeparator, isActive && styles.topicRowActive]}>
                       <View style={styles.topicText}>
                         <Text style={[styles.topicLabel, isActive && styles.topicLabelActive]}>
                           {topic.label}
                         </Text>
                         <Caption
-                          color={isActive ? colors.textInverse : colors.textMuted}
+                          color={isActive ? colors.brand : colors.textMuted}
                           numberOfLines={2}
                         >
                           {topic.description}
                         </Caption>
                       </View>
                       {isActive && (
-                        <Ionicons name="checkmark-circle" size={22} color={colors.textInverse} />
+                        <Ionicons name="checkmark" size={20} color={colors.brand} />
                       )}
                     </View>
                   </AnimatedPressable>
@@ -270,11 +299,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             if (!topic) return null;
             const isEscrowHeld = orderStatus === 'paid' || orderStatus === 'shipped' || orderStatus === 'in transit' || orderStatus === 'out for delivery';
             const guidance: Record<string, string> = {
-              not_received: 'We\'ll contact the seller to confirm dispatch and tracking. If the item cannot be located, you could be eligible for a full refund from escrow.',
-              not_as_described: 'Provide photos showing the discrepancy. We\'ll compare against the listing and mediate a partial or full refund from escrow.',
-              damaged: 'Attach photos of the damage and original packaging. We\'ll assess liability and arrange a refund from escrow or a seller remedy.',
-              wrong_item: 'Attach photos of the received item. We\'ll arrange a return label and refund from escrow once the item is returned.',
-              return: 'We\'ll review your return eligibility. If approved, you\'ll receive a return label and a refund from escrow once the item is received by the seller.',
+              not_received: 'We\'ll contact the seller to confirm dispatch and tracking. If the item cannot be located, we\'ll work with you on a resolution.',
+              not_as_described: 'Provide photos showing the discrepancy. We\'ll compare against the listing and help resolve this with the seller.',
+              damaged: 'Attach photos of the damage and original packaging. We\'ll assess the situation and help arrange a resolution.',
+              wrong_item: 'Attach photos of the received item. We\'ll review and help coordinate a return or resolution.',
+              return: 'We\'ll review your return eligibility and guide you through the next steps.',
               payment_issue: 'We\'ll investigate the payment and billing discrepancy and correct any erroneous charges.',
               other: 'Describe the issue in detail below. Our support team will review and respond.',
             };
@@ -315,11 +344,17 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             </View>
           </View>
 
-          {/* Evidence upload */}
-          {!isSubmitted && (
+          {/* Evidence upload — reason-specific. Hidden entirely for reasons
+              that don't need photos (no accusatory photo theatre). */}
+          {!isSubmitted && showEvidence && evidenceConfig && (
             <View>
-              <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
+              <Meta color={colors.textMuted} style={styles.sectionLabel}>
+                {evidenceConfig.needsPhotos ? 'EVIDENCE' : 'EVIDENCE (OPTIONAL)'}
+              </Meta>
               <View style={styles.evidenceCard}>
+                {evidenceConfig.hint ? (
+                  <Text style={styles.evidenceHint}>{evidenceConfig.hint}</Text>
+                ) : null}
                 {evidenceUris.length > 0 && (
                   <View style={styles.evidenceThumbs}>
                     {evidenceUris.map((uri, index) => (
@@ -361,30 +396,50 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           )}
 
           {isSubmitted && submittedTicketId && (
-            <View style={styles.successCard}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
-              <BodyEmphasis style={styles.successTitle}>Request received</BodyEmphasis>
-              <Caption color={colors.textSecondary} style={styles.successSub}>
-                Ticket #{submittedTicketId.slice(-8).toUpperCase()}
-              </Caption>
-              <Caption color={colors.textMuted} style={styles.successSub}>
-                Our support team will review your request and respond as soon as possible.
-              </Caption>
-              <AppButton
-                title="View ticket"
-                variant="secondary"
-                size="md"
-                style={{ marginTop: Space.sm }}
-                onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: submittedTicketId })}
-              />
+            <View style={styles.timeline}>
+              <View style={styles.timelineStep}>
+                <View style={styles.timelineMarker}>
+                  <View style={styles.timelineCheck}>
+                    <Ionicons name="checkmark" size={18} color={colors.surface} />
+                  </View>
+                </View>
+                <View style={styles.timelineStepContent}>
+                  <Text style={styles.timelineStepTitle}>Case submitted</Text>
+                  <Caption color={colors.textSecondary} style={styles.timelineStepSub}>
+                    We'll review your case and respond within 24 hours.
+                  </Caption>
+                </View>
+              </View>
+
+              <View style={styles.timelineConnector} />
+
+              <View style={styles.timelineStep}>
+                <View style={styles.timelineMarker}>
+                  <View style={styles.timelineDot} />
+                </View>
+                <View style={styles.timelineStepContent}>
+                  <Text style={styles.timelineStepLabel}>Next: Seller response</Text>
+                  <Caption color={colors.textMuted} style={styles.timelineStepSub}>
+                    The seller has 3 days to respond.
+                  </Caption>
+                </View>
+              </View>
+
+              <View style={styles.timelineActions}>
+                <AppButton
+                  title="View case details"
+                  variant="secondary"
+                  size="md"
+                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: submittedTicketId })}
+                />
+              </View>
             </View>
           )}
 
-          {!isSubmitted && (
-            <View style={styles.honestNote}>
-              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-              <Caption color={colors.textMuted} style={styles.honestNoteText}>
-                Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.
+          {!isSubmitted && selectedTopic && (
+            <View style={styles.outcomePreview}>
+              <Caption color={colors.textMuted} style={styles.outcomePreviewText}>
+                Next: {OUTCOME_PREVIEW[selectedTopic] ?? OUTCOME_PREVIEW.other}
               </Caption>
             </View>
           )}
@@ -481,24 +536,16 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
-    paddingVertical: Space.smMd,
+    paddingVertical: Space.md,
     paddingHorizontal: Space.md,
+    minHeight: 44,
+  },
+  topicRowSeparator: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   topicRowActive: {
-    backgroundColor: colors.textPrimary,
-  },
-  topicIcon: {
-    width: Space.xl + 4,
-    height: Space.xl + 4,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topicIconActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: `${colors.brand}0A`,
   },
   topicText: {
     flex: 1,
@@ -511,7 +558,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs / 2,
   },
   topicLabelActive: {
-    color: colors.textInverse,
+    color: colors.brand,
   },
   detailsCard: {
     backgroundColor: colors.surface,
@@ -530,14 +577,17 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'right',
     marginTop: Space.xs,
   },
-  honestNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
+  evidenceHint: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 5,
+    marginBottom: Space.sm,
+  },
+  outcomePreview: {
     paddingHorizontal: Space.sm,
   },
-  honestNoteText: {
-    flex: 1,
+  outcomePreviewText: {
     lineHeight: Type.caption.lineHeight + 2,
   },
   footer: {
@@ -549,23 +599,63 @@ function createStyles(colors: ThemeColors) {
   btnDisabled: {
     opacity: 0.45,
   },
-  successCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    alignItems: 'center',
-    gap: Space.sm,
-    ...Elevation.subtle,
+  timeline: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
   },
-  successTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
+  timelineStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  timelineMarker: {
+    width: 28,
+    alignItems: 'center',
+  },
+  timelineCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: colors.success,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+    backgroundColor: colors.border,
     marginTop: Space.sm,
   },
-  successSub: {
-    textAlign: 'center',
+  timelineStepContent: {
+    flex: 1,
+    paddingTop: Space.xs / 2,
+  },
+  timelineStepTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    marginBottom: Space.xs / 2,
+  },
+  timelineStepLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    marginBottom: Space.xs / 2,
+  },
+  timelineStepSub: {
     lineHeight: Type.caption.lineHeight + 2,
+  },
+  timelineConnector: {
+    marginLeft: 14,
+    width: StyleSheet.hairlineWidth,
+    height: Space.md,
+    backgroundColor: colors.border,
+  },
+  timelineActions: {
+    marginTop: Space.lg,
+    flexDirection: 'row',
+    gap: Space.sm,
   },
   orderCard: {
     backgroundColor: colors.surface,

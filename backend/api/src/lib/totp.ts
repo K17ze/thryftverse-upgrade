@@ -127,8 +127,8 @@ export function generateRecoveryCodes(count = 8): string[] {
   const codes: string[] = [];
 
   for (let index = 0; index < count; index += 1) {
-    const raw = crypto.randomBytes(4).toString('hex').toUpperCase();
-    codes.push(`${raw.slice(0, 4)}-${raw.slice(4, 8)}`);
+    const raw = crypto.randomBytes(8).toString('hex').toUpperCase();
+    codes.push(`${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}`);
   }
 
   return codes;

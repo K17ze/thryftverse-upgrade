@@ -11,6 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -20,6 +21,7 @@ export interface InboxConversationRowProps {
   lastMessage: string;
   lastMessageTime: string;
   unread: boolean;
+  unreadCount?: number;
   isPinned: boolean;
   isMuted: boolean;
   isGroup: boolean;
@@ -40,11 +42,57 @@ export interface InboxConversationRowProps {
   testID?: string;
 }
 
+// ── TypingDots — iMessage-style animated three-dot typing indicator ──
+// Three dots that pulse in sequence, creating a compact visual cue that
+// someone is typing. Replaces the text "typing..." which reads as
+// prototype-grade. Respects reduced motion (static dots, no animation).
+function TypingDots({ color, size = 5 }: { color: string; size?: number }) {
+  const { isEnabled } = useMotionConfig();
+  const dot1 = useSharedValue(0.3);
+  const dot2 = useSharedValue(0.3);
+  const dot3 = useSharedValue(0.3);
+
+  React.useEffect(() => {
+    if (!isEnabled) return;
+    const config = { duration: 600 };
+    dot1.value = withRepeat(
+      withSequence(withTiming(1, { duration: 200 }), withTiming(0.3, config)),
+      -1, false,
+    );
+    const t2 = setTimeout(() => {
+      dot2.value = withRepeat(
+        withSequence(withTiming(1, { duration: 200 }), withTiming(0.3, config)),
+        -1, false,
+      );
+    }, 200);
+    const t3 = setTimeout(() => {
+      dot3.value = withRepeat(
+        withSequence(withTiming(1, { duration: 200 }), withTiming(0.3, config)),
+        -1, false,
+      );
+    }, 400);
+    return () => { clearTimeout(t2); clearTimeout(t3); };
+  }, [isEnabled, dot1, dot2, dot3]);
+
+  const s1 = useAnimatedStyle(() => ({ opacity: dot1.value }));
+  const s2 = useAnimatedStyle(() => ({ opacity: dot2.value }));
+  const s3 = useAnimatedStyle(() => ({ opacity: dot3.value }));
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <Reanimated.View style={[{ width: size, height: size, borderRadius: size, backgroundColor: color }, s1]} />
+      <Reanimated.View style={[{ width: size, height: size, borderRadius: size, backgroundColor: color }, s2]} />
+      <Reanimated.View style={[{ width: size, height: size, borderRadius: size, backgroundColor: color }, s3]} />
+    </View>
+  );
+}
+
 function InboxConversationRowBase({
   displayTitle,
   lastMessage,
   lastMessageTime,
   unread,
+  unreadCount,
   isPinned,
   isMuted,
   isGroup,
@@ -73,8 +121,8 @@ function InboxConversationRowBase({
 
     typingOpacity.value = withRepeat(
       withSequence(
-        withTiming(0.4, { duration: 700 }),
-        withTiming(1, { duration: 700 }),
+        withTiming(0.4, { duration: Motion.duration.slower }),
+        withTiming(1, { duration: Motion.duration.slower }),
       ),
       -1,
       false,
@@ -148,25 +196,30 @@ function InboxConversationRowBase({
               </Text>
             ) : null}
             {isTyping ? (
-              <Reanimated.Text
-                style={[styles.preview, styles.typingPreview, typingAnimStyle]}
-                numberOfLines={1}
-              >
-                typing...
-              </Reanimated.Text>
+              <View style={styles.typingDotsWrap}>
+                <TypingDots color={colors.brand} />
+              </View>
             ) : (
               <Text
                 style={[
                   styles.preview,
                   unread && styles.previewUnread,
                 ]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {draftText ?? lastMessage}
               </Text>
             )}
             {unread && !draftText ? (
-              <View style={styles.unreadIndicator} />
+              unreadCount && unreadCount > 1 ? (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.unreadIndicator} />
+              )
             ) : null}
             {!unread && itemId && itemThumbUri ? (
               <CachedImage
@@ -191,7 +244,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     gap: Space.sm + 2,
-    minHeight: 68,
+    minHeight: 76,
   },
   rowUnread: {},
   avatarWrap: {
@@ -214,13 +267,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  // Name: Type.bodyEmphasis — clear, readable, emphasis on identity
+  // Name: Type.bodyStrong — clear, readable, emphasis on identity
   name: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   nameUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -269,17 +322,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.brand,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
+  typingDotsWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: Type.body.lineHeight,
+  },
   previewUnread: {
     color: colors.textPrimary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
-  // Unread indicator — refined dot, not a large badge
+  // Unread indicator — refined dot for single unread
   unreadIndicator: {
     width: 8,
     height: 8,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     marginLeft: 2,
+  },
+  // Unread count badge — for multiple unread messages (WhatsApp/iMessage style)
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    marginLeft: 2,
+  },
+  unreadBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: colors.textInverse,
+    lineHeight: 12,
   },
   // Commerce thumbnail — clean, rounded, right-side context
   itemThumb: {

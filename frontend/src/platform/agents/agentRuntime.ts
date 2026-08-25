@@ -110,7 +110,12 @@ export async function executeToolCall(
         };
       }
     }
-    return { approved: true, executed: true };
+    // Fail closed: no executor or no arguments means the tool did not run.
+    return {
+      approved: true,
+      executed: false,
+      error: 'No executor registered for capability or missing arguments',
+    };
   }
 
   // Request the capability from the broker. This records an
@@ -140,7 +145,12 @@ export async function executeToolCall(
           };
         }
       }
-      return { approved: true, executed: true };
+      // Fail closed: no executor or no arguments means the tool did not run.
+      return {
+        approved: true,
+        executed: false,
+        error: 'No executor registered for capability or missing arguments',
+      };
     }
   }
 
@@ -198,8 +208,13 @@ export async function resolveAndExecute(
     }
   }
 
+  // Fail closed: no executor or no arguments means the tool did not run.
   clearPendingApproval(requestId);
-  return { approved: true, executed: true };
+  return {
+    approved: true,
+    executed: false,
+    error: 'No executor registered for capability or missing arguments',
+  };
 }
 
 // Re-export bypass / financial checks for callers that want them alongside

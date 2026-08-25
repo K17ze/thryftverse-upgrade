@@ -139,8 +139,8 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.xs,
@@ -152,8 +152,8 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.xs,
   },
   seeAll: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },

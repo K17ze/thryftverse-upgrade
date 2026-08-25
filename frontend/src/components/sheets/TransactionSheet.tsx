@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { FontFamily, Space, Type } from '../../theme/designTokens';
+import { FontFamily, Space, Type, Radius } from '../../theme/designTokens';
 
 /**
  * TransactionSheet — clear total/consequence, restrained material.
@@ -105,7 +105,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     primaryButton: {
       flex: 1,
       height: 52,
-      borderRadius: 8,
+      borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -117,12 +117,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     primaryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      fontSize: Type.bodyStrong.size,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     secondaryButton: {
       height: 52,
-      borderRadius: 8,
+      borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: StyleSheet.hairlineWidth,

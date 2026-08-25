@@ -15,8 +15,9 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { EmptyState } from '../components/EmptyState';
-import { Typography, Space, Radius, Type, Stroke, Control } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SavedSearches'>;
 
@@ -89,32 +90,6 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.smMd,
-      paddingVertical: Space.xs + 2,
-    },
-    backBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    markSeenBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
     tabRow: {
       flexDirection: 'row',
       gap: Space.sm,
@@ -135,7 +110,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       borderColor: colors.brand,
     },
     tabText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -171,25 +146,14 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       gap: Space.sm,
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.sm + 2,
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      marginBottom: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     searchMain: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.smMd,
-    },
-    searchIconWrap: {
-      width: Space.xl + 6,
-      height: Space.xl + 6,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     searchIconWrapInactive: {
       opacity: 0.6,
@@ -199,7 +163,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       gap: Space.xs / 2 + 1,
     },
     searchQuery: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       flexShrink: 1,
@@ -234,7 +198,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     },
     newMatchesText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },
@@ -265,24 +229,22 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       />
 
       {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Saved Searches</Text>
-        {totalNewMatches > 0 ? (
-          <AnimatedPressable
-            style={styles.markSeenBtn}
-            onPress={handleMarkAllSeen}
-            accessibilityLabel="Mark all saved searches as seen"
-            accessibilityRole="button"
-          >
-            <Ionicons name="checkmark-done" size={20} color={colors.brand} />
-          </AnimatedPressable>
-        ) : (
-          <View style={styles.backBtn} />
-        )}
-      </View>
+      <ScreenHeader
+        title="Saved Searches"
+        backIcon="arrow-back"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          totalNewMatches > 0 ? (
+            <AnimatedPressable
+              onPress={handleMarkAllSeen}
+              accessibilityLabel="Mark all saved searches as seen"
+              accessibilityRole="button"
+            >
+              <Ionicons name="checkmark-done" size={20} color={colors.brand} />
+            </AnimatedPressable>
+          ) : undefined
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -292,7 +254,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
           <EmptyState
             icon="notifications-outline"
             title="No saved searches yet"
-            subtitle="Save a search from the search results page to get alerts when new items match. It's the easiest way to catch drops before anyone else."
+            subtitle="Save searches to get alerts on new items."
             ctaLabel="Start searching"
             onCtaPress={handleDiscoverSellers}
           />
@@ -350,19 +312,16 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                   <Pressable
                     style={styles.searchMain}
                     onPress={() => handleSearchPress(search.query)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityLabel={`Search for ${search.query}${newCount > 0 ? `, ${newCount} new matches` : ''}`}
                     accessibilityRole="button"
                   >
-                    <View style={[
-                      styles.searchIconWrap,
-                      !search.alertsEnabled && styles.searchIconWrapInactive,
-                    ]}>
-                      <Ionicons
-                        name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
-                        size={18}
-                        color={search.alertsEnabled ? colors.brand : colors.textMuted}
-                      />
-                    </View>
+                    <Ionicons
+                      name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                      size={20}
+                      color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                      style={!search.alertsEnabled && styles.searchIconWrapInactive}
+                    />
                     <View style={styles.searchTextWrap}>
                       <View style={styles.searchQueryRow}>
                         <Text style={styles.searchQuery} numberOfLines={1}>{search.query}</Text>

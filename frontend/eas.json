@@ -1,4 +1,23 @@
 {
+  "_secrets": {
+    "_doc": "Secrets required for EAS Build and Submit. Set via: eas secret:create --scope project --name <NAME> --value <VALUE>. Never commit real values.",
+    "required": {
+      "EXPO_TOKEN": "Expo access token for EAS CLI authentication",
+      "EXPO_PROJECT_ID": "EAS project ID (from app.json extra.eas.projectId)",
+      "SENTRY_AUTH_TOKEN": "Sentry auth token for source map upload",
+      "SENTRY_ORG": "Sentry organization slug",
+      "SENTRY_PROJECT": "Sentry project slug",
+      "EXPO_PUBLIC_OTA_CODE_SIGNING_KEY": "OTA update code signing private key"
+    },
+    "submit_ios": {
+      "EAS_APPLE_ID": "Apple Developer account email (replaces hardcoded appleId)",
+      "EAS_IOS_ASC_APP_ID": "App Store Connect app ID (replaces hardcoded ascAppId)",
+      "EAS_APPLE_TEAM_ID": "Apple Developer Team ID (replaces hardcoded appleTeamId)"
+    },
+    "submit_android": {
+      "EAS_ANDROID_SERVICE_ACCOUNT_KEY_PATH": "Path to Google Play service account JSON key (replaces hardcoded path)"
+    }
+  },
   "cli": {
     "version": ">= 15.0.0",
     "appVersionSource": "remote"
@@ -16,7 +35,6 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api-dev.thryftverse.com",
-        "EXPO_PUBLIC_SENTRY_DSN": "",
         "EXPO_PUBLIC_ENVIRONMENT": "development"
       }
     },
@@ -34,7 +52,6 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api-staging.thryftverse.com",
-        "EXPO_PUBLIC_SENTRY_DSN": "",
         "EXPO_PUBLIC_ENVIRONMENT": "staging"
       }
     },
@@ -49,7 +66,6 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.thryftverse.com",
-        "EXPO_PUBLIC_SENTRY_DSN": "",
         "EXPO_PUBLIC_ENVIRONMENT": "production",
         "EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE": "1"
       }
@@ -58,12 +74,10 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "dev@thryftverse.com",
-        "ascAppId": "1234567890",
-        "appleTeamId": "ABCDE12345"
+        "ascAppId": "EAS_IOS_ASC_APP_ID"
       },
       "android": {
-        "serviceAccountKeyPath": "./keys/google-play-service-account.json",
+        "serviceAccountKeyPath": "EAS_ANDROID_SERVICE_ACCOUNT_KEY_PATH",
         "track": "production"
       }
     }

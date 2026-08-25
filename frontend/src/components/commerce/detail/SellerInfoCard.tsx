@@ -66,7 +66,7 @@ export function SellerInfoCard({
   const stats: StatCell[] = [];
   if (seller.rating != null) {
     stats.push({
-      value: `${seller.rating.toFixed(1)}★${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
+      value: `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
     });
   }
   if (seller.completedSales != null) {
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   avatarInitial: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   identityText: {
@@ -242,13 +242,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   name: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   location: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   shopChevron: {
@@ -259,15 +259,15 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   shopLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // Concise trust line — single inline text, no KPI card chrome.
   // Per spec 12: avoid transforming seller trust into a KPI card.
   trustLine: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },

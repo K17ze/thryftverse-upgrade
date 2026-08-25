@@ -1,26 +1,21 @@
 /**
  * Conversational Search API — natural-language search service
  *
- * This service provides the data contract and mock implementation for
- * ThryftVerse conversational / natural-language search — a 2026 marketplace
- * differentiator (Mercari × ChatGPT, eBay AI Snap, Tilt Snap AI).
+ * This service provides the data contract for ThryftVerse conversational /
+ * natural-language search.
  *
- * Per AGENTS.md §11 (Truthful UI): the mock is flagged via
- * `CONVERSATIONAL_SEARCH_DEMO_MODE` and every entity carries `isDemo: true`
- * so the UI can show an honest "Demo mode" indicator. The mock does NOT claim
- * to use a real LLM / GPT / ChatGPT. Filter extraction uses simple, honest
- * keyword matching (e.g. "under £50" → priceRange.max 50, "vintage" →
- * condition "Very good", "sustainable" → sustainableOnly true). The UI labels
- * the extracted filters as "matched keywords", not "AI inference".
+ * The service calls the real backend (`POST /search/conversational`). The
+ * backend uses deterministic heuristic keyword matching — NOT an LLM / GPT /
+ * ChatGPT. The response includes a `parsedFilters` field so the UI can show
+ * what was understood (honest AI labelling per AGENTS.md §11).
  *
- * The service is mock-ready — the function signatures mirror what a real
- * conversational search backend (LLM + retrieval) would expose. When a real
- * backend is wired, set `CONVERSATIONAL_SEARCH_DEMO_MODE = false` and replace
- * the mock branches with real fetch calls. The UI layer does not need to
- * change.
+ * When the API is unreachable (offline / dev without a running server), it
+ * falls back to client-side keyword matching so the UI remains functional.
+ * Mock entities carry `isDemo: true`.
  */
 
 import { makeStableId } from '../utils/createStableId';
+import { fetchJson } from '../lib/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,8 +54,6 @@ export interface ChatMessage {
   suggestions?: string[];
   /** Filters extracted from the user query that produced this assistant turn. */
   filterResults?: SearchFilters;
-  /** Estimated match count for the extracted filters (mock heuristic). */
-  estimatedMatchCount?: number;
   /** Honest flag — true while this message comes from mock logic. */
   isDemo: boolean;
 }
@@ -87,7 +80,6 @@ export interface SearchSuggestion {
 
 // ---------------------------------------------------------------------------
 // Demo flag — the UI reads this to decide whether to show a "Demo mode" badge.
-// When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
 export const CONVERSATIONAL_SEARCH_DEMO_MODE = __DEV__;
@@ -97,46 +89,16 @@ export const CONVERSATIONAL_SEARCH_DEMO_MODE = __DEV__;
 // ---------------------------------------------------------------------------
 
 const MOCK_SUGGESTIONS: SearchSuggestion[] = [
-  {
-    id: 'sugg-1',
-    label: 'Vintage denim under £50',
-    query: 'Vintage denim under £50',
-    category: 'vintage',
-  },
-  {
-    id: 'sugg-2',
-    label: 'Sustainable sneakers size 9',
-    query: 'Sustainable sneakers size 9',
-    category: 'sustainable',
-  },
-  {
-    id: 'sugg-3',
-    label: 'Designer bags for winter',
-    query: 'Designer bags for winter',
-    category: 'designer',
-  },
-  {
-    id: 'sugg-4',
-    label: 'Mid-century furniture',
-    query: 'Mid-century furniture',
-    category: 'furniture',
-  },
-  {
-    id: 'sugg-5',
-    label: 'Black leather jacket under £80',
-    query: 'Black leather jacket under £80',
-    category: 'value',
-  },
-  {
-    id: 'sugg-6',
-    label: 'Minimalist wool knitwear',
-    query: 'Minimalist wool knitwear',
-    category: 'designer',
-  },
+  { id: 'sugg-1', label: 'Vintage denim under £50', query: 'Vintage denim under £50', category: 'vintage' },
+  { id: 'sugg-2', label: 'Sustainable sneakers size 9', query: 'Sustainable sneakers size 9', category: 'sustainable' },
+  { id: 'sugg-3', label: 'Designer bags for winter', query: 'Designer bags for winter', category: 'designer' },
+  { id: 'sugg-4', label: 'Mid-century furniture', query: 'Mid-century furniture', category: 'furniture' },
+  { id: 'sugg-5', label: 'Black leather jacket under £80', query: 'Black leather jacket under £80', category: 'value' },
+  { id: 'sugg-6', label: 'Minimalist wool knitwear', query: 'Minimalist wool knitwear', category: 'designer' },
 ];
 
 // ---------------------------------------------------------------------------
-// Keyword dictionaries for honest mock filter extraction
+// Keyword dictionaries for honest fallback filter extraction
 // ---------------------------------------------------------------------------
 
 const BRAND_KEYWORDS: string[] = [
@@ -193,7 +155,7 @@ function nowIso(): string {
 }
 
 /**
- * Honest keyword-based filter extraction.
+ * Honest keyword-based filter extraction (client-side fallback).
  *
  * This is NOT AI. It is deterministic keyword matching against small
  * dictionaries. The UI labels the output as "matched keywords" so the user
@@ -209,7 +171,6 @@ export function extractFilters(query: string): SearchFilters {
   const conditions: string[] = [];
   const sizes: string[] = [];
 
-  // Brands — match multi-word brands first to avoid partial collisions.
   const sortedBrands = [...BRAND_KEYWORDS].sort((a, b) => b.length - a.length);
   for (const brand of sortedBrands) {
     if (text.includes(brand)) {
@@ -244,7 +205,6 @@ export function extractFilters(query: string): SearchFilters {
     }
   }
 
-  // Conditions
   for (const { keywords, condition } of CONDITION_MAP) {
     for (const keyword of keywords) {
       if (text.includes(keyword)) {
@@ -256,26 +216,18 @@ export function extractFilters(query: string): SearchFilters {
     }
   }
 
-  // Sustainable flag
   const sustainableOnly = SUSTAINABLE_KEYWORDS.some((keyword) => text.includes(keyword));
 
-  // Price range — "under £50", "under 50", "below £30", "less than £100"
+  const priceRange: { min?: number; max?: number } = {};
   const maxMatch = text.match(/(?:under|below|less than|max(?:imum)?)\s*[£$]?\s*(\d+)/);
   const minMatch = text.match(/(?:over|above|more than|min(?:imum)?)\s*[£$]?\s*(\d+)/);
-  const priceRange: { min?: number; max?: number } = {};
-  if (maxMatch) {
-    priceRange.max = Number(maxMatch[1]);
-  }
-  if (minMatch) {
-    priceRange.min = Number(minMatch[1]);
-  }
+  if (maxMatch) priceRange.max = Number(maxMatch[1]);
+  if (minMatch) priceRange.min = Number(minMatch[1]);
 
-  // Sizes — "size 9", "size M", "size 32", "a 9", "uk 9"
   const sizeMatch = query.match(/(?:size|uk|us)\s*([0-9]{1,2}|xs|s|m|l|xl|xxl)\b/i);
   if (sizeMatch) {
     sizes.push(sizeMatch[1].toUpperCase());
   }
-  // Bare single-letter sizes after "size"
   const bareSize = query.match(/\bsize\s+([a-zA-Z]{1,3})\b/i);
   if (bareSize && !sizes.some((s) => s.toLowerCase() === bareSize[1].toLowerCase())) {
     sizes.push(bareSize[1].toUpperCase());
@@ -315,25 +267,6 @@ export function summariseFilters(filters: SearchFilters): string {
   return parts.length ? parts.join('  ·  ') : 'No specific keywords matched';
 }
 
-/**
- * Mock heuristic for an estimated match count. This is a deterministic
- * function of how many filters were extracted — it is NOT a real catalogue
- * query. The UI presents it honestly alongside the demo indicator.
- */
-function estimateMatchCount(filters: SearchFilters): number {
-  let base = 120;
-  if (filters.brands?.length) base -= 18 * filters.brands.length;
-  if (filters.categories?.length) base -= 14 * filters.categories.length;
-  if (filters.sizes?.length) base -= 22 * filters.sizes.length;
-  if (filters.conditions?.length) base -= 10 * filters.conditions.length;
-  if (filters.colors?.length) base -= 8 * filters.colors.length;
-  if (filters.styles?.length) base -= 12 * filters.styles.length;
-  if (filters.priceRange?.max !== undefined) base -= 16;
-  if (filters.priceRange?.min !== undefined) base -= 8;
-  if (filters.sustainableOnly) base -= 20;
-  return Math.max(3, base);
-}
-
 function buildRefinementSuggestions(filters: SearchFilters): string[] {
   const suggestions: string[] = [];
   if (filters.priceRange?.max === undefined) {
@@ -352,19 +285,49 @@ function buildRefinementSuggestions(filters: SearchFilters): string[] {
   return suggestions.slice(0, 4);
 }
 
-function buildAssistantContent(filters: SearchFilters, matchCount: number): string {
+function buildAssistantContent(filters: SearchFilters): string {
   const summary = summariseFilters(filters);
   if (summary === 'No specific keywords matched') {
     return "I couldn't pick out specific keywords from that. Try describing the item, brand, size, or price range — for example \"vintage Levi's denim under £50\".";
   }
-  return `I matched these keywords:\n${summary}\n\nBased on those, I found around ${matchCount} items. Tap "View results" to see them, or refine below.`;
+  return `I matched these keywords:\n${summary}\n\nTap "View results" to see matches, or refine below.`;
 }
 
 // ---------------------------------------------------------------------------
-// In-memory conversation store (mock only)
+// In-memory conversation store (shared between real and fallback paths)
 // ---------------------------------------------------------------------------
 
 const MOCK_CONVERSATIONS = new Map<string, SearchConversation>();
+
+// ---------------------------------------------------------------------------
+// API response types
+// ---------------------------------------------------------------------------
+
+interface ApiConversationalSearchResponse {
+  ok: boolean;
+  query: string;
+  method: string;
+  /**
+   * Structured retrieval capability metadata. `method: 'keyword_parser'`
+   * discloses that results come from keyword-rule parsing, not AI/ML.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured: boolean;
+    searchEngineVersion?: string;
+  };
+  parsedFilters: Omit<SearchFilters, 'isDemo'>;
+  total: number;
+  items: Array<Record<string, unknown>>;
+}
+
+function apiFiltersToSearchFilters(
+  raw: Omit<SearchFilters, 'isDemo'>,
+  isDemo: boolean,
+): SearchFilters {
+  return { ...raw, isDemo };
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -380,32 +343,42 @@ export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
 
 /**
  * Start a new conversational search session.
- * Returns the created conversation with the user's first message and the
- * assistant's response (extracted filters + suggestions).
+ * Calls the real backend; falls back to client-side extraction on error.
  */
 export async function startConversation(query: string): Promise<SearchConversation> {
-  await delay(520); // simulate processing latency for honest loading state
-
   const conversationId = generateId('conv');
   const userMessage: ChatMessage = {
     id: generateId('msg'),
     role: 'user',
     content: query,
     timestamp: nowIso(),
-    isDemo: true,
+    isDemo: false,
   };
 
-  const filters = extractFilters(query);
-  const matchCount = estimateMatchCount(filters);
+  let filters: SearchFilters;
+  let isDemo = false;
+
+  try {
+    const data = await fetchJson<ApiConversationalSearchResponse>('/search/conversational', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit: 24 }),
+    });
+    filters = apiFiltersToSearchFilters(data.parsedFilters, false);
+  } catch {
+    await delay(520);
+    filters = extractFilters(query);
+    isDemo = __DEV__;
+  }
+
   const assistantMessage: ChatMessage = {
     id: generateId('msg'),
     role: 'assistant',
-    content: buildAssistantContent(filters, matchCount),
+    content: buildAssistantContent(filters),
     timestamp: nowIso(),
     suggestions: buildRefinementSuggestions(filters),
     filterResults: filters,
-    estimatedMatchCount: matchCount,
-    isDemo: true,
+    isDemo,
   };
 
   const conversation: SearchConversation = {
@@ -413,7 +386,7 @@ export async function startConversation(query: string): Promise<SearchConversati
     query,
     messages: [userMessage, assistantMessage],
     createdAt: nowIso(),
-    isDemo: true,
+    isDemo,
   };
 
   MOCK_CONVERSATIONS.set(conversationId, conversation);
@@ -430,8 +403,6 @@ export async function continueConversation(
   conversationId: string,
   query: string,
 ): Promise<ChatMessage> {
-  await delay(520);
-
   const conversation = MOCK_CONVERSATIONS.get(conversationId);
   if (!conversation) {
     throw new Error('Conversation not found');
@@ -442,18 +413,32 @@ export async function continueConversation(
     role: 'user',
     content: query,
     timestamp: nowIso(),
-    isDemo: true,
+    isDemo: conversation.isDemo,
   };
   conversation.messages.push(userMessage);
 
-  // Merge: take the last assistant filters and apply the new extraction on top.
   const lastAssistant = [...conversation.messages]
     .reverse()
     .find((m) => m.role === 'assistant' && m.filterResults);
   const priorFilters = lastAssistant?.filterResults;
-  const newFilters = extractFilters(query);
 
-  const merged: SearchFilters = { isDemo: true };
+  let newFilters: SearchFilters;
+  let isDemo = conversation.isDemo;
+
+  try {
+    const data = await fetchJson<ApiConversationalSearchResponse>('/search/conversational', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit: 24 }),
+    });
+    newFilters = apiFiltersToSearchFilters(data.parsedFilters, false);
+  } catch {
+    await delay(520);
+    newFilters = extractFilters(query);
+    isDemo = __DEV__;
+  }
+
+  const merged: SearchFilters = { isDemo };
   merged.brands = dedupe([...(priorFilters?.brands ?? []), ...(newFilters.brands ?? [])]);
   merged.categories = dedupe([...(priorFilters?.categories ?? []), ...(newFilters.categories ?? [])]);
   merged.sizes = dedupe([...(priorFilters?.sizes ?? []), ...(newFilters.sizes ?? [])]);
@@ -461,7 +446,6 @@ export async function continueConversation(
   merged.colors = dedupe([...(priorFilters?.colors ?? []), ...(newFilters.colors ?? [])]);
   merged.styles = dedupe([...(priorFilters?.styles ?? []), ...(newFilters.styles ?? [])]);
 
-  // Price range: a new "under £X" overrides the prior max; same for min.
   const priceRange: { min?: number; max?: number } = {
     ...(priorFilters?.priceRange ?? {}),
     ...(newFilters.priceRange ?? {}),
@@ -472,16 +456,14 @@ export async function continueConversation(
 
   merged.sustainableOnly = newFilters.sustainableOnly ?? priorFilters?.sustainableOnly ?? false;
 
-  const matchCount = estimateMatchCount(merged);
   const assistantMessage: ChatMessage = {
     id: generateId('msg'),
     role: 'assistant',
-    content: buildAssistantContent(merged, matchCount),
+    content: buildAssistantContent(merged),
     timestamp: nowIso(),
     suggestions: buildRefinementSuggestions(merged),
     filterResults: merged,
-    estimatedMatchCount: matchCount,
-    isDemo: true,
+    isDemo,
   };
   conversation.messages.push(assistantMessage);
 

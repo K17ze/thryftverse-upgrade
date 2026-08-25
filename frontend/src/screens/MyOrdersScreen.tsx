@@ -23,19 +23,25 @@ import {
   type ListUserOrdersParams,
 } from '../services/commerceApi';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
 import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   OrdersFilterSheet,
   FilterClassification,
   OrdersFilterState,
 } from '../components/orders/OrdersFilterSheet';
 import {
+
   needsAction,
   type OrderRole,
 } from '../components/orders/orderCapabilities';
+import { t } from '../i18n';
 
 interface DateGroup {
   key: string;
@@ -83,8 +89,9 @@ export default function MyOrdersScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
+  const { isOffline } = useConnectivity();
 
-  const [activeTab, setActiveTab] = useState<OrdersTab>('buying');
+  const [activeTab, setActiveTab] = useState<OrdersTab>('all');
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -120,11 +127,26 @@ export default function MyOrdersScreen() {
   const buildParams = useCallback(
     (cursor?: string): ListUserOrdersParams => {
       const params: ListUserOrdersParams = {
-        role: activeTab === 'buying' ? 'buyer' : 'seller',
         limit: PAGE_SIZE,
       };
 
-      if (filter.classification !== 'all') {
+      // Tab → role mapping:
+      //  'all'       → role=all (both buyer + seller orders)
+      //  'buying'    → role=buyer
+      //  'selling'   → role=seller
+      //  'completed' → role=buyer, classification=completed
+      if (activeTab === 'buying') {
+        params.role = 'buyer';
+      } else if (activeTab === 'selling') {
+        params.role = 'seller';
+      } else if (activeTab === 'completed') {
+        params.role = 'buyer';
+        params.classification = 'completed';
+      } else {
+        params.role = 'all';
+      }
+
+      if (filter.classification !== 'all' && activeTab !== 'completed') {
         params.classification = filter.classification;
       }
       if (filter.year) {
@@ -283,7 +305,7 @@ export default function MyOrdersScreen() {
     ({ item }: { item: OrderViewModel }) => (
       <OrderLedgerRow
         order={item}
-        formattedTotal={formatFromFiat(item.totalGbp, 'GBP', { displayMode: 'fiat' })}
+        formattedTotal={formatFromFiat(item.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         onPress={() => handleOrderPress(item.id)}
       />
     ),
@@ -375,6 +397,30 @@ export default function MyOrdersScreen() {
       );
     }
 
+    if (activeTab === 'completed') {
+      return (
+        <EmptyState
+          icon="checkmark-done-outline"
+          title="No completed orders yet"
+          subtitle="Orders you've received and confirmed will appear here."
+          ctaLabel="Browse items"
+          onCtaPress={() => navigation.navigate('MainTabs')}
+        />
+      );
+    }
+
+    if (activeTab === 'all') {
+      return (
+        <EmptyState
+          icon="bag-outline"
+          title="No orders yet"
+          subtitle="When you buy or sell something, your orders will show up here."
+          ctaLabel="Start shopping"
+          onCtaPress={() => navigation.navigate('MainTabs')}
+        />
+      );
+    }
+
     return (
       <EmptyState
         icon="pricetag-outline"
@@ -393,8 +439,8 @@ export default function MyOrdersScreen() {
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
       <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-      <Text style={styles.errorTitle}>Orders could not be loaded</Text>
-      <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+      <Text style={styles.errorTitle}>{isOffline ? 'You are offline' : 'Orders could not be loaded'}</Text>
+      <Text style={styles.errorSubtitle}>{isOffline ? 'Check your connection and try again.' : 'We couldn\'t load your orders. Tap below to try again.'}</Text>
       <Pressable
         style={styles.retryBtn}
         onPress={() => {
@@ -409,7 +455,7 @@ export default function MyOrdersScreen() {
         <Text style={styles.retryBtnText}>Retry</Text>
       </Pressable>
     </View>
-  ), [fetchOrders]);
+  ), [fetchOrders, isOffline, colors.textMuted]);
 
   const renderListFooter = useCallback(() => {
     if (isLoadingMore) {
@@ -466,42 +512,44 @@ export default function MyOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable
-          style={styles.headerBack}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Orders</Text>
-        <Pressable
-          style={styles.headerFilterBtn}
-          onPress={() => setFilterSheetVisible(true)}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel={`Filter orders${filterSummary ? `, current filter: ${filterSummary}` : ''}`}
-        >
-          <Ionicons
-            name={hasActiveFilter ? 'filter' : 'filter-outline'}
-            size={22}
-            color={hasActiveFilter ? colors.brand : colors.textPrimary}
-          />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Orders"
+        variant="large"
+        onBack={() => navigation.goBack()}
+        style={{
+          paddingTop: insets.top,
+          paddingBottom: Space.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+        rightAction={
+          <Pressable
+            onPress={() => setFilterSheetVisible(true)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter orders${filterSummary ? `, current filter: ${filterSummary}` : ''}`}
+          >
+            <Ionicons
+              name={hasActiveFilter ? 'filter' : 'filter-outline'}
+              size={22}
+              color={hasActiveFilter ? colors.brand : colors.textPrimary}
+            />
+          </Pressable>
+        }
+      />
 
       <OrdersTabRail
         activeTab={activeTab}
+        allCount={0}
         buyingCount={0}
         sellingCount={0}
+        completedCount={0}
         onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
         <Pressable
-          style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
+          style={[styles.needsActionBanner, { backgroundColor: colors.brandSubtle }]}
           onPress={() => setFilter({ classification: 'needs_action', year: null })}
           accessibilityRole="button"
           accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
@@ -555,6 +603,10 @@ export default function MyOrdersScreen() {
         </View>
       ) : null}
 
+      {isOffline && orders.length > 0 ? (
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+      ) : null}
+
       <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
@@ -600,34 +652,6 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerBack: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-    color: colors.textPrimary,
-  },
-  headerFilterBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   needsActionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -638,10 +662,10 @@ function createStyles(colors: ThemeColors) {
   },
   needsActionText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   searchRow: {
@@ -672,17 +696,17 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   filterSummaryText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   clearFilterText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   groupHeader: {
@@ -691,10 +715,10 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs + 2,
   },
   groupHeaderText: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     color: colors.textMuted,
     textTransform: 'uppercase',
   },
@@ -713,7 +737,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -733,7 +757,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -745,10 +769,10 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerLoadingText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   footerError: {
@@ -759,17 +783,17 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerErrorText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   retryLink: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   footerEnd: {
@@ -777,10 +801,10 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerEndText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   });

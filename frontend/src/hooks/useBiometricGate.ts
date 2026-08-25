@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
+import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
 /**
  * Biometric gate hook for sensitive screens (wallet, payments, account
@@ -43,16 +44,27 @@ export interface UseBiometricGateResult {
 const DEFAULT_REASON = 'Authenticate to continue';
 
 export function useBiometricGate(): UseBiometricGateResult {
+  const { biometricEnabled } = useSettingsPreferences();
   const [status, setStatus] = useState<BiometricGateStatus>('pending');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Probe hardware availability once on mount.
+  // Probe hardware availability once on mount. If the user has disabled
+  // biometric gating in Settings, the gate reports `unavailable` so screens
+  // reveal content with a truthful warning instead of prompting.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        if (!biometricEnabled) {
+          // User opted out of biometric gating — treat as unavailable so
+          // screens fall back to password / no-gate rather than prompting.
+          if (cancelled) return;
+          setIsAvailable(false);
+          setStatus('unavailable');
+          return;
+        }
         const hasHardware = await LocalAuthentication.hasHardwareAsync();
         const enrolled = await LocalAuthentication.isEnrolledAsync();
         const available = hasHardware && enrolled;
@@ -75,7 +87,7 @@ export function useBiometricGate(): UseBiometricGateResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [biometricEnabled]);
 
   const authenticate = useCallback(
     async (reason: string = DEFAULT_REASON): Promise<boolean> => {

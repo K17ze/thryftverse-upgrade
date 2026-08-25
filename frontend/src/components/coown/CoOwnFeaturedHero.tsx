@@ -162,7 +162,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   eyebrow: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontWeight: '600',
     color: colors.textSecondary,
     letterSpacing: 0.5,
@@ -183,7 +183,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   unitPrice: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.5,
@@ -232,7 +232,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
   },
   actionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontWeight: '600',
     color: colors.background,
   },

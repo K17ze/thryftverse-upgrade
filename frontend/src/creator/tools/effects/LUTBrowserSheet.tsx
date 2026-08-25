@@ -36,6 +36,7 @@ import {
   FontFamily,
   Control,
   Stroke,
+  IconGrammar,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -150,7 +151,7 @@ export function LUTBrowserSheet({
             accessibilityHint="Closes the color grade browser"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -277,7 +278,7 @@ function createStyles(colors: ThemeColors) {
     },
     descriptionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     descriptionBody: {
       fontFamily: Typography.family.regular,
@@ -305,7 +306,7 @@ function createStyles(colors: ThemeColors) {
     },
     applyBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

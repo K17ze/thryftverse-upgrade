@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +16,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { requestDataExport, type DataExportResult } from '../services/accountApi';
 import { AppButton } from '../components/ui/AppButton';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExport'>;
 
@@ -134,13 +133,11 @@ export default function DataExportScreen({ navigation }: Props) {
         {/* Loading state */}
         {exportState === 'loading' ? (
           <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-              Generating your export
-            </Text>
-            <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>
-              We're collecting your data. This usually takes a few seconds.
-            </Text>
+            <FlagshipState
+              variant="loading"
+              title="Generating your export"
+              subtitle="We're collecting your data. This usually takes a few seconds."
+            />
           </View>
         ) : null}
 
@@ -149,7 +146,7 @@ export default function DataExportScreen({ navigation }: Props) {
           <View style={[styles.successCard, { backgroundColor: `${colors.success}10`, borderColor: `${colors.success}30` }]}>
             <View style={styles.successHeader}>
               <View style={[styles.successIcon, { backgroundColor: colors.success }]}>
-                <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                <Ionicons name="checkmark" size={20} color={colors.background} />
               </View>
               <View style={styles.successHeaderText}>
                 <Text style={[styles.successTitle, { color: colors.success }]}>
@@ -183,7 +180,7 @@ export default function DataExportScreen({ navigation }: Props) {
               </View>
             ) : null}
             <Text style={[styles.successFootnote, { color: colors.textSecondary }]}>
-              A copy of your export has been sent to your registered email address. Request a new export at any time too.
+              Your export is ready above. Request a new export at any time.
             </Text>
           </View>
         ) : null}
@@ -193,7 +190,7 @@ export default function DataExportScreen({ navigation }: Props) {
           <View style={[styles.errorCard, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
             <View style={styles.errorHeader}>
               <View style={[styles.errorIcon, { backgroundColor: colors.danger }]}>
-                <Ionicons name="alert-circle" size={20} color="#FFFFFF" />
+                <Ionicons name="alert-circle" size={20} color={colors.background} />
               </View>
               <View style={styles.errorHeaderText}>
                 <Text style={[styles.errorTitle, { color: colors.danger }]}>
@@ -301,10 +298,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     heroSubtitle: {
       fontSize: Type.caption.size,
@@ -365,10 +362,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     stateTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     stateSubtitle: {
       fontSize: Type.body.size,
@@ -400,10 +397,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     successTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     successSubtitle: {
       fontSize: Type.caption.size,
@@ -461,10 +458,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     errorTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     errorSubtitle: {
       fontSize: Type.body.size,

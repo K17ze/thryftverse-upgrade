@@ -290,7 +290,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs + 4,
     },
     amount: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       letterSpacing: -1,

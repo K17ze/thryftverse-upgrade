@@ -27,6 +27,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
@@ -86,17 +87,17 @@ export default function DetailsDrawer({
     if (visible) {
       // Spring slide-up entrance
       translateYSV.value = withSpring(0, spring.entrance as SpringConfig);
-      backdropOpacitySV.value = withTiming(1, { duration: 200 });
+      backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal });
       // Staggered close button appearance
       closeBtnOpacitySV.value = withDelay(
-        100,
-        withTiming(1, { duration: 150 })
+        Motion.duration.fast,
+        withTiming(1, { duration: Motion.duration.fast })
       );
     } else {
       // Spring slide-down exit
       translateYSV.value = withSpring(DRAWER_HEIGHT, spring.entrance as SpringConfig);
-      backdropOpacitySV.value = withTiming(0, { duration: 150 });
-      closeBtnOpacitySV.value = withTiming(0, { duration: 100 });
+      backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
+      closeBtnOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
     }
   }, [visible, translateYSV, backdropOpacitySV, closeBtnOpacitySV, spring]);
 
@@ -371,13 +372,13 @@ function createStyles(colors: any) {
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    gap: 16,
+    gap: Space.md,
   },
   section: {
     gap: 8,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -423,7 +424,7 @@ function createStyles(colors: any) {
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     paddingVertical: 20,
@@ -443,10 +444,10 @@ function createStyles(colors: any) {
   },
   expiryPillActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand + '15',
+    backgroundColor: colors.brandSubtle,
   },
   expiryPillText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -487,7 +488,7 @@ function createStyles(colors: any) {
   },
   publishBtnText: {
     color: '#fff',
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
 });

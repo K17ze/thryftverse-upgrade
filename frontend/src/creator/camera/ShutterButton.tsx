@@ -42,6 +42,9 @@ export interface ShutterButtonProps {
   handsFreeMode?: boolean;
   /** Current speed mode label (e.g. '1', '0.3', '2', '3') for the ring indicator. */
   speedMode?: string;
+  /** Exposes hold-for-video only when the native camera mode, microphone
+   *  permission and downstream composition contract are all available. */
+  videoCaptureEnabled?: boolean;
 }
 
 /**
@@ -63,6 +66,7 @@ export function ShutterButton({
   recordingRingScale,
   handsFreeMode,
   speedMode,
+  videoCaptureEnabled = true,
 }: ShutterButtonProps) {
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
@@ -74,10 +78,12 @@ export function ShutterButton({
   }));
 
   const handlePress = React.useCallback(() => {
-    // Snappy down, smooth back up
+    // Snappy down, smooth back up — use withSequence so both animations run
     if (!reducedMotion) {
-      shutterScale.value = withSpring(0.92, spring.tap);
-      shutterScale.value = withSpring(1, spring.entrance);
+      shutterScale.value = withSequence(
+        withSpring(0.92, spring.tap),
+        withSpring(1, spring.entrance),
+      );
     }
     onPress();
   }, [reducedMotion, shutterScale, spring, onPress]);
@@ -89,14 +95,16 @@ export function ShutterButton({
     ? 'Stop recording'
     : handsFreeMode
       ? 'Start hands-free capture with 3 second countdown'
-      : 'Take photo or hold for video';
+      : videoCaptureEnabled
+        ? 'Take photo or hold for video'
+        : 'Take photo';
 
   return (
     <Pressable
       onPress={handlePress}
-      onLongPress={onLongPress}
-      onPressOut={onPressOut}
-      delayLongPress={handsFreeMode ? 10000 : 250}
+      onLongPress={videoCaptureEnabled && !handsFreeMode ? onLongPress : undefined}
+      onPressOut={videoCaptureEnabled ? onPressOut : undefined}
+      delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"

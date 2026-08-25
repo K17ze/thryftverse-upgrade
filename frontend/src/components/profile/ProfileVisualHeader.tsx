@@ -281,10 +281,10 @@ const styles = StyleSheet.create({
   },
   bio: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: Colors.textSecondary,
     marginTop: Space.xs,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   statsRail: {
     flexDirection: 'row',
@@ -301,9 +301,9 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: Colors.textPrimary,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   statLabel: {
     fontFamily: Typography.family.medium,

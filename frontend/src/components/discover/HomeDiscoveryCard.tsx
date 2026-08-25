@@ -48,7 +48,7 @@ import { MediaPreview as CanonicalMediaPreview } from '../MediaPreview';
 import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ProductAnalytics } from '../../platform/product/productAnalytics';
-import { Space, FontFamily, Radius } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, Type } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { HomeDiscoveryItemVM } from '../../presentation/homeDiscoveryViewModel';
 
@@ -121,10 +121,22 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
     formattedPrice,
     item.price.originalMinor ? `was ${formattedOriginalPrice}` : '',
     item.context?.text ?? '',
+    item.likes > 10 ? `${item.likes} likes` : '',
     item.saved ? 'saved' : '',
   ]
     .filter(Boolean)
     .join(', ');
+
+  // Social proof: show likes count only for items with significant
+  // engagement (> 10 likes) to avoid noise on low-engagement tiles.
+  // 2026 research: subtle social proof below price drives discovery
+  // engagement without cluttering the tile.
+  const showLikes = item.likes > 10;
+  const likesLabel = showLikes
+    ? item.likes > 999
+      ? `${(item.likes / 1000).toFixed(1)}k likes`
+      : `${item.likes} likes`
+    : null;
 
   return (
     <View style={[styles.card, { width: tileWidth }]}>
@@ -160,11 +172,27 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                 />
               ) : (
                 <View style={styles.mediaPlaceholder}>
-                  <Ionicons
-                    name={getCategoryIcon(item.category)}
-                    size={32}
-                    color={colors.textMuted}
-                  />
+                  {getCategoryPlaceholderTint(item.category, colors) ? (
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: getCategoryPlaceholderTint(item.category, colors) }]} />
+                  ) : null}
+                  {(() => {
+                    const label = getCategoryPlaceholderLabel(item.category, item.identity.primary);
+                    // Brand initial → large confident monogram (art-directed,
+                    // not a tiny label). Category name → quieter but still
+                    // confident. The object is the label (AGENTS.md §4).
+                    if (label.length === 1) {
+                      return (
+                        <Text style={styles.mediaPlaceholderMonogram} numberOfLines={1}>
+                          {label}
+                        </Text>
+                      );
+                    }
+                    return (
+                      <Text style={styles.mediaPlaceholderText} numberOfLines={1}>
+                        {label}
+                      </Text>
+                    );
+                  })()}
                 </View>
               )}
             </SharedTransitionView>
@@ -181,7 +209,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
             <Ionicons
               name={item.saved ? 'heart' : 'heart-outline'}
               size={22}
-              color={item.saved ? colors.danger : '#FFFFFF'}
+              color={item.saved ? colors.danger : colors.scrimTextPrimary}
               style={styles.saveGlyph}
             />
           </Pressable>
@@ -227,6 +255,14 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                 {item.context.text}
               </Text>
             )}
+            {likesLabel && (
+              <View style={styles.likesRow} pointerEvents="none">
+                <Ionicons name="heart" size={10} color={colors.textMuted} />
+                <Text style={styles.likesText} numberOfLines={1}>
+                  {likesLabel}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -244,6 +280,14 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                 {item.context.text}
               </Text>
             )}
+            {likesLabel && (
+              <View style={styles.likesRow} pointerEvents="none">
+                <Ionicons name="heart" size={10} color={colors.textMuted} />
+                <Text style={styles.likesText} numberOfLines={1}>
+                  {likesLabel}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </AnimatedPressable>
@@ -251,14 +295,29 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   );
 });
 
-// ── Category icon helper ──────────────────────────────────────────────────
+// ── Category placeholder helpers ───────────────────────────────────────────
 
-function getCategoryIcon(category?: string): keyof typeof Ionicons.glyphMap {
+/** Returns a subtle category-tinted background using existing *Subtle tokens,
+ *  or undefined for the default cool-grey surfaceAlt. */
+function getCategoryPlaceholderTint(category: string | undefined, colors: ThemeColors): string | undefined {
   const normalized = category?.toLowerCase() ?? '';
-  if (normalized.includes('shoe')) return 'footsteps-outline';
-  if (normalized.includes('bag')) return 'bag-handle-outline';
-  if (normalized.includes('jewel') || normalized.includes('watch')) return 'diamond-outline';
-  return 'shirt-outline';
+  if (normalized.includes('bag')) return colors.warningSubtle;   // warm beige tint
+  if (normalized.includes('shoe')) return colors.brandSubtle;    // neutral brand tint
+  return undefined; // watches/jewellery/apparel → cool grey (surfaceAlt)
+}
+
+/** Returns the category label or brand initial for the placeholder's
+ *  typographic treatment. Prefers brand initial when available. */
+function getCategoryPlaceholderLabel(category: string | undefined, brand?: string): string {
+  if (brand && brand.length > 0) {
+    return brand.charAt(0).toUpperCase();
+  }
+  const normalized = category?.toLowerCase() ?? '';
+  if (normalized.includes('shoe')) return 'Footwear';
+  if (normalized.includes('bag')) return 'Bags';
+  if (normalized.includes('jewel')) return 'Jewellery';
+  if (normalized.includes('watch')) return 'Watches';
+  return category ?? 'ThryftVerse';
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
@@ -289,7 +348,26 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
+      overflow: 'hidden',
     },
+    // Category label: 13sp, medium, letter-spaced — quiet but confident.
+    mediaPlaceholderText: {
+      fontSize: 13,
+      lineHeight: 18,
+      fontFamily: FontFamily.medium,
+      color: colors.textMuted,
+      letterSpacing: 0.3,
+    } as TextStyle,
+    // Brand monogram: 36sp, light weight, low opacity — art-directed
+    // typographic treatment. The initial IS the artwork, not a label.
+    mediaPlaceholderMonogram: {
+      fontSize: 36,
+      lineHeight: 40,
+      fontFamily: FontFamily.light,
+      color: colors.textMuted,
+      opacity: 0.5,
+      letterSpacing: -0.5,
+    } as TextStyle,
     // Save glyph: 44pt transparent hit area, 22pt visible icon, top-right
     saveButton: {
       position: 'absolute',
@@ -303,7 +381,7 @@ const createStyles = (colors: ThemeColors) =>
       zIndex: 5,
     },
     saveGlyph: {
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.shadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     },
@@ -352,6 +430,21 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textSecondary,
       marginTop: Space.xxs,
     } as TextStyle,
+    // Social proof: subtle likes row — 12sp muted with small heart glyph.
+    // Only shown when likes > 10 to avoid noise on low-engagement tiles.
+    likesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      marginTop: Space.xxs,
+    },
+    likesText: {
+      fontSize: 12,
+      lineHeight: 16,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
+    } as TextStyle,
     // ── Overlay price (video tiles only) ──
     bottomScrim: {
       position: 'absolute',
@@ -372,8 +465,8 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.1,
-      color: '#fff',
-      textShadowColor: 'rgba(0,0,0,0.55)',
+      color: colors.scrimTextPrimary,
+      textShadowColor: colors.shadow,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     } as TextStyle,

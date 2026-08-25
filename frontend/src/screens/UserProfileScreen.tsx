@@ -24,6 +24,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   runOnJS,
+  FadeIn,
 } from 'react-native-reanimated';
 // Note: useAnimatedScrollHandler + AnimatedFlashList crashes on web due to
 // Reanimated 4.x not backporting the FlashList scroll-event fix from 3.12.
@@ -52,12 +53,15 @@ import {
 } from '../platform/server';
 import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
+import { respondToReview } from '../services/reviewApi';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ProfileSkeleton } from '../components/profile/ProfileSkeleton';
@@ -67,9 +71,14 @@ import { TabRail, SegmentedControl, type TabKey, type SegmentKey } from '../comp
 import { ProfileShopTile } from '../components/profile/ProfileShopTile';
 import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
+import { SellerResponseComposer } from '../components/profile/SellerResponseComposer';
+import { ReviewReportSheet } from '../components/profile/ReviewReportSheet';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
-import { SellerReputationCard } from '../components/seller/SellerReputationCard';
+import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
+import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { track } from '../analytics';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -87,7 +96,7 @@ const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
-type Tab = 'Shop' | 'Looks' | 'Collections' | 'Drops' | 'Reviews';
+type Tab = 'Shop' | 'Looks' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
@@ -107,7 +116,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
+  const { requireAuth } = useSignupWall();
   const { colors, isDark } = useAppTheme();
+  const haptic = useHaptic();
 
   // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
@@ -117,6 +128,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const SURFACE_ALT = colors.surfaceAlt;
   const BRAND = colors.brand;
   const TEXT_INVERSE = colors.textInverse;
+  // On-cover icons: always white regardless of theme. colors.textInverse flips
+  // to #000000 in dark mode, making icons invisible on the dark overlay.
+  const SCRIM_PRIMARY = colors.scrimTextPrimary;
 
   // Themed color proxy - supplements module-level `styles` with color properties
   // that cannot live in StyleSheet.create (they depend on the active theme).
@@ -147,6 +161,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
   const [stickyRailVisible, setStickyRailVisible] = useState(false);
+  const [responseComposer, setResponseComposer] = useState<{
+    visible: boolean;
+    reviewId: string;
+    reviewerName?: string;
+    rating?: number;
+  }>({ visible: false, reviewId: '' });
+  const [reportSheet, setReportSheet] = useState<{ visible: boolean; reviewId: string }>({ visible: false, reviewId: '' });
 
   // UserProfile is a public-only projection. Self-navigation is normalised
   // to the MyProfile tab by the openProfile() resolver before this screen
@@ -161,6 +182,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     }
   }, [userId, currentUserId, navigation]);
 
+  useEffect(() => {
+    if (userId && userId !== currentUserId) {
+      track('profile_viewed', { user_id: userId });
+    }
+  }, [userId, currentUserId]);
+
   const publicProfileQuery = usePublicProfileQuery(userId);
   const activeListingsQuery = useUserListingsInfinite(targetUserId, 'active');
   const soldListingsQuery = useUserListingsInfinite(targetUserId, 'sold');
@@ -170,18 +197,17 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Seller trust summary - verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
 
-  // Idle query placeholder for tabs that have no backend data source yet
-  // (Collections, Drops). Provides the same surface as React Query infinite
-  // hooks so the shared scroll/refresh/load-more logic works without branching.
-  const idleQuery = useMemo(() => ({
-    isRefetching: false,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: () => {},
-    refetch: () => {},
-    isLoading: false,
-    error: null as unknown,
-  } as any), []);
+  // Story highlights — fetched for the highlights rail below the ProfileHero.
+  // Renders nothing when empty (truthful UI — no fabricated placeholder content).
+  const [highlights, setHighlights] = useState<PosterHighlight[]>([]);
+  useEffect(() => {
+    if (!targetUserId) return;
+    let cancelled = false;
+    fetchPosterHighlights(targetUserId)
+      .then((res) => { if (!cancelled) setHighlights(res.items ?? []); })
+      .catch(() => { if (!cancelled) setHighlights([]); });
+    return () => { cancelled = true; };
+  }, [targetUserId]);
 
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
@@ -225,7 +251,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       const pages = query.data?.pages ?? [];
       const items: ListingApiItem[] = [];
       for (const page of pages) for (const item of page.items) items.push(item);
-      return items;
+      // Pinned/featured listings appear first in the Shop grid (2026 pattern).
+      // Stable sort preserves backend ordering for non-featured items.
+      return items.sort((a, b) => {
+        const af = a.featured === true ? 0 : 1;
+        const bf = b.featured === true ? 0 : 1;
+        return af - bf;
+      });
     }
     if (activeTab === 'Looks') {
       const pages = looksQuery.data?.pages ?? [];
@@ -233,16 +265,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       for (const page of pages) for (const item of page.items) items.push(item);
       return items;
     }
-    if (activeTab === 'Collections' || activeTab === 'Drops') {
-      return [];
-    }
     const pages = reviewsQuery.data?.pages ?? [];
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
   }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
 
-  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : (activeTab === 'Collections' || activeTab === 'Drops') ? idleQuery : reviewsQuery;
+  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
@@ -343,10 +372,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // Handlers
   const handleShare = useCallback(async () => {
+    haptic.light();
     try {
       await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
-  }, [displayUsername, profileDeepLink]);
+  }, [displayUsername, profileDeepLink, haptic]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -359,15 +389,30 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   }, [profileDeepLink, showToast]);
 
   const handleMessageProfile = useCallback(() => {
+    haptic.light();
+    if (!requireAuth('message_seller')) return;
     if (!targetUserId) return;
     if (viewer && !viewer.canMessage) return;
     navigation.navigate('NewMessage', { preselectedUserId: targetUserId, preselectedDisplayName: displayUsername });
-  }, [displayUsername, navigation, targetUserId, viewer]);
+  }, [requireAuth, displayUsername, navigation, targetUserId, viewer, haptic]);
 
-  const handleFollowToggle = useCallback(() => { if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing); }, [targetUserId, viewer, followMutation]);
+  const handleFollowToggle = useCallback(() => {
+    haptic.light();
+    if (!requireAuth('follow_seller')) return;
+    if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing);
+  }, [requireAuth, targetUserId, viewer, followMutation, haptic]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
   const handleBlock = useCallback(() => { setMoreSheetVisible(false); setBlockConfirmVisible(true); }, []);
+
+  const handleRespondToReview = useCallback(async (reviewId: string, text: string) => {
+    await respondToReview(reviewId, text);
+    reviewsQuery.refetch();
+  }, [reviewsQuery]);
+
+  const handleCloseResponseComposer = useCallback(() => {
+    setResponseComposer((prev) => ({ ...prev, visible: false }));
+  }, []);
   const confirmBlock = useCallback(() => {
     setBlockConfirmVisible(false);
     blockMutation.mutate(true, { onSuccess: () => showToast('User blocked', 'success'), onError: () => showToast('Could not block user', 'error') });
@@ -439,10 +484,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         item={reviewItem}
         onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
         onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
-        onRespond={undefined}
+        onRespond={targetUserId === currentUserId
+          ? (reviewId, reviewerName, rating) => setResponseComposer({ visible: true, reviewId, reviewerName, rating })
+          : undefined}
+        onReport={targetUserId !== currentUserId
+          ? (reviewId) => setReportSheet({ visible: true, reviewId })
+          : undefined}
       />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, targetUserId, currentUserId]);
 
   // -----------------------------------------------------------------------
   // DERIVED RENDER STATE - after all hooks
@@ -477,7 +527,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // -----------------------------------------------------------------------
   // MAIN RENDER
   // -----------------------------------------------------------------------
-  const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
+  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -494,7 +544,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         reviewCount={reviewCount}
         memberSince={memberSince}
         sellerTrust={sellerTrust}
-        emailVerified={targetProfile?.emailVerified}
         followPending={followMutation.isPending}
         isBlocked={isBlocked}
         scrollY={scrollY}
@@ -525,9 +574,20 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {/* Seller reputation metrics - prominent trust display */}
-      <SellerReputationCard seller={sellerTrust ?? null} />
-
+      {/* Story highlights rail — renders only when highlights exist.
+          No "New" tile for public profiles (viewer is not the owner). */}
+      {highlights.length > 0 ? (
+        <PosterHighlightsRail
+          highlights={highlights}
+          isOwner={false}
+          onOpenHighlight={(highlightId) => {
+            navigation.navigate('PosterHighlightViewer', { highlightId });
+          }}
+          onHighlightLongPress={(highlightId) => {
+            navigation.navigate('PosterHighlightViewer', { highlightId });
+          }}
+        />
+      ) : null}
 
       {/* Tab rail - measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
@@ -616,6 +676,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
+      <OfflineBanner onRetry={() => void handleRefresh()} />
+
       {/* Top utility controls - overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
@@ -623,7 +685,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           pointerEvents={collapsedVisible ? 'none' : 'auto'}
         >
           <AnimatedPressable
-            style={styles.topUtilityIconBtn}
+            style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -631,28 +693,28 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color={TEXT_INVERSE} />
+            <Ionicons name="arrow-back" size={18} color={SCRIM_PRIMARY} />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
-              style={styles.topUtilityIconBtn}
+              style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
               activeOpacity={0.9}
               onPress={handleShare}
               accessibilityLabel="Share profile"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color={TEXT_INVERSE} />
+              <Ionicons name="share-outline" size={18} color={SCRIM_PRIMARY} />
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.topUtilityIconBtn}
+              style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
               activeOpacity={0.9}
               onPress={handleMore}
               accessibilityLabel="More options"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
+              <Ionicons name="ellipsis-horizontal" size={18} color={SCRIM_PRIMARY} />
             </AnimatedPressable>
           </View>
         </Reanimated.View>
@@ -762,7 +824,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           onContentSizeChange={handleContentSizeChange}
         >
           {listHeader}
-          {listEmpty}
+          {listEmpty && (
+            <Reanimated.View
+              key={currentDestination}
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            >
+              {listEmpty}
+            </Reanimated.View>
+          )}
           {listData.length > 0 && (
             numColumns > 1 ? (
               <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP }}>
@@ -789,7 +858,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           renderItem={renderItem}
           keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={listEmpty}
+          ListEmptyComponent={listEmpty ? (
+            <Reanimated.View
+              key={currentDestination}
+              entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            >
+              {listEmpty}
+            </Reanimated.View>
+          ) : null}
           ListFooterComponent={listFooter}
           numColumns={numColumns}
           {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } } : {})}
@@ -800,7 +876,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-          key={`list-${numColumns}`}
+          key={`list-${currentDestination}`}
           onContentSizeChange={handleContentSizeChange}
         />
       )}
@@ -847,6 +923,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         followingCount={stats?.followingCount ?? 0}
         onOpenProfile={(id) => openProfile(navigation, id, currentUserId)}
       />
+      <SellerResponseComposer
+        visible={responseComposer.visible}
+        reviewId={responseComposer.reviewId}
+        reviewerName={responseComposer.reviewerName}
+        rating={responseComposer.rating}
+        onClose={handleCloseResponseComposer}
+        onSubmit={handleRespondToReview}
+      />
+      <ReviewReportSheet
+        visible={reportSheet.visible}
+        reviewId={reportSheet.reviewId}
+        onDismiss={() => setReportSheet({ visible: false, reviewId: '' })}
+        onSubmitted={() => showToast('Report submitted', 'success')}
+        onError={(message) => showToast(message, 'error')}
+      />
     </View>
   );
 }
@@ -858,7 +949,6 @@ const styles = StyleSheet.create({
   topUtilityRight: { flexDirection: 'row', gap: Space.sm },
   topUtilityIconBtn: {
     width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.sheetDialog,
-    backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   collapsedHeader: {

@@ -45,18 +45,18 @@ export type CreatorInitialMedia = {
   mimeType?: string;
   /**
    * Playback speed multiplier captured with the camera speed-mode selector.
-   * expo-camera 57 does not support native slow/fast-motion recording, so
-   * the video is always recorded at 1× and the speed is applied at playback
-   * time by the timeline/export engine. Values: 0.3 (slow), 1, 2, 3 (fast).
+   * Native speed control is supported via react-native-vision-camera's fps parameter.
+   * The speed is applied at playback time by the timeline/export engine.
+   * Values: 0.3 (slow), 1, 2, 3 (fast).
    * @default 1
    */
   speed?: number;
   /**
    * Green-screen metadata. When present, the clip was captured with a
-   * background-replacement intent. Real-time chroma keying is not feasible
-   * with expo-camera alone (no frame-processor API), so the effect is
-   * applied in post-production via Skia. The background image URI and key
-   * parameters are preserved so the timeline can re-render the composite.
+   * background-replacement intent. Real-time chroma keying is supported
+   * via vision-camera's Skia frame processors. The background image URI
+   * and key parameters are preserved so the timeline can re-render the
+   * composite.
    */
   greenScreen?: {
     backgroundUri: string;
@@ -68,9 +68,8 @@ export type CreatorInitialMedia = {
     feather: number;
   };
   /**
-   * Camera effect selected at capture time. expo-camera does not support
-   * real-time color matrix filters, so the effect is applied post-capture
-   * by the composer when seeding the media layer. Values match the
+   * Camera effect selected at capture time. Real-time color matrix filters
+   * are supported via vision-camera's Skia frame processors. Values match the
    * CameraEffectId type: 'vintage', 'noir', 'vivid', 'warm', 'cool',
    * 'fade'. Absent when 'none' (no effect).
    */
@@ -90,13 +89,19 @@ export type CreatorAcquisitionResult =
   | { mode: 'single_media'; media: CreatorInitialMedia };
 
 export type RootStackParamList = {
+  // ── Auth & Onboarding ──
   // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
   AgeVerification: undefined;
   Onboarding: undefined;
   AuthLanding: undefined;
   Login: undefined;
   SignUp: undefined;
+  BiometricLogin: undefined;
+
+  // ── Main Tabs ──
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
+
+  // ── Commerce ──
   CategoryDetail: { categoryId: string };
   Browse: {
     categoryId: string;
@@ -104,14 +109,27 @@ export type RootStackParamList = {
     title: string;
     searchQuery?: string;
   };
-  ItemDetail: { itemId: string };
+  ItemDetail: {
+    itemId: string;
+    /** Source feed section (e.g. 'for_you', 'following', 'browse', 'search'). */
+    sectionKey?: string;
+    /** Position of the item in the source feed (0-indexed). */
+    position?: number;
+    /** Algorithmic reason code for why the item was shown. */
+    reasonCode?: string;
+    /** Whether the item was personalised to the user. */
+    personalised?: boolean;
+  };
   Closet: undefined;
+
+  // ── Creator Studio ──
   PosterViewer: { storyId: string; startFrameIndex?: number };
-  CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   PosterHighlightViewer: { highlightId: string };
   CreatePosterHighlight: { storyId?: string; frameIds?: string[] } | undefined;
+
+  // ── Auctions & Trading ──
   AuctionHome: undefined;
   Auctions: undefined;
   SellerAuctionCentre: undefined;
@@ -123,6 +141,8 @@ export type RootStackParamList = {
     /** Pre-fill the bid input with this amount (GBP) */
     initialBidAmount?: number;
   };
+
+  // ── Co-Own / Syndicate ──
   CreateCoOwn:
     | {
         listingId?: string;
@@ -156,6 +176,8 @@ export type RootStackParamList = {
     actionId?: string;
   };
   DistributionHistory: { assetId?: string } | undefined;
+
+  // ── Chat & Messaging ──
   Inbox: undefined;
   Chat: {
     conversationId: string;
@@ -182,24 +204,35 @@ export type RootStackParamList = {
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
+
+  // ── Social / Profile ──
   UserProfile: { userId: string };
   // Followers / following — full-screen people lists (spec 50)
   Followers: { userId: string };
   Following: { userId: string };
-  // Profile sub-screens
+  // Unified followers/following list — mode determines which to show.
+  ConnectionList: { userId: string; mode: 'followers' | 'following' };
+
+  // ── Wallet & Payments ──
   Wallet: undefined;
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
   WalletConvert: undefined;
   WalletActivity: undefined;
   MyOrders: undefined;
-  Personalisation: undefined;
+
+  // ── Settings & Account ──
+  Personalisation: { fromOnboarding?: boolean } | undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
   AccountControl: undefined;
+  AccountSecurity: undefined;
+  AccountSecurityRecovery: { caseId: string } | undefined;
   SavedAddresses: undefined;
   Payments: undefined;
+
+  // ── Commerce ── (orders, offers, checkout, listings)
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number; parentOfferId?: string };
   PushNotifications: undefined;
@@ -227,7 +260,11 @@ export type RootStackParamList = {
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
-  GlobalSearch: undefined;
+  GlobalSearch: { initialQuery?: string } | undefined;
+  /** Unified discovery surface — combines Galleria editorial, personalised
+   *  listings, looks, mood boards, pulse and curated collections into one
+   *  flagship discovery entry from the Home search button. */
+  UnifiedDiscovery: { initialQuery?: string } | undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens
@@ -248,25 +285,36 @@ export type RootStackParamList = {
         smartSellEnabled?: boolean;
       }
     | undefined;
+
+  // ── Settings & Account ── (notifications, security)
   // Phase 27
   NotificationsList: undefined;
   // Phase 28
   ForgotPassword: undefined;
+  ResetPassword: { token: string };
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
-  WriteReview: { orderId: string };
-  Report: { type: 'item' | 'user'; targetId?: string };
+  WriteReview: { orderId: string; initialRating?: number };
+
+  // ── Support & Help ──
+  Report: { type: 'item' | 'user' | 'group'; targetId?: string };
+  Appeal: { decisionId: string };
+
+  // ── Auctions & Trading ──
   MyBids: undefined;
+
+  // ── Seller Tools ──
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   SavedSearches: undefined;
+
+  // ── Creator Studio ── (looks, camera, studio, outfits, explore)
   // Explore / Creator screens
-  CreateLook: undefined;
-  CreateCamera: { mode?: 'visual-search' | 'look' | 'poster' } | undefined;
   CreatorStudio: {
     type: 'look' | 'poster';
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
+    sourceMode?: 'edit' | 'remix';
     /**
      * Backward-compatible single-asset entry point (camera capture, legacy
      * callers). Prefer `initialMedia` for multi-asset acquisition.
@@ -307,6 +355,8 @@ export type RootStackParamList = {
       | { type: 'auction' };
   };
   StyleQuiz: undefined;
+
+  // ── Settings & Account ── (chat settings, sessions, privacy, about)
   // Phase 13 — Settings integrity
   ChatSettings: undefined;
   ActiveSessions: undefined;
@@ -316,6 +366,8 @@ export type RootStackParamList = {
   MutedConversations: undefined;
   ArchivedConversations: undefined;
   ManageQuickReplies: { role: 'seller' | 'buyer' };
+
+  // ── Chat & Messaging ── (conversations, messages, media)
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
@@ -323,21 +375,43 @@ export type RootStackParamList = {
     | { preselectedUserId?: string; preselectedDisplayName?: string }
     | undefined;
   SharedConversationMedia: { conversationId: string };
+
+  // ── Commerce ── (collections)
   ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;
-  OrderSupport: { orderId: string };
+
+  // ── Support & Help ── (order support, buyer protection)
+  OrderSupport: { orderId: string; categoryId?: string; categoryLabel?: string };
   BuyerProtection: { orderId: string };
+
+  // ── Settings & Account ── (connected accounts, accessibility, co-own prefs)
   ConnectedAccounts: undefined;
   EmailNotifications: undefined;
   AccessibilitySettings: undefined;
+
+  // ── Co-Own / Syndicate ── (price alerts, tax, recurring orders)
   CoOwnPriceAlerts: undefined;
   CoOwnTaxDocuments: undefined;
   CoOwnRecurringOrders: undefined;
+
+  // ── Chat & Messaging ── (media preview)
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
+
+  // ── Commerce ── (collection editing)
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
+
+  // ── Support & Help ── (tickets, resolution centre, conversations)
   SupportTicketDetail: { ticketId: string };
   ResolutionCentre: undefined;
+  SupportConversation: {
+    conversationId: string;
+    contextKind?: 'general' | 'order' | 'listing' | 'payout' | 'report' | 'auction' | 'coown_asset' | 'catalog_import' | 'media_job';
+    contextId?: string;
+  };
+  SupportCaseDetail: { caseId: string };
+
+  // ── Seller Tools ── (listing preview)
   // UI-19 — Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
@@ -365,7 +439,7 @@ export type RootStackParamList = {
     totalValue: number;
     fee: number;
     netValue: number;
-    orderMode: 'limit';
+    orderMode: 'market' | 'limit';
     ticketOrderType: 'protected_instant' | 'limit';
     limitPriceGbp: number;
     averageFillPriceGbp: number;
@@ -378,9 +452,20 @@ export type RootStackParamList = {
     maxReserved1ze: number;
     marketDataTimestamp: string;
   };
+
+  // ── Auctions & Trading ── (trade confirm)
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+
+  // ── Seller Tools ── (sell, trade hub, seller hub, analytics, verification)
   Sell: undefined;
+  // Catalogue Import — concierge importer flow
+  CatalogImportStart: undefined;
+  CatalogImportConsent: { source: 'ebay' | 'seller_package' | 'depop' | 'vinted' };
+  CatalogImportProgress: { batchId: string };
+  CatalogImportReview: { batchId: string };
+  CatalogImportItem: { itemId: string; batchId: string };
+  CatalogImportSummary: { batchId: string };
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // GDPR — Account deletion & data export
   DeleteAccount: undefined;
@@ -398,12 +483,16 @@ export type RootStackParamList = {
   // Seller verification response — sellers view and respond to Co-Own verification demands
   SellerVerification: undefined;
   VerificationResponse: { assetId: string; demandId: number } | undefined;
+
+  // ── Live Shopping ──
   // Live shopping — Whatnot/Tilt-style live commerce
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
+
+  // ── Seller Tools ── (AI listing, bulk, inventory, KYC)
   AIPoweredListing: undefined;
   // Pro seller tools
   BulkListing: undefined;
@@ -411,6 +500,8 @@ export type RootStackParamList = {
   InventoryManagement: undefined;
   // Full KYC verification flow — multi-step identity verification
   KYCVerification: undefined;
+
+  // ── Discovery & Editorial ── (galleria, algorithm, moodboards, AI search)
   // Galleria — editorial discovery surface for Co-Own assets & curated collections
   Galleria: undefined;
   GalleriaCollectionDetail: { collectionId: string };
@@ -423,6 +514,8 @@ export type RootStackParamList = {
   // Moodboard — user-generated editorial collage tools
   MoodboardHome: undefined;
   MoodboardEditor: { moodboardId?: string };
+
+  // ── Settings & Account ── (AI prefs, sustainability, data privacy, notifications)
   // Settings sub-departments — 2026 settings enhancement
   AIPreferences: undefined;
   SustainabilityPreferences: undefined;
@@ -434,10 +527,229 @@ export type RootStackParamList = {
   AgentActivity: undefined;
 };
 
-export type TabParamList = {
+export const ROOT_STACK_ROUTES = [
+  'AgeVerification',
+  'Onboarding',
+  'AuthLanding',
+  'Login',
+  'SignUp',
+  'BiometricLogin',
+  'MainTabs',
+  'CategoryDetail',
+  'Browse',
+  'ItemDetail',
+  'Closet',
+  'PosterViewer',
+  'PosterStoryActivity',
+  'PosterArchive',
+  'PosterHighlightViewer',
+  'CreatePosterHighlight',
+  'AuctionHome',
+  'Auctions',
+  'SellerAuctionCentre',
+  'CreateAuction',
+  'AuctionDetail',
+  'CreateCoOwn',
+  'MarketLedger',
+  'CoOwnHub',
+  'AssetDetail',
+  'AssetDueDiligence',
+  'Trade',
+  'Portfolio',
+  'CoOwnOrderHistory',
+  'AssetLeaderboard',
+  'Buyout',
+  'CoOwnOnboarding',
+  'CorporateActionDetail',
+  'DistributionHistory',
+  'Inbox',
+  'Chat',
+  'CreateGroupChat',
+  'GroupChat',
+  'GroupChatInfo',
+  'GroupMembers',
+  'GroupBotManagement',
+  'BotDirectory',
+  'BotDetail',
+  'CustomBots',
+  'BotBuilder',
+  'EditGroup',
+  'UserProfile',
+  'Followers',
+  'Following',
+  'ConnectionList',
+  'Wallet',
+  'SellerEarnings',
+  'WalletConvert',
+  'WalletActivity',
+  'MyOrders',
+  'Personalisation',
+  'Settings',
+  'EditProfile',
+  'AccountSettings',
+  'AccountControl',
+  'AccountSecurity',
+  'AccountSecurityRecovery',
+  'SavedAddresses',
+  'Payments',
+  'MakeOffer',
+  'PushNotifications',
+  'Postage',
+  'InviteFriends',
+  'BalanceHistory',
+  'AddBankAccount',
+  'HelpSupport',
+  'OrderDetail',
+  'SellerFulfilment',
+  'OrderReceipt',
+  'Checkout',
+  'AddressForm',
+  'Success',
+  'ManageListing',
+  'EditListing',
+  'Withdraw',
+  'CategoryTree',
+  'GlobalSearch',
+  'UnifiedDiscovery',
+  'CollectionDetail',
+  'Filter',
+  'ListingSuccess',
+  'NotificationsList',
+  'ForgotPassword',
+  'ResetPassword',
+  'ChangePassword',
+  'TwoFactorSetup',
+  'WriteReview',
+  'Report',
+  'Appeal',
+  'MyBids',
+  'MyListings',
+  'SavedSearches',
+  'CreatorStudio',
+  'VisualSearch',
+  'CreatorDraftList',
+  'CoOwnIssue',
+  'OutfitBuilder',
+  'LookDetail',
+  'PulseFeed',
+  'ExploreCollection',
+  'StyleQuiz',
+  'ChatSettings',
+  'ActiveSessions',
+  'BlockedUsers',
+  'PrivacySettings',
+  'About',
+  'MutedConversations',
+  'ArchivedConversations',
+  'ManageQuickReplies',
+  'ConversationInfo',
+  'MessageRequests',
+  'NewMessage',
+  'SharedConversationMedia',
+  'ManageCollectionItems',
+  'CreateCollection',
+  'OrderSupport',
+  'BuyerProtection',
+  'ConnectedAccounts',
+  'EmailNotifications',
+  'AccessibilitySettings',
+  'CoOwnPriceAlerts',
+  'CoOwnTaxDocuments',
+  'CoOwnRecurringOrders',
+  'ChatMediaPreview',
+  'EditCollection',
+  'SupportTicketDetail',
+  'ResolutionCentre',
+  'SupportConversation',
+  'SupportCaseDetail',
+  'ListingPreview',
+  'TradeConfirm',
+  'RuntimeSmokeTest',
+  'Sell',
+  'CatalogImportStart',
+  'CatalogImportConsent',
+  'CatalogImportProgress',
+  'CatalogImportReview',
+  'CatalogImportItem',
+  'CatalogImportSummary',
+  'TradeHub',
+  'DeleteAccount',
+  'DataExport',
+  'Verification',
+  'VerificationStatus',
+  'SellerAnalytics',
+  'SellerHub',
+  'CreatorAnalyticsDashboard',
+  'BundleBag',
+  'SellerVerification',
+  'VerificationResponse',
+  'LiveShopping',
+  'LiveStreamViewer',
+  'LiveStreamSeller',
+  'AIPoweredListing',
+  'BulkListing',
+  'InventoryManagement',
+  'KYCVerification',
+  'Galleria',
+  'GalleriaCollectionDetail',
+  'YourAlgorithm',
+  'AIPhotoEnhancement',
+  'ConversationalSearch',
+  'MoodboardHome',
+  'MoodboardEditor',
+  'AIPreferences',
+  'SustainabilityPreferences',
+  'DataPrivacy',
+  'NotificationPreferences',
+  'AIAgentIntegration',
+  'AgentActivity',
+] as const;
+
+export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
+
+// ── Per-tab stack param lists ──
+// Each tab wraps a native-stack navigator so tab switches preserve per-tab
+// navigation history. Screens that are shared across tabs (ItemDetail, Chat,
+// Checkout, etc.) remain in the root stack for cross-tab navigation.
+
+export type HomeTabParamList = {
   Home: undefined;
+  PulseFeed: undefined;
+  ExploreCollection: RootStackParamList['ExploreCollection'];
+  LookDetail: RootStackParamList['LookDetail'];
+  Galleria: undefined;
+  GalleriaCollectionDetail: RootStackParamList['GalleriaCollectionDetail'];
+  MoodboardHome: undefined;
+  YourAlgorithm: undefined;
+  StyleQuiz: undefined;
+  ConversationalSearch: undefined;
+};
+
+export type ExploreTabParamList = {
   Explore: undefined;
-  Create: undefined;
+  CategoryDetail: RootStackParamList['CategoryDetail'];
+  CategoryTree: RootStackParamList['CategoryTree'];
+  Browse: RootStackParamList['Browse'];
+  Filter: RootStackParamList['Filter'];
+  SavedSearches: undefined;
+  CollectionDetail: RootStackParamList['CollectionDetail'];
+  LookDetail: RootStackParamList['LookDetail'];
+};
+
+export type InboxTabParamList = {
   Inbox: undefined;
+};
+
+export type ProfileTabParamList = {
   Profile: undefined;
+  LookDetail: RootStackParamList['LookDetail'];
+};
+
+// ── Main Tabs ──
+export type TabParamList = {
+  Home: NavigatorScreenParams<HomeTabParamList> | undefined;
+  Explore: NavigatorScreenParams<ExploreTabParamList> | undefined;
+  Create: undefined;
+  Inbox: NavigatorScreenParams<InboxTabParamList> | undefined;
+  Profile: NavigatorScreenParams<ProfileTabParamList> | undefined;
 };

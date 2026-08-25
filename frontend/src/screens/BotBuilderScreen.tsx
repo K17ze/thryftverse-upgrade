@@ -873,8 +873,8 @@ function createStyles(colors: ThemeColors) {
   introBody: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   section: { gap: Space.md - 2 },
   sectionTitle: {
@@ -896,7 +896,7 @@ function createStyles(colors: ThemeColors) {
   fieldLabel: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   option: {
@@ -921,7 +921,7 @@ function createStyles(colors: ThemeColors) {
   choiceTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   choiceDetail: {
     color: colors.textMuted,
@@ -946,7 +946,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   caution: {
     flexDirection: 'row',
@@ -959,7 +959,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: Type.captionElevated.lineHeight - 1,
+    lineHeight: Type.caption.lineHeight - 1,
   },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
   loadingText: {
@@ -973,13 +973,13 @@ function createStyles(colors: ThemeColors) {
   riskGroupTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   riskGroupHint: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: Type.captionElevated.lineHeight - 1,
+    lineHeight: Type.caption.lineHeight - 1,
   },
   permissionList: {},
   permissionRow: { paddingVertical: Space.sm, gap: Space.xs },
@@ -989,7 +989,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   approvalChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs, paddingLeft: Space.sm + Space.xs + Space.sm },
   approvalChip: {
@@ -1020,7 +1020,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.danger,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    lineHeight: Type.captionElevated.lineHeight - 1,
+    lineHeight: Type.caption.lineHeight - 1,
   },
   readiness: {
     flexDirection: 'row',
@@ -1042,13 +1042,13 @@ function createStyles(colors: ThemeColors) {
   readinessTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   readinessDetail: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: Type.captionElevated.lineHeight - 1,
+    lineHeight: Type.caption.lineHeight - 1,
   },
   actions: { flexDirection: 'row', gap: Space.sm },
   action: { flex: 1 },

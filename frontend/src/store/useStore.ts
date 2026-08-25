@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../domain';
@@ -8,7 +7,9 @@ import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
-import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
+import { identifyUser, resetIdentity } from '../analytics';
+import { appStorage } from '../storage/mmkv';
+import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
   fetchSystemBotsFromApi,
@@ -17,12 +18,28 @@ import {
   updateCustomBotOnApi,
   deleteCustomBotOnApi,
 } from '../services/botsApi';
-import { fetchChatBotsFromApi } from '../services/chatApi';
+import {
+  fetchChatBotsFromApi,
+  fetchQuickRepliesFromApi,
+  createQuickReplyOnApi,
+  updateQuickReplyOnApi,
+  deleteQuickReplyOnApi,
+  muteConversationOnApi,
+  unmuteConversationOnApi,
+  archiveConversationOnApi,
+  unarchiveConversationOnApi,
+  acceptMessageRequestOnApi,
+  declineMessageRequestOnApi,
+  addMessageReactionOnApi,
+  removeMessageReactionOnApi,
+} from '../services/chatApi';
+import { fetchJson } from '../lib/apiClient';
 import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
   listSupportTickets as listSupportTicketsFromApi,
   listSupportTicketsForOrder as listSupportTicketsForOrderFromApi,
+  updateSupportTicketStatus as updateSupportTicketStatusOnApi,
 } from '../services/supportApi';
 import {
   createCollection as createCollectionOnApi,
@@ -56,6 +73,10 @@ export interface User {
   rating?: number;
   reviewCount?: number;
   isVerified?: boolean;
+  /** Identity/KYC verification — separate from email verification. */
+  identityVerified?: boolean;
+  /** Seller standards verification — separate from email/identity. */
+  sellerVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -260,6 +281,13 @@ interface AuctionRuntimeState {
   closedAtMs?: number;
   closedReason?: 'buy-now' | 'expired';
   settled?: boolean;
+  /**
+   * Anti-sniping: when a bid is placed within the extension window (last 5
+   * minutes), the auction end is extended. This stores the extended end
+   * timestamp (ms since epoch) so the countdown logic can use it instead of
+   * the original `endsAt`. Null/undefined means no extension has been applied.
+   */
+  extendedEndMs?: number;
 }
 
 interface CoOwnRuntimeState {
@@ -293,6 +321,32 @@ const makeLedgerEntry = (
   id: makeStableId('ml'),
   timestamp: new Date().toISOString(),
 });
+
+// Anti-sniping (pop-bidding) constants — when a bid is placed within the
+// extension window of the auction end, the end time is extended to give
+// other bidders a fair chance to respond. This is standard practice on
+// eBay, Catawiki, and other flagship auction platforms.
+const ANTI_SNIPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes before end
+const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000; // extend by 5 minutes
+
+// P0.12: Derive the per-user conversation state arrays (muted / archived /
+// pending message requests) from the hydrated conversation objects. The
+// backend now returns `isMuted`, `isArchived` and `requestStatus` on each
+// conversation, so these arrays are projections of the canonical state
+// rather than independently-maintained local lists.
+function deriveConversationStateArrays(conversations: Conversation[]) {
+  return {
+    mutedConversationIds: conversations
+      .filter((c) => c.isMuted === true)
+      .map((c) => c.id),
+    archivedConversationIds: conversations
+      .filter((c) => c.isArchived === true)
+      .map((c) => c.id),
+    messageRequests: conversations
+      .filter((c) => c.requestStatus === 'pending')
+      .map((c) => c.id),
+  };
+}
 
 async function persistLocalAuthSnapshot(
   currentUser: User | null,
@@ -347,6 +401,14 @@ interface StoreState {
   logout: () => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
+  /**
+   * When true, the app has restored an auth snapshot from SecureStore but is
+   * waiting for the user to pass biometric authentication before revealing the
+   * main app. The BiometricLogin screen clears this flag on success; on
+   * failure/cancel it calls logout() which also clears it.
+   */
+  biometricLoginPending: boolean;
+  setBiometricLoginPending: (value: boolean) => void;
 
   // General app onboarding — first-launch gate.
   // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
@@ -382,6 +444,9 @@ interface StoreState {
   seenPosterIds: string[];
   markPosterSeen: (posterId: string) => void;
   hasSeenPoster: (posterId: string) => boolean;
+  savedPosterStoryIds: string[];
+  toggleSavedPosterStory: (storyId: string) => void;
+  isSavedPosterStory: (storyId: string) => boolean;
   customPosters: Poster[];
   addPoster: (poster: Poster) => void;
   removePoster: (posterId: string) => void;
@@ -438,6 +503,7 @@ interface StoreState {
   updatePaymentPreferences: (updates: Partial<PaymentPreferences>) => void;
   postagePreferences: PostagePreferences;
   updatePostagePreferences: (updates: Partial<PostagePreferences>) => void;
+  hydratePostagePreferences: () => Promise<void>;
   personalisationPreferences: PersonalisationPreferences;
   updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => void;
 
@@ -452,6 +518,8 @@ interface StoreState {
 
   // Conversations Inbox
   conversations: Conversation[];
+  conversationsLoaded: boolean;
+  markConversationsLoaded: () => void;
   availableChatBots: ChatBot[];
   upsertConversation: (conversation: Conversation) => void;
   markConversationRead: (id: string) => void;
@@ -472,19 +540,19 @@ interface StoreState {
   toggleBlockedUser: (userId: string) => void;
   isBlockedUser: (userId: string) => boolean;
   mutedConversationIds: string[];
-  toggleMutedConversation: (id: string) => void;
+  toggleMutedConversation: (id: string) => Promise<void>;
   isMutedConversation: (id: string) => boolean;
   readReceiptsEnabled: boolean;
   setReadReceiptsEnabled: (v: boolean) => void;
   allowMessagesFrom: 'everyone' | 'following' | 'nobody';
   setAllowMessagesFrom: (v: 'everyone' | 'following' | 'nobody') => void;
   archivedConversationIds: string[];
-  toggleArchivedConversation: (id: string) => void;
+  toggleArchivedConversation: (id: string) => Promise<void>;
   isArchivedConversation: (id: string) => boolean;
   // Message requests
   messageRequests: string[]; // conversationIds that are pending requests
-  acceptMessageRequest: (id: string) => void;
-  declineMessageRequest: (id: string) => void;
+  acceptMessageRequest: (id: string) => Promise<void>;
+  declineMessageRequest: (id: string) => Promise<void>;
   isMessageRequest: (id: string) => boolean;
   // Support tickets
   supportTickets: SupportTicket[];
@@ -492,14 +560,14 @@ interface StoreState {
   createSupportTicketOnApi: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   loadSupportTicketsFromApi: () => Promise<void>;
   loadSupportTicketsForOrderFromApi: (orderId: string) => Promise<void>;
-  updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => void;
+  updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => Promise<void>;
   getSupportTicketsForOrder: (orderId: string) => SupportTicket[];
   // Marketplace chat settings
   offersInChatEnabled: boolean;
   setOffersInChatEnabled: (v: boolean) => void;
   orderUpdatesInChatEnabled: boolean;
   setOrderUpdatesInChatEnabled: (v: boolean) => void;
-  // Quick replies (seller-side, locally editable)
+  // Quick replies (persisted to API, locally editable)
   sellerQuickReplies: QuickReply[];
   addSellerQuickReply: (reply: QuickReply) => void;
   updateSellerQuickReply: (index: number, reply: QuickReply) => void;
@@ -508,6 +576,10 @@ interface StoreState {
   addBuyerQuickReply: (reply: QuickReply) => void;
   updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
+  loadQuickRepliesFromApi: () => Promise<void>;
+  addQuickReplyOnApi: (role: 'buyer' | 'seller', title: string, message: string) => Promise<QuickReply>;
+  updateQuickReplyOnApi: (role: 'buyer' | 'seller', index: number, title: string, message: string) => Promise<void>;
+  removeQuickReplyOnApi: (role: 'buyer' | 'seller', index: number) => Promise<void>;
   // Enabled bots (global)
   enabledBotIds: string[];
   toggleEnabledBot: (botId: string) => void;
@@ -551,6 +623,8 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  biometricLoginPending: false,
+  setBiometricLoginPending: (value) => set({ biometricLoginPending: value }),
   hasCompletedOnboarding: false,
   setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
   login: (user) => {
@@ -563,12 +637,18 @@ export const useStore = create<StoreState>()(
       email: user.email ?? undefined,
       username: user.username,
     });
+    identifyUser({
+      id: user.id,
+      email: user.email ?? undefined,
+      username: user.username,
+    });
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
+    resetIdentity();
   },
   updateUserProfile: (updates) =>
     set((state) => {
@@ -595,6 +675,8 @@ export const useStore = create<StoreState>()(
               role: profile.role,
               emailVerified: profile.emailVerified,
               twoFactorEnabled: profile.twoFactorEnabled,
+              identityVerified: profile.identityVerified,
+              sellerVerified: profile.sellerVerified,
               createdAt: profile.createdAt,
               updatedAt: profile.updatedAt,
             }
@@ -760,6 +842,17 @@ export const useStore = create<StoreState>()(
       };
     }),
   hasSeenPoster: (posterId) => get().seenPosterIds.includes(posterId),
+  savedPosterStoryIds: [],
+  toggleSavedPosterStory: (storyId) =>
+    set((state) => {
+      const isSaved = state.savedPosterStoryIds.includes(storyId);
+      return {
+        savedPosterStoryIds: isSaved
+          ? state.savedPosterStoryIds.filter((id) => id !== storyId)
+          : [...state.savedPosterStoryIds, storyId],
+      };
+    }),
+  isSavedPosterStory: (storyId) => get().savedPosterStoryIds.includes(storyId),
   customPosters: [],
   addPoster: (poster) =>
     set((state) => ({
@@ -792,12 +885,25 @@ export const useStore = create<StoreState>()(
       return { ok: false, message: 'Bid must be above current bid' };
     }
 
+    // Anti-sniping: if the bid is placed within the extension window of the
+    // auction end, extend the end time so other bidders can respond. The
+    // effective end time accounts for any previous extensions.
+    const now = Date.now();
+    const originalEndMs = new Date(auction.endsAt).getTime();
+    const effectiveEndMs = runtime?.extendedEndMs ?? originalEndMs;
+    const msToEnd = effectiveEndMs - now;
+    let extendedEndMs = runtime?.extendedEndMs;
+    if (msToEnd <= ANTI_SNIPE_WINDOW_MS) {
+      extendedEndMs = Math.max(effectiveEndMs, now) + ANTI_SNIPE_EXTENSION_MS;
+    }
+
     const nextRuntime: AuctionRuntimeState = {
       currentBid: amount,
       bidCount: (runtime?.bidCount ?? auction.bidCount) + 1,
       lastBidderId: bidderId,
       winnerUserId: runtime?.winnerUserId,
       settled: false,
+      extendedEndMs,
     };
 
     set({
@@ -1246,10 +1352,22 @@ export const useStore = create<StoreState>()(
 
   postagePreferences: { carrierKey: 'evri', freeShipping: false, bundleDiscount: true },
   updatePostagePreferences: (updates) => {
+    const prev = get().postagePreferences;
     set((state) => ({
       postagePreferences: { ...state.postagePreferences, ...updates },
     }));
-    void updateUserPostagePreferences(updates);
+    void updateUserPostagePreferences(updates).catch(() => {
+      // Rollback on failure — restore previous state so UI stays truthful
+      set({ postagePreferences: prev });
+    });
+  },
+  hydratePostagePreferences: async () => {
+    try {
+      const postage = await fetchPostagePreferences();
+      set({ postagePreferences: postage });
+    } catch {
+      // Silently keep cached/local defaults
+    }
   },
 
   personalisationPreferences: {
@@ -1274,37 +1392,51 @@ export const useStore = create<StoreState>()(
   clearSellDraft: () => set({ sellDraft: {} }),
 
   conversations: ENABLE_RUNTIME_MOCKS ? MOCK_CONVERSATIONS : [],
+  conversationsLoaded: ENABLE_RUNTIME_MOCKS,
+  markConversationsLoaded: () => set({ conversationsLoaded: true }),
   availableChatBots: ENABLE_RUNTIME_MOCKS ? MOCK_CHAT_BOTS : [],
   upsertConversation: (conversation) =>
     set((state) => {
       const existing = state.conversations.find((item) => item.id === conversation.id);
+      let nextConversations: Conversation[];
       if (!existing) {
-        return {
-          conversations: [conversation, ...state.conversations],
+        nextConversations = [conversation, ...state.conversations];
+      } else {
+        const mergedConversation: Conversation = {
+          ...existing,
+          ...conversation,
+          participantIds: conversation.participantIds ?? existing.participantIds,
+          botIds: conversation.botIds ?? existing.botIds,
+          messages: conversation.messages.length ? conversation.messages : existing.messages,
         };
-      }
-
-      const mergedConversation: Conversation = {
-        ...existing,
-        ...conversation,
-        participantIds: conversation.participantIds ?? existing.participantIds,
-        botIds: conversation.botIds ?? existing.botIds,
-        messages: conversation.messages.length ? conversation.messages : existing.messages,
-      };
-
-      return {
-        conversations: [
+        nextConversations = [
           mergedConversation,
           ...state.conversations.filter((item) => item.id !== conversation.id),
-        ],
+        ];
+      }
+
+      // P0.12: Re-derive the muted/archived/request arrays from the hydrated
+      // conversation fields so they stay in sync with server state.
+      return {
+        conversations: nextConversations,
+        ...deriveConversationStateArrays(nextConversations),
       };
     }),
-  markConversationRead: (id) =>
+  markConversationRead: (id) => {
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, unread: false } : c
+        c.id === id ? { ...c, unread: false, markedUnread: false } : c
       ),
-    })),
+    }));
+    // P0.7: Fire-and-forget read-receipt to the backend. Don't block the UI
+    // and don't surface errors — the next sync reconciles authoritative state.
+    void fetchJson<{ ok: true }>(
+      '/chat/conversations/' + encodeURIComponent(id) + '/read',
+      { method: 'POST' }
+    ).catch(() => {
+      /* best-effort: ignore — next sync reconciles */
+    });
+  },
   toggleConversationUnread: (id) =>
     set((state) => ({
       conversations: state.conversations.map((c) =>
@@ -1318,6 +1450,11 @@ export const useStore = create<StoreState>()(
   deleteConversation: (id) =>
     set((state) => ({
       conversations: state.conversations.filter((c) => c.id !== id),
+      // Clean up auxiliary per-conversation state so deleted conversations
+      // don't linger in the muted/archived/request lists and inflate badges.
+      mutedConversationIds: state.mutedConversationIds.filter((mid) => mid !== id),
+      archivedConversationIds: state.archivedConversationIds.filter((aid) => aid !== id),
+      messageRequests: state.messageRequests.filter((rid) => rid !== id),
     })),
   toggleConversationPinned: (id) =>
     set((state) => ({
@@ -1499,15 +1636,34 @@ export const useStore = create<StoreState>()(
     }),
   isBlockedUser: (userId) => get().blockedUsers.includes(userId),
   mutedConversationIds: [],
-  toggleMutedConversation: (id) =>
-    set((state) => {
-      const isMuted = state.mutedConversationIds.includes(id);
-      return {
-        mutedConversationIds: isMuted
-          ? state.mutedConversationIds.filter((mid) => mid !== id)
-          : [...state.mutedConversationIds, id],
-      };
-    }),
+  toggleMutedConversation: (id) => {
+    const wasMuted = get().mutedConversationIds.includes(id);
+    // Optimistic update — flip local state immediately for snappy UX. Also
+    // mirror the flag onto the conversation object so the derived arrays
+    // (P0.12) stay consistent with the local toggle.
+    set((state) => ({
+      mutedConversationIds: wasMuted
+        ? state.mutedConversationIds.filter((mid) => mid !== id)
+        : [...state.mutedConversationIds, id],
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isMuted: !wasMuted } : c
+      ),
+    }));
+    return (wasMuted ? unmuteConversationOnApi(id) : muteConversationOnApi(id)).catch(
+      (error) => {
+        // Rollback on failure so the UI tells the truth (§11).
+        set((state) => ({
+          mutedConversationIds: wasMuted
+            ? [...state.mutedConversationIds, id]
+            : state.mutedConversationIds.filter((mid) => mid !== id),
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, isMuted: wasMuted } : c
+          ),
+        }));
+        throw error;
+      }
+    );
+  },
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
   readReceiptsEnabled: true,
   setReadReceiptsEnabled: (v) => {
@@ -1529,31 +1685,98 @@ export const useStore = create<StoreState>()(
     });
   },
   archivedConversationIds: [],
-  toggleArchivedConversation: (id) =>
-    set((state) => {
-      const isArchived = state.archivedConversationIds.includes(id);
-      return {
-        archivedConversationIds: isArchived
-          ? state.archivedConversationIds.filter((aid) => aid !== id)
-          : [...state.archivedConversationIds, id],
-      };
-    }),
+  toggleArchivedConversation: (id) => {
+    const wasArchived = get().archivedConversationIds.includes(id);
+    // Optimistic update — flip local state immediately for snappy UX. Also
+    // mirror the flag onto the conversation object so the derived arrays
+    // (P0.12) stay consistent with the local toggle.
+    set((state) => ({
+      archivedConversationIds: wasArchived
+        ? state.archivedConversationIds.filter((aid) => aid !== id)
+        : [...state.archivedConversationIds, id],
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isArchived: !wasArchived } : c
+      ),
+    }));
+    return (wasArchived ? unarchiveConversationOnApi(id) : archiveConversationOnApi(id)).catch(
+      (error) => {
+        // Rollback on failure so the UI tells the truth (§11).
+        set((state) => ({
+          archivedConversationIds: wasArchived
+            ? [...state.archivedConversationIds, id]
+            : state.archivedConversationIds.filter((aid) => aid !== id),
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, isArchived: wasArchived } : c
+          ),
+        }));
+        throw error;
+      }
+    );
+  },
   isArchivedConversation: (id) => get().archivedConversationIds.includes(id),
   messageRequests: [],
-  acceptMessageRequest: (id) =>
-    set((state) => ({
-      messageRequests: state.messageRequests.filter((rid) => rid !== id),
-    })),
-  declineMessageRequest: (id) =>
+  acceptMessageRequest: (id) => {
+    const wasRequest = get().messageRequests.includes(id);
+    // Optimistic update — remove from the pending requests list immediately.
+    // Also mirror the status onto the conversation object so the derived
+    // arrays (P0.12) stay consistent.
+    if (wasRequest) {
+      set((state) => ({
+        messageRequests: state.messageRequests.filter((rid) => rid !== id),
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, requestStatus: 'accepted' } : c
+        ),
+      }));
+    }
+    return acceptMessageRequestOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11).
+      if (wasRequest) {
+        set((state) => ({
+          messageRequests: [...state.messageRequests, id],
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, requestStatus: 'pending' } : c
+          ),
+        }));
+      }
+      throw error;
+    });
+  },
+  declineMessageRequest: (id) => {
+    const wasRequest = get().messageRequests.includes(id);
+    const previousConversation = get().conversations.find((c) => c.id === id) ?? null;
+    // Optimistic update — drop the request and the conversation immediately.
     set((state) => ({
       messageRequests: state.messageRequests.filter((rid) => rid !== id),
       conversations: state.conversations.filter((c) => c.id !== id),
-    })),
+    }));
+    return declineMessageRequestOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11).
+      set((state) => ({
+        messageRequests: wasRequest ? [...state.messageRequests, id] : state.messageRequests,
+        conversations: previousConversation
+          ? [previousConversation, ...state.conversations]
+          : state.conversations,
+      }));
+      throw error;
+    });
+  },
   isMessageRequest: (id) => get().messageRequests.includes(id),
   offersInChatEnabled: true,
-  setOffersInChatEnabled: (v) => set({ offersInChatEnabled: v }),
+  setOffersInChatEnabled: (v) => {
+    const previous = get().offersInChatEnabled;
+    set({ offersInChatEnabled: v });
+    void updateChatPrivacy({ offersInChatEnabled: v }).catch(() => {
+      set({ offersInChatEnabled: previous });
+    });
+  },
   orderUpdatesInChatEnabled: true,
-  setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
+  setOrderUpdatesInChatEnabled: (v) => {
+    const previous = get().orderUpdatesInChatEnabled;
+    set({ orderUpdatesInChatEnabled: v });
+    void updateChatPrivacy({ orderUpdatesInChatEnabled: v }).catch(() => {
+      set({ orderUpdatesInChatEnabled: previous });
+    });
+  },
   sellerQuickReplies: [
     { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
     { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
@@ -1584,6 +1807,57 @@ export const useStore = create<StoreState>()(
   removeBuyerQuickReply: (index) => set((state) => ({
     buyerQuickReplies: state.buyerQuickReplies.filter((_, i) => i !== index),
   })),
+  loadQuickRepliesFromApi: async () => {
+    try {
+      const apiReplies = await fetchQuickRepliesFromApi();
+      const sellerReplies: QuickReply[] = [];
+      const buyerReplies: QuickReply[] = [];
+      for (const r of apiReplies) {
+        const reply: QuickReply = { id: r.id, title: r.title, message: r.body };
+        if (r.role === 'seller') sellerReplies.push(reply);
+        else buyerReplies.push(reply);
+      }
+      set({
+        sellerQuickReplies: sellerReplies.length ? sellerReplies : get().sellerQuickReplies,
+        buyerQuickReplies: buyerReplies.length ? buyerReplies : get().buyerQuickReplies,
+      });
+    } catch {
+      // Silently keep local defaults if the API is unavailable.
+    }
+  },
+  addQuickReplyOnApi: async (role, title, message) => {
+    const created = await createQuickReplyOnApi({ role, title, body: message });
+    const reply: QuickReply = { id: created.id, title: created.title, message: created.body };
+    if (role === 'seller') {
+      get().addSellerQuickReply(reply);
+    } else {
+      get().addBuyerQuickReply(reply);
+    }
+    return reply;
+  },
+  updateQuickReplyOnApi: async (role, index, title, message) => {
+    const replies = role === 'seller' ? get().sellerQuickReplies : get().buyerQuickReplies;
+    const existing = replies[index];
+    if (!existing) throw new Error('Quick reply not found');
+    await updateQuickReplyOnApi(existing.id, { title, body: message });
+    const reply: QuickReply = { ...existing, title, message };
+    if (role === 'seller') {
+      get().updateSellerQuickReply(index, reply);
+    } else {
+      get().updateBuyerQuickReply(index, reply);
+    }
+  },
+  removeQuickReplyOnApi: async (role, index) => {
+    const replies = role === 'seller' ? get().sellerQuickReplies : get().buyerQuickReplies;
+    const existing = replies[index];
+    if (!existing) throw new Error('Quick reply not found');
+    await deleteQuickReplyOnApi(existing.id);
+    if (role === 'seller') {
+      get().removeSellerQuickReply(index);
+    } else {
+      get().removeBuyerQuickReply(index);
+    }
+  },
   supportTickets: [],
   createSupportTicket: (ticket) => {
     const id = makeStableId('ticket', 9);
@@ -1653,12 +1927,14 @@ export const useStore = create<StoreState>()(
       return { supportTickets: [...existingOther, ...incoming] };
     });
   },
-  updateSupportTicketStatus: (id, status) =>
+  updateSupportTicketStatus: async (id, status) => {
+    await updateSupportTicketStatusOnApi(id, status);
     set((state) => ({
       supportTickets: state.supportTickets.map((t) =>
         t.id === id ? { ...t, status, updatedAt: Date.now() } : t
       ),
-    })),
+    }));
+  },
   getSupportTicketsForOrder: (orderId) =>
     get().supportTickets.filter((t) => t.orderId === orderId),
   enabledBotIds: [],
@@ -1753,7 +2029,7 @@ export const useStore = create<StoreState>()(
     }
   },
 
-  addMessageReaction: (conversationId, messageId, reaction) =>
+  addMessageReaction: (conversationId, messageId, reaction) => {
     set((state) => ({
       conversations: state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
@@ -1775,8 +2051,15 @@ export const useStore = create<StoreState>()(
           }),
         };
       }),
-    })),
-  removeMessageReaction: (conversationId, messageId, reaction) =>
+    }));
+    // P0.9: Persist the reaction to the backend. Fire-and-forget — on error
+    // we log but do NOT roll back the optimistic mutation; the next sync
+    // reconciles authoritative state.
+    void addMessageReactionOnApi(conversationId, messageId, reaction).catch((error) => {
+      console.warn('[store] addMessageReaction API failed', { conversationId, messageId, reaction, error });
+    });
+  },
+  removeMessageReaction: (conversationId, messageId, reaction) => {
     set((state) => ({
       conversations: state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
@@ -1798,7 +2081,14 @@ export const useStore = create<StoreState>()(
           }),
         };
       }),
-    })),
+    }));
+    // P0.9: Persist the removal to the backend. Fire-and-forget — on error
+    // we log but do NOT roll back the optimistic mutation; the next sync
+    // reconciles authoritative state.
+    void removeMessageReactionOnApi(conversationId, messageId, reaction).catch((error) => {
+      console.warn('[store] removeMessageReaction API failed', { conversationId, messageId, reaction, error });
+    });
+  },
 
   userAvatar: null,
   userCover: null,
@@ -1902,7 +2192,18 @@ export const useStore = create<StoreState>()(
 }),
     {
       name: 'thryftverse-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => ({
+        getItem: (name: string): string | null => {
+          const raw = appStorage.getString(name);
+          return raw === undefined ? null : raw;
+        },
+        setItem: (name: string, value: string): void => {
+          appStorage.set(name, value);
+        },
+        removeItem: (name: string): void => {
+          appStorage.remove(name);
+        },
+      })),
       version: 4,
       migrate: (persistedState, version) => {
         let state = { ...(persistedState as Partial<StoreState>) };
@@ -1947,6 +2248,7 @@ export const useStore = create<StoreState>()(
         savedProducts: state.savedProducts,
         collections: state.collections,
         seenPosterIds: state.seenPosterIds,
+        savedPosterStoryIds: state.savedPosterStoryIds,
         customPosters: state.customPosters,
         conversations: state.conversations,
         savedSearches: state.savedSearches,
@@ -1981,3 +2283,13 @@ export const useStore = create<StoreState>()(
     },
   ),
 );
+
+/**
+ * Guest mode selector — returns true when the user is not authenticated
+ * (no currentUser and isAuthenticated is false). Used by the tab navigator,
+ * HomeScreen, SellScreen, and other surfaces to gate account-bound actions
+ * behind the soft signup wall while allowing browse-only access.
+ */
+export function useIsGuest(): boolean {
+  return useStore((s) => !s.currentUser && !s.isAuthenticated);
+}

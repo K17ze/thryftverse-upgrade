@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   iconRing: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor:
@@ -49,13 +49,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: Colors.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: Colors.textMuted,
     textAlign: 'center',
     maxWidth: 240,

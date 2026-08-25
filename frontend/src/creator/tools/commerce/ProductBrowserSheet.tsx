@@ -29,6 +29,8 @@ import Reanimated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import {
@@ -171,7 +173,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   useEffect(() => {
     if (reduceMotion) return;
     shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: 1200 });
+    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
   }, [reduceMotion, shimmerSV]);
 
   const style = useAnimatedStyle(() => ({
@@ -441,7 +443,7 @@ export function ProductBrowserSheet({
             accessibilityHint="Closes the product browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -471,7 +473,7 @@ export function ProductBrowserSheet({
         {/* ── Search input (Discover tab only) ────────────────────── */}
         {activeTab === 'discover' && (
           <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+            <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="Search listings..."
@@ -523,7 +525,7 @@ export function ProductBrowserSheet({
                   {item.imageUrl ? (
                     <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} contentFit="cover" />
                   ) : (
-                    <Ionicons name="pricetag" size={16} color={colors.textSecondary} />
+                    <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} />
                   )}
                 </View>
                 <View style={styles.resultInfo}>
@@ -694,7 +696,7 @@ function createStyles(colors: ThemeColors) {
     },
     retryBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
   });

@@ -139,7 +139,7 @@ export function CoOwnOrderBook({
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
         {isCallAuction && (
-          <View style={[styles.auctionBadge, { backgroundColor: colors.warning + '22' }]}>
+          <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="time-outline" size={11} color={colors.warning} />
             <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
           </View>
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   lastValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   lastAge: {
@@ -526,9 +526,9 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   rfqTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   rfqSubtitle: {
     fontSize: Type.caption.size,
@@ -558,9 +558,9 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   haltedTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   haltedSubtitle: {
     fontSize: Type.caption.size,

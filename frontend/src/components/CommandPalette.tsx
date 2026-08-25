@@ -286,7 +286,7 @@ export function CommandPalette() {
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
+      <Pressable style={styles.backdrop} onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close">
         <Reanimated.View
           entering={reducedMotion ? undefined : SlideInDown.springify().damping(18).stiffness(260)}
           exiting={reducedMotion ? undefined : SlideOutUp.duration(180)}
@@ -430,6 +430,7 @@ const CommandRow = React.memo(function CommandRow({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={({ pressed }) => [
         styles.row,
         highlighted && styles.rowHighlighted,
@@ -529,7 +530,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
@@ -600,10 +601,10 @@ function createRowStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     rowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     rowSubtitle: {
       fontSize: Type.caption.size,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 
@@ -39,6 +39,7 @@ export function CommerceRelatedRail({
   onPressItem,
 }: CommerceRelatedRailProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   if (items.length === 0) return null;
 
@@ -131,7 +132,7 @@ export function CommerceRelatedRail({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.xl,
   },
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     top: Space.sm,
     left: Space.sm,
     maxWidth: 126,
-    backgroundColor: 'rgba(0,0,0,0.68)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
   },
   cardBody: {
@@ -192,13 +193,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     minHeight: 36,
     marginBottom: Space.xs,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   cardPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   cardIze: {

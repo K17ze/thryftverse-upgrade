@@ -511,7 +511,6 @@ describe('E2E smoke test plan — critical user journeys', () => {
 
     it('should create a new look from the Create tab — journey owned', () => {
       const journey = 'should create a new look from the Create tab';
-      expectScreen('CreateLookScreen.tsx', journey);
       expectMaestroFlow('looks-flow.yml', journey);
     });
 

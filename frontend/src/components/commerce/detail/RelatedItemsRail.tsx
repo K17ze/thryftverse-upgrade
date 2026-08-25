@@ -28,6 +28,7 @@ import { AnimatedPressable } from '../../AnimatedPressable';
 import { PressPresets } from '../../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import type { Listing } from '../../../services/listingsApi';
+import { DEFAULT_CURRENCY_CODE } from '../../../constants/currencies';
 
 export interface RelatedItemsRailProps {
   items: Listing[];
@@ -62,7 +63,7 @@ export function RelatedItemsRail({
     ({ item }: { item: Listing }) => {
       const imageUri = item.images?.[0];
       const formattedPrice = item.price != null
-        ? formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })
+        ? formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
         : 'Price unavailable';
       return (
         <AnimatedPressable
@@ -211,8 +212,8 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     seeAll: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -259,8 +260,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     cardPrice: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],

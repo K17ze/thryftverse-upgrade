@@ -46,11 +46,11 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   description: {
     fontSize: Type.body.size,
@@ -58,8 +58,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   toggleText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     marginTop: Space.xs,
   },

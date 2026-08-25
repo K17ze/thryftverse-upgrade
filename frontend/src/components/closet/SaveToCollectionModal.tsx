@@ -177,7 +177,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       onRequestClose={handleClose}
     >
       <KeyboardStickyView
-        style={styles.overlay}
+        style={[styles.overlay, { backgroundColor: colors.overlay }]}
       >
         <View style={[styles.card, { backgroundColor: colors.background, paddingBottom: Space.md + insets.bottom }]}>
           {/* Header — flat, no border. Title + close. */}
@@ -309,7 +309,6 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   // ── Card (sheet container) — the one dominant panel ──
@@ -361,13 +360,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   itemTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   itemBrand: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Saved toggle — flat row with hairline separator ──
@@ -386,8 +385,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   savedRowTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   savedRowSub: {
@@ -398,10 +397,10 @@ const styles = StyleSheet.create({
   },
   // ── Section label ──
   sectionLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginTop: Space.lg,
     marginBottom: Space.sm,
@@ -441,8 +440,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   collectionName: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   collectionCount: {
@@ -479,8 +478,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   createTriggerText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
 });

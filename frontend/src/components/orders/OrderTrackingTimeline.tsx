@@ -135,7 +135,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
@@ -153,7 +153,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginLeft: Space.sm,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: 18,

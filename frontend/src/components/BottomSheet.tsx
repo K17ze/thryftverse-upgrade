@@ -17,6 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useModalFocusManagement } from '../hooks/useModalFocusManagement';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -134,7 +135,7 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { spring, isEnabled } = useMotionConfig();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const baseConfig = VARIANT_CONFIGS[variant];
   const variantConfig: SheetVariantConfig = {
     ...baseConfig,
@@ -148,6 +149,12 @@ export function BottomSheet({
   const translateY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
+
+  // Focus management — moves screen reader focus to the sheet on open and
+  // restores it when the sheet closes. Complements `accessibilityViewIsModal`
+  // which traps VoiceOver focus on iOS.
+  const contentRef = React.useRef<View>(null);
+  useModalFocusManagement({ visible, contentRef });
 
   const open = useCallback(() => {
     // Subtle spring entrance — smooth, confident settle.
@@ -238,7 +245,7 @@ export function BottomSheet({
         {variantConfig.useGlassBackdrop ? (
           <LiquidGlassBackdrop
             intensity={blurIntensity}
-            tint={colors.background === '#FFFFFF' ? 'light' : 'dark'}
+            tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
         ) : null}
@@ -254,6 +261,8 @@ export function BottomSheet({
       {/* Sheet */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
+          ref={contentRef}
+          accessibilityRole="alert"
           style={[
             styles.sheet,
             {
@@ -323,7 +332,7 @@ const createStyles = (
       width: 40,
       height: 5,
       borderRadius: Radius.sm,
-      backgroundColor: colors.textMuted + '80',
+      backgroundColor: colors.border,
     },
     contentWrap: {
       flex: 1,

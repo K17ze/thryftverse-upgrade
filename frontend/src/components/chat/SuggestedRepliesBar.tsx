@@ -63,6 +63,7 @@ export function SuggestedRepliesBar({
                 pressed && { opacity: 0.6 },
               ]}
               onPress={() => onSelect(reply)}
+              hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
               accessibilityRole="button"
               accessibilityLabel={`Use suggested reply: ${reply.text}`}
               accessibilityHint="Fills the message input with this reply"
@@ -95,11 +96,11 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.sm - 1,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      minHeight: 34,
+      minHeight: 24,
     },
     pillText: {
       fontSize: Type.caption.size,

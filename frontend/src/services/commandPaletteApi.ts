@@ -371,7 +371,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       label: 'Create auction',
       subtitle: 'Start a new auction',
       category: 'action',
-      icon: 'gavel-outline',
+      icon: 'hammer-outline',
       keywords: ['auction', 'bidding', 'sell auction', 'start auction'],
       action: nav('CreateAuction'),
     },
@@ -409,7 +409,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       category: 'action',
       icon: 'shirt-outline',
       keywords: ['look', 'outfit', 'style', 'creator', 'poster'],
-      action: nav('CreateLook'),
+      action: nav('CreatorStudio', { type: 'look' }),
     },
     {
       id: 'action-create-collection',

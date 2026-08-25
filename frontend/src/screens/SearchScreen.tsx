@@ -1,15 +1,18 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   AnimatedPressable
 } from '../components/AnimatedPressable';
 import {
   View,
-  Text,
   StyleSheet,
   StatusBar,
+  TextInput,
+  Pressable,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,10 +21,16 @@ import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { Type, Typography, Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
+import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
+import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
+
+const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
+const TRENDING_SEARCHES = ['Vintage denim', 'Y2K bags', 'Linen shirts', 'Chunky boots', 'Gold jewellery'];
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,8 +39,11 @@ type ExploreTab = DiscoveryMode;
 // Main screen
 export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
-  const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
+  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  const haptic = useHaptic();
 
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,7 +54,39 @@ export default function SearchScreen() {
   // its scroll position is preserved across tab switches.
   const [loadedTabs, setLoadedTabs] = useState<Set<ExploreTab>>(new Set(['discover']));
 
+  // Inline search state — real TextInput with autocomplete dropdown.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const searchInputRef = useRef<TextInput>(null);
+  const recentSearchesKey = `${RECENT_SEARCHES_KEY}:${currentUser?.id ?? 'guest'}`;
+
+  useEffect(() => {
+    AsyncStorage.getItem(recentSearchesKey)
+      .then((raw) => {
+        if (raw) {
+          try { setRecentSearches(JSON.parse(raw)); } catch { /* noop */ }
+        }
+      })
+      .catch(() => undefined);
+  }, [recentSearchesKey]);
+
+  const submitSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    Keyboard.dismiss();
+    setIsSearchFocused(false);
+    // Persist to recent searches.
+    setRecentSearches((prev) => {
+      const updated = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 8);
+      void AsyncStorage.setItem(recentSearchesKey, JSON.stringify(updated)).catch(() => undefined);
+      return updated;
+    });
+    navigation.navigate('GlobalSearch', { initialQuery: trimmed });
+  }, [navigation, recentSearchesKey]);
+
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -82,9 +126,22 @@ export default function SearchScreen() {
     gap: Space.smMd,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    borderWidth: 0,
-    borderColor: 'transparent',
+    borderWidth: Stroke.hairline,
+    borderColor: colors.borderSubtle,
     paddingHorizontal: Space.md,
+  },
+  searchBarFocused: {
+    backgroundColor: colors.surface,
+    borderColor: colors.brand,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.regular,
+    letterSpacing: LetterSpacing.wide,
+    padding: 0,
   },
   searchPlaceholder: {
     flex: 1,
@@ -93,6 +150,16 @@ export default function SearchScreen() {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     letterSpacing: LetterSpacing.wide,
+  },
+  autocompleteOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: colors.background,
+    zIndex: 10,
+  },
+  autocompleteDropdown: {
+    flex: 1,
+    paddingHorizontal: Space.md,
   },
   visualSearchButton: {
     width: Control.hit,
@@ -129,18 +196,30 @@ export default function SearchScreen() {
     isSyncing,
     lastError,
     isLoadingMore,
+    hasMore,
     refreshing,
     onRefresh: () => void handleRefresh(),
     onLoadMore: () => void loadMoreListings(),
-    onPressItem: (item: typeof listings[number]) => navigation.navigate('ItemDetail', { itemId: item.id }),
-    onPressSeller: (item: typeof listings[number]) => openProfile(navigation, item.sellerId, currentUser?.id),
-    onMessageSeller: (item: typeof listings[number]) => navigation.navigate('Chat', {
+    // DiscoverScene now receives heterogeneous DiscoveryFeedUnit[]; listing
+    // tiles carry the production DiscoveryListingSummary, so the navigation
+    // callbacks are typed against that contract (it exposes id + sellerId,
+    // which is all navigation needs here).
+    onPressItem: (item: DiscoveryListingSummary) => navigation.navigate('ItemDetail', { itemId: item.id }),
+    onPressSeller: (item: DiscoveryListingSummary) => openProfile(navigation, item.sellerId, currentUser?.id),
+    onMessageSeller: (item: DiscoveryListingSummary) => navigation.navigate('Chat', {
       conversationId: `${item.sellerId}_${item.id}`,
       focusQuery: '',
       partnerUserId: item.sellerId,
       itemId: item.id,
     }),
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
+    // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
+    // pattern). The store owns the saved state; the tile reflects it.
+    onToggleSave: (item: DiscoveryListingSummary) => {
+      haptic.light();
+      toggleSavedProduct(item.id);
+    },
+    isSavedListing: (listingId: string) => isSavedProduct(listingId),
   };
 
   const renderScene = (tab: ExploreTab) => {
@@ -158,17 +237,39 @@ export default function SearchScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      {/* -- Search Bar (tab navigation supplies the "Explore" context) -- */}
+      {/* -- Search Bar (real inline input with autocomplete) -- */}
       <View style={styles.searchRow}>
-        <AnimatedPressable
-          style={styles.searchBar}
-          onPress={() => navigation.navigate('GlobalSearch')}
-          accessibilityRole="search"
+        <Pressable
+          style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}
+          onPress={() => searchInputRef.current?.focus()}
+          accessibilityRole="button"
           accessibilityLabel="Search"
         >
           <Ionicons name="search" size={19} color={colors.textMuted} />
-          <Text style={styles.searchPlaceholder} numberOfLines={1}>Search items, brands and people</Text>
-        </AnimatedPressable>
+          <TextInput
+            ref={searchInputRef}
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search items, brands and people"
+            placeholderTextColor={colors.textMuted}
+            onFocus={() => setIsSearchFocused(true)}
+            onSubmitEditing={() => submitSearch(searchQuery)}
+            returnKeyType="search"
+            accessibilityRole="search"
+            accessibilityLabel="Search"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </Pressable>
         <AnimatedPressable
           style={styles.visualSearchButton}
           onPress={() => navigation.navigate('VisualSearch')}
@@ -178,6 +279,37 @@ export default function SearchScreen() {
           <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
+
+      {/* Autocomplete overlay — covers scene content while the search is focused. */}
+      {isSearchFocused && (
+        <View style={styles.autocompleteOverlay}>
+          <View style={styles.autocompleteDropdown}>
+            <SearchAutocomplete
+              query={searchQuery}
+              visible={isSearchFocused}
+              trending={TRENDING_SEARCHES}
+              recent={recentSearches}
+              userId={currentUser?.id}
+              onSelect={(suggestion) => {
+                const query: string = 'query' in suggestion && suggestion.query
+                  ? String(suggestion.query)
+                  : ('label' in suggestion ? String(suggestion.label) : '');
+                submitSearch(query);
+              }}
+              onClearRecent={() => {
+                setRecentSearches([]);
+                void AsyncStorage.removeItem(recentSearchesKey).catch(() => undefined);
+              }}
+            />
+          </View>
+          <Pressable
+            style={{ height: Space.xl }}
+            onPress={() => { setIsSearchFocused(false); searchInputRef.current?.blur(); Keyboard.dismiss(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss search"
+          />
+        </View>
+      )}
 
       {/* -- Offline banner (global concern, fixed at top) -- */}
       <OfflineBanner onRetry={() => void handleRefresh()} />

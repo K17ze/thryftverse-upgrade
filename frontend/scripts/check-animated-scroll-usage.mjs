@@ -56,8 +56,23 @@ for (const file of files) {
     src.includes('createAnimatedComponent(FlashList)') ||
     src.includes('createAnimatedComponent(ScrollView)') ||
     src.includes('createAnimatedComponent(FlatList)');
+  // Forwarded-handler pattern: the file builds an animated scroll handler and
+  // passes it to a child component (onScroll={scrollHandler}) that owns the
+  // animated scroll container. This is the established HomeScreen /
+  // DiscoverScene pattern — the handler is valid even though the animated
+  // FlashList/ScrollView lives in the child, not this file. Only recognized
+  // when the file does NOT directly render a scroll container that would
+  // receive the handler (a direct scroll container must be the animated one).
+  const forwardsHandlerToChild =
+    /onScroll=\{?\s*[A-Za-z_$][\w$]*\s*\}?/.test(src) &&
+    !/<\s*(ScrollView|FlatList|FlashList)\b[^>]*onScroll/.test(src);
 
-  if (!hasReanimatedScrollView && !hasReanimatedFlatList && !hasCreatedAnimatedComponent) {
+  if (
+    !hasReanimatedScrollView &&
+    !hasReanimatedFlatList &&
+    !hasCreatedAnimatedComponent &&
+    !forwardsHandlerToChild
+  ) {
     const rel = file.replace(ROOT + '\\', '').replace(ROOT + '/', '');
     violations.push(
       `${rel}: uses useAnimatedScrollHandler but has no Reanimated.ScrollView or Reanimated.FlatList`

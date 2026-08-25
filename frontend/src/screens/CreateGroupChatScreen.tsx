@@ -77,7 +77,11 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
+  const [groupPhotoFinalizationId, setGroupPhotoFinalizationId] = useState<string | null>(null);
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
+  const [coverPhotoFinalizationId, setCoverPhotoFinalizationId] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
@@ -167,16 +171,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     if (isUploadingPhoto) return;
     haptic.light();
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        show('Allow photo access to set a group photo.', 'error');
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: false,
-        quality: 0.85,
+        allowsEditing: true,
         aspect: [1, 1],
+        quality: 0.88,
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
 
@@ -185,6 +185,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       try {
         const uploaded = await uploadMedia(pickedUri, 'avatars');
         setGroupPhoto(uploaded.publicUrl);
+        setGroupPhotoFinalizationId(uploaded.finalizationId);
         haptic.success();
         show('Group photo uploaded.', 'success');
       } catch (uploadErr) {
@@ -199,6 +200,37 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       show('Could not open photo library.', 'error');
     }
   }, [haptic, show, isUploadingPhoto]);
+
+  const handlePickCoverPhoto = useCallback(async () => {
+    if (isUploadingCover) return;
+    haptic.light();
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        allowsEditing: true,
+        aspect: [3, 1],
+        quality: 0.88,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const pickedUri = result.assets[0].uri;
+      setIsUploadingCover(true);
+      try {
+        const uploaded = await uploadMedia(pickedUri, 'covers');
+        setCoverPhoto(uploaded.publicUrl);
+        setCoverPhotoFinalizationId(uploaded.finalizationId);
+        haptic.success();
+      } catch (uploadErr) {
+        const parsed = parseApiError(uploadErr, 'Could not upload cover photo.');
+        show(parsed.message, 'error');
+      } finally {
+        setIsUploadingCover(false);
+      }
+    } catch {
+      show('Could not open photo library.', 'error');
+    }
+  }, [haptic, show, isUploadingCover]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -304,6 +336,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         idempotencyKey: idempotencyKeyRef.current,
         description: description.trim() || undefined,
         avatar: groupPhoto ?? undefined,
+        avatarFinalizationId: groupPhotoFinalizationId ?? undefined,
+        coverPhoto: coverPhoto ?? undefined,
+        coverPhotoFinalizationId: coverPhotoFinalizationId ?? undefined,
       });
 
       upsertConversation(conversation);
@@ -329,6 +364,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     setSelectedIds([]);
     setSelectedUsers(new Map());
     setGroupPhoto(null);
+    setGroupPhotoFinalizationId(null);
     setStage('select');
   };
 
@@ -397,13 +433,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               ) : null}
               <View style={[styles.stickyAction, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
                 <AppButton
-                  style={[styles.createBtn, (!title.trim() || isCreating || isUploadingPhoto) && styles.createBtnDisabled]}
+                  style={[styles.createBtn, (!title.trim() || isCreating || isUploadingPhoto || isUploadingCover) && styles.createBtnDisabled]}
                   variant="primary"
                   size="md"
                   align="center"
-                  title={isCreating ? 'Creating...' : isUploadingPhoto ? 'Uploading photo...' : 'Create Group'}
+                  title={isCreating ? 'Creating...' : (isUploadingPhoto || isUploadingCover) ? 'Uploading photo...' : 'Create Group'}
                   onPress={() => void handleCreateGroup()}
-                  disabled={!title.trim() || isCreating || isUploadingPhoto}
+                  disabled={!title.trim() || isCreating || isUploadingPhoto || isUploadingCover}
                   accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
                   accessibilityRole="button"
                 />
@@ -411,6 +447,41 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             </>
           }
         >
+          {/* Cover photo — wide banner, optional. Separate from the circular
+              group avatar. Matches WhatsApp/Telegram group creation pattern. */}
+          <Pressable
+            onPress={handlePickCoverPhoto}
+            disabled={isUploadingCover}
+            style={({ pressed }) => [
+              styles.coverSelector,
+              pressed && styles.avatarSelectorPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityHint="Opens your photo library to choose a wide cover image"
+          >
+            {coverPhoto ? (
+              <CachedImage
+                uri={coverPhoto}
+                style={styles.coverImage}
+                contentFit="cover"
+                priority="high"
+              />
+            ) : (
+              <View style={[styles.coverPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+                <Text style={[styles.coverPlaceholderText, { color: colors.textMuted }]}>
+                  {isUploadingCover ? 'Uploading…' : 'Add cover photo'}
+                </Text>
+              </View>
+            )}
+            {isUploadingCover ? (
+              <View style={styles.coverUploadingOverlay}>
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+              </View>
+            ) : null}
+          </Pressable>
+
           <View style={styles.avatarSelectorWrap}>
             <Pressable
               onPress={handlePickGroupPhoto}
@@ -431,7 +502,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               />
               {isUploadingPhoto ? (
                 <View style={styles.avatarUploadingOverlay}>
-                  <ActivityIndicator size="small" color={colors.textInverse} />
+                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
                 </View>
               ) : (
                 <View style={styles.cameraBadge}>
@@ -770,7 +841,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   memberAvatarText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: colors.textPrimary,
   },
@@ -870,6 +941,37 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     marginBottom: Space.lg,
   },
+  // Cover photo
+  coverSelector: {
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    marginBottom: Space.md,
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+  },
+  coverPlaceholderText: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
+  coverUploadingOverlay: {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarSelectorPressable: {
     position: 'relative',
     borderRadius: Radius.full,
@@ -897,7 +999,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     bottom: 0,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -908,7 +1010,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.lg,
   },
   fieldLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
     marginBottom: Space.xs + 2,
   },
@@ -968,7 +1070,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   participantAvatarText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: colors.textPrimary,
   },

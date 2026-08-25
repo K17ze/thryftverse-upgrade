@@ -14,10 +14,11 @@
  *   - Microphone permission handling (request on open, show denied state)
  *
  * Per AGENTS.md §11 (truthful UI): VoiceoverRecorder.isAvailable() returns
- * false when expo-audio is not installed. The sheet shows an honest
- * "unavailable" state rather than pretending recording works. When the
- * native dependency is added, the recorder's real implementation activates
- * and this UI works end-to-end without changes.
+ * false when the expo-audio native module is not linked (e.g., Expo Go
+ * without a development build). The sheet shows an honest "unavailable"
+ * state rather than pretending recording works. With a development build
+ * that includes expo-audio, the recorder's real implementation activates
+ * and this UI works end-to-end.
  *
  * Per AGENTS.md §13: 44pt touch targets for all interactive controls.
  * Per AGENTS.md §17: Reanimated for animations (no PanResponder).
@@ -48,10 +49,12 @@ import {
   Control,
   Stroke,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion as useHookReducedMotion } from '../../../hooks/useReducedMotion';
+import { Motion } from '../../../theme/motionTokens';
 import {
   VoiceoverRecorder,
   VoiceoverDependencyError,
@@ -167,6 +170,14 @@ export function VoiceoverRecorderSheet({
     cancelAnimation(ringOpacitySV);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // ── Release native recorder on unmount ────────────────────────────
+  useEffect(() => {
+    const recorder = recorderRef.current;
+    return () => {
+      recorder?.dispose();
+    };
+  }, []);
 
   // ── Timer management ──────────────────────────────────────────────
   const stopTimer = useCallback(() => {
@@ -337,7 +348,7 @@ export function VoiceoverRecorderSheet({
             accessibilityHint="Closes the voiceover recording sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -400,7 +411,7 @@ export function VoiceoverRecorderSheet({
                 <View style={styles.waveformPlaceholder}>
                   <Ionicons
                     name="mic-outline"
-                    size={32}
+                    size={IconGrammar.hero}
                     color={colors.textMuted}
                   />
                   <Text
@@ -544,12 +555,12 @@ function RecordButton({
 
   const handlePressIn = useCallback(() => {
     if (disabled) return;
-    pressedSV.value = withTiming(1, { duration: 100 });
+    pressedSV.value = withTiming(1, { duration: Motion.duration.fast });
   }, [disabled, pressedSV]);
 
   const handlePressOut = useCallback(() => {
     if (disabled) return;
-    pressedSV.value = withTiming(0, { duration: 100 });
+    pressedSV.value = withTiming(0, { duration: Motion.duration.fast });
   }, [disabled, pressedSV]);
 
   const handlePress = useCallback(() => {
@@ -605,7 +616,7 @@ function RecordButton({
             style={{
               width: size * 0.3,
               height: size * 0.3,
-              borderRadius: 4,
+              borderRadius: Radius.sm,
               backgroundColor: iconColor,
             }}
           />
@@ -614,7 +625,7 @@ function RecordButton({
             style={{
               width: size * 0.3,
               height: size * 0.3,
-              borderRadius: 4,
+              borderRadius: Radius.sm,
               backgroundColor: iconColor,
             }}
           />
@@ -662,7 +673,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
               flex: barWidth,
               height,
               backgroundColor: color,
-              borderRadius: 1,
+              borderRadius: Radius.none,
               opacity: 0.4 + 0.6 * level,
             }}
           />
@@ -696,7 +707,7 @@ function SecondaryButton({
       accessibilityLabel={label}
       accessibilityRole="button"
     >
-      <Ionicons name={icon} size={18} color={colors.textPrimary} />
+      <Ionicons name={icon} size={IconGrammar.metadata} color={colors.textPrimary} />
       <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>
         {label}
       </Text>
@@ -704,7 +715,7 @@ function SecondaryButton({
   );
 }
 
-// ── Unavailable state (truthful — dependency not installed) ───────────
+// ── Unavailable state (truthful — native module not linked) ──────────
 
 function UnavailableState({
   colors,
@@ -720,7 +731,8 @@ function UnavailableState({
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
         This feature requires the expo-audio native module, which is not
-        installed yet. It will be available in a future app update.
+        linked in this build. Use a development build to enable voiceover
+        recording.
       </Text>
     </View>
   );
@@ -867,7 +879,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── Empty states ──
     emptyBody: {
@@ -877,7 +889,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       textAlign: 'center',
     },
     emptySubtitle: {

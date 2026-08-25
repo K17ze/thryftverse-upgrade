@@ -13,7 +13,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -21,11 +21,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { PressScale } from './CreatorAnimations';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
@@ -42,7 +44,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+
 
 type Tool = 'scissors' | 'eraser';
 
@@ -82,6 +84,7 @@ export function CreatorCutoutSheet({
   const { show } = useToast();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -93,7 +96,7 @@ export function CreatorCutoutSheet({
   const mountedRef = useRef(false);
 
   // ── Spring-driven shared values ──────────────────────────────────
-  const sheetYSV = useSharedValue(SCREEN_W * 1.2);
+  const sheetYSV = useSharedValue(screenWidth * 1.2);
   const backdropOpacitySV = useSharedValue(0);
   const toolHighlightSV = useSharedValue(0); // 0 = scissors, 1 = eraser
   const cutoutScaleSV = useSharedValue(1);
@@ -105,7 +108,6 @@ export function CreatorCutoutSheet({
   const toolTabLayouts = useRef<Map<Tool, { x: number; width: number }>>(new Map());
   const toolUnderlineXSV = useSharedValue(0);
   const toolUnderlineWSV = useSharedValue(0);
-  const TOOL_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Load image dimensions ────────────────────────────────────────
   useEffect(() => {
@@ -113,8 +115,8 @@ export function CreatorCutoutSheet({
       RNImage.getSize(imageUri, (w: number, h: number) => {
         setImageSize({ width: w, height: h });
         // Fit within display area
-        const maxW = SCREEN_W - 32;
-        const maxH = SCREEN_W * 0.6;
+        const maxW = screenWidth - 32;
+        const maxH = screenWidth * 0.6;
         const ratio = Math.min(maxW / w, maxH / h);
         setDisplaySize({ width: w * ratio, height: h * ratio });
       }, () => {
@@ -132,15 +134,15 @@ export function CreatorCutoutSheet({
         backdropOpacitySV.value = 1;
       } else {
         sheetYSV.value = withSpring(0, spring.entrance);
-        backdropOpacitySV.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
-        sheetYSV.value = SCREEN_W * 1.2;
+        sheetYSV.value = screenWidth * 1.2;
         backdropOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacitySV.value = withTiming(0, { duration: 160 });
+        sheetYSV.value = withTiming(screenWidth * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, spring]);
@@ -162,8 +164,8 @@ export function CreatorCutoutSheet({
         toolUnderlineXSV.value = layout.x;
         toolUnderlineWSV.value = layout.width;
       } else {
-        toolUnderlineXSV.value = withSpring(layout.x, TOOL_UNDERLINE_SPRING);
-        toolUnderlineWSV.value = withSpring(layout.width, TOOL_UNDERLINE_SPRING);
+        toolUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        toolUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
       }
     }
   }, [tool, haptic, toolHighlightSV, reduceMotion, spring, toolUnderlineXSV, toolUnderlineWSV]);
@@ -246,7 +248,7 @@ export function CreatorCutoutSheet({
       subjectHighlightSV.value = 1;
     } else {
       subjectHighlightSV.value = withSequence(
-        withTiming(1, { duration: 150 }),
+        withTiming(1, { duration: Motion.duration.fast }),
         withSpring(0, spring.tap),
       );
     }
@@ -403,7 +405,7 @@ export function CreatorCutoutSheet({
             accessibilityLabel="Close manual crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -491,7 +493,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="cut-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={tool === 'scissors' ? colors.brand : colors.textSecondary}
             />
             <Text style={[styles.toolSelectorLabel, { color: tool === 'scissors' ? colors.brand : colors.textSecondary }]}>
@@ -517,7 +519,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="brush-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={tool === 'eraser' ? colors.brand : colors.textSecondary}
             />
             <Text style={[styles.toolSelectorLabel, { color: tool === 'eraser' ? colors.brand : colors.textSecondary }]}>
@@ -542,7 +544,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="eye-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textPrimary)}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textSecondary) }]}>
@@ -559,7 +561,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="arrow-undo-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : colors.textPrimary}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : colors.textSecondary }]}>
@@ -575,7 +577,7 @@ export function CreatorCutoutSheet({
           >
             <Ionicons
               name="trash-outline"
-              size={22}
+              size={IconGrammar.standard}
               color={paths.length === 0 ? colors.textMuted : colors.textPrimary}
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : colors.textSecondary }]}>
@@ -679,7 +681,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   title: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   closeBtn: {
@@ -690,7 +692,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   instructions: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingBottom: 4,
@@ -721,7 +723,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   toolSelectorBtn: {
     flex: 1,
@@ -739,7 +741,7 @@ const styles = StyleSheet.create({
   toolRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
+    gap: Space.md,
     paddingVertical: Space.md,
   },
   toolBtn: {
@@ -772,13 +774,13 @@ const styles = StyleSheet.create({
   },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

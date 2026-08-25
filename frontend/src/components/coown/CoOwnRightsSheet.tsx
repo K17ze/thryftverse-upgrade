@@ -86,7 +86,7 @@ function RightsRowItem({
         </Text>
         <View style={styles.rowRight}>
           {row.isTbc && (
-            <View style={[styles.tbcBadge, { backgroundColor: colors.warning + '22' }]}>
+            <View style={[styles.tbcBadge, { backgroundColor: colors.warningSubtle }]}>
               <Text style={[styles.tbcBadgeText, { color: colors.warning }]}>TBC</Text>
             </View>
           )}
@@ -169,7 +169,7 @@ export function CoOwnRightsSheet({
 
         {/* TBC warning banner */}
         {hasTbc && (
-          <View style={[styles.tbcBanner, { backgroundColor: colors.warning + '18' }]}>
+          <View style={[styles.tbcBanner, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
             <Text style={[styles.tbcBannerText, { color: colors.warning }]}>
               {tbcCount} {tbcCount === 1 ? 'row' : 'rows'} to be confirmed — not yet tradable

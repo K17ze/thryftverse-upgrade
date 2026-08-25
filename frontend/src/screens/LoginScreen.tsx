@@ -1,25 +1,34 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, StatusBar, Keyboard, ActivityIndicator, Pressable } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { markInteractive } from '../platform/monitoring';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   loginWithPassword,
+  loginWithAppleIdentityToken,
+  loginWithGoogleIdToken,
   requestEmailOtp,
   requestMagicLink,
   verifyEmailOtp,
   type LoginWithPasswordError,
+  type OtpVerificationError,
 } from '../services/authApi';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -36,18 +45,120 @@ export default function LoginScreen() {
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
+  // Inline 2FA challenge for the OTP flow. The backend does NOT consume the
+  // OTP challenge when TWO_FACTOR_REQUIRED is returned (the transaction rolls
+  // back), so the same challengeId + OTP code can be retried with a 2FA code.
+  const [otpTwoFactorRequired, setOtpTwoFactorRequired] = useState(false);
+  const [otpTwoFactorCode, setOtpTwoFactorCode] = useState('');
+  const [otpRecoveryCode, setOtpRecoveryCode] = useState('');
+  const [otpUseRecovery, setOtpUseRecovery] = useState(false);
+  const [isOtpTwoFactorVerifying, setIsOtpTwoFactorVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore(state => state.login);
   const setTwoFactorEnabled = useStore(state => state.setTwoFactorEnabled);
+
+  const hasGoogleOAuth = Boolean(
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID
+  );
+
+  const [googleRequest, googleResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response for login
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type !== 'success') {
+      setSocialLoading(null);
+      return;
+    }
+    const idToken = googleResponse.authentication?.idToken
+      ?? (typeof googleResponse.params?.id_token === 'string' ? googleResponse.params.id_token : null);
+    if (!idToken) {
+      setSocialLoading(null);
+      setErrorMsg('Google sign-in failed: Unable to get identity token.');
+      return;
+    }
+    void (async () => {
+      try {
+        const result = await loginWithGoogleIdToken(idToken);
+        login(result.storeUser);
+        setTwoFactorEnabled(result.user.twoFactorEnabled);
+        navigation.replace('MainTabs');
+        markInteractive({ surface: 'login_complete_google' });
+      } catch (error) {
+        setErrorMsg(`Google sign-in failed: ${(error as Error).message}`);
+      } finally {
+        setSocialLoading(null);
+      }
+    })();
+  }, [googleResponse, login, navigation, setTwoFactorEnabled]);
+
+  const handleGoogleSignIn = async () => {
+    if (socialLoading || isSubmitting) return;
+    if (!googleRequest) {
+      setErrorMsg('Google sign-in unavailable. Configure Google OAuth client IDs.');
+      return;
+    }
+    setSocialLoading('google');
+    setErrorMsg('');
+    try {
+      const response = await promptGoogleAuth();
+      if (response.type !== 'success') setSocialLoading(null);
+    } catch (error) {
+      setSocialLoading(null);
+      setErrorMsg(`Google sign-in failed: ${(error as Error).message}`);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    if (socialLoading || isSubmitting) return;
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      setErrorMsg('Apple sign-in is only available on supported iOS devices.');
+      return;
+    }
+    setSocialLoading('apple');
+    setErrorMsg('');
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error('Missing Apple identity token');
+      const result = await loginWithAppleIdentityToken(credential.identityToken);
+      login(result.storeUser);
+      setTwoFactorEnabled(result.user.twoFactorEnabled);
+      navigation.replace('MainTabs');
+      markInteractive({ surface: 'login_complete_apple' });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ERR_REQUEST_CANCELED') {
+        setErrorMsg(`Apple sign-in failed: ${(error as Error).message}`);
+      }
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting;
   const canRequestMagicLink = email.trim().length > 0 && !isSubmitting && !isMagicSending;
   const canRequestOtp = email.trim().length > 0 && !isSubmitting && !isOtpSending;
-  const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting;
+  const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting && !otpTwoFactorRequired;
 
   const errorPulse = useSharedValue(1);
 
@@ -58,8 +169,8 @@ export default function LoginScreen() {
       return;
     }
     errorPulse.value = withSequence(
-      withTiming(0.95, { duration: 120 }),
-      withTiming(1, { duration: 180 })
+      withTiming(0.95, { duration: Motion.duration.fast }),
+      withTiming(1, { duration: Motion.duration.normal })
     );
   };
 
@@ -258,17 +369,91 @@ export default function LoginScreen() {
       // the TTI metric.
       markInteractive({ surface: 'login_complete_otp' });
     } catch (error) {
-      const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
-      const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';
-      if (typeof maybeAttempts === 'number') {
-        setErrorMsg(`${baseMessage} Attempts left: ${maybeAttempts}.`);
+      // The backend does NOT consume the OTP challenge when
+      // TWO_FACTOR_REQUIRED is returned (the transaction rolls back), so
+      // the same challengeId + OTP code can be retried with a 2FA code.
+      // Show an inline 2FA challenge instead of redirecting to password
+      // login. The challengeId and otpCode are retained for retry.
+      const otpError = error as OtpVerificationError;
+      if (otpError.code === 'TWO_FACTOR_REQUIRED') {
+        setOtpTwoFactorRequired(true);
+        setOtpTwoFactorCode('');
+        setOtpRecoveryCode('');
+        setOtpUseRecovery(false);
+        setInfoMsg('Two-factor authentication is required. Enter the code from your authenticator app to continue.');
+        setErrorMsg('');
       } else {
-        setErrorMsg(baseMessage);
+        const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
+        const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';
+        if (typeof maybeAttempts === 'number') {
+          setErrorMsg(`${baseMessage} Attempts left: ${maybeAttempts}.`);
+        } else {
+          setErrorMsg(baseMessage);
+        }
+        triggerErrorFeedback();
       }
-      triggerErrorFeedback();
     } finally {
       setIsOtpVerifying(false);
     }
+  };
+
+  const handleVerifyOtpTwoFactor = async () => {
+    if (!otpChallengeId || isOtpTwoFactorVerifying || isSubmitting) {
+      return;
+    }
+
+    const twoFactorCode = otpTwoFactorCode.trim();
+    const recoveryCode = otpRecoveryCode.trim();
+
+    if (otpUseRecovery) {
+      if (!recoveryCode) {
+        setErrorMsg('Enter your recovery code.');
+        setInfoMsg('');
+        triggerErrorFeedback();
+        return;
+      }
+    } else {
+      if (twoFactorCode.length < 6) {
+        setErrorMsg('Enter the 6-digit code from your authenticator app.');
+        setInfoMsg('');
+        triggerErrorFeedback();
+        return;
+      }
+    }
+
+    setErrorMsg('');
+    setInfoMsg('');
+    setIsOtpTwoFactorVerifying(true);
+
+    try {
+      const result = await verifyEmailOtp({
+        challengeId: otpChallengeId,
+        code: otpCode.trim(),
+        twoFactorCode: otpUseRecovery ? undefined : twoFactorCode,
+        recoveryCode: otpUseRecovery ? recoveryCode : undefined,
+      });
+
+      login(result.storeUser);
+      setTwoFactorEnabled(result.user.twoFactorEnabled);
+      navigation.replace('MainTabs');
+      markInteractive({ surface: 'login_complete_otp' });
+    } catch (error) {
+      // The challenge is not consumed on TWO_FACTOR_REQUIRED — keep it so
+      // the user can retry with a corrected code.
+      setErrorMsg((error as Error).message || 'Unable to verify two-factor code.');
+      triggerErrorFeedback();
+    } finally {
+      setIsOtpTwoFactorVerifying(false);
+    }
+  };
+
+  const cancelOtpTwoFactor = () => {
+    setOtpTwoFactorRequired(false);
+    setOtpTwoFactorCode('');
+    setOtpRecoveryCode('');
+    setOtpUseRecovery(false);
+    setInfoMsg('Enter the OTP code from your email.');
+    setErrorMsg('');
   };
 
   return (
@@ -299,21 +484,8 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Welcome back</Text>
-            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Log in to continue buying, selling, and trading.</Text>
-
-            {/* Trust reassurance — calm, reflective-level signal (§27.7).
-                A small lock icon + line communicates security without
-                overwhelming the form. Shown only when no 2FA challenge
-                is active to avoid visual noise during recovery. */}
-            {!requiresTwoFactor && !otpChallengeId && (
-              <View style={styles.trustReassure}>
-                <Ionicons name="lock-closed-outline" size={13} color={colors.textMuted} />
-                <Text style={styles.trustReassureText} maxFontSizeMultiplier={1.3}>
-                  Your login is encrypted and secure
-                </Text>
-              </View>
-            )}
+            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Sign in</Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Enter your details to continue.</Text>
 
             <View style={styles.form}>
               <AppInput
@@ -334,6 +506,10 @@ export default function LoginScreen() {
                     setOtpChallengeId(null);
                     setOtpCode('');
                   }
+                  setOtpTwoFactorRequired(false);
+                  setOtpTwoFactorCode('');
+                  setOtpRecoveryCode('');
+                  setOtpUseRecovery(false);
                   if (errorMsg) {
                     setErrorMsg('');
                   }
@@ -350,7 +526,7 @@ export default function LoginScreen() {
               {requiresTwoFactor && (
                 <View style={styles.twoFactorGroup}>
                   <View style={styles.twoFactorHeader}>
-                    <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+                    <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
                       <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
                     </View>
                     <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
@@ -426,9 +602,79 @@ export default function LoginScreen() {
                 <Text style={styles.forgotText} maxFontSizeMultiplier={1.3}>Forgot password?</Text>
               </AnimatedPressable>
 
+              {/* Primary action — visually dominant, placed immediately after
+                  the password field so the recommended path is obvious.
+                  Per the research, the flat column of three equally-weighted
+                  buttons was ambiguous; the primary "Log In" must dominate. */}
+              <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
+                <AppButton
+                  title={isSubmitting ? 'Signing in...' : 'Log In'}
+                  style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
+                  titleStyle={styles.primaryText}
+                  variant="primary"
+                  size="lg"
+                  onPress={handleLogin}
+                  disabled={!canSubmit}
+                  loading={isSubmitting}
+                  accessibilityLabel="Log in"
+                  hapticFeedback="medium"
+                />
+              </Reanimated.View>
+
+              {/* Social login — per 2026 research, social sign-in below the
+                  primary email/password path gives users a low-friction
+                  alternative. Full-width labeled buttons, not icon circles. */}
+              <View style={styles.socialDivider}>
+                <View style={styles.socialDividerLine} />
+                <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with</Text>
+                <View style={styles.socialDividerLine} />
+              </View>
+
+              <View style={styles.socialGroup}>
+                <AnimatedPressable
+                  style={[styles.socialFullBtn, (!!socialLoading || isSubmitting) && styles.socialBtnDisabled]}
+                  activeOpacity={0.85}
+                  onPress={handleAppleSignIn}
+                  disabled={!!socialLoading || isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Apple"
+                  accessibilityHint="Sign in using your Apple ID"
+                >
+                  {socialLoading === 'apple' ? (
+                    <ActivityIndicator color={colors.textPrimary} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={20} color={colors.textPrimary} />
+                      <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Apple</Text>
+                    </>
+                  )}
+                </AnimatedPressable>
+
+                {hasGoogleOAuth ? (
+                  <AnimatedPressable
+                    style={[styles.socialFullBtn, (!!socialLoading || isSubmitting) && styles.socialBtnDisabled]}
+                    activeOpacity={0.85}
+                    onPress={handleGoogleSignIn}
+                    disabled={!!socialLoading || isSubmitting}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Google"
+                    accessibilityHint="Sign in using your Google account"
+                  >
+                    {socialLoading === 'google' ? (
+                      <ActivityIndicator color={colors.textPrimary} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
+                        <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Continue with Google</Text>
+                      </>
+                    )}
+                  </AnimatedPressable>
+                ) : null}
+              </View>
+
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>or</Text>
+                <Text style={styles.dividerText} maxFontSizeMultiplier={1.3}>more options</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -484,6 +730,96 @@ export default function LoginScreen() {
                     accessibilityLabel="Verify OTP and log in"
                     hapticFeedback="medium"
                   />
+
+                  {otpTwoFactorRequired ? (
+                    <View style={styles.otpTwoFactorGroup}>
+                      <View style={styles.twoFactorHeader}>
+                        <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
+                          <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                        </View>
+                        <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
+                      </View>
+                      <Text style={styles.otpTwoFactorBody} maxFontSizeMultiplier={1.3}>
+                        Enter the code from your authenticator app to continue signing in.
+                      </Text>
+
+                      {otpUseRecovery ? (
+                        <AppInput
+                          label="Recovery code"
+                          placeholder="XXXX-XXXX-XXXX-XXXX"
+                          autoCapitalize="characters"
+                          autoCorrect={false}
+                          value={otpRecoveryCode}
+                          onChangeText={(value) => {
+                            setOtpRecoveryCode(value.toUpperCase());
+                            if (errorMsg) {
+                              setErrorMsg('');
+                            }
+                          }}
+                        />
+                      ) : (
+                        <AppInput
+                          label="Authenticator code"
+                          placeholder="000000"
+                          keyboardType="number-pad"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          maxLength={6}
+                          autoFocus
+                          value={otpTwoFactorCode}
+                          onChangeText={(value) => {
+                            setOtpTwoFactorCode(value.replace(/\D/g, '').slice(0, 6));
+                            if (errorMsg) {
+                              setErrorMsg('');
+                            }
+                          }}
+                        />
+                      )}
+
+                      <Pressable
+                        onPress={() => {
+                          setOtpUseRecovery((prev) => !prev);
+                          if (errorMsg) {
+                            setErrorMsg('');
+                          }
+                        }}
+                        hitSlop={Control.hit / 2}
+                        accessibilityRole="button"
+                        accessibilityLabel={otpUseRecovery ? 'Use authenticator code instead' : 'Use recovery code instead'}
+                        style={styles.otpTwoFactorToggle}
+                      >
+                        <Text style={styles.otpTwoFactorToggleText} maxFontSizeMultiplier={1.3}>
+                          {otpUseRecovery ? 'Use authenticator code' : 'Use recovery code'}
+                        </Text>
+                      </Pressable>
+
+                      <AppButton
+                        title={isOtpTwoFactorVerifying ? 'Verifying...' : 'Verify'}
+                        style={styles.otpVerifyBtn}
+                        titleStyle={styles.otpVerifyText}
+                        variant="primary"
+                        size="md"
+                        onPress={handleVerifyOtpTwoFactor}
+                        disabled={isOtpTwoFactorVerifying}
+                        loading={isOtpTwoFactorVerifying}
+                        accessibilityLabel="Verify two-factor code"
+                        hapticFeedback="medium"
+                      />
+
+                      <Pressable
+                        onPress={cancelOtpTwoFactor}
+                        hitSlop={Control.hit / 2}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel two-factor"
+                        accessibilityHint="Returns to the OTP input"
+                        style={styles.otpTwoFactorCancel}
+                      >
+                        <Text style={styles.otpTwoFactorCancelText} maxFontSizeMultiplier={1.3}>
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </View>
@@ -515,21 +851,6 @@ export default function LoginScreen() {
                 {errorMsg}
               </Reanimated.Text>
             )}
-
-            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
-              <AppButton
-                title={isSubmitting ? 'Signing in...' : 'Log In'}
-                style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
-                titleStyle={styles.primaryText}
-                variant="primary"
-                size="md"
-                onPress={handleLogin}
-                disabled={!canSubmit}
-                loading={isSubmitting}
-                accessibilityLabel="Log in"
-                hapticFeedback="medium"
-              />
-            </Reanimated.View>
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText} maxFontSizeMultiplier={1.3}>New to Thryftverse?</Text>
@@ -567,24 +888,54 @@ function createStyles(colors: ThemeColors) {
   },
   title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing },
   subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.md },
-  trustReassure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginBottom: Space.lg,
-  },
-  trustReassureText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    letterSpacing: 0.1,
-  },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
   forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0, marginTop: Space.md + 2 },
+  socialDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    marginTop: Space.md + 2,
+    marginBottom: Space.sm,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: Stroke.hairline,
+    backgroundColor: colors.border,
+  },
+  socialDividerText: {
+    color: colors.textMuted,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    textTransform: 'uppercase',
+    letterSpacing: LetterSpacing.caps,
+  },
+  socialGroup: {
+    gap: Space.sm + 2,
+    marginBottom: Space.sm,
+  },
+  socialFullBtn: {
+    flexDirection: 'row',
+    height: Space.xxl + Space.xl + 4,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm + 2,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+  },
+  socialFullText: {
+    color: colors.textPrimary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
+  },
+  socialBtnDisabled: { opacity: 0.7 },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.smMd,
@@ -638,10 +989,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   twoFactorTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   twoFactorHint: {
     color: colors.textMuted,
@@ -658,7 +1009,7 @@ function createStyles(colors: ThemeColors) {
   },
   magicLinkText: {
     color: colors.textSecondary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
@@ -673,11 +1024,44 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
+  otpTwoFactorGroup: {
+    marginTop: Space.sm,
+    gap: Space.sm,
+  },
+  otpTwoFactorBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 4,
+  },
+  otpTwoFactorToggle: {
+    alignSelf: 'flex-start',
+    paddingVertical: Space.xs,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  otpTwoFactorToggleText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    textDecorationLine: 'underline',
+  },
+  otpTwoFactorCancel: {
+    alignSelf: 'center',
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  otpTwoFactorCancelText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: colors.success, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
+  infoText: { color: colors.success, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
@@ -689,12 +1073,12 @@ function createStyles(colors: ThemeColors) {
   },
   switchText: {
     color: colors.textSecondary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   switchLink: {
     color: colors.textPrimary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },

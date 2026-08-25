@@ -253,11 +253,20 @@ export class CutoutService {
   /**
    * Build a MaskRef (composition schema metadata) for a cutout mask.
    * The caller attaches this to the media layer's `maskRef` field.
+   *
+   * Per §8.3: mask dimensions, source checksum, model/version, and
+   * manual refinement count are persisted so the cutout is reproducible
+   * and auditable. The generated cutout is NOT a trustless permanent
+   * replacement — the original image URI is preserved on the layer.
    */
   buildMaskRef(
     mask: CutoutMask,
     featherPx: number,
     invert: boolean,
+    options?: {
+      sourceChecksum?: string;
+      strokeCount?: number;
+    },
   ): MaskRef {
     return {
       type: 'alpha-mask',
@@ -266,6 +275,10 @@ export class CutoutService {
       modelVersion: 'skia-brush-v1',
       featherPx,
       invert,
+      maskWidth: mask.width,
+      maskHeight: mask.height,
+      sourceChecksum: options?.sourceChecksum,
+      strokeCount: options?.strokeCount,
     };
   }
 
@@ -298,6 +311,21 @@ export class CutoutService {
         'Use brush-based selection instead.',
     );
   }
+}
+
+// ── Source checksum ─────────────────────────────────────────────────
+// A lightweight hash of the source image URI so the MaskRef can detect
+// if the source asset has drifted since the mask was created. This is
+// NOT a cryptographic hash — it's a stable string hash sufficient for
+// change detection (§8.3: persist source checksum).
+
+export function sourceChecksum(uri: string): string {
+  let hash = 0;
+  for (let i = 0; i < uri.length; i++) {
+    const ch = uri.charCodeAt(i);
+    hash = ((hash << 5) - hash + ch) | 0;
+  }
+  return `crc_${(hash >>> 0).toString(36)}`;
 }
 
 // ── Session mask storage ────────────────────────────────────────────

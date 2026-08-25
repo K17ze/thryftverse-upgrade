@@ -18,6 +18,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
+import { useInboxMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption } from '../components/ui/Text';
@@ -32,6 +33,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
@@ -77,10 +79,12 @@ export default function InboxScreen() {
   const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
   const toggleArchivedConversation = useStore((state) => state.toggleArchivedConversation);
   const archivedIds = useStore((state) => state.archivedConversationIds);
+  useVisuallyComplete('Inbox');
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
+  const markConversationsLoaded = useStore((state) => state.markConversationsLoaded);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [segment, setSegment] = useState<InboxSegment>('all');
@@ -122,12 +126,63 @@ export default function InboxScreen() {
       setSyncError((error as Error).message || 'Unable to load conversations.');
     } finally {
       setIsLoading(false);
+      markConversationsLoaded();
     }
   };
   useEffect(() => {
     void loadConversations();
   }, []);
+
+  // Realtime subscription — live-update inbox rows when new messages arrive
+  // on any loaded conversation. useInboxMessageEvent subscribes to every
+  // conversation topic currently in the store and reconciles as the list
+  // changes.
+  useInboxMessageEvent(
+    useCallback(
+      (payload) => {
+        const existing = conversations.find((c) => c.id === payload.conversationId);
+        const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
+
+        // If the conversation isn't in the local store yet, reload the full
+        // inbox so the new thread appears.
+        if (!existing) {
+          void loadConversations();
+          return;
+        }
+
+        // Skip messages the current user just sent — the sending surface
+        // already optimistically updated the row.
+        const isOwnMessage = Boolean(
+          currentUser?.id && payload.senderType === 'user' && payload.senderUserId === currentUser.id,
+        );
+
+        // Deduplicate — the store may already hold this message after an
+        // optimistic send or a prior realtime event.
+        const alreadyStored = existing.messages.some((m) => m.id === domainMessage.id);
+
+        const nextLastMessage =
+          domainMessage.text ??
+          (domainMessage.mediaType === 'image'
+            ? '📷 Photo'
+            : domainMessage.mediaType === 'video'
+              ? '🎥 Video'
+              : domainMessage.systemTitle) ??
+          'New message';
+
+        upsertConversation({
+          ...existing,
+          lastMessage: nextLastMessage,
+          lastMessageTime: domainMessage.timestamp,
+          unread: isOwnMessage ? existing.unread : true,
+          messages: alreadyStored ? existing.messages : [...existing.messages, domainMessage],
+        });
+      },
+      [conversations, currentUser?.id, upsertConversation],
+    ),
+  );
+
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     setSyncError('');
     await refreshListings();
@@ -268,19 +323,19 @@ export default function InboxScreen() {
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
     Alert.alert(
-      'Delete conversation?',
-      'This conversation will be removed from your inbox.',
+      'Remove from inbox?',
+      'This conversation will be hidden from your inbox. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             const previous = conversations.find((c) => c.id === id);
             deleteConversation(id);
-            showError('Conversation deleted', 'This conversation was removed from your inbox.');
+            showError('Conversation removed', 'This conversation was removed from your inbox.');
             try {
-              await deleteConversationOnApi(id);
+              await deleteConversationOnApi(id, 'me');
             } catch {
               showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
               if (previous) {
@@ -294,26 +349,46 @@ export default function InboxScreen() {
   }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
   const handleMute = useCallback((id: string) => {
     haptic.light();
-    toggleMutedConversation(id);
     const nowMuted = !mutedIds.includes(id);
-    showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
-  }, [toggleMutedConversation, mutedIds, showInfo, haptic]);
+    toggleMutedConversation(id)
+      .then(() => {
+        showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update mute status. Check your connection and try again.');
+      });
+  }, [toggleMutedConversation, mutedIds, showInfo, showError, haptic]);
   const handleArchive = useCallback((id: string) => {
     haptic.light();
-    toggleArchivedConversation(id);
     const nowArchived = !archivedIds.includes(id);
-    showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
-  }, [toggleArchivedConversation, archivedIds, showInfo, haptic]);
+    toggleArchivedConversation(id)
+      .then(() => {
+        showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update archive status. Check your connection and try again.');
+      });
+  }, [toggleArchivedConversation, archivedIds, showInfo, showError, haptic]);
   const handleAcceptRequest = useCallback((id: string) => {
     haptic.medium();
-    acceptMessageRequest(id);
-    showSuccess('Request accepted', 'Message request accepted.');
-  }, [acceptMessageRequest, showSuccess, haptic]);
+    acceptMessageRequest(id)
+      .then(() => {
+        showSuccess('Request accepted', 'Message request accepted.');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not accept this request. Check your connection and try again.');
+      });
+  }, [acceptMessageRequest, showSuccess, showError, haptic]);
   const handleDeclineRequest = useCallback((id: string) => {
     haptic.medium();
-    declineMessageRequest(id);
-    showInfo('Request declined', 'Message request declined.');
-  }, [declineMessageRequest, showInfo, haptic]);
+    declineMessageRequest(id)
+      .then(() => {
+        showInfo('Request declined', 'Message request declined.');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not decline this request. Check your connection and try again.');
+      });
+  }, [declineMessageRequest, showInfo, showError, haptic]);
   const handlePin = useCallback((id: string) => {
     haptic.medium();
     toggleConversationPinned(id);
@@ -386,7 +461,7 @@ export default function InboxScreen() {
     ) : (
       <AvatarRing
         uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? counterpartySummary?.avatar ?? undefined : undefined)}
-        size={40}
+        size={44}
         isUnread={item.unread}
             ringWidth={2}
         fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
@@ -442,6 +517,7 @@ export default function InboxScreen() {
         lastMessage={item.lastMessage ?? ''}
         lastMessageTime={item.lastMessageTime}
         unread={!!item.unread}
+        unreadCount={item.unread ? item.messages.filter(m => m.sender !== 'me' && !m.isSystem).length : undefined}
         isPinned={!!item.isPinned}
         isMuted={isMuted}
         isGroup={isGroup}

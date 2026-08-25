@@ -18,7 +18,6 @@
 import React, { useCallback, useRef } from 'react';
 import { StyleSheet, ScrollView, View, type ViewStyle } from 'react-native';
 import { CreatorToolButton } from '../controls/CreatorToolButton';
-import { useHaptic } from '../../hooks/useHaptic';
 
 // ── Effect type ──────────────────────────────────────────────────────
 
@@ -46,19 +45,19 @@ export interface CameraEffectDef {
  * The canonical camera effect set. The ColorMatrix for each effect is
  * resolved at render time via `resolveColorMatrix` from filterConfig.
  * The icon names are chosen to communicate the effect's character:
- *   none     → circle-outline (neutral)
+ *   none     → ellipse-outline (neutral)
  *   vintage  → color-filter-outline (warm, faded, nostalgic)
  *   noir     → contrast-outline (high-contrast B&W)
- *   vivid    → sparkles-outline (punchy, saturated)
+ *   vivid    → sunny-outline (punchy, saturated)
  *   warm     → sunny-outline (warm tone)
  *   cool     → snow-outline (cool tone)
  *   fade     → cloud-outline (muted, lifted blacks)
  */
 export const CAMERA_EFFECTS: CameraEffectDef[] = [
-  { id: 'none', label: 'None', icon: 'circle-outline' },
+  { id: 'none', label: 'None', icon: 'ellipse-outline' },
   { id: 'vintage', label: 'Vintage', icon: 'color-filter-outline' },
   { id: 'noir', label: 'Noir', icon: 'contrast-outline' },
-  { id: 'vivid', label: 'Vivid', icon: 'sparkles-outline' },
+  { id: 'vivid', label: 'Vivid', icon: 'sunny-outline' },
   { id: 'warm', label: 'Warm', icon: 'sunny-outline' },
   { id: 'cool', label: 'Cool', icon: 'snow-outline' },
   { id: 'fade', label: 'Fade', icon: 'cloud-outline' },
@@ -87,17 +86,13 @@ export function CameraEffectBar({
   onSelectEffect,
   disabled = false,
 }: CameraEffectBarProps): React.ReactElement {
-  const haptic = useHaptic();
   const scrollRef = useRef<ScrollView>(null);
 
   const handleSelect = useCallback(
     (effect: CameraEffectId) => {
-      // CreatorToolButton already fires a selection haptic, but we add
-      // an extra light haptic here for the bar-level feedback.
-      haptic.light();
       onSelectEffect(effect);
     },
-    [haptic, onSelectEffect],
+    [onSelectEffect],
   );
 
   return (

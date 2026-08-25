@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 2,
     marginHorizontal: Space.xs,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   stageLabelRow: {
     marginBottom: Space.sm,

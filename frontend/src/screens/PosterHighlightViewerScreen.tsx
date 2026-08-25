@@ -7,6 +7,7 @@ import {
   Pressable,
   Dimensions,
   AccessibilityInfo,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,9 +21,13 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { CachedImage } from '../components/CachedImage';
 import { Video } from '../components/compat/Video';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
-import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
+import { fetchPosterHighlightById, type PosterHighlight } from '../services/postersApi';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS,
+} from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterHighlightViewer'>;
 
@@ -31,6 +36,7 @@ const TICK_MS = 50;
 const DEFAULT_DURATION = 5000;
 const ERROR_ICON_SIZE = 40;
 const PAUSE_ICON_SIZE = 20;
+const SWIPE_THRESHOLD = 40;
 
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
@@ -54,34 +60,26 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
+  const [reloadKey, setReloadKey] = React.useState(0);
+  const [videoPosition, setVideoPosition] = React.useState(0);
+  const [videoDuration, setVideoDuration] = React.useState(0);
+  const playerRef = React.useRef<any>(null);
+  const scrubberBarWidth = React.useRef(0);
   // Caption expand/collapse — 3-line clamp with "more" tap.
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Load highlight data
+  // NOTE: The backend API exposes only a list endpoint
+  // (GET /users/:userId/poster-highlights) — there is no single-highlight
+  // fetch. We therefore fetch the user's highlights and find the matching
+  // id. When a GET /poster-highlights/:id endpoint becomes available,
+  // this should be replaced with a direct fetch.
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // We don't know the userId here, so we fetch via a different approach:
-        // The highlight viewer needs the highlight data. Since the GET endpoint
-        // is /users/:userId/poster-highlights, we need the userId.
-        // For now, we pass the highlight data via navigation params or
-        // fetch from the store. Let's use a simpler approach: fetch all
-        // highlights for the current user and find the one we need.
-        // This is a limitation of the backend API design.
-        //
-        // Actually, the best approach is to pass the userId in the route.
-        // But to keep it simple, we'll use the store to get the current user.
-        const { useStore } = await import('../store/useStore');
-        const currentUser = useStore.getState().currentUser;
-        if (!currentUser) {
-          setLoadError(true);
-          setIsLoading(false);
-          return;
-        }
-        const res = await fetchPosterHighlights(currentUser.id);
+        const found = await fetchPosterHighlightById(highlightId);
         if (cancelled) return;
-        const found = res.items.find((h) => h.id === highlightId);
         if (!found) {
           setLoadError(true);
         } else {
@@ -94,15 +92,48 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
       }
     })();
     return () => { cancelled = true; };
-  }, [highlightId]);
+  }, [highlightId, reloadKey]);
 
   const activeFrame = highlight?.frames[frameIndex] ?? null;
+  const isVideo = !!activeFrame && (activeFrame.mediaType === 'video' || isVideoUrl(activeFrame.mediaUrl));
 
   // Reset caption expansion whenever the frame changes so each frame starts
   // in its collapsed (3-line clamp) state.
   React.useEffect(() => {
     setCaptionExpanded(false);
+    setVideoPosition(0);
+    setVideoDuration(0);
   }, [activeFrame?.frameId]);
+
+  // Android hardware back button — dismiss the viewer (matches close button
+  // and swipe-down dismiss).
+  React.useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      haptic.light();
+      navigation.goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [navigation, haptic]);
+
+  // Swipe-down to dismiss gesture — matches the main PosterViewerScreen's
+  // primary exit gesture (Instagram/Snapchat pattern).
+  const handleSwipeDismiss = React.useCallback(() => {
+    haptic.heavy();
+    navigation.goBack();
+  }, [haptic, navigation]);
+
+  const dismissPanGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(SWIPE_THRESHOLD)
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_THRESHOLD && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+            runOnJS(handleSwipeDismiss)();
+          }
+        }),
+    [handleSwipeDismiss]
+  );
 
   const goNextFrame = React.useCallback(() => {
     setProgress(0);
@@ -136,10 +167,12 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     setProgress(0);
   };
 
-  // Auto-advance timer
+  // Auto-advance timer (image frames only; video frames use position tracking)
   React.useEffect(() => {
     if (!activeFrame || isPaused || isLoading) return;
     if (frameIndex >= (highlight?.frames.length ?? 1) - 1) return;
+    const isVideoFrame = activeFrame.mediaType === 'video' || isVideoUrl(activeFrame.mediaUrl);
+    if (isVideoFrame) return;
 
     if (reducedMotion) {
       const timeoutId = setTimeout(() => goNextFrame(), DEFAULT_DURATION);
@@ -160,6 +193,17 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     return () => clearInterval(intervalId);
   }, [activeFrame?.frameId, isPaused, isLoading, goNextFrame, reducedMotion, frameIndex, highlight?.frames.length]);
 
+  // Video position-based progress + auto-advance at end
+  React.useEffect(() => {
+    if (!isVideo || isPaused || isLoading) return;
+    if (frameIndex >= (highlight?.frames.length ?? 1) - 1) return;
+    if (videoDuration > 0 && videoPosition >= videoDuration && videoPosition > 0) {
+      goNextFrame();
+    }
+  }, [videoPosition, videoDuration, isVideo, isPaused, isLoading, frameIndex, highlight?.frames.length, goNextFrame]);
+
+  const videoProgress = videoDuration > 0 ? videoPosition / videoDuration : 0;
+
   // Loading state
   if (isLoading) {
     return (
@@ -170,7 +214,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
           <SkeletonLoader
             width={SCREEN_WIDTH}
             height={SCREEN_HEIGHT * 0.6}
-            borderRadius={0}
+            borderRadius={Radius.none}
           />
         </View>
       </View>
@@ -188,24 +232,24 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
           <View style={styles.errorBtnRow}>
             <AnimatedPressable
               onPress={() => {
-                haptic.error();
+                haptic.light();
+                setHighlight(null);
                 setLoadError(false);
+                setMediaError(false);
+                setFrameIndex(0);
+                setProgress(0);
                 setIsLoading(true);
-                // Re-trigger the load effect by re-running the fetch
-                // Force re-mount by changing a state that the effect depends on
-                const reloadKey = Date.now();
-                void reloadKey;
-                navigation.goBack();
+                setReloadKey((k) => k + 1);
               }}
               style={styles.errorBtn}
               scaleValue={0.97}
               hapticFeedback="light"
               activeOpacity={0.85}
-              accessibilityLabel="Go back"
-              accessibilityHint="Returns to the previous screen"
+              accessibilityLabel="Retry loading highlight"
+              accessibilityHint="Retries loading the highlight data"
               accessibilityRole="button"
             >
-              <Text style={styles.errorBtnText}>Go back</Text>
+              <Text style={styles.errorBtnText}>Retry</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -213,10 +257,12 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     );
   }
 
-  const isVideo = activeFrame.mediaType === 'video' || isVideoUrl(activeFrame.mediaUrl);
+  const isSingleFrame = highlight.frames.length <= 1;
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={dismissPanGesture}>
+        <View style={StyleSheet.absoluteFill}>
       <StatusBar barStyle="light-content" />
 
       {/* Media layer */}
@@ -231,6 +277,11 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
             isLooping={false}
             resizeMode="cover"
             onError={() => setMediaError(true)}
+            playerRef={playerRef}
+            onPlaybackStatusUpdate={(status) => {
+              setVideoPosition(status.positionMillis);
+              setVideoDuration(status.durationMillis);
+            }}
           />
         ) : activeFrame.mediaUrl ? (
           <CachedImage
@@ -295,6 +346,36 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         </AnimatedPressable>
       )}
 
+      {/* Scrubber bar for video frames */}
+      {isVideo && !mediaError && videoDuration > 0 && (
+        <View
+          style={[styles.scrubberWrap, { bottom: insets.bottom + 160 }]}
+          pointerEvents="box-none"
+          onLayout={(e) => { scrubberBarWidth.current = e.nativeEvent.layout.width; }}
+        >
+          <Pressable
+            style={styles.scrubberBar}
+            onPress={(e) => {
+              const barWidth = scrubberBarWidth.current || 1;
+              const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / barWidth));
+              if (playerRef.current && videoDuration > 0) {
+                playerRef.current.currentTime = ratio * (videoDuration / 1000);
+                setVideoPosition(ratio * videoDuration);
+              }
+              haptic.light();
+            }}
+            accessibilityLabel="Seek video"
+            accessibilityRole="adjustable"
+            accessibilityHint="Drag to seek through the video"
+          >
+            <View style={styles.scrubberTrack}>
+              <View style={[styles.scrubberFill, { width: videoProgress * (scrubberBarWidth.current || 0) }]} />
+              <View style={[styles.scrubberHandle, { left: videoProgress * (scrubberBarWidth.current || 0) }]} />
+            </View>
+          </Pressable>
+        </View>
+      )}
+
       {/* Dark overlay for readability */}
       <View style={styles.overlay} pointerEvents="box-none" />
 
@@ -333,40 +414,47 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         <View style={styles.iconBtn} />
       </SafeAreaView>
 
-      {/* Progress segments */}
-      <View style={[styles.progressWrap, { top: insets.top + 52 }]} pointerEvents="none">
-        <PosterProgressSegments
-          total={highlight.frames.length}
-          currentIndex={frameIndex}
-          progress={progress}
-          isPaused={isPaused}
-          isLoading={isLoading}
-          reducedMotion={reducedMotion}
-        />
-      </View>
+      {/* Progress segments — hidden for single-frame highlights (no
+          navigation needed, cleaner immersive view). */}
+      {!isSingleFrame && (
+        <View style={[styles.progressWrap, { top: insets.top + 52 }]} pointerEvents="none">
+          <PosterProgressSegments
+            total={highlight.frames.length}
+            currentIndex={frameIndex}
+            progress={isVideo ? videoProgress : progress}
+            isPaused={isPaused}
+            isLoading={isLoading}
+            reducedMotion={reducedMotion}
+          />
+        </View>
+      )}
 
-      {/* Tap zones for frame navigation */}
-      <View
-        style={[styles.tapLayer, { top: insets.top + 52, bottom: insets.bottom + 24 }]}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          style={styles.tapLeft}
-          onPress={goPrevFrame}
-          onLongPress={() => { setIsPaused(true); haptic.light(); }}
-          onPressOut={() => { if (isPaused) setIsPaused(false); }}
-          accessibilityLabel="Previous frame"
-          accessibilityRole="button"
-        />
-        <Pressable
-          style={styles.tapRight}
-          onPress={goNextFrame}
-          onLongPress={() => { setIsPaused(true); haptic.light(); }}
-          onPressOut={() => { if (isPaused) setIsPaused(false); }}
-          accessibilityLabel="Next frame"
-          accessibilityRole="button"
-        />
-      </View>
+      {/* Tap zones for frame navigation — only for multi-frame highlights.
+          Single-frame highlights have no navigation, so tap zones are
+          omitted to avoid confusing empty press targets. */}
+      {!isSingleFrame && (
+        <View
+          style={[styles.tapLayer, { top: insets.top + 52, bottom: insets.bottom + 24 }]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            style={styles.tapLeft}
+            onPress={goPrevFrame}
+            onLongPress={() => { setIsPaused(true); haptic.light(); }}
+            onPressOut={() => { if (isPaused) setIsPaused(false); }}
+            accessibilityLabel="Previous frame"
+            accessibilityRole="button"
+          />
+          <Pressable
+            style={styles.tapRight}
+            onPress={goNextFrame}
+            onLongPress={() => { setIsPaused(true); haptic.light(); }}
+            onPressOut={() => { if (isPaused) setIsPaused(false); }}
+            accessibilityLabel="Next frame"
+            accessibilityRole="button"
+          />
+        </View>
+      )}
 
       {/* Caption (if present and not a text-only frame).
           3-line clamp with "more" tap to expand.
@@ -391,13 +479,17 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         </Pressable>
       )}
 
-      {/* Frame counter */}
-      <View style={[styles.frameCounter, { bottom: insets.bottom + 8 }]} pointerEvents="none">
-        <Text style={styles.frameCounterText}>
-          {frameIndex + 1} / {highlight.frames.length}
-        </Text>
-      </View>
-    </View>
+      {/* Frame counter — hidden for single-frame highlights */}
+      {!isSingleFrame && (
+        <View style={[styles.frameCounter, { bottom: insets.bottom + 8 }]} pointerEvents="none">
+          <Text style={styles.frameCounterText}>
+            {frameIndex + 1} / {highlight.frames.length}
+          </Text>
+        </View>
+      )}
+        </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 
@@ -562,7 +654,7 @@ function createStyles(colors: any) {
     },
     mediaErrorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       color: '#fff',
     },
     retryBtn: {
@@ -602,6 +694,36 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 12,
+    },
+    scrubberWrap: {
+      position: 'absolute',
+      left: Space.lg,
+      right: Space.lg,
+      zIndex: 11,
+    },
+    scrubberBar: {
+      height: Control.hit,
+      justifyContent: 'center',
+    },
+    scrubberTrack: {
+      height: 3,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      overflow: 'visible',
+    },
+    scrubberFill: {
+      height: 3,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.9)',
+    },
+    scrubberHandle: {
+      position: 'absolute',
+      top: -4,
+      width: 11,
+      height: 11,
+      marginLeft: -5.5,
+      borderRadius: Radius.full,
+      backgroundColor: '#fff',
     },
   });
 }

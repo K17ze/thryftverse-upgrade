@@ -57,8 +57,8 @@ type DecisionMetadata = {
   request_id: string;
   policy_version: string;
   feature_schema_version: string;
-  capability_level: 'heuristic_baseline';
-  trained_model: false;
+  capability_level: 'heuristic_baseline' | 'trained_model';
+  trained_model: boolean;
   generated_at: string;
   candidate_count: number;
   eligible_count: number;
@@ -79,8 +79,8 @@ const decisionResponseSchema = z.object({
     request_id: z.string().min(8),
     policy_version: z.string().min(2),
     feature_schema_version: z.string().min(2),
-    capability_level: z.literal('heuristic_baseline'),
-    trained_model: z.literal(false),
+    capability_level: z.enum(['heuristic_baseline', 'trained_model']),
+    trained_model: z.boolean(),
     generated_at: z.string().datetime({ offset: true }),
     candidate_count: z.number().int().nonnegative(),
     eligible_count: z.number().int().nonnegative(),
@@ -102,10 +102,21 @@ const decisionResponseSchema = z.object({
   ),
 });
 
+const INTERACTION_ACTIONS = [
+  'view', 'wishlist', 'purchase',
+  'qualified_detail_view', 'rapid_skip',
+  'save', 'unsave', 'share',
+  'follow_seller', 'unfollow_seller', 'open_seller_profile',
+  'offer_started', 'offer_submitted', 'message_seller_started',
+  'add_to_basket', 'checkout_started',
+  'not_interested', 'show_fewer', 'report_content',
+] as const;
+type InteractionAction = (typeof INTERACTION_ACTIONS)[number];
+
 const interactionSchema = z.object({
   userId: z.string().min(2),
   listingId: z.string().min(2),
-  action: z.enum(['view', 'wishlist', 'purchase']),
+  action: z.enum(INTERACTION_ACTIONS),
   strength: z.number().positive().max(20).default(1),
   requestId: z.string().min(8).max(120).optional(),
   position: z.number().int().positive().max(100).optional(),
@@ -124,13 +135,48 @@ const analyticsSchema = z.object({
   reasonCode: z.string().optional(),
   personalised: z.boolean().optional(),
   sessionId: z.string().optional(),
+  surface: z.string().min(2).max(50).optional(),
 });
+
+const ANALYTICS_ENVELOPE_VERSION = '1.0';
 
 const recommendationParamsSchema = z.object({ userId: z.string().min(2) });
 const recommendationQuerySchema = z.object({
   surface: z.string().min(2).max(60).default('home_feed'),
   sessionId: z.string().min(4).max(160).optional(),
 });
+
+const impressionConfirmationSchema = z.object({
+  requestId: z.string().min(8).max(120),
+  entries: z
+    .array(
+      z.object({
+        listingId: z.string().min(2).max(120),
+        status: z.enum(['rendered', 'viewable']),
+        viewability: z.record(z.unknown()).optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+function intentEpochKey(userId: string): string {
+  return `recommendations:intent:${userId}`;
+}
+
+async function resolveIntentEpoch(
+  redis: Redis,
+  userId: string,
+  log: { warn: (info: Record<string, unknown>, msg: string) => void },
+): Promise<string> {
+  try {
+    const epoch = await redis.get(intentEpochKey(userId));
+    return epoch ?? '0';
+  } catch (error) {
+    log.warn({ err: error }, 'Recommendation intent epoch unavailable');
+    return '0';
+  }
+}
 
 function qualityScore(row: ListingRow): number {
   const fields = [
@@ -244,13 +290,43 @@ async function recordServe(
         input.decision.generated_at,
       ],
     );
+    // Candidate-source lineage and selection propensity (migration 142).
+    //
+    // The current heuristic baseline retrieves every candidate from a single
+    // SQL keyset over recent active listings, so all rows share one source.
+    // source_rank mirrors the final position and source_score mirrors the
+    // served score because there is no separate retrieval stage yet. As the
+    // retrieval funnel matures into multiple sources (text_hybrid, visual,
+    // item_to_item, user_affinity, …) these fields will diverge from the final
+    // rank/score and carry the source's own ordering.
+    //
+    // selection_propensity is the IPW key for unbiased off-policy evaluation.
+    // For the deterministic-novelty exploration policy: exploit candidates are
+    // selected with probability (1 - exploration_rate) and explore candidates
+    // share the exploration mass evenly (exploration_rate / result_count).
+    // This is an approximation — exact propensity logging is refined as the
+    // retrieval funnel matures. While exploration_rate is 0 (fallback path),
+    // exploit propensity collapses to 1, which is honest for a deterministic
+    // fallback and is the correct IPW weight only under a deterministic
+    // logging policy assumption (documented limitation).
+    const explorationRate = input.decision.exploration_rate;
+    const resultCount = Math.max(1, input.decision.result_count);
+    const explorePropensity = explorationRate / resultCount;
+    const exploitPropensity = 1 - explorationRate;
+    const candidateSource = 'recent_sql_keyset';
+    const retrievalVersion = 'v1';
+
     for (const recommendation of input.recommendations) {
+      const selectionPropensity =
+        recommendation.policy === 'explore' ? explorePropensity : exploitPropensity;
       await client.query(
         `INSERT INTO recommendation_impressions (
            request_id, user_id, listing_id, position, score, policy, model,
-           reason_codes, component_scores
+           reason_codes, component_scores, status,
+           candidate_source, source_rank, source_score, retrieval_version,
+           selection_propensity
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'served', $10, $11, $12, $13, $14)`,
         [
           input.decision.request_id,
           userId,
@@ -261,6 +337,11 @@ async function recordServe(
           recommendation.model,
           recommendation.reason_codes,
           recommendation.component_scores,
+          candidateSource,
+          recommendation.position,
+          recommendation.score,
+          retrievalVersion,
+          Number(selectionPropensity.toFixed(6)),
         ],
       );
     }
@@ -405,7 +486,7 @@ export function registerRecommendationRoutes({
           }),
         )
         .ltrim(`events:user:${userId}`, 0, 199)
-        .del(`recommendations:v2:${userId}`)
+        .incr(intentEpochKey(userId))
         .exec();
     } catch (error) {
       request.log.warn(
@@ -421,21 +502,140 @@ export function registerRecommendationRoutes({
   app.post('/analytics/events', async (request, reply) => {
     const payload = analyticsSchema.parse(request.body);
     const userId = request.authUser?.userId ?? null;
+    const eventTime = new Date().toISOString();
+
+    // ────────────────────────────────────────────────────────────────────
+    // Operational telemetry — Redis capped list (last 1000 entries).
+    // This is NOT a durable training data source. It exists for real-time
+    // operational dashboards and ad-hoc inspection. Data is evicted as the
+    // list grows beyond 1000 entries (LTRIM). The durable record is the
+    // Postgres analytics_events table written below.
+    // ────────────────────────────────────────────────────────────────────
     const eventKey = `analytics:${payload.event}`;
-    await redis
-      .multi()
-      .lpush(eventKey, JSON.stringify({ ...payload, userId, ts: new Date().toISOString() }))
-      .ltrim(eventKey, 0, 999)
-      .exec();
+    try {
+      await redis
+        .multi()
+        .lpush(eventKey, JSON.stringify({ ...payload, userId, ts: eventTime }))
+        .ltrim(eventKey, 0, 999)
+        .exec();
+    } catch (error) {
+      request.log.warn(
+        { err: error, event: payload.event },
+        'Analytics operational telemetry (Redis) write failed — non-fatal',
+      );
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Durable training ledger — Postgres append-only analytics_events
+    // table. Fire-and-forget: the response is not blocked and a failure
+    // here does not fail the analytics request (analytics is best-effort).
+    // The canonical event envelope (§5.1) is used so downstream ML
+    // feature pipelines and batch export jobs read from a single
+    // durable source of truth.
+    // ────────────────────────────────────────────────────────────────────
+    const properties: Record<string, unknown> = {};
+    if (payload.listingId !== undefined) properties.listing_id = payload.listingId;
+    if (payload.sectionKey !== undefined) properties.section_key = payload.sectionKey;
+    if (payload.position !== undefined) properties.position = payload.position;
+    if (payload.reasonCode !== undefined) properties.reason_code = payload.reasonCode;
+    if (payload.personalised !== undefined) properties.personalised = payload.personalised;
+
+    void db
+      .query(
+        `INSERT INTO analytics_events (
+           event_name, schema_version, event_time, actor_user_id,
+           session_id, request_id, surface, properties
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+        [
+          payload.event,
+          ANALYTICS_ENVELOPE_VERSION,
+          eventTime,
+          userId,
+          payload.sessionId ?? null,
+          request.id,
+          payload.surface ?? null,
+          JSON.stringify(properties),
+        ],
+      )
+      .catch((error) => {
+        request.log.error(
+          { err: error, event: payload.event, userId },
+          'Analytics durable write (Postgres analytics_events) failed — non-fatal, event may be lost',
+        );
+      });
+
     reply.code(202);
     return { ok: true };
+  });
+
+  // Client-confirmed recommendation exposure. A row written at response time is
+  // only a serve candidate; the client must confirm that the cell rendered and
+  // crossed a viewability threshold before training treats it as an impression.
+  // Status only advances forward (served -> rendered -> viewable).
+  app.post('/recommendations/impressions', async (request, reply) => {
+    const payload = impressionConfirmationSchema.parse(request.body);
+    const userId = resolveAuthenticatedUserId(request);
+    const now = new Date().toISOString();
+    const client = await db.connect();
+    let updated = 0;
+    try {
+      await client.query('BEGIN');
+      for (const entry of payload.entries) {
+        const result = await client.query<{ status: string }>(
+          `UPDATE recommendation_impressions
+             SET status = $1,
+                 rendered_at = COALESCE(
+                   rendered_at,
+                   CASE WHEN $1 IN ('rendered','viewable') THEN $2 END
+                 ),
+                 viewable_at = COALESCE(
+                   viewable_at,
+                   CASE WHEN $1 = 'viewable' THEN $2 END
+                 ),
+                 viewability = COALESCE($3, viewability)
+           WHERE request_id = $4
+             AND user_id = $5
+             AND listing_id = $6
+             AND (CASE status
+                    WHEN 'served' THEN 0
+                    WHEN 'rendered' THEN 1
+                    WHEN 'viewable' THEN 2
+                  END) <= (CASE $1
+                             WHEN 'rendered' THEN 1
+                             WHEN 'viewable' THEN 2
+                           END)
+           RETURNING status`,
+          [
+            entry.status,
+            now,
+            entry.viewability ?? null,
+            payload.requestId,
+            userId,
+            entry.listingId,
+            entry.status,
+          ],
+        );
+        updated += result.rowCount ?? 0;
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    reply.code(updated ? 200 : 404);
+    return { ok: updated > 0, updated };
   });
 
   app.get('/recommendations/:userId', async (request, reply) => {
     const { userId: requestedUserId } = recommendationParamsSchema.parse(request.params);
     const userId = resolveAuthenticatedUserId(request, requestedUserId);
     const { surface, sessionId } = recommendationQuerySchema.parse(request.query);
-    const cacheKey = `recommendations:v2:${userId}`;
+    const intentEpoch = await resolveIntentEpoch(redis, userId, request.log);
+    const cacheKey = `recommendations:v2:${userId}:${surface}:${POLICY_VERSION}:${intentEpoch}`;
     const generatedAt = new Date().toISOString();
     const requestId = `rec_${crypto.randomUUID()}`;
 
@@ -447,9 +647,14 @@ export function registerRecommendationRoutes({
          GROUP BY listing_id
        ),
        seller_ratings AS (
-         SELECT seller_id, AVG(rating)::text AS seller_rating
-         FROM order_reviews
-         GROUP BY seller_id
+         -- Reputation feature is in shadow mode (Phase 0 contract-truth repair).
+         -- Raw AVG/5 was an unsafe trust signal: one 5-star review produced a
+         -- perfect 1.0 trust score while a new seller got 0.5, creating
+         -- incumbent bias and a gaming surface. Until a calibrated Bayesian
+         -- feature with fairness guardrails is shadow-tested, all sellers
+         -- receive a neutral 0.5 so ranking is driven by other features only.
+         SELECT seller_id, NULL::text AS seller_rating
+         FROM (SELECT DISTINCT seller_id FROM listings WHERE seller_id IS NOT NULL) s
        )
        SELECT
          l.id, l.seller_id, l.title, l.description, l.category, l.brand,
@@ -468,7 +673,7 @@ export function registerRecommendationRoutes({
 
     const interactionsResult = await db.query<{
       listing_id: string;
-      action: 'view' | 'wishlist' | 'purchase';
+      action: InteractionAction;
       strength: string;
       created_at: string;
       title: string;
@@ -698,7 +903,7 @@ export function registerRecommendationRoutes({
         policyVersion: result.decision.policy_version,
         featureSchemaVersion: result.decision.feature_schema_version,
         capabilityLevel: result.decision.capability_level,
-        trainedModel: false,
+        trainedModel: result.decision.trained_model,
         generatedAt: result.decision.generated_at,
         explorationRate: result.decision.exploration_rate,
         coldStart: result.decision.cold_start,

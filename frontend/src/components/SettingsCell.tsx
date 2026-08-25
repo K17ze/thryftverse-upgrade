@@ -195,7 +195,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderRadius: Radius.xl,
       overflow: 'hidden',
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 0.06,
       shadowRadius: 10,
@@ -273,7 +273,7 @@ function createStyles(colors: ThemeColors) {
     badgeText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
-      color: '#FFFFFF',
+      color: colors.surfaceElevated,
       letterSpacing: Type.caption.letterSpacing,
     },
     sectionHeader: {

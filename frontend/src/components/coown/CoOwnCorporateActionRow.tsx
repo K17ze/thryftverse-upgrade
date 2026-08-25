@@ -106,7 +106,7 @@ export function CoOwnCorporateActionRow({
       accessibilityLabel={`${actionCfg.label}, ${statusCfg.label}, ${dateLabel}. ${effectLabel}${amountLabel ? `, ${amountLabel}` : ''}${recordDateLabel ? `, ${recordDateLabel}` : ''}${paymentDateLabel ? `, ${paymentDateLabel}` : ''}`}
     >
       {/* Icon */}
-      <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
+      <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
         <Ionicons name={actionCfg.icon} size={16} color={colors.brand} />
       </View>
 
@@ -193,10 +193,10 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   date: {
     fontSize: Type.meta.size,
@@ -229,10 +229,10 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   amount: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   statusPill: {

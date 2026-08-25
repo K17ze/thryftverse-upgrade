@@ -1,16 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { StyleSheet, Pressable, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  runOnUI,
 } from 'react-native-reanimated';
 import { Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { setStoredCreateMode } from '../../preferences/createModePreferences';
 
 // ── CreatorModeSwitch ──────────────────────────────────────────────────
 // A minimal Look / Poster / Search switch that sits at the bottom of the
@@ -22,10 +21,10 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 // not a wizard." The mode switch lets the user reframe their intent without
 // leaving the camera — no route transition, just a mode change.
 //
-// The last-used mode is persisted to AsyncStorage so the camera reopens in
-// the mode the user last chose.
+// Look/Poster preference is persisted by the canonical Create preference
+// owner. Visual Search is intentionally transient.
 
-export type CreatorCaptureMode = 'look' | 'poster' | 'search';
+export type CreatorCaptureMode = 'look' | 'poster' | 'visual-search';
 
 export interface CreatorModeSwitchProps {
   /** Currently active mode. */
@@ -34,12 +33,10 @@ export interface CreatorModeSwitchProps {
   onModeChange: (mode: CreatorCaptureMode) => void;
 }
 
-const STORAGE_KEY = 'creatorCaptureMode';
-
 const MODES: { key: CreatorCaptureMode; label: string }[] = [
   { key: 'look', label: 'Look' },
   { key: 'poster', label: 'Poster' },
-  { key: 'search', label: 'Search' },
+  { key: 'visual-search', label: 'Search' },
 ];
 
 // Fixed-width label slots so the active-indicator dot position is
@@ -54,56 +51,28 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
 
   // Active-indicator x-offset (animated dot). Each slot is SLOT_WIDTH wide;
   // the dot centres under the active slot.
-  const dotX = useSharedValue(0);
+  const initialModeIndex = Math.max(0, MODES.findIndex((item) => item.key === mode));
+  const dotX = useSharedValue(initialModeIndex * SLOT_WIDTH + SLOT_WIDTH / 2 - DOT_SIZE / 2);
 
-  const updateDot = (activeMode: CreatorCaptureMode) => {
-    'worklet';
+  const updateDot = useCallback((activeMode: CreatorCaptureMode) => {
     const idx = MODES.findIndex((m) => m.key === activeMode);
     if (idx >= 0) {
       const target = idx * SLOT_WIDTH + SLOT_WIDTH / 2 - DOT_SIZE / 2;
-      dotX.value = withSpring(target, spring.tap);
+      dotX.value = reducedMotion ? target : withSpring(target, spring.tap);
     }
-  };
-
-  // Persist the mode to AsyncStorage (best-effort).
-  const persistMode = (next: CreatorCaptureMode) => {
-    AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {
-      // Best-effort — the camera still functions if persistence fails.
-    });
-  };
-
-  // On mount, read the persisted mode and apply it once (so the camera
-  // reopens in the last-used mode). The parent's `mode` prop is the initial
-  // value; the persisted value overrides it only when present and different.
-  useEffect(() => {
-    let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (cancelled || !raw) return;
-        const normalized = raw.trim().toLowerCase();
-        const valid: CreatorCaptureMode[] = ['look', 'poster', 'search'];
-        if (valid.includes(normalized as CreatorCaptureMode) && normalized !== mode) {
-          onModeChange(normalized as CreatorCaptureMode);
-        }
-      })
-      .catch(() => {
-        // Best-effort — ignore storage failures.
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dotX, reducedMotion, spring.tap]);
 
   // Position the dot whenever the mode changes.
   useEffect(() => {
-    runOnUI(updateDot)(mode);
-  }, [mode]);
+    updateDot(mode);
+  }, [mode, updateDot]);
 
   const handlePress = (next: CreatorCaptureMode) => {
     if (next === mode) return;
     haptic.selection();
-    persistMode(next);
+    if (next !== 'visual-search') {
+      void setStoredCreateMode(next);
+    }
     onModeChange(next);
   };
 

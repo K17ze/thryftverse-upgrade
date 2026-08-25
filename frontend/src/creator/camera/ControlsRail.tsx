@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Type } from '../../theme/designTokens';
+import { Typography, Type, Space } from '../../theme/designTokens';
 
 const CONTROL_RAIL_ICON = 22;
 
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   rail: {
     position: 'absolute',
     right: 8,
-    gap: 16,
+    gap: Space.md,
     alignItems: 'center',
   },
   // 44pt minimum touch target (AGENTS.md §13). The visible glyph is 22pt

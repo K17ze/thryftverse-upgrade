@@ -20,10 +20,13 @@ import { Lobster_400Regular } from '@expo-google-fonts/lobster';
 import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { PlayfairDisplay_400Regular, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
+import { loadAsync as fontLoadAsync } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
-import { View, ActivityIndicator, Text, TextInput, Alert } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { View, ActivityIndicator, Text, TextInput, Alert, AppState } from 'react-native';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from './src/constants/colors';
 import { ToastProvider } from './src/context/ToastContext';
 import { TabScrollProvider } from './src/context/TabScrollContext';
@@ -31,11 +34,16 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
-import { ToastContainer } from './src/components/Toast';
+import { TaxonomyProvider } from './src/context/TaxonomyContext';
+import { ToastContainer, PushSoftAskOverlay } from './src/components/Toast';
+import { UpdateManager } from './src/platform/updates';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
+import { RealtimeProvider } from './src/platform/realtime';
+import { PostHogProvider } from './src/analytics/PostHogProvider';
+import { SupportProvider } from './src/platform/support';
 import { BrandedSplash } from './src/components/BrandedSplash';
 import { Typography } from './src/theme/designTokens';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -47,15 +55,25 @@ import {
 import { restoreAuthSession } from './src/services/authApi';
 import { useStore } from './src/store/useStore';
 import { joinGroupByInviteOnApi } from './src/services/chatApi';
+import { initChatOutboxDrain, drainChatOutbox } from './src/services/chatOutbox';
+import { initOutboxDrain } from './src/storage/outboxClient';
+import { runSync, type SyncDomain } from './src/storage/syncEngine';
 import { parseApiError } from './src/lib/apiClient';
 import { useOfflineQueue } from './src/lib/offlineQueue';
 import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences';
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
+import { getStoredSettingsPreferences } from './src/preferences/settingsPreferences';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
+import { initializeSslPinning } from './src/utils/sslPinning';
+import { linking } from './src/navigation/linking';
+import { SignupWallProvider } from './src/hooks/useSignupWall';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
+import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
+import { useScreenshotTracking } from './src/platform/screenCapture';
 import { trackScreenView } from './src/lib/telemetry';
+import { trackScreenChange } from './src/analytics/useScreenTracking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
@@ -68,7 +86,112 @@ initSentry();
 // crash reporting behaviour. Idempotent — safe to call once at startup.
 installGlobalErrorHandler();
 
+// ──────────────────────────────────────────────────────────────────────────
+// Foreground notification presentation
+// ----------------------------------------------------------------------------
+// `setNotificationHandler` MUST be configured at module level (outside any
+// React component) so expo-notifications can consult it before the first
+// component mounts. Without it, notifications delivered while the app is in
+// the foreground are silently dropped — no alert, no banner, no sound.
+//
+// Presentation is driven by the notification's `eventType` payload field:
+//   - Actionable events (auction outbid/won, order lifecycle, chat, payouts,
+//     resolution) interrupt with a sound, badge update, and high priority.
+//   - Low-priority "generic" / news notifications present silently with a
+//     default priority so they don't pull the user's attention away from the
+//     foreground task.
+//
+// The brand accent colour for notification chrome is applied via the
+// navigation theme (`notification: Colors.danger`) and the Android
+// notification channel colour — `NotificationBehavior` itself exposes no
+// colour field, so the brand token is referenced here for documentation.
+// ──────────────────────────────────────────────────────────────────────────
+const ACTIONABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'auction_outbid',
+  'auction_won',
+  'auction_ending_soon',
+  'order_created',
+  'order_paid',
+  'order_dispatched',
+  'order_delivered',
+  'order_cancelled',
+  'order_refunded',
+  'resolution_opened',
+  'resolution_status_changed',
+  'chat_message',
+  'payout_processed',
+  'refund_completed',
+]);
+
+Notifications.setNotificationHandler({
+  handleNotification: async (notification) => {
+    const data = (notification.request.content.data ?? {}) as Record<string, unknown>;
+    const eventType = typeof data.eventType === 'string' ? data.eventType : null;
+    const isActionable = eventType ? ACTIONABLE_EVENT_TYPES.has(eventType) : false;
+    const isGeneric = eventType === null || eventType === 'generic';
+
+    return {
+      // iOS: present an alert banner; Android: show the heads-up banner.
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      // Sound only for actionable categories — silent for generic/news so the
+      // foreground experience stays calm.
+      shouldPlaySound: isActionable,
+      // Badge updates for everything except generic news pings.
+      shouldSetBadge: !isGeneric,
+      // Android priority: HIGH interrupts with a heads-up; DEFAULT respects
+      // the channel's importance without forcing a peek.
+      priority: isActionable
+        ? Notifications.AndroidNotificationPriority.HIGH
+        : Notifications.AndroidNotificationPriority.DEFAULT,
+    };
+  },
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Notification action categories — interactive buttons on message notifications.
+// ----------------------------------------------------------------------------
+// Registers a "message" category with "Reply" and "Mark as read" actions so
+// the OS presents inline action buttons on chat message notifications. The
+// notification tap handler (usePushNotificationTap) already handles navigation
+// on tap; these actions are registered so the buttons are available, with
+// response handling as a no-op for now.
+// ──────────────────────────────────────────────────────────────────────────
+Notifications.setNotificationCategoryAsync('message', [
+  {
+    identifier: 'reply',
+    buttonTitle: 'Reply',
+    options: {
+      opensAppToForeground: false,
+    },
+  },
+  {
+    identifier: 'mark_as_read',
+    buttonTitle: 'Mark as read',
+    options: {
+      opensAppToForeground: false,
+      isDestructive: false,
+    },
+  },
+]).catch(() => {
+  // Category registration is best-effort — must not crash app startup.
+});
+
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+let lastListingDraftSyncAt = 0;
+const LISTING_DRAFT_SYNC_MIN_INTERVAL_MS = 60_000;
+
+function runSyncListingDraft(): void {
+  const now = Date.now();
+  if (now - lastListingDraftSyncAt < LISTING_DRAFT_SYNC_MIN_INTERVAL_MS) {
+    return;
+  }
+  lastListingDraftSyncAt = now;
+  const domain: SyncDomain = 'listing_draft';
+  runSync(domain).catch(() => undefined);
+}
 
 let globalTypographyApplied = false;
 
@@ -85,16 +208,16 @@ function applyGlobalTypographyDefaults(useInterFonts: boolean) {
   const textDefaultProps = (Text as any).defaultProps ?? {};
   (Text as any).defaultProps = {
     ...textDefaultProps,
-    allowFontScaling: false,
-    maxFontSizeMultiplier: 1.06,
+    allowFontScaling: true,
+    maxFontSizeMultiplier: 1.35,
     style: [textDefaultProps.style, { fontFamily: textFamily, letterSpacing: 0 }],
   };
 
   const inputDefaultProps = (TextInput as any).defaultProps ?? {};
   (TextInput as any).defaultProps = {
     ...inputDefaultProps,
-    allowFontScaling: false,
-    maxFontSizeMultiplier: 1.04,
+    allowFontScaling: true,
+    maxFontSizeMultiplier: 1.35,
     selectionColor: Colors.brand,
     style: [inputDefaultProps.style, { fontFamily: inputFamily, letterSpacing: 0 }],
   };
@@ -115,7 +238,18 @@ export default function App() {
 
   usePushNotificationTap();
   useUnreadNotificationCount();
+  usePushTokenCleanup();
+  // Detect screenshots on non-protected screens and report them to analytics.
+  // Protected screens block screenshots at the OS level, so this listener only
+  // fires on surfaces where tracking (not blocking) is the desired behaviour.
+  useScreenshotTracking();
 
+  // Performance: only block first paint on the Inter family (used on every
+  // screen from boot). The 8 display fonts below are used exclusively in the
+  // Creator canvas/text tools, which the user always navigates to after the
+  // first paint. Loading them lazily after appReady removes ~8 font decode
+  // operations from the critical cold-start path and directly reduces the
+  // "Skipped 185 frames" jank observed on cold start.
   const [fontsLoaded, fontLoadError] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -123,15 +257,6 @@ export default function App() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    Anton_400Regular,
-    BebasNeue_400Regular,
-    Caveat_400Regular,
-    DancingScript_400Regular,
-    Lobster_400Regular,
-    Pacifico_400Regular,
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_700Bold,
-    PressStart2P_400Regular,
   });
 
   React.useEffect(() => {
@@ -165,6 +290,21 @@ export default function App() {
     markInteractive({ surface: 'app_mounted' });
   }, []);
 
+  // P0.14: Mount the application-owned chat outbox drain. NetInfo reconnects
+  // flush pending messages; an AppState listener re-drains on foreground.
+  React.useEffect(() => {
+    initChatOutboxDrain();
+    drainChatOutbox().catch(() => undefined);
+    initOutboxDrain();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        drainChatOutbox().catch(() => undefined);
+        runSyncListingDraft();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   React.useEffect(() => {
     const unsubscribe = subscribeThemePreferenceChange(() => {
       setThemeTick((value) => value + 1);
@@ -177,19 +317,39 @@ export default function App() {
     let mounted = true;
 
     const initializeAppBootstrapState = async () => {
+      // Initialise SSL public-key pinning before any network request so every
+      // HTTPS connection (fetch, Axios, image loaders) is validated against
+      // the pinned keys once the native module is installed. Safe to call in
+      // dev — it no-ops when the module is absent and never throws.
+      try {
+        await initializeSslPinning();
+      } catch {
+        // Pinning init must never block app startup.
+      }
+
       const preference = await getStoredThemePreference();
       applyThemePreference(preference);
 
-      const [storedProfileMedia, localAuthSnapshot] = await Promise.all([
+      const [storedProfileMedia, localAuthSnapshot, storedSettings] = await Promise.all([
         getStoredProfileMedia(),
         getStoredAuthSnapshot(),
+        getStoredSettingsPreferences(),
       ]);
 
       const store = useStore.getState();
 
       if (localAuthSnapshot?.user) {
+        // When biometric login is enabled, restore the user into the store
+        // (so the navigator knows they are authenticated) but set the
+        // pending flag so AppNavigator shows BiometricLogin as the initial
+        // route instead of MainTabs. The BiometricLogin screen clears the
+        // flag after a successful Face ID / Touch ID prompt.
+        if (storedSettings.biometricLoginEnabled) {
+          store.setBiometricLoginPending(true);
+        }
         store.login(localAuthSnapshot.user);
         store.setTwoFactorEnabled(localAuthSnapshot.twoFactorEnabled);
+        runSyncListingDraft();
       }
 
       if (storedProfileMedia.avatar) {
@@ -219,6 +379,7 @@ export default function App() {
           const latestStore = useStore.getState();
           latestStore.login(restoredSession.storeUser);
           latestStore.setTwoFactorEnabled(restoredSession.user.twoFactorEnabled);
+          runSyncListingDraft();
         })
         .catch(() => {
           // Session refresh is best-effort and should not interrupt app usage.
@@ -244,6 +405,23 @@ export default function App() {
 
   const fontsReady = fontsLoaded || !!fontLoadError || bootTimedOut;
   const appReady = fontsReady && themeInitialized && !!ThemeReadyNavigator;
+
+  // Lazy-load display fonts after the app is interactive so they are
+  // available when the user opens the Creator, without blocking boot.
+  React.useEffect(() => {
+    if (!appReady) return;
+    void fontLoadAsync({
+      Anton_400Regular,
+      BebasNeue_400Regular,
+      Caveat_400Regular,
+      DancingScript_400Regular,
+      Lobster_400Regular,
+      Pacifico_400Regular,
+      PlayfairDisplay_400Regular,
+      PlayfairDisplay_700Bold,
+      PressStart2P_400Regular,
+    });
+  }, [appReady]);
 
   const processedInviteTokensRef = React.useRef<Set<string>>(new Set());
 
@@ -271,6 +449,10 @@ export default function App() {
         // is respected inside trackTelemetryEvent.
         const params = currentRoute.params as Record<string, string | number> | undefined;
         trackScreenView(currentRoute.name, params);
+        // PostHog screen view tracking — emits a typed `screen_view` event
+        // with previous-screen context for funnel/flow analysis. No-op in
+        // dev mode (no PostHog API key).
+        trackScreenChange(currentRoute);
       }
     } catch {
       // Navigation observability must never crash the app.
@@ -481,16 +663,25 @@ export default function App() {
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
+          <PostHogProvider>
+          <SupportProvider>
           <KeyboardProvider>
           <ServerStateProvider>
+            <RealtimeProvider>
             <ToastProvider>
               <BackendDataProvider>
+                <TaxonomyProvider>
                 <CurrencyProvider>
                   <SettingsPreferencesProvider>
                     <TabScrollProvider>
+                      {/* Global reduced-motion config — ensures every Reanimated
+                          animation respects the device's Reduce Motion setting.
+                          Placed at the app root so it covers all child animations. */}
+                      <ReducedMotionConfig mode={ReduceMotion.System} />
                       <NavigationContainer
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
+                        linking={linking}
                         onStateChange={onNavigationStateChange}
                         onReady={() => {
                           setNavigationReady(true);
@@ -517,16 +708,24 @@ export default function App() {
                         }}
                       >
                         <StatusBar style={ActiveTheme === 'light' ? 'dark' : 'light'} />
-                        {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
+                        <SignupWallProvider>
+                          {ThemeReadyNavigator ? <ThemeReadyNavigator /> : null}
+                        </SignupWallProvider>
                       </NavigationContainer>
                     </TabScrollProvider>
                   </SettingsPreferencesProvider>
                 </CurrencyProvider>
+                </TaxonomyProvider>
               </BackendDataProvider>
               <ToastContainer />
+              <PushSoftAskOverlay />
+              <UpdateManager />
             </ToastProvider>
+            </RealtimeProvider>
           </ServerStateProvider>
           </KeyboardProvider>
+          </SupportProvider>
+          </PostHogProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </AppErrorBoundary>

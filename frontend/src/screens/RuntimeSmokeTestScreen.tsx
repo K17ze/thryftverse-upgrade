@@ -124,8 +124,8 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
     { label: 'UserProfile', screen: 'UserProfile', needsData: 'user' },
     { label: 'Closet', screen: 'Closet' },
     { label: 'MyOrders', screen: 'MyOrders' },
-    { label: 'CreatePoster', screen: 'CreatePoster' },
-    { label: 'CreateLook', screen: 'CreateLook' },
+    { label: 'CreatorStudio (poster)', screen: 'CreatorStudio', params: { type: 'poster' } },
+    { label: 'CreatorStudio (look)', screen: 'CreatorStudio', params: { type: 'look' } },
     { label: 'ItemDetail', screen: 'ItemDetail', needsData: 'listing' },
   ];
 
@@ -361,14 +361,14 @@ function createStyles(colors: ThemeColors) {
   },
   resetTile: {
     width: '100%',
-    backgroundColor: colors.danger + '18',
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.danger + '40',
+    borderColor: colors.dangerBorder,
     marginBottom: Space.md,
     gap: Space.xs,
   },

@@ -1,5 +1,5 @@
 import type { LinkingOptions } from '@react-navigation/native';
-import type { RootStackParamList, TabParamList } from './types';
+import type { RootStackParamList } from './types';
 
 /**
  * URL prefixes that the navigation container will accept as deep links.
@@ -42,27 +42,69 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
   config: {
     screens: {
-      // Root stack — tab navigator. Nested screens are addressable via
-      // their own path segments (e.g. `thryftverse://home`).
+      // Root stack — tab navigator. Each tab wraps a native-stack
+      // navigator, so deep-linkable screens nested inside a tab stack
+      // are addressable via their own path segments under the tab's
+      // `screens` config (e.g. `thryftverse://category/123` resolves to
+      // MainTabs > Explore > CategoryDetail).
       MainTabs: {
         screens: {
-          Home: 'home',
-          Explore: 'explore',
-          Create: undefined, // Create tab is not deep-linkable (modal action)
+          Home: {
+            screens: {
+              Home: 'home',
+              PulseFeed: 'pulse',
+              LookDetail: 'looks/:lookId',
+              Galleria: 'galleria',
+              GalleriaCollectionDetail: 'galleria/collections/:collectionId',
+              MoodboardHome: 'moodboards',
+              YourAlgorithm: 'algorithm',
+              StyleQuiz: 'style-quiz',
+              ConversationalSearch: 'ai-search',
+            },
+          },
+          Explore: {
+            screens: {
+              Explore: 'explore',
+              CategoryDetail: 'category/:categoryId',
+              CollectionDetail: 'collection/:collectionId',
+              SavedSearches: 'saved-searches',
+            },
+          },
           Inbox: 'inbox',
-          Profile: 'me',
-        } satisfies Record<keyof TabParamList, string | undefined>,
+          Profile: {
+            screens: {
+              Profile: 'me',
+            },
+          },
+        },
       },
 
-      // Marketplace / product surfaces
+      // Marketplace / product surfaces (root stack — cross-tab)
       ItemDetail: 'product/:itemId',
-      CategoryDetail: 'category/:categoryId',
-      CollectionDetail: 'collection/:collectionId',
-      Closet: 'closet',
       Checkout: 'checkout/:itemId',
+
+      // Discovery (root stack — cross-tab)
+      GlobalSearch: 'search',
+
+      // Settings & account (root stack — cross-tab)
+      EditProfile: 'me/edit',
+      Settings: 'settings',
+      Personalisation: 'personalisation',
+      Closet: 'closet',
+      NotificationsList: 'notifications',
+      SavedAddresses: 'addresses',
+      Payments: 'payments',
+      HelpSupport: 'help',
+      Verification: 'verification',
+      AccountSecurity: 'account-security',
+      AccountSecurityRecovery: 'account-security/recovery/:caseId',
+
+      // Auth — password reset deep link (thryftverse://auth/reset-password?token=…)
+      ResetPassword: 'auth/reset-password',
 
       // Auctions
       AuctionHome: 'auctions',
+      Auctions: 'auctions/all',
       AuctionDetail: 'auction/:auctionId',
       MyBids: 'auctions/my-bids',
 
@@ -72,10 +114,14 @@ export const linking: LinkingOptions<RootStackParamList> = {
       AssetDueDiligence: 'asset/:assetId/due-diligence',
       Portfolio: 'portfolio',
       CoOwnOrderHistory: 'co-own/orders',
+      MarketLedger: 'market',
+      AssetLeaderboard: 'leaderboard',
 
       // Chat / social
       Chat: 'chat/:conversationId',
       UserProfile: 'user/:userId',
+      BotDirectory: 'bots',
+      BotDetail: 'bot/:botId',
 
       // Orders & wallet
       OrderDetail: 'order/:orderId',
@@ -85,22 +131,30 @@ export const linking: LinkingOptions<RootStackParamList> = {
       Withdraw: 'wallet/withdraw',
       SellerEarnings: 'wallet/earnings',
       WalletActivity: 'wallet/activity',
+      WalletConvert: 'wallet/convert',
+      AddBankAccount: 'wallet/bank-account',
 
-      // Discovery
-      GlobalSearch: 'search',
-      PulseFeed: 'pulse',
-      LookDetail: 'looks/:lookId',
-      NotificationsList: 'notifications',
+      // Seller tools
+      SellerHub: 'seller-hub',
+      SellerAnalytics: 'seller-analytics',
+      CreatorAnalyticsDashboard: 'creator-analytics',
+      InventoryManagement: 'inventory',
 
-      // Bots
-      BotDirectory: 'bots',
-      BotDetail: 'bot/:botId',
+      // Support & help
+      ResolutionCentre: 'resolution-centre',
+      SupportConversation: 'support/conversation/:conversationId',
+      SupportCaseDetail: 'support/case/:caseId',
+      OrderSupport: 'support/order/:orderId',
+      InviteFriends: 'invite',
+      Postage: 'postage',
 
       // Moodboards
       MoodboardEditor: 'moodboards/:moodboardId',
 
-      // Galleria collections
-      GalleriaCollectionDetail: 'galleria/collections/:collectionId',
+      // Live shopping — live stream viewer is deep-linkable from push
+      // notifications ("Seller is live now") and shared stream URLs.
+      LiveShopping: 'live',
+      LiveStreamViewer: 'live/:sessionId',
     },
   },
 };

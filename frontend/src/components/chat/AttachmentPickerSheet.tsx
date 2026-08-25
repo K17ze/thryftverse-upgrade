@@ -14,6 +14,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -23,6 +24,8 @@ export type AttachmentType =
   | 'file'
   | 'location'
   | 'offer'
+  | 'product'
+  | 'priceQuote'
   | 'shareListing'
   | 'shareOrder'
   | 'requestPayment'
@@ -40,6 +43,8 @@ const OPTIONS: AttachmentOption[] = [
   { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', colorKey: 'brand' },
   { id: 'camera', label: 'Camera', icon: 'camera-outline', colorKey: 'success' },
   { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', colorKey: 'warning' },
+  { id: 'product', label: 'Product', icon: 'cube-outline', colorKey: 'discovery' },
+  { id: 'priceQuote', label: 'Price Quote', icon: 'receipt-outline', colorKey: 'brand' },
   { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', colorKey: 'discovery' },
   { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', colorKey: 'brand' },
   { id: 'requestPayment', label: 'Payment', icon: 'card-outline', colorKey: 'success' },
@@ -66,11 +71,11 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
   useEffect(() => {
     if (visible) {
       setRendered(true);
-      opacity.value = withTiming(1, { duration: 180 });
-      translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
+      opacity.value = withTiming(1, { duration: Motion.duration.normal });
+      translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
     } else if (rendered) {
-      opacity.value = withTiming(0, { duration: 150 });
-      translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: 200 });
+      opacity.value = withTiming(0, { duration: Motion.duration.fast });
+      translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: Motion.duration.normal });
       setTimeout(() => setRendered(false), 220);
     }
   }, [visible, rendered, opacity, translateY, reducedMotion]);
@@ -93,7 +98,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       if (e.translationY > 100 || e.velocityY > 600) {
         runOnJS(onClose)();
       } else {
-        translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
       }
     });
 
@@ -104,7 +109,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
 
   const visibleOptions = OPTIONS.filter((opt) => {
     if (opt.id === 'inviteBot') return isGroup;
-    if (opt.id === 'offer' || opt.id === 'shareListing') return hasLinkedItem;
+    if (opt.id === 'offer' || opt.id === 'shareListing' || opt.id === 'product' || opt.id === 'priceQuote') return hasLinkedItem;
     if (opt.id === 'shareOrder' || opt.id === 'requestPayment') return hasLinkedOrder;
     return true;
   });
@@ -113,7 +118,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      <Reanimated.View style={[styles.backdrop, backdropStyle]}>
+      <Reanimated.View style={[styles.backdrop, { backgroundColor: colors.overlay }, backdropStyle]}>
         <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} disableAnimation />
       </Reanimated.View>
 
@@ -166,7 +171,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
     borderTopLeftRadius: Radius.xl + 8,
@@ -190,15 +194,15 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   optionBtn: {
-    width: '23%',
+    width: '31%',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
     minHeight: 44,
   },
   iconCircle: {
-    width: 60,
-    height: 60,
+    width: 80,
+    height: 80,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',

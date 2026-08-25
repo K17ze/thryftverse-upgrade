@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   // glyph. Distinguishes institutional custodians from individual
   // sellers per spec 03_COOWN §2.
   avatarInitial: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   identityText: {
@@ -224,8 +224,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   name: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   subtitle: {

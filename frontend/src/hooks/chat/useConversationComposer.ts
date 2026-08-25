@@ -21,6 +21,7 @@ import {
   fetchComposerStateFromApi,
   upsertComposerStateOnApi,
   clearComposerStateOnApi,
+  setTypingStatus,
 } from "../../services/chatApi";
 
 import * as ImagePicker from "expo-image-picker";
@@ -58,6 +59,71 @@ export function useConversationComposer({
   } | null>(null);
   const [reactingToMessage, setReactingToMessage] = useState<Message | null>(null);
 
+  // Typing indicator publisher (P0 #1 / P2 #56).
+  // Local `isTyping` mirrors the realtime signal we publish to other
+  // participants. The composer debounces "started typing" (1s) and clears
+  // "stopped typing" after 3s of inactivity; on send the caller invokes
+  // `notifyStoppedTyping` to clear immediately. The publish itself is
+  // fired by the effect below whenever `isTyping` transitions, so the
+  // debounce timers are the single source of truth for state changes.
+  const [isTyping, setIsTyping] = useState(false);
+  const typingStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+  isTypingRef.current = isTyping;
+
+  const setTypingInput = useCallback((value: string) => {
+    setInput(value);
+    // Clear any pending stop timer — the user is actively typing
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (value.length > 0) {
+      // Start the show timer if not already typing and no pending start
+      if (!typingStartTimerRef.current && !isTypingRef.current) {
+        typingStartTimerRef.current = setTimeout(() => {
+          setIsTyping(true);
+          typingStartTimerRef.current = null;
+        }, 1000);
+      }
+      // Schedule the stop timer for 3s of inactivity
+      typingStopTimerRef.current = setTimeout(() => {
+        setIsTyping(false);
+        typingStopTimerRef.current = null;
+      }, 3000);
+    } else {
+      // Input cleared — cancel start timer and stop typing immediately
+      if (typingStartTimerRef.current) {
+        clearTimeout(typingStartTimerRef.current);
+        typingStartTimerRef.current = null;
+      }
+      setIsTyping(false);
+    }
+  }, []);
+
+  // Publish typing state to the backend whenever it transitions. The
+  // backend fans the event out to other participants via the conversation's
+  // realtime topic; `useTypingIndicator` on the receiving side lights up.
+  useEffect(() => {
+    if (!conversationId) return;
+    setTypingStatus(conversationId, isTyping).catch(() => undefined);
+  }, [conversationId, isTyping]);
+
+  // Immediate stop — used by the send path so the recipient's typing
+  // indicator clears the moment a message is sent, not 3s later.
+  const notifyStoppedTyping = useCallback(() => {
+    if (typingStartTimerRef.current) {
+      clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    setIsTyping(false);
+  }, []);
+
   // Search state
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? "");
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
@@ -73,6 +139,16 @@ export function useConversationComposer({
   useEffect(() => {
     if (!conversationId) return;
     hydratedComposerRef.current = null;
+    // Reset typing state when switching conversations
+    setIsTyping(false);
+    if (typingStartTimerRef.current) {
+      clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -123,6 +199,12 @@ export function useConversationComposer({
     return () => {
       if (composerPersistTimerRef.current) {
         clearTimeout(composerPersistTimerRef.current);
+      }
+      if (typingStartTimerRef.current) {
+        clearTimeout(typingStartTimerRef.current);
+      }
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
       }
       if (conversationId && input) {
         upsertComposerStateOnApi(conversationId, {
@@ -190,6 +272,9 @@ export function useConversationComposer({
   return {
     input,
     setInput,
+    setTypingInput,
+    isTyping,
+    notifyStoppedTyping,
     replyTo,
     setReplyTo,
     attachmentPickerVisible,

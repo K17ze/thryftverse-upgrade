@@ -31,17 +31,19 @@ export function NativeMenu({ visible, onDismiss, options, testID }: NativeMenuPr
 
   if (!visible) return null;
   return (
-    <Pressable style={styles.overlay} onPress={onDismiss} testID={testID}>
+    <Pressable style={styles.overlay} onPress={onDismiss} testID={testID} accessibilityRole="button" accessibilityLabel="Dismiss menu">
       <View style={styles.menu}>
         {options.map((opt, i) => (
           <Pressable
             key={i}
             style={styles.option}
+            accessibilityLabel={opt.label}
             onPress={() => {
               opt.onPress();
               onDismiss();
             }}
             disabled={opt.disabled}
+          accessibilityRole="switch"
           >
             <Text
               style={[
@@ -63,7 +65,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -72,7 +74,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingVertical: Space.xs,
     minWidth: 200,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -83,7 +85,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   optionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },

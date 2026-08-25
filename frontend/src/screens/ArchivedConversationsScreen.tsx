@@ -6,11 +6,13 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Typography } from '../theme/designTokens';
+import { Type, Typography, Space } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
+import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,6 +21,7 @@ export default function ArchivedConversationsScreen() {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
+  const conversationsLoaded = useStore((s) => s.conversationsLoaded);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const toggleArchived = useStore((s) => s.toggleArchivedConversation);
   const deleteConversation = useStore((s) => s.deleteConversation);
@@ -30,23 +33,33 @@ export default function ArchivedConversationsScreen() {
     return conversations.filter((c) => archivedIds.includes(c.id));
   }, [conversations, archivedIds]);
 
-  const handleRestore = (id: string) => {
-    toggleArchived(id);
-    show('Conversation restored to inbox', 'success');
+  const handleRestore = async (id: string) => {
+    try {
+      await unarchiveConversationOnApi(id);
+      toggleArchived(id);
+      show('Conversation restored to inbox', 'success');
+    } catch {
+      show('Could not restore this conversation. Check your connection and try again.', 'error');
+    }
   };
 
   const handleDelete = (id: string, title: string) => {
     Alert.alert(
-      'Delete conversation?',
-      `"${title}" will be permanently removed.`,
+      'Remove from inbox?',
+      `"${title}" will be removed from your archived conversations.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            deleteConversation(id);
-            show('Conversation deleted', 'info');
+          onPress: async () => {
+            try {
+              await deleteConversationOnApi(id, 'me');
+              deleteConversation(id);
+              show('Conversation removed', 'info');
+            } catch {
+              show('Could not delete this conversation. Check your connection and try again.', 'error');
+            }
           },
         },
       ]
@@ -63,9 +76,23 @@ export default function ArchivedConversationsScreen() {
         {
           text: 'Clear all',
           style: 'destructive',
-          onPress: () => {
-            archivedConversations.forEach((c) => deleteConversation(c.id));
-            show('Archive cleared', 'info');
+          onPress: async () => {
+            let failedCount = 0;
+            await Promise.all(
+              archivedConversations.map(async (c) => {
+                try {
+                  await deleteConversationOnApi(c.id, 'me');
+                  deleteConversation(c.id);
+                } catch {
+                  failedCount++;
+                }
+              })
+            );
+            if (failedCount > 0) {
+              show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
+            } else {
+              show('Archive cleared', 'info');
+            }
           },
         },
       ]
@@ -95,7 +122,11 @@ export default function ArchivedConversationsScreen() {
         />
       }
     >
-      {archivedConversations.length === 0 ? (
+      {!conversationsLoaded ? (
+        <View style={styles.skeletonWrap}>
+          <ConversationListSkeleton count={5} />
+        </View>
+      ) : archivedConversations.length === 0 ? (
         <EmptyState
           icon="archive-outline"
           title="No archived conversations"
@@ -144,6 +175,9 @@ export default function ArchivedConversationsScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    skeletonWrap: {
+      paddingTop: Space.sm,
+    },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,

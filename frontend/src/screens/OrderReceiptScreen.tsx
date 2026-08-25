@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -24,12 +23,13 @@ import { getOrder, type CommerceOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { haptics } from '../utils/haptics';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
-
-const haptics = {
-  tap: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-};
 
 function formatReceiptDate(iso: string): string {
   const date = new Date(iso);
@@ -55,8 +55,6 @@ export default function OrderReceiptScreen() {
   // Theme-aware color overrides for the static styles.
   const t = React.useMemo(() => ({
     container: { backgroundColor: colors.background },
-    header: { borderBottomColor: colors.border },
-    headerTitle: { color: colors.textPrimary },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     retryBtn: { backgroundColor: colors.brand },
@@ -64,7 +62,6 @@ export default function OrderReceiptScreen() {
     successIconWrap: { backgroundColor: `${colors.success}15` },
     successTitle: { color: colors.textPrimary },
     successSubtitle: { color: colors.textMuted },
-    receiptCard: { backgroundColor: colors.surface },
     receiptTitle: { color: colors.textPrimary },
     orderIdLabel: { color: colors.textSecondary },
     sectionLabel: { color: colors.textMuted },
@@ -75,7 +72,7 @@ export default function OrderReceiptScreen() {
     totalValue: { color: colors.textPrimary },
     immutableText: { color: colors.textMuted },
     pendingText: { color: colors.textMuted },
-    nextStepsCard: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}20` },
+    nextStepsCard: { borderTopColor: colors.border, backgroundColor: `${colors.brand}08` },
     nextStepsTitle: { color: colors.textPrimary },
     nextStepDotActive: { backgroundColor: colors.brand },
     nextStepDotPending: { backgroundColor: colors.border },
@@ -122,7 +119,7 @@ export default function OrderReceiptScreen() {
     if (!order) return;
     haptics.tap();
     const shortId = order.id.slice(0, 8).toUpperCase();
-    const total = formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' });
+    const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' });
     const status = humaniseStatus(order.status);
     const date = formatReceiptDate(order.createdAt);
     try {
@@ -158,31 +155,29 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.skeletonContainer}>
           {/* Receipt header skeleton */}
-          <SkeletonLoader width={100} height={12} borderRadius={6} />
-          <SkeletonLoader width={140} height={20} borderRadius={10} style={{ marginTop: Space.sm }} />
-          <SkeletonLoader width="80%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
+          <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} />
+          <SkeletonLoader width={140} height={20} borderRadius={Radius.lg} style={{ marginTop: Space.sm }} />
+          <SkeletonLoader width="80%" height={14} borderRadius={Radius.md} style={{ marginTop: 6 }} />
           {/* Item row skeleton */}
           <View style={styles.skeletonItemRow}>
-            <SkeletonLoader width={56} height={56} borderRadius={8} />
+            <SkeletonLoader width={56} height={56} borderRadius={Radius.md} />
             <View style={{ flex: 1, gap: Space.xs + 2 }}>
-              <SkeletonLoader width="70%" height={14} borderRadius={7} />
-              <SkeletonLoader width="40%" height={12} borderRadius={6} />
+              <SkeletonLoader width="70%" height={14} borderRadius={Radius.md} />
+              <SkeletonLoader width="40%" height={12} borderRadius={Radius.sm} />
             </View>
           </View>
           {/* Transaction rows skeleton */}
           {Array.from({ length: 5 }).map((_, i) => (
             <View key={i} style={styles.skeletonTxRow}>
-              <SkeletonLoader width="50%" height={12} borderRadius={6} />
-              <SkeletonLoader width={70} height={12} borderRadius={6} />
+              <SkeletonLoader width="50%" height={12} borderRadius={Radius.sm} />
+              <SkeletonLoader width={70} height={12} borderRadius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -194,13 +189,11 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Receipt could not be loaded</Text>
@@ -216,13 +209,11 @@ export default function OrderReceiptScreen() {
     return (
       <View style={[styles.container, t.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>You do not have access to this receipt</Text>
@@ -237,10 +228,12 @@ export default function OrderReceiptScreen() {
   const isReceiptFinal = isTerminalStatus(normalisedStatus);
 
   const fiatOpts = { displayMode: 'fiat' as const };
-  const subtotal = formatFromFiat(order.subtotalGbp, 'GBP', fiatOpts);
-  const platformCharge = formatFromFiat(order.platformChargeGbp, 'GBP', fiatOpts);
-  const postage = formatFromFiat(order.postageFeeGbp, 'GBP', fiatOpts);
-  const total = formatFromFiat(order.totalGbp, 'GBP', fiatOpts);
+  const subtotal = formatFromFiat(order.subtotalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const platformCharge = formatFromFiat(order.platformChargeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const postage = formatFromFiat(order.postageFeeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const buyerProtectionFee = order.buyerProtectionFeeGbp;
+  const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
 
   const counterpartyRole = isBuyer ? 'Seller' : 'Buyer';
   const counterparty = isBuyer ? order.seller : order.buyer;
@@ -250,28 +243,29 @@ export default function OrderReceiptScreen() {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
-      <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
-        <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
-        <View style={styles.headerRight}>
-          {Platform.OS === 'web' && (
-            <Pressable
-              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-              onPress={handlePrint}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Print receipt"
-            >
-              <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+      <ScreenHeader
+        title="Receipt"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <View style={styles.headerRight}>
+            {Platform.OS === 'web' && (
+              <Pressable
+                style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+                onPress={handlePrint}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Print receipt"
+              >
+                <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+              </Pressable>
+            )}
+            <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
+              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
             </Pressable>
-          )}
-          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
-            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
-        </View>
-      </View>
+          </View>
+        }
+        style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -290,7 +284,7 @@ export default function OrderReceiptScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.receiptCard, t.receiptCard]}>
+        <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
             <Text style={[styles.receiptTitle, t.receiptTitle]}>Order Receipt</Text>
             <Pressable
@@ -314,9 +308,40 @@ export default function OrderReceiptScreen() {
 
           <View style={[styles.receiptDivider, t.receiptDivider]} />
 
+          {/* Itemized item — image + title + price for visual verification */}
+          <View style={styles.receiptSection}>
+            <Text style={[styles.sectionLabel, t.sectionLabel]}>Item</Text>
+            <View style={styles.itemizedRow}>
+              {order.listingImageUrl ? (
+                <CachedImage
+                  uri={order.listingImageUrl}
+                  style={styles.itemThumb}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.itemThumb, styles.itemThumbPlaceholder]}>
+                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.itemizedInfo}>
+                <Text style={[styles.itemizedTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {order.listingTitle}
+                </Text>
+                <Text style={[styles.itemizedPrice, { color: colors.textSecondary }]}>
+                  {subtotal}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.receiptDivider, t.receiptDivider]} />
+
           <View style={styles.receiptSection}>
             <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
+            {hasBuyerProtection && (
+              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, DEFAULT_CURRENCY_CODE, fiatOpts)} />
+            )}
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
@@ -392,6 +417,17 @@ export default function OrderReceiptScreen() {
           <Text style={[styles.viewDetailBtnText, t.viewDetailBtnText]}>View order details</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.brand} />
         </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
+          onPress={handleShare}
+          hitSlop={{ top: 8, bottom: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Save or share receipt"
+        >
+          <Ionicons name="download-outline" size={18} color={colors.brand} />
+          <Text style={[styles.saveBtnText, t.viewDetailBtnText]}>Save or share receipt</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -415,14 +451,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -438,13 +466,6 @@ const styles = StyleSheet.create({
   },
   viewDetailBtnPressed: {
     opacity: 0.6,
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-  },
-  headerSpacer: {
-    width: Control.hit,
   },
   headerRight: {
     flexDirection: 'row',
@@ -486,7 +507,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
   },
@@ -499,7 +520,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   scrollContent: {
@@ -520,16 +541,15 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   successTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   successSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   receiptCard: {
-    borderRadius: Radius.lg,
     padding: Space.md,
   },
   receiptHeader: {
@@ -539,7 +559,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   receiptTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   orderIdRow: {
@@ -555,7 +575,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
@@ -589,11 +609,11 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
   },
   totalLabel: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   totalValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   immutableNotice: {
@@ -621,12 +641,11 @@ const styles = StyleSheet.create({
   },
   nextStepsCard: {
     marginTop: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   nextStepsTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     letterSpacing: Type.body.letterSpacing,
@@ -668,7 +687,52 @@ const styles = StyleSheet.create({
     minHeight: Space.xxl,
   },
   viewDetailBtnText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Itemized item row ──
+  itemizedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  itemThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+  },
+  itemThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  itemizedInfo: {
+    flex: 1,
+    gap: Space.xs - 2,
+  },
+  itemizedTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.body.lineHeight,
+  },
+  itemizedPrice: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.medium,
+  },
+  // ── Save / share button ──
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.md - 2,
+    minHeight: Space.xxl - Space.sm,
+  },
+  saveBtnPressed: {
+    opacity: 0.6,
+  },
+  saveBtnText: {
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
 });

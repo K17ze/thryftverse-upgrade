@@ -12,18 +12,20 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { fetchPosterStoryActivity } from '../services/postersApi';
 import type { PosterStoryActivity as ActivityData } from '../services/postersApi';
@@ -50,9 +52,127 @@ const REACTION_LABELS: Record<string, string> = {
   laugh: 'Laugh',
 };
 
-type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0];
+type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0] | ActivityData['styleVotes'][0];
 
 const AVATAR_SIZE = 44;
+
+type HourlyActivity = { hour: number; count: number };
+
+const HOUR_LABELS = ['12a', '6a', '12p', '6p'];
+const HOUR_LABEL_HOURS = [0, 6, 12, 18];
+const BAR_WIDTH = 4;
+const BAR_GAP = 2;
+const BAR_MAX_HEIGHT = 60;
+
+function formatHourLabel(hour: number): string {
+  if (hour === 0) return '12am';
+  if (hour === 12) return '12pm';
+  return hour < 12 ? `${hour}am` : `${hour - 12}pm`;
+}
+
+// ── Peak time bar ──────────────────────────────────────────────────────
+// A single animated bar in the peak-time chart. Height grows from 0 to
+// its target via the shared `progress` value (spring-animated on mount
+// unless reduced motion is enabled, in which case progress starts at 1).
+function PeakTimeBar({
+  targetHeight,
+  isPeak,
+  color,
+  peakColor,
+  progress,
+}: {
+  targetHeight: number;
+  isPeak: boolean;
+  color: string;
+  peakColor: string;
+  progress: SharedValue<number>;
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: progress.value * targetHeight,
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: BAR_WIDTH, borderRadius: BAR_WIDTH / 2, backgroundColor: isPeak ? peakColor : color },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
+// ── Peak time chart ────────────────────────────────────────────────────
+// Instagram-style horizontal bar chart showing engagement activity
+// (views + reactions + replies + style votes) grouped by hour of day.
+// Flat canvas — no card, just padding. Peak hour(s) use antiqueGold.
+function PeakTimeChart({
+  data,
+  colors,
+  styles,
+}: {
+  data: HourlyActivity[];
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const progress = useSharedValue(reducedMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (!reducedMotion) {
+      progress.value = withSpring(1, spring.entrance);
+    }
+  }, [reducedMotion, spring.entrance, progress]);
+
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const peakCount = Math.max(...data.map((d) => d.count));
+  const peakHours = data
+    .filter((d) => d.count === peakCount && peakCount > 0)
+    .map((d) => d.hour);
+  const peakHour = peakHours[0];
+
+  const barColor = `${colors.brand}66`; // 40% opacity
+  const peakColor = colors.antiqueGold;
+
+  return (
+    <View
+      style={styles.peakTimeSection}
+      accessibilityLabel="Peak times chart showing when your audience is most active by hour"
+    >
+      <Text style={styles.peakTimeLabel}>Peak times</Text>
+      <View style={styles.peakTimeBars}>
+        {data.map((entry) => {
+          const targetHeight = Math.max(
+            entry.count > 0 ? 3 : 0,
+            (entry.count / maxCount) * BAR_MAX_HEIGHT
+          );
+          return (
+            <PeakTimeBar
+              key={entry.hour}
+              targetHeight={targetHeight}
+              isPeak={peakHours.includes(entry.hour)}
+              color={barColor}
+              peakColor={peakColor}
+              progress={progress}
+            />
+          );
+        })}
+      </View>
+      <View style={styles.peakTimeHourLabels}>
+        {HOUR_LABELS.map((label) => (
+          <Text key={label} style={styles.peakTimeHourText}>
+            {label}
+          </Text>
+        ))}
+      </View>
+      {peakHour !== undefined && (
+        <Text style={styles.peakTimeCaption}>
+          Most active at {formatHourLabel(peakHour)}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 export default function PosterStoryActivityScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -66,7 +186,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [activeTab, setActiveTab] = useState<'viewers' | 'reactions' | 'replies'>('viewers');
+  const [activeTab, setActiveTab] = useState<'viewers' | 'reactions' | 'replies' | 'stickers'>('viewers');
 
   // ── Animated tab indicator ──
   // Spring-based underline that slides between tabs using Motion.spring.entrance.
@@ -90,7 +210,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     }
   }, [activeTab, spring.entrance, tabIndicatorX, tabIndicatorW]);
 
-  const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies') => {
+  const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies' | 'stickers') => {
     haptic.selection();
     setActiveTab(key);
     AccessibilityInfo.announceForAccessibility(`Showing ${key}`);
@@ -146,13 +266,38 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       ? Math.round((totalEngagement / viewerCount) * 1000) / 10 // 1 decimal place
       : 0;
 
-    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate };
+    const stickerVoteCount = activity?.styleVotes.length ?? 0;
+
+    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate, stickerVoteCount };
+  }, [activity]);
+
+  // ── Hourly activity distribution ──────────────────────────────────────
+  // Groups all engagement events (views + reactions + replies + style votes)
+  // by hour of day (0-23) for the peak-time chart.
+  const hourlyActivity = useMemo<HourlyActivity[]>(() => {
+    const counts = new Array(24).fill(0);
+    if (activity) {
+      activity.viewers.forEach((v) => {
+        counts[new Date(v.latestViewedAt).getHours()] += 1;
+      });
+      activity.reactions.forEach((r) => {
+        counts[new Date(r.createdAt).getHours()] += 1;
+      });
+      activity.replies.forEach((r) => {
+        counts[new Date(r.createdAt).getHours()] += 1;
+      });
+      activity.styleVotes.forEach((s) => {
+        counts[new Date(s.createdAt).getHours()] += 1;
+      });
+    }
+    return counts.map((count, hour) => ({ hour, count }));
   }, [activity]);
 
   const tabs = [
     { key: 'viewers' as const, label: 'Views', count: summary.viewerCount, icon: 'eye-outline' as const },
     { key: 'reactions' as const, label: 'Reactions', count: summary.reactionCount, icon: 'heart-outline' as const },
     { key: 'replies' as const, label: 'Replies', count: summary.replyCount, icon: 'chatbubble-outline' as const },
+    { key: 'stickers' as const, label: 'Stickers', count: summary.stickerVoteCount, icon: 'stats-chart-outline' as const },
   ];
 
   // FlashList v2 performance: memoized render functions prevent full
@@ -230,14 +375,33 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     </View>
   ), [styles, formatRelativeTime]);
 
+  // ── Sticker engagement render ────────────────────────────────────────
+  // Renders style vote entries (avatar + username + selected option).
+  // Poll and quiz results are aggregated in the header component below.
+  const renderStyleVote = useCallback(({ item }: { item: ActivityData['styleVotes'][0] }) => (
+    <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} voted in a style vote`}>
+      <View style={[styles.avatar, styles.avatarPlaceholder, styles.voteAvatar]}>
+        <Ionicons name="stats-chart-outline" size={18} color={colors.textSecondary} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowTitle}>@{item.username ?? item.userId}</Text>
+        <Text style={styles.rowSubtitle}>voted in a style poll</Text>
+      </View>
+      <Text style={styles.rowTime}>
+        {formatRelativeTime(item.createdAt)}
+      </Text>
+    </View>
+  ), [styles, colors, formatRelativeTime]);
+
   // FlashList v2 performance: memoized renderItem dispatches to the
   // memoized render functions above, preventing full re-render of all
   // visible activity rows on every parent state change.
   const renderActivityItem = useCallback(({ item }: { item: ActivityItem; index: number }) => {
     if ('viewedFrameCount' in item) return renderViewer({ item });
     if ('reaction' in item) return renderReaction({ item });
+    if ('optionId' in item && 'stickerId' in item) return renderStyleVote({ item });
     return renderReply({ item });
-  }, [renderViewer, renderReaction, renderReply]);
+  }, [renderViewer, renderReaction, renderReply, renderStyleVote]);
 
   // ── Summary header card ──────────────────────────────────────────────
   // A compact metrics summary at the top of the
@@ -380,7 +544,8 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const hasAnyActivity = activity && (
     (activity.viewers?.length ?? 0) > 0 ||
     (activity.reactions?.length ?? 0) > 0 ||
-    (activity.replies?.length ?? 0) > 0
+    (activity.replies?.length ?? 0) > 0 ||
+    (activity.styleVotes?.length ?? 0) > 0
   );
 
   if (activity && !hasAnyActivity) {
@@ -416,11 +581,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 
   const currentData: ActivityItem[] = activeTab === 'viewers' ? activity?.viewers ?? []
     : activeTab === 'reactions' ? activity?.reactions ?? []
+    : activeTab === 'stickers' ? activity?.styleVotes ?? []
     : activity?.replies ?? [];
 
-  const emptyIcon = activeTab === 'viewers' ? 'eye-outline' : activeTab === 'reactions' ? 'heart-outline' : 'chatbubble-outline';
-  const emptyLabel = activeTab === 'viewers' ? 'No views yet' : activeTab === 'reactions' ? 'No reactions yet' : 'No replies yet';
-  const emptyHint = activeTab === 'viewers' ? 'Views will appear here once people watch your story.' : activeTab === 'reactions' ? 'Reactions will appear here as people react.' : 'Replies will appear here as people reply.';
+  const emptyIcon = activeTab === 'viewers' ? 'eye-outline' : activeTab === 'reactions' ? 'heart-outline' : activeTab === 'stickers' ? 'stats-chart-outline' : 'chatbubble-outline';
+  const emptyLabel = activeTab === 'viewers' ? 'No views yet' : activeTab === 'reactions' ? 'No reactions yet' : activeTab === 'stickers' ? 'No sticker interactions yet' : 'No replies yet';
+  const emptyHint = activeTab === 'viewers' ? 'Views will appear here once people watch your story.' : activeTab === 'reactions' ? 'Reactions will appear here as people react.' : activeTab === 'stickers' ? 'Poll votes, quiz answers, and question responses will appear here.' : 'Replies will appear here as people reply.';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -444,6 +610,10 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       </View>
 
       {renderSummaryHeader()}
+
+      {hourlyActivity.some((d) => d.count > 0) && (
+        <PeakTimeChart data={hourlyActivity} colors={colors} styles={styles} />
+      )}
 
       <View style={styles.tabBar}>
         {tabs.map((tab) => (
@@ -628,6 +798,42 @@ function createStyles(colors: ThemeColors) {
       height: Space.xl,
       backgroundColor: colors.border,
     },
+    // ── Peak time chart ──────────────────────────────────────────────────
+    // Flat canvas — no card, just padding. Bars sit directly on the screen
+    // background (AGENTS.md §4: no card-on-card, flat canvas default).
+    peakTimeSection: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
+      gap: Space.xs,
+    },
+    peakTimeLabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      textTransform: 'uppercase',
+      letterSpacing: LetterSpacing.caps + 0.38,
+      color: colors.textMuted,
+    },
+    peakTimeBars: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      height: BAR_MAX_HEIGHT,
+      gap: BAR_GAP,
+    },
+    peakTimeHourLabels: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    peakTimeHourText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    peakTimeCaption: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
     // ── Per-frame breakdown ─────────────────────────────────────────────
     frameBreakdown: {
       paddingHorizontal: Space.md,
@@ -700,7 +906,7 @@ function createStyles(colors: ThemeColors) {
       left: 0,
       height: 3,
       backgroundColor: colors.brand,
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
     },
     tabText: {
       fontSize: Type.body.size,
@@ -752,22 +958,25 @@ function createStyles(colors: ThemeColors) {
     avatarPlaceholder: {
       backgroundColor: colors.surfaceAlt,
     },
+    voteAvatar: {
+      backgroundColor: colors.surfaceAlt,
+    },
     avatarText: {
       color: colors.textSecondary,
       fontFamily: Typography.family.bold,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
     },
     rowContent: {
       flex: 1,
       gap: Space.xs - 2,
     },
     rowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
     rowSubtitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
     },
@@ -798,7 +1007,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     emptyTitle: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },
@@ -827,7 +1036,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     errorTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },

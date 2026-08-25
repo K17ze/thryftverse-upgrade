@@ -165,7 +165,7 @@ export function CoOwnAssetTile({
               <Text style={[styles.imageFallbackText, { color: colors.textMuted }]}>No photo yet</Text>
             </View>
           )}
-          <View style={[styles.statusPill, { backgroundColor: colors.background + 'E6' }]}>
+          <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: colors.textPrimary }]} numberOfLines={1}>{statusLabel}</Text>
           </View>
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,
@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   },
   allocationBarBg: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     marginTop: Space.xs,
   },
   allocationBarFill: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
   },
   allocationText: {
     fontSize: Type.meta.size,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   marketTitle: {
     fontSize: Type.body.size,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   marketStatusDot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
   },
   marketStatusText: {
     fontSize: Type.meta.size,
@@ -332,10 +332,10 @@ const styles = StyleSheet.create({
     minWidth: 70,
   },
   marketPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   marketAge: {

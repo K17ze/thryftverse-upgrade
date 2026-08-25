@@ -62,6 +62,7 @@ import {
   LetterSpacing,
   Type,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 
 export interface SpeedCurveEditorProps {
   curve: SpeedCurve;
@@ -501,7 +502,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 accessibilityLabel="Decrease speed"
                 hitSlop={Control.hit / 2}
               >
-                <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                <Ionicons name="remove" size={IconGrammar.metadata} color={colors.textPrimary} />
               </Pressable>
               <Text style={[styles.valueText, { color: colors.textPrimary }]}>
                 {selectedPoint.speed.toFixed(2)}x
@@ -513,7 +514,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 accessibilityLabel="Increase speed"
                 hitSlop={Control.hit / 2}
               >
-                <Ionicons name="add" size={18} color={colors.textPrimary} />
+                <Ionicons name="add" size={IconGrammar.metadata} color={colors.textPrimary} />
               </Pressable>
             </View>
           </View>
@@ -531,7 +532,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
             accessibilityLabel="Delete control point"
             style={[styles.deleteButton, { backgroundColor: colors.danger }]}
           >
-            <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="trash-outline" size={IconGrammar.metadata} color="#FFFFFF" />
             <Text style={styles.deleteLabel}>Delete Point</Text>
           </Pressable>
         </View>
@@ -662,7 +663,7 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
     textAlign: 'center',
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
   },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: '#FFFFFF',
     letterSpacing: LetterSpacing.normal,
   },

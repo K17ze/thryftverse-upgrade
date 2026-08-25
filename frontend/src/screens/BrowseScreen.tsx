@@ -5,7 +5,7 @@ import { View,
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   RefreshControl,
   Pressable,
@@ -14,10 +14,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { Motion } from '../constants/motion';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,10 +46,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 
 import { Space, Radius, Elevation, Type, Typography, AspectRatio, Control } from '../theme/designTokens';
-const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
-// 2 column grid with margins
-const ITEM_WIDTH = (width - 40 - GRID_SPACING) / 2;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
 const BROWSE_GRID_DENSITY_PREF_KEY = 'thryftverse:browse-grid-density:v1';
@@ -108,6 +106,9 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 
 export default function BrowseScreen() {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const { width: windowWidth } = useWindowDimensions();
+  const itemWidth = (windowWidth - 40 - GRID_SPACING) / 2;
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -138,11 +139,21 @@ export default function BrowseScreen() {
       lineHeight: Type.title.lineHeight,
     },
     itemCountText: {
-      fontSize: Type.body.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      marginTop: Space.xs + 2,
+      color: colors.textSecondary,
       fontVariant: ['tabular-nums'],
+    },
+    itemCountPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xxs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xxs + 1,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      marginTop: Space.xs + 2,
+      alignSelf: 'flex-start',
     },
 
     filterBar: { paddingBottom: Space.md },
@@ -157,9 +168,9 @@ export default function BrowseScreen() {
       backgroundColor: 'transparent',
     },
     filterPillActive: {
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -169,7 +180,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.full,
       backgroundColor: 'transparent',
     },
-    filterPillText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    filterPillText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     saveSearchPillActive: {
       backgroundColor: colors.surfaceAlt,
     },
@@ -187,9 +198,9 @@ export default function BrowseScreen() {
       backgroundColor: 'transparent',
     },
     sortTriggerActive: {
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
-    sortTriggerText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    sortTriggerText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: Typography.family.semibold },
     sortMenu: {
       marginHorizontal: Space.md,
@@ -233,7 +244,7 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}1A`,
+      backgroundColor: colors.surfaceAlt,
     },
     activeBadgeText: {
       color: colors.textPrimary,
@@ -245,6 +256,12 @@ export default function BrowseScreen() {
       height: Control.iconCompact,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    activeBadgeDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: Space.md,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: Space.xs / 2,
     },
     clearAllBtn: {
       paddingHorizontal: Space.sm,
@@ -273,7 +290,7 @@ export default function BrowseScreen() {
       rowGap: Space.xl,
     },
     loadingCard: {
-      width: ITEM_WIDTH,
+      width: itemWidth,
     },
     loadingCardOffset: {
       marginTop: Space.lg,
@@ -283,9 +300,9 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.xs,
     },
 
-    gridItem: { width: ITEM_WIDTH },
+    gridItem: { width: itemWidth },
     imageWrap: {
-      width: ITEM_WIDTH,
+      width: itemWidth,
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
@@ -318,9 +335,9 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       marginBottom: Space.xs,
     },
-    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+    priceText: { color: colors.textPrimary, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
     brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-    sizeText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    sizeText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     sellerActionRow: {
       marginTop: Space.sm,
       flexDirection: 'row',
@@ -367,7 +384,7 @@ export default function BrowseScreen() {
       alignItems: 'center',
       justifyContent: 'center',
     },
-  }), [colors]);
+  }), [colors, itemWidth]);
 
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
@@ -444,6 +461,7 @@ export default function BrowseScreen() {
     };
 
     const hasBackendFilters =
+      browseFilters.query.trim().length > 0 ||
       browseFilters.brands.length > 0 ||
       browseFilters.sizes.length > 0 ||
       browseFilters.condition !== 'Any' ||
@@ -460,10 +478,13 @@ export default function BrowseScreen() {
     setBackendError(null);
 
     fetchFilteredListings({
+      query: browseFilters.query.trim() || undefined,
       category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
       brand: browseFilters.brands[0],
       size: browseFilters.sizes[0],
       condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
+      minPrice: browseFilters.priceMin ?? undefined,
+      maxPrice: browseFilters.priceMax ?? undefined,
       sort: sortMap[browseFilters.sort] || 'newest',
     })
       .then((result) => {
@@ -493,6 +514,7 @@ export default function BrowseScreen() {
   });
 
   const handleRefresh = async () => {
+    haptic.patterns.refresh();
     setRefreshing(true);
     await refreshListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -610,7 +632,9 @@ export default function BrowseScreen() {
       if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
       if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
 
-      // Sustainable — client-side heuristic: only A/B graded items.
+      // Sustainable — fail-closed: returns false in production (no real
+      // data), so the filter yields no results until a backend impact
+      // service or seller tags exist.
       if (
         browseFilters.sustainableOnly &&
         !isSustainableGrade({
@@ -669,9 +693,9 @@ export default function BrowseScreen() {
     </View>
   );
 
-  // Sustainability is a client-side heuristic, so it must be applied to both
-  // the cached list and the backend-filtered list (the backend does not know
-  // about the grade).
+  // Sustainability filter is fail-closed: isSustainableGrade returns false
+  // in production (no real data), so this filter yields no results until a
+  // backend impact service or seller tags exist.
   const displayListings = useMemo(() => {
     const base = backendListings ?? dataToRender;
     if (!browseFilters.sustainableOnly) return base;
@@ -697,7 +721,7 @@ export default function BrowseScreen() {
       {/* Heavy Typography Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} aria-hidden={true} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -708,17 +732,20 @@ export default function BrowseScreen() {
             accessibilityLabel={gridDensity === 'comfortable' ? 'Switch to compact 3 column grid' : 'Switch to comfortable 2 column grid'}
             accessibilityState={{ selected: true }}
           >
-            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={20} color={colors.textPrimary} />
+            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={22} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityRole="button" accessibilityLabel="Search listings">
-            <Ionicons name="search" size={20} color={colors.textPrimary} />
+            <Ionicons name="search" size={22} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         </View>
       </View>
 
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
-        <Text style={styles.itemCountText} accessibilityLiveRegion="polite">{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+        <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
+          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+        </View>
       </View>
 
       <View style={styles.filterBar}>
@@ -732,7 +759,7 @@ export default function BrowseScreen() {
             accessibilityState={{ selected: hasActiveFilters }}
             accessibilityHint={hasActiveFilters ? 'Filters are applied' : 'Opens filter options'}
           >
-            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
             <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -743,9 +770,9 @@ export default function BrowseScreen() {
             accessibilityLabel={`Sort by ${browseFilters.sort}`}
             accessibilityState={{ expanded: sortMenuOpen }}
           >
-            <Ionicons name="swap-vertical" size={14} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="swap-vertical" size={16} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
             <Text style={[styles.sortTriggerText, browseFilters.sort !== 'Recommended' && styles.sortTriggerTextActive]}>{browseFilters.sort}</Text>
-            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -756,7 +783,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.brands.length > 0 ? `${browseFilters.brands.length} brands selected` : 'Opens brand filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.brands.length > 0 && styles.filterPillTextActive]}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -767,7 +794,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.sizes.length > 0 ? `${browseFilters.sizes.length} sizes selected` : 'Opens size filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.sizes.length > 0 && styles.filterPillTextActive]}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -778,7 +805,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.condition !== 'Any' ? `Condition: ${browseFilters.condition}` : 'Opens condition filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.condition !== 'Any' && styles.filterPillTextActive]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.filterPillOutline, browseFilters.sustainableOnly && styles.filterPillActive]}
@@ -793,8 +820,9 @@ export default function BrowseScreen() {
           >
             <Ionicons
               name="leaf"
-              size={14}
+              size={16}
               color={browseFilters.sustainableOnly ? colors.textPrimary : colors.textMuted}
+              aria-hidden={true}
             />
             <Text
               style={[
@@ -817,8 +845,9 @@ export default function BrowseScreen() {
             >
               <Ionicons
                 name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
-                size={14}
+                size={16}
                 color={isCurrentSaved ? colors.brand : colors.textSecondary}
+                aria-hidden={true}
               />
               <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
@@ -845,7 +874,7 @@ export default function BrowseScreen() {
                 <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]}>
                   {opt.label}
                 </Text>
-                {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+                {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} /> : null}
               </Pressable>
             );
           })}
@@ -854,9 +883,13 @@ export default function BrowseScreen() {
 
       {hasActiveFilters ? (
         <View style={styles.activeBadgeRow}>
+          {/* Active filters grouped by category — badges within a category
+              are visually adjacent. Category prefix removed from badge text
+              (the grouping makes it redundant). A hairline divider separates
+              categories when multiple are active. */}
           {browseFilters.brands.map((brand) => (
             <View key={`brand-${brand}`} style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Brand: ${brand}`}</Text>
+              <Text style={styles.activeBadgeText}>{brand}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -866,13 +899,16 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Remove brand filter ${brand}`}
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ))}
+          {browseFilters.brands.length > 0 && (browseFilters.sizes.length > 0 || browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
+            <View style={styles.activeBadgeDivider} />
+          ) : null}
           {browseFilters.sizes.map((size) => (
             <View key={`size-${size}`} style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Size: ${size}`}</Text>
+              <Text style={styles.activeBadgeText}>{size}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -882,13 +918,16 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Remove size filter ${size}`}
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ))}
+          {browseFilters.sizes.length > 0 && (browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
+            <View style={styles.activeBadgeDivider} />
+          ) : null}
           {browseFilters.condition !== 'Any' ? (
             <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{`Condition: ${browseFilters.condition}`}</Text>
+              <Text style={styles.activeBadgeText}>{browseFilters.condition}</Text>
               <Pressable
                 style={styles.activeBadgeClose}
                 onPress={() => {
@@ -898,9 +937,12 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Remove condition filter"
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
+          ) : null}
+          {browseFilters.condition !== 'Any' && browseFilters.sustainableOnly ? (
+            <View style={styles.activeBadgeDivider} />
           ) : null}
           {browseFilters.sustainableOnly ? (
             <View style={styles.activeBadge}>
@@ -914,7 +956,7 @@ export default function BrowseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Remove sustainable filter"
               >
-                <Ionicons name="close" size={12} color={colors.textPrimary} />
+                <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
               </Pressable>
             </View>
           ) : null}

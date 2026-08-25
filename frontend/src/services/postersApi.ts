@@ -36,9 +36,9 @@ export class PosterApiError extends Error {
 
 // ── Types: Stickers ─────────────────────────────────────────────────
 
-export type PosterStickerType = 'text' | 'mention' | 'listing' | 'look' | 'style_vote' | 'poll' | 'quiz' | 'question' | 'countdown';
+export type PosterStickerType = 'text' | 'mention' | 'listing' | 'look' | 'style_vote' | 'poll' | 'quiz' | 'question' | 'countdown' | 'emojiSlider';
 
-export type PosterTextStyle = 'editorial' | 'minimal' | 'label' | 'outline';
+export type PosterTextStyle = 'headline' | 'editorial' | 'clean' | 'compact' | 'handwritten' | 'bubble' | 'deco' | 'poster' | 'squeeze' | 'signature' | 'minimal' | 'label' | 'outline';
 
 export interface PollStickerPayload {
   question: string;      // max 200
@@ -62,6 +62,11 @@ export interface CountdownStickerPayload {
   endLabel?: string;     // text shown when countdown ends, max 60
 }
 
+export interface EmojiSliderStickerPayload {
+  question: string;      // max 100
+  emoji: string;         // emoji shown at the high end of the slider
+}
+
 export interface PosterStickerPayload {
   text?: string;
   textStyle?: PosterTextStyle;
@@ -81,6 +86,7 @@ export interface PosterStickerPayload {
   correctOptionId?: string;
   targetDate?: string;
   endLabel?: string;
+  emoji?: string;
 }
 
 export interface PosterSticker {
@@ -252,6 +258,8 @@ export interface PosterStoryCreateFrame {
   id: string;
   mediaType: PosterMediaType;
   mediaUrl?: string;
+  mediaFinalizationId?: string;
+  mediaAssetId?: string;
   backgroundColor?: string;
   caption?: string;
   durationMs?: number;
@@ -447,11 +455,16 @@ export async function fetchPosterStories(options?: {
     }
     return response;
   } catch (error) {
-    const cached = filterPosterStories(await readCachedPosterStories(), options);
-    if (cached.length > 0) return { items: cached };
+    // In production, surface API errors honestly instead of serving stale
+    // cached data that may be deleted or expired (AGENTS.md §11 — fail-closed
+    // trust signals). Cache fallback is dev-only via ENABLE_RUNTIME_MOCKS.
+    if (ENABLE_RUNTIME_MOCKS) {
+      const cached = filterPosterStories(await readCachedPosterStories(), options);
+      if (cached.length > 0) return { items: cached };
 
-    const developmentStories = filterPosterStories(getDevelopmentPosterStories(), options);
-    if (developmentStories.length > 0) return { items: developmentStories };
+      const developmentStories = filterPosterStories(getDevelopmentPosterStories(), options);
+      if (developmentStories.length > 0) return { items: developmentStories };
+    }
 
     throw error;
   }
@@ -461,12 +474,17 @@ export async function fetchPosterStoryById(storyId: string): Promise<PosterStory
   try {
     return await fetchJson<PosterStory>(`/poster-stories/${storyId}`);
   } catch (error) {
-    const fallbackStories = [
-      ...(await readCachedPosterStories()),
-      ...getDevelopmentPosterStories(),
-    ];
-    const fallback = fallbackStories.find((story) => story.id === storyId);
-    if (fallback) return fallback;
+    // In production, surface API errors honestly instead of serving stale
+    // cached data that may be deleted or expired (AGENTS.md §11 — fail-closed
+    // trust signals). Cache fallback is dev-only via ENABLE_RUNTIME_MOCKS.
+    if (ENABLE_RUNTIME_MOCKS) {
+      const fallbackStories = [
+        ...(await readCachedPosterStories()),
+        ...getDevelopmentPosterStories(),
+      ];
+      const fallback = fallbackStories.find((story) => story.id === storyId);
+      if (fallback) return fallback;
+    }
     throw error;
   }
 }
@@ -801,6 +819,15 @@ export interface PosterHighlight {
 
 export async function fetchPosterHighlights(userId: string): Promise<{ items: PosterHighlight[] }> {
   return fetchJson<{ items: PosterHighlight[] }>(`/users/${userId}/poster-highlights`);
+}
+
+/** Fetch a single highlight by id — avoids loading all highlights just to find one. */
+export async function fetchPosterHighlightById(highlightId: string): Promise<PosterHighlight | null> {
+  try {
+    return await fetchJson<PosterHighlight>(`/poster-highlights/${encodeURIComponent(highlightId)}`);
+  } catch {
+    return null;
+  }
 }
 
 export async function createPosterHighlight(body: {

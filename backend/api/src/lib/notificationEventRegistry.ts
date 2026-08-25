@@ -265,6 +265,19 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: () => null,
     objectExtractor: () => undefined,
   },
+
+  // Safety outcome — moderator has reviewed a user's report and recorded a
+  // decision. No object reference (the report itself is the context).
+  safety_outcome: {
+    semanticRole: "system",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = getString(payload, "caseId");
+      return id ? `safety:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
 };
 
 const DEFAULT_METADATA = NOTIFICATION_EVENT_REGISTRY.generic;

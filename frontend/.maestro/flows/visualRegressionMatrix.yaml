@@ -1,0 +1,217 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - visual-regression
+  - matrix
+---
+# Visual regression matrix — captures golden routes across theme + font
+# scale variants.
+#
+# This flow is parameterised by env vars:
+#   THEME      — "light" | "dark" (used in screenshot names)
+#   FONT_SCALE — "100" | "130" | "200" (used in screenshot names)
+#
+# Device-level theme and font-scale changes are handled externally by
+# scripts/capture-baselines.sh, which sets the device configuration via
+# xcrun simctl (iOS) or adb (Android) before each invocation of this
+# flow. Maestro flows are declarative YAML and cannot run shell commands
+# to change device settings directly.
+#
+# Usage (see scripts/capture-baselines.sh for the full matrix loop):
+#   maestro test .maestro/flows/visualRegressionMatrix.yaml \
+#     --env APP_ID=$APP_ID \
+#     --env THEME=light \
+#     --env FONT_SCALE=100 \
+#     --output .maestro/screenshots/light-100
+
+- launchApp:
+    clearState: false
+    permissions:
+      all: allow
+
+- extendedWaitUntil:
+    visible:
+      id: "home-brand-title"
+      optional: true
+    timeout: 20000
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: golden-home-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    label: "Search listings"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-search-${THEME}-${FONT_SCALE}
+
+- clearText
+
+- back
+
+- tapOn:
+    label: "Explore"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-browse-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    point: "50%, 40%"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "item-detail-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-pdp-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "List an item"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-sell-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Profile"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-profile-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    text: "Settings"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-settings-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Inbox"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "inbox-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-inbox-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    point: "50%, 30%"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-chat-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Explore"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-auction-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    point: "50%, 50%"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-auction-detail-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Explore"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-coown-${THEME}-${FONT_SCALE}
+
+- tapOn:
+    point: "50%, 40%"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-coown-detail-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Profile"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- tapOn:
+    text: "Seller Hub"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-seller-hub-${THEME}-${FONT_SCALE}
+
+- back
+
+- tapOn:
+    label: "Create"
+    optional: true
+
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: golden-poster-${THEME}-${FONT_SCALE}

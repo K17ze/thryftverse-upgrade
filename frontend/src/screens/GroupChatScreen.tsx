@@ -1,13 +1,12 @@
 /**
- * GroupChatScreen — dedicated multi-user group chat surface (group buying,
+ * GroupChatScreen — multi-user group chat surface (group buying,
  * co-own coordination, seller broadcasts).
  *
- * Reuses the existing chat primitives (ChatTopBar, MessageBubble,
- * ChatComposerBar) and adds:
- *  - AI agent deployment via ChatAgentPicker
- *  - SuggestedRepliesBar above the input when an agent is active
- *  - Group info modal (members, settings, leave group)
- *  - Loading / empty / error states
+ * Wave 0 convergence: this screen now uses the SAME controller hooks as
+ * ChatScreen — useConversationMessages + useConversationComposer — so group
+ * chat inherits clientMessageId reconciliation, durable outbox, reconciling
+ * state, delete-with-undo, cursor pagination, offline/foreground resync,
+ * realtime event consumption, and server-driven typing indicators.
  *
  * The route params carry { groupId, groupName }. The conversation is looked
  * up from the store by id; if it isn't found the screen renders a truthful
@@ -19,12 +18,9 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Modal,
   ScrollView,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
-import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -32,9 +28,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
-import { makeStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
 import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 
@@ -44,31 +40,43 @@ import { ChatComposerBar } from '../components/chat/ChatComposerBar';
 import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { SuggestedRepliesBar } from '../components/chat/SuggestedRepliesBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Caption, Body, BodyEmphasis, Meta } from '../components/ui/Text';
+import { Caption, BodyEmphasis } from '../components/ui/Text';
+import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
+import { MessageContextMenu, type MessageAction } from '../components/chat/MessageContextMenu';
+import { EmojiReactionsBar, type EmojiReaction } from '../components/chat/EmojiReactionsBar';
+import { ReplyQuote } from '../components/chat/ReplyQuote';
+import * as Clipboard from 'expo-clipboard';
 
 import {
   deployAgent,
   removeAgent,
   getDeployedAgents,
   getAgentSuggestions,
-  getAgentResponse,
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import { deleteConversationOnApi, leaveGroupOnApi } from '../services/chatApi';
-import type { Message as ConversationMessage } from '../domain';
+import { reportConversationOnApi } from '../services/chatApi';
+import { useTypingIndicator } from '../services/realtimeClient';
+
+import {
+  useConversationMessages,
+  useConversationComposer,
+  type Message,
+  formatDateSeparator,
+  formatMessageTime,
+} from '../hooks/chat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
-type LoadState = 'loading' | 'ready' | 'error';
-
-interface GroupMessage {
-  id: string;
-  text: string;
-  senderId: string;
-  senderLabel: string;
-  isMe: boolean;
-  timestamp: string;
+function toEmojiReactions(
+  reactions: { emoji: string; count: number; reactedByMe: boolean }[] | undefined,
+): EmojiReaction[] | undefined {
+  if (!reactions || reactions.length === 0) return undefined;
+  return reactions.map((r) => ({
+    emoji: r.emoji,
+    count: r.count,
+    reactedByMe: r.reactedByMe,
+  }));
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
@@ -77,74 +85,65 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { formatFromFiat } = useFormattedPrice();
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
-  const deleteConversation = useStore((state) => state.deleteConversation);
+  const replaceConversationMessages = useStore((state) => state.replaceConversationMessages);
+  const markConversationRead = useStore((state) => state.markConversationRead);
+  const setConversationDraft = useStore((state) => state.setConversationDraft);
+  const addMessageReaction = useStore((state) => state.addMessageReaction);
+  const removeMessageReaction = useStore((state) => state.removeMessageReaction);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === groupId),
     [conversations, groupId],
   );
 
-  const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [infoVisible, setInfoVisible] = useState(false);
+  const conversationId = conversation?.id ?? groupId;
+
+  // ─── Hydrated messages from store ───────────────────────────────────
+  const hydratedMessages = useMemo<Message[]>(() => {
+    if (!conversation?.messages.length) return [];
+    return conversation.messages.map((entry) => {
+      const isCurrentUserSender =
+        entry.senderId === 'me' || entry.senderId === currentUser?.id;
+      const sender: 'me' | 'them' = isCurrentUserSender ? 'me' : 'them';
+      const senderLabel =
+        conversation.participantProfiles?.find((p) => p.id === entry.senderId)?.displayName ??
+        conversation.participantProfiles?.find((p) => p.id === entry.senderId)?.username ??
+        'Member';
+      return {
+        id: entry.id,
+        type: entry.isSystem || entry.type === 'system' ? 'system' : entry.mediaUri ? 'media' : 'text',
+        sender,
+        senderId: entry.senderId,
+        senderLabel,
+        text: entry.text ?? entry.systemTitle ?? '',
+        isSystem: entry.isSystem,
+        systemTitle: entry.systemTitle,
+        date: entry.timestamp,
+        mediaUri: entry.mediaUri,
+        mediaType: entry.mediaType,
+        reactions: entry.reactions?.map((r) => ({
+          emoji: r.emoji,
+          count: r.userIds.length,
+          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me'),
+        })),
+        replyToMessageId: entry.replyToMessageId,
+      };
+    });
+  }, [conversation, currentUser?.id]);
+
+  // ─── AI agents (demo service) ───────────────────────────────────────
   const [agentPickerVisible, setAgentPickerVisible] = useState(false);
   const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
-  const [isLeaving, setIsLeaving] = useState(false);
 
-  const listRef = useRef<FlashListRef<GroupMessage>>(null);
-
-  // Resolve messages from the store conversation (if present).
-  useEffect(() => {
-    if (!conversation) {
-      // Allow a brief loading window; if still missing, show error state.
-      const timer = setTimeout(() => setLoadState('error'), 600);
-      return () => clearTimeout(timer);
-    }
-    const mapped: GroupMessage[] = (conversation.messages ?? [])
-      .filter((m) => !m.isSystem)
-      .map((m) => ({
-        id: m.id,
-        text: m.text ?? '',
-        senderId: m.senderId,
-        senderLabel:
-          conversation.participantProfiles?.find((p) => p.id === m.senderId)?.displayName ??
-          conversation.participantProfiles?.find((p) => p.id === m.senderId)?.username ??
-          'Member',
-        isMe: m.senderId === currentUser?.id,
-        timestamp: m.timestamp,
-      }));
-    setMessages(mapped);
-    setLoadState('ready');
-  }, [conversation, currentUser?.id]);
-
-  // Sync deployed agents from the demo service on mount.
   useEffect(() => {
     setDeployedAgents(getDeployedAgents(groupId));
   }, [groupId]);
-
-  const memberCount = conversation?.participantIds?.length ?? 0;
-  const memberProfiles = conversation?.participantProfiles ?? [];
-
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => {
-      try {
-        listRef.current?.scrollToEnd({ animated: true });
-      } catch {
-        /* list may not have laid out yet */
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages.length, scrollToBottom]);
 
   const refreshSuggestions = useCallback(
     (lastMessage: string) => {
@@ -154,69 +153,83 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     [groupId],
   );
 
+  // ─── Controller hook: message list, sync, send, retry, delete ───────
+  const {
+    messages,
+    isSyncing,
+    syncError,
+    listRef,
+    scheduleScrollToEnd,
+    recentlyDeleted,
+    composerSending,
+    sendMessage: hookSendMessage,
+    handleDeleteMessage,
+    handleUndoDelete,
+    dateSeparatorIndices,
+    handleMessageListScroll: hookHandleMessageListScroll,
+    syncMessagesFromApi,
+  } = useConversationMessages({
+    conversationId,
+    currentUser,
+    hydratedMessages,
+    formatFromFiat,
+    show,
+    haptic,
+    onOfferSent: () => {},
+    clearComposerState: async () => {},
+    deployedChatAgents: deployedAgents,
+    getChatAgentResponse: () => ({ id: '', agentId: '', content: '' }),
+    getChatAgentSuggestions: () => [],
+    setChatAgentSuggestionsExternal: () => {},
+    navigation,
+    isGroup: true,
+    conversationUnread: conversation?.unread,
+    markConversationRead,
+    appendConversationMessage,
+    replaceConversationMessages,
+  });
+
+  // ─── Controller hook: composer state, typing, reply ─────────────────
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  const {
+    input,
+    setTypingInput,
+    notifyStoppedTyping,
+    replyTo,
+    setReplyTo,
+    reactingToMessage,
+    setReactingToMessage,
+  } = useConversationComposer({
+    conversationId,
+    messagesRef,
+    show,
+    haptic,
+    setConversationDraft,
+  });
+
+  // ─── Server-driven typing indicator (other participants only) ──────
+  // P0.13: Replaces the false self-typing indicator. useTypingIndicator
+  // subscribes to chat.typing.update events and auto-clears after 4s.
+  const remoteTyping = useTypingIndicator(groupId);
+
+  // ─── Send adapter ───────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
-
-    setSending(true);
-    haptic.light();
-
-    const localId = makeStableId('g', 7);
-    const outgoing: GroupMessage = {
-      id: localId,
-      text: trimmed,
-      senderId: currentUser?.id ?? 'me',
-      senderLabel: currentUser?.username ?? 'you',
-      isMe: true,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, outgoing]);
-    setInput('');
-
-    // Persist into the store conversation so it survives navigation.
-    if (conversation) {
-      const storeMessage: ConversationMessage = {
-        id: localId,
-        senderId: currentUser?.id ?? 'me',
-        text: trimmed,
-        timestamp: outgoing.timestamp,
-        type: 'text',
-        sender: 'me',
-      };
-      appendConversationMessage(conversation.id, storeMessage);
-    }
-
-    // If an agent is deployed, surface an agent response (demo).
-    if (deployedAgents.length > 0) {
-      setTimeout(() => {
-        const agentResponse = getAgentResponse(groupId, trimmed);
-        if (!agentResponse.content) return;
-        const agentMsg: GroupMessage = {
-          id: agentResponse.id,
-          text: agentResponse.content,
-          senderId: agentResponse.agentId,
-          senderLabel: deployedAgents[0]?.name ?? 'AI Agent',
-          isMe: false,
-          timestamp: agentResponse.createdAt,
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-        refreshSuggestions(agentResponse.content);
-        setSending(false);
-      }, 500);
-    } else {
-      setSending(false);
-    }
-
+    hookSendMessage(trimmed, replyTo, setTypingInput, setReplyTo);
+    notifyStoppedTyping();
     refreshSuggestions(trimmed);
-  }, [input, haptic, currentUser, conversation, appendConversationMessage, deployedAgents, groupId, refreshSuggestions]);
+  }, [input, hookSendMessage, replyTo, setTypingInput, setReplyTo, notifyStoppedTyping, refreshSuggestions]);
 
+  // ─── Agent management ───────────────────────────────────────────────
   const handleSelectSuggestion = useCallback(
     (reply: SuggestedReply) => {
       haptic.selection();
-      setInput(reply.text);
+      setTypingInput(reply.text);
     },
-    [haptic],
+    [haptic, setTypingInput],
   );
 
   const handleDeployAgent = useCallback(
@@ -242,33 +255,117 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     [groupId, haptic, show],
   );
 
-  const renderMessage: ListRenderItem<GroupMessage> = useCallback(
+  // ─── Context menu + reactions ───────────────────────────────────────
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  const handleMessageLongPress = useCallback((msg: Message) => {
+    haptic.medium();
+    setSelectedMessage(msg);
+    setContextMenuVisible(true);
+  }, [haptic]);
+
+  const handleContextAction = useCallback((action: MessageAction) => {
+    if (!selectedMessage) return;
+    switch (action) {
+      case 'reply':
+        setReplyTo(selectedMessage);
+        break;
+      case 'copy':
+        Clipboard.setStringAsync(selectedMessage.text ?? '');
+        show('Copied', 'success');
+        break;
+      case 'react':
+        setReactingToMessage(selectedMessage);
+        break;
+      case 'delete':
+        handleDeleteMessage(selectedMessage);
+        break;
+      case 'report': {
+        const reportKey = `rpt_${conversationId}_${selectedMessage.id}`;
+        reportConversationOnApi(conversationId, 'other', undefined, selectedMessage.id, reportKey)
+          .then(() => show('Report submitted. Thank you.', 'success'))
+          .catch(() => show('Failed to submit report. Please try again.', 'error'));
+        break;
+      }
+      default:
+        break;
+    }
+    setContextMenuVisible(false);
+  }, [selectedMessage, conversationId, show, handleDeleteMessage, setReplyTo, setReactingToMessage]);
+
+  const handleReact = useCallback((emoji: string) => {
+    const msg = reactingToMessage;
+    if (!msg) return;
+    const existing = msg.reactions?.find((r) => r.emoji === emoji);
+    if (existing?.reactedByMe) {
+      removeMessageReaction(conversationId, msg.id, emoji);
+    } else {
+      addMessageReaction(conversationId, msg.id, emoji);
+    }
+    setReactingToMessage(null);
+    haptic.light();
+  }, [reactingToMessage, conversationId, addMessageReaction, removeMessageReaction, haptic, setReactingToMessage]);
+
+  // ─── Message rendering ──────────────────────────────────────────────
+  const renderMessage: ListRenderItem<Message> = useCallback(
     ({ item, index }) => {
       const prev = messages[index - 1];
       const next = messages[index + 1];
       const isFirstInCluster = !prev || prev.senderId !== item.senderId;
       const isLastInCluster = !next || next.senderId !== item.senderId;
       const isAgent = deployedAgents.some((agent) => agent.id === item.senderId);
+      const replyParent = item.replyToMessageId
+        ? messages.find((m) => m.id === item.replyToMessageId)
+        : undefined;
+
+      const dateSep = dateSeparatorIndices.has(index)
+        ? formatDateSeparator(item.date ?? '')
+        : null;
+      const time = formatMessageTime(item.date);
+
       return (
         <View style={styles.messageRow}>
+          {dateSep ? (
+            <View style={styles.dateSeparator}>
+              <View style={[styles.dateSeparatorLine, { backgroundColor: colors.borderSubtle }]} />
+              <Caption color={colors.textMuted} style={styles.dateSeparatorText}>{dateSep}</Caption>
+              <View style={[styles.dateSeparatorLine, { backgroundColor: colors.borderSubtle }]} />
+            </View>
+          ) : null}
           <MessageBubble
-            text={item.text}
-            isMe={item.isMe}
-            senderLabel={isAgent ? `${item.senderLabel} · AI` : item.senderLabel}
-            timestamp={item.timestamp}
+            text={item.text ?? ''}
+            isMe={item.sender === 'me'}
+            senderLabel={isAgent ? `${item.senderLabel ?? 'Member'} · AI` : item.senderLabel}
+            timestamp={time}
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
-            showAvatar={!item.isMe && isLastInCluster}
+            showAvatar={item.sender === 'them' && isFirstInCluster}
+            reactions={toEmojiReactions(item.reactions)}
+            replyTo={
+              replyParent
+                ? { senderName: replyParent.senderLabel ?? 'Member', text: replyParent.text ?? '' }
+                : null
+            }
+            onLongPress={() => handleMessageLongPress(item)}
+            onReactionPress={() => setReactingToMessage(item)}
           />
         </View>
       );
     },
-    [deployedAgents, styles.messageRow],
+    [deployedAgents, styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage],
   );
 
-  const keyExtractor = useCallback((item: GroupMessage) => item.id, []);
+  const keyExtractor = useCallback((item: Message) => item.id, []);
 
-  const headerSubtitle = `${memberCount} members${deployedAgents.length > 0 ? ` · ${deployedAgents.length} AI` : ''}`;
+  const memberCount = conversation?.participantIds?.length ?? 0;
+  const headerSubtitle = remoteTyping
+    ? 'typing…'
+    : `${memberCount} members${deployedAgents.length > 0 ? ` · ${deployedAgents.length} AI` : ''}`;
+
+  // ─── Loading / error states ─────────────────────────────────────────
+  const showLoading = isSyncing && messages.length === 0;
+  const showError = syncError && messages.length === 0;
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screenRoot}>
@@ -278,12 +375,11 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           subtitle={headerSubtitle}
           variant="group"
           onBack={() => navigation.goBack()}
-          onInfo={() => setInfoVisible(true)}
-          onTitlePress={() => setInfoVisible(true)}
+          onInfo={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
+          onTitlePress={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
         />
 
-        {/* AI agent chips — one per deployed agent, tap to remove.
-            Mirrors the ChatScreen chip pattern: avatar glyph + name + close. */}
+        {/* AI agent chips */}
         {deployedAgents.length > 0 && (
           <View
             style={[
@@ -324,16 +420,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {loadState === 'loading' && (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="small" color={colors.textMuted} />
-            <Caption color={colors.textMuted} style={styles.stateCaption}>
-              Loading conversation…
-            </Caption>
-          </View>
-        )}
+        {showLoading && <SkeletonChatLoader count={6} />}
 
-        {loadState === 'error' && (
+        {showError && (
           <View style={styles.centerState}>
             <Ionicons name="alert-circle-outline" size={28} color={colors.textMuted} />
             <BodyEmphasis color={colors.textPrimary} style={styles.stateTitle}>
@@ -344,10 +433,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             </Caption>
             <AnimatedPressable
               style={[styles.retryBtn, { backgroundColor: colors.brand }]}
-              onPress={() => {
-                setLoadState('loading');
-                setTimeout(() => setLoadState(conversation ? 'ready' : 'error'), 400);
-              }}
+              onPress={() => void syncMessagesFromApi()}
               activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="light"
@@ -359,7 +445,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {loadState === 'ready' && (
+        {!showLoading && !showError && (
           <>
             <FlashList
               ref={listRef}
@@ -368,7 +454,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               renderItem={renderMessage}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
-              onContentSizeChange={scrollToBottom}
+              onScroll={hookHandleMessageListScroll}
+              onContentSizeChange={scheduleScrollToEnd}
               ListEmptyComponent={
                 <View style={styles.centerState}>
                   <Ionicons name="chatbubbles-outline" size={30} color={colors.textMuted} />
@@ -380,22 +467,60 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                   </Caption>
                 </View>
               }
+              // P0.6: Preserve scroll anchor when older messages are
+              // prepended via cursor pagination.
+              maintainVisibleContentPosition={{
+                autoscrollToTopThreshold: 0,
+              }}
             />
 
             <KeyboardStickyView style={styles.composerWrap}>
+              {recentlyDeleted.length > 0 && (
+                <Pressable
+                  style={styles.undoBanner}
+                  onPress={handleUndoDelete}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo delete"
+                >
+                  <Caption color={colors.textInverse}>Message deleted · Undo</Caption>
+                </Pressable>
+              )}
+
+              {replyTo ? (
+                <ReplyQuote
+                  senderName={replyTo.senderLabel ?? 'Member'}
+                  text={replyTo.text ?? ''}
+                  onClose={() => setReplyTo(null)}
+                  style={styles.replyQuote}
+                />
+              ) : null}
+
+              {reactingToMessage ? (
+                <EmojiReactionsBar
+                  reactions={toEmojiReactions(reactingToMessage.reactions) ?? []}
+                  onReact={handleReact}
+                  style={styles.reactionsBar}
+                />
+              ) : null}
+
+              {remoteTyping ? (
+                <View style={styles.typingRow}>
+                  <Caption color={colors.textMuted}>Someone is typing…</Caption>
+                </View>
+              ) : null}
+
               {deployedAgents.length > 0 && suggestions.length > 0 && input.trim().length === 0 && (
                 <SuggestedRepliesBar suggestions={suggestions} onSelect={handleSelectSuggestion} />
               )}
 
               <ChatComposerBar
                 value={input}
-                onChangeText={setInput}
+                onChangeText={setTypingInput}
                 onSend={handleSend}
                 placeholder="Message the group…"
-                isSending={sending}
+                isSending={composerSending}
               />
 
-              {/* Add AI Agent entry point — sits as a subtle action above the input row */}
               <View style={styles.addAgentContainer}>
                 <AnimatedPressable
                   style={styles.addAgentRow}
@@ -427,186 +552,15 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           deployedAgentIds={deployedAgents.map((agent) => agent.id)}
         />
 
-        <GroupInfoModal
-          visible={infoVisible}
-          onClose={() => setInfoVisible(false)}
-          groupName={groupName}
-          memberProfiles={memberProfiles}
-          memberCount={memberCount}
-          deployedAgents={deployedAgents}
-          isLeaving={isLeaving}
-          onLeaveGroup={() => {
-            Alert.alert(
-              'Leave group?',
-              "You'll no longer receive messages from this group.",
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Leave group',
-                  style: 'destructive',
-                  onPress: async () => {
-                    if (!currentUser?.id) {
-                      show('Could not leave group. Try again.', 'error');
-                      return;
-                    }
-                    haptic.warning();
-                    setIsLeaving(true);
-                    try {
-                      await leaveGroupOnApi(groupId, currentUser.id);
-                      deleteConversation(groupId);
-                      setInfoVisible(false);
-                      show('Left group', 'info');
-                      navigation.goBack();
-                    } catch {
-                      show('Could not leave group. Try again.', 'error');
-                    } finally {
-                      setIsLeaving(false);
-                    }
-                  },
-                },
-              ],
-            );
-          }}
-          onManageAgents={() => {
-            setInfoVisible(false);
-            setAgentPickerVisible(true);
-          }}
+        <MessageContextMenu
+          visible={contextMenuVisible}
+          onClose={() => setContextMenuVisible(false)}
+          onAction={handleContextAction}
+          messageText={selectedMessage?.text}
+          isOwnMessage={selectedMessage?.sender === 'me'}
         />
       </View>
     </SafeAreaView>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Group info modal — members, settings, leave group
-// ---------------------------------------------------------------------------
-function GroupInfoModal({
-  visible,
-  onClose,
-  groupName,
-  memberProfiles,
-  memberCount,
-  deployedAgents,
-  isLeaving,
-  onLeaveGroup,
-  onManageAgents,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  groupName: string;
-  memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
-  memberCount: number;
-  deployedAgents: ChatAgent[];
-  isLeaving: boolean;
-  onLeaveGroup: () => void;
-  onManageAgents: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View
-          style={[styles.sheet, { backgroundColor: colors.surface }]}
-          accessibilityLabel="Group info sheet"
-        >
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              {groupName}
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              {memberCount} member{memberCount === 1 ? '' : 's'}
-            </Text>
-          </View>
-
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-            {deployedAgents.length > 0 && (
-              <View style={styles.modalSection}>
-                <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                  AI AGENTS
-                </Meta>
-                {deployedAgents.map((agent) => (
-                  <View key={agent.id} style={[styles.memberRow, { backgroundColor: colors.surfaceAlt }]}>
-                    <View style={[styles.memberIcon, { backgroundColor: `${colors.brand}14` }]}>
-                      <Ionicons name={agent.avatar as keyof typeof Ionicons.glyphMap} size={18} color={colors.brand} />
-                    </View>
-                    <View style={styles.memberText}>
-                      <BodyEmphasis numberOfLines={1}>{agent.name}</BodyEmphasis>
-                      <Caption color={colors.textMuted} numberOfLines={1}>{agent.description}</Caption>
-                    </View>
-                  </View>
-                ))}
-                <AnimatedPressable
-                  style={[styles.manageAgentsBtn, { borderColor: colors.border }]}
-                  onPress={onManageAgents}
-                  activeOpacity={0.7}
-                  scaleValue={0.97}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityLabel="Manage AI agents"
-                >
-                  <Text style={[styles.manageAgentsText, { color: colors.textPrimary }]}>Manage AI agents</Text>
-                </AnimatedPressable>
-              </View>
-            )}
-
-            <View style={styles.modalSection}>
-              <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                MEMBERS
-              </Meta>
-              {memberProfiles.length === 0 ? (
-                <Caption color={colors.textMuted} style={styles.emptyMembers}>
-                  Member list unavailable
-                </Caption>
-              ) : (
-                memberProfiles.map((member) => (
-                  <View key={member.id} style={[styles.memberRow, { backgroundColor: colors.surfaceAlt }]}>
-                    <View style={[styles.memberIcon, { backgroundColor: colors.surface }]}>
-                      <Ionicons name="person" size={16} color={colors.textSecondary} />
-                    </View>
-                    <View style={styles.memberText}>
-                      <BodyEmphasis numberOfLines={1}>
-                        {member.displayName ?? member.username}
-                      </BodyEmphasis>
-                      <Caption color={colors.textMuted} numberOfLines={1}>@{member.username}</Caption>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
-
-          <Pressable
-            style={[styles.leaveBtn, { borderColor: colors.danger }, isLeaving && styles.leaveBtnDisabled]}
-            onPress={onLeaveGroup}
-            disabled={isLeaving}
-            accessibilityRole="button"
-            accessibilityLabel="Leave group"
-            accessibilityHint="Removes you from this group conversation"
-            accessibilityState={{ disabled: isLeaving }}
-          >
-            {isLeaving ? (
-              <ActivityIndicator size="small" color={colors.danger} />
-            ) : (
-              <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close group info"
-          >
-            <Text style={[styles.cancelText, { color: colors.textPrimary }]}>Close</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -677,9 +631,43 @@ const createStyles = (colors: ThemeColors) =>
     messageRow: {
       marginVertical: 2,
     },
+    dateSeparator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm,
+    },
+    dateSeparatorLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+    },
+    dateSeparatorText: {
+      textAlign: 'center',
+    },
     composerWrap: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
+    },
+    undoBanner: {
+      backgroundColor: colors.brand,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      alignItems: 'center',
+    },
+    replyQuote: {
+      marginHorizontal: Space.md,
+      marginTop: Space.sm,
+    },
+    reactionsBar: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    typingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
     },
     addAgentContainer: {
       alignItems: 'center',
@@ -702,117 +690,5 @@ const createStyles = (colors: ThemeColors) =>
       textAlign: 'center',
       marginTop: Space.xs,
       paddingHorizontal: Space.lg,
-    },
-    overlay: {
-      flex: 1,
-      backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
-    sheet: {
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-      gap: Space.md,
-      maxHeight: '85%',
-    },
-    handle: {
-      width: Control.chrome,
-      height: Space.xs,
-      borderRadius: Radius.full,
-      alignSelf: 'center',
-      marginBottom: Space.sm,
-    },
-    modalHeader: {
-      marginBottom: Space.xs,
-    },
-    modalTitle: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    modalSubtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.xs / 2,
-    },
-    modalScroll: {
-      flexGrow: 0,
-    },
-    modalScrollContent: {
-      gap: Space.md,
-    },
-    modalSection: {
-      gap: Space.sm,
-    },
-    sectionLabel: {
-      letterSpacing: Type.metaElevated.letterSpacing,
-    },
-    memberRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.sm + 2,
-      borderRadius: Radius.lg,
-    },
-    memberIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    memberText: {
-      flex: 1,
-      gap: Space.xs / 4,
-    },
-    emptyMembers: {
-      paddingVertical: Space.sm,
-    },
-    manageAgentsBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.sm + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    manageAgentsText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-    leaveBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.md + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    leaveBtnDisabled: {
-      opacity: 0.6,
-    },
-    leaveBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-    cancelBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.md + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    cancelText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     },
   });

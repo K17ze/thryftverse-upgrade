@@ -18,6 +18,7 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface RailCardProps {
   item: Listing;
@@ -26,7 +27,13 @@ interface RailCardProps {
   reasonCode?: string;
   personalised?: boolean;
   listingId: string;
-  onPress: (item: Listing) => void;
+  onPress: (
+    item: Listing,
+    sectionKey: string,
+    position: number,
+    reasonCode?: string,
+    personalised?: boolean,
+  ) => void;
   cardWidth: number;
   cardHeight: number;
   showAccent: boolean;
@@ -47,12 +54,12 @@ function RailCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
-  const formattedPrice = formatFromFiat(item.price, 'GBP');
+  const formattedPrice = formatFromFiat(item.price, DEFAULT_CURRENCY_CODE);
   const imageUri = item.images?.[0];
 
   const handlePress = () => {
     ProductAnalytics.recommendationClick(listingId, sectionKey, index, reasonCode, personalised);
-    onPress(item);
+    onPress(item, sectionKey, index, reasonCode, personalised);
   };
 
   return (
@@ -98,7 +105,13 @@ function RailCard({
 export interface RecommendationRailProps {
   section: RecommendationSection;
   listingId: string;
-  onPressItem: (item: Listing) => void;
+  onPressItem: (
+    item: Listing,
+    sectionKey: string,
+    position: number,
+    reasonCode?: string,
+    personalised?: boolean,
+  ) => void;
   onSeeAll?: () => void;
 }
 
@@ -112,10 +125,7 @@ export function RecommendationRail({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
 
-  if (section.items.length === 0) return null;
-
   const listingItems = section.items.filter((item): item is Listing => !isRecommendationLook(item));
-  if (listingItems.length === 0) return null;
 
   const isComplementary = section.key === 'complete_the_look';
   const isPersonalised = section.personalised;
@@ -149,6 +159,8 @@ export function RecommendationRail({
     ),
     [section.key, section.reason, section.personalised, listingId, onPressItem, cardWidth, cardHeight, showAccent],
   );
+
+  if (section.items.length === 0 || listingItems.length === 0) return null;
 
   return (
     <View
@@ -228,8 +240,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     subtitle: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginTop: Space.xs,
@@ -240,8 +252,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     seeAll: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -308,15 +320,15 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
     },
     cardTitle: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
       marginTop: Space.xs,
     },
     cardPrice: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginTop: Space.xs,

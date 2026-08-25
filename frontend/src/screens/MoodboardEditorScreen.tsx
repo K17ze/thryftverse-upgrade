@@ -57,6 +57,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import {
   fetchMoodboardDetail,
   fetchMoodboardThemes,
@@ -66,6 +67,7 @@ import {
   removeItemFromMoodboard,
   updateItemPosition,
   reorderItem,
+  updateMoodboardTheme,
   getThemeById,
   MOODBOARD_DEMO_MODE,
   type Moodboard,
@@ -120,6 +122,7 @@ interface CanvasItemProps {
   canvasWidth: number;
   canvasHeight: number;
   isSelected: boolean;
+  multiSelectMode: boolean;
   reducedMotion: boolean;
   onSelect: (id: string) => void;
   onPositionCommit: (id: string, position: MoodboardItemPosition) => void;
@@ -131,6 +134,7 @@ const CanvasItem = React.memo(function CanvasItem({
   canvasWidth,
   canvasHeight,
   isSelected,
+  multiSelectMode,
   reducedMotion,
   onSelect,
   onPositionCommit,
@@ -156,16 +160,16 @@ const CanvasItem = React.memo(function CanvasItem({
     const expectedX = normToPx(item.position.x, canvasWidth);
     const expectedY = normToPx(item.position.y, canvasHeight);
     if (Math.abs(translateX.value - expectedX) > 1) {
-      translateX.value = reducedMotion ? expectedX : withSpring(expectedX, { damping: 26, stiffness: 220 });
+      translateX.value = reducedMotion ? expectedX : withSpring(expectedX, Motion.spring.sharedElement);
     }
     if (Math.abs(translateY.value - expectedY) > 1) {
-      translateY.value = reducedMotion ? expectedY : withSpring(expectedY, { damping: 26, stiffness: 220 });
+      translateY.value = reducedMotion ? expectedY : withSpring(expectedY, Motion.spring.sharedElement);
     }
     if (Math.abs(scale.value - item.position.scale) > 0.01) {
-      scale.value = reducedMotion ? item.position.scale : withSpring(item.position.scale, { damping: 26, stiffness: 220 });
+      scale.value = reducedMotion ? item.position.scale : withSpring(item.position.scale, Motion.spring.sharedElement);
     }
     if (Math.abs(rotation.value - item.position.rotation) > 0.5) {
-      rotation.value = reducedMotion ? item.position.rotation : withSpring(item.position.rotation, { damping: 26, stiffness: 220 });
+      rotation.value = reducedMotion ? item.position.rotation : withSpring(item.position.rotation, Motion.spring.sharedElement);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.position.x, item.position.y, item.position.scale, item.position.rotation, canvasWidth, canvasHeight, reducedMotion]);
@@ -176,8 +180,8 @@ const CanvasItem = React.memo(function CanvasItem({
       const halfPx = halfBase * finalScale;
       const clampedX = clampCenter(finalX, canvasWidth, halfPx);
       const clampedY = clampCenter(finalY, canvasHeight, halfPx);
-      translateX.value = reducedMotion ? clampedX : withSpring(clampedX, { damping: 26, stiffness: 220 });
-      translateY.value = reducedMotion ? clampedY : withSpring(clampedY, { damping: 26, stiffness: 220 });
+      translateX.value = reducedMotion ? clampedX : withSpring(clampedX, Motion.spring.sharedElement);
+      translateY.value = reducedMotion ? clampedY : withSpring(clampedY, Motion.spring.sharedElement);
       const position: MoodboardItemPosition = {
         x: pxToNorm(clampedX, canvasWidth),
         y: pxToNorm(clampedY, canvasHeight),
@@ -275,14 +279,17 @@ const CanvasItem = React.memo(function CanvasItem({
   );
 
   // Compose: simultaneous pan+pinch+rotate, racing with tap and long-press.
+  // In multi-select mode items are static — only tap (toggle selection) is active.
   const composedGesture = useMemo(
     () =>
-      Gesture.Race(
-        Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
-        tapGesture,
-        longPressGesture,
-      ),
-    [longPressGesture, panGesture, pinchGesture, rotationGesture, tapGesture],
+      multiSelectMode
+        ? tapGesture
+        : Gesture.Race(
+            Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
+            tapGesture,
+            longPressGesture,
+          ),
+    [multiSelectMode, longPressGesture, panGesture, pinchGesture, rotationGesture, tapGesture],
   );
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -297,7 +304,9 @@ const CanvasItem = React.memo(function CanvasItem({
     };
   });
 
-  const a11yLabel = `Canvas item: ${item.title}, ${item.price.toFixed(0)} pounds. ${isSelected ? 'Selected.' : 'Tap to select.'} Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order.`;
+  const a11yLabel = multiSelectMode
+    ? `Canvas item: ${item.title}, ${item.price.toFixed(0)} pounds. ${isSelected ? 'Selected.' : 'Tap to select.'} Multi-select mode.`
+    : `Canvas item: ${item.title}, ${item.price.toFixed(0)} pounds. ${isSelected ? 'Selected.' : 'Tap to select.'} Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order.`;
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -305,7 +314,7 @@ const CanvasItem = React.memo(function CanvasItem({
         style={[styles.canvasItem, animatedStyle]}
         accessibilityLabel={a11yLabel}
         accessibilityRole="button"
-        accessibilityHint="Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order."
+        accessibilityHint={multiSelectMode ? 'Tap to toggle selection.' : 'Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order.'}
         accessible
       >
         <View
@@ -440,7 +449,7 @@ const SelectionControl = React.memo(function SelectionControl({
       accessibilityLabel={label}
       accessibilityHint={hint}
     >
-      <Ionicons name={icon} size={20} color={destructive ? colors.textInverse : colors.textInverse} />
+      <Ionicons name={icon} size={20} color={colors.scrimTextPrimary} />
     </AnimatedPressable>
   );
 });
@@ -466,6 +475,8 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [canvasWidth, setCanvasWidth] = useState(SCREEN_W);
   const [canvasHeight, setCanvasHeight] = useState(CANVAS_HEIGHT);
@@ -524,18 +535,45 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const handleSelect = useCallback(
     (id: string) => {
       haptic.selection();
-      setSelectedItemId((prev) => (prev === id ? null : id));
+      if (multiSelectMode) {
+        setSelectedItemIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) {
+            next.delete(id);
+          } else {
+            next.add(id);
+          }
+          return next;
+        });
+      } else {
+        setSelectedItemId((prev) => (prev === id ? null : id));
+      }
     },
-    [haptic],
+    [haptic, multiSelectMode],
   );
 
   const handleLongPress = useCallback(
     (id: string) => {
       haptic.heavy();
-      setSelectedItemId(id);
+      setSelectedItemId(null);
+      setMultiSelectMode(true);
+      setSelectedItemIds(new Set([id]));
     },
     [haptic],
   );
+
+  // Exit multi-select mode once the selection set becomes empty.
+  useEffect(() => {
+    if (multiSelectMode && selectedItemIds.size === 0) {
+      setMultiSelectMode(false);
+    }
+  }, [multiSelectMode, selectedItemIds]);
+
+  const handleCancelMultiSelect = useCallback(() => {
+    haptic.light();
+    setMultiSelectMode(false);
+    setSelectedItemIds(new Set());
+  }, [haptic]);
 
   const handlePositionCommit = useCallback(
     async (id: string, position: MoodboardItemPosition) => {
@@ -552,11 +590,12 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             }
           : prev,
       );
-      // Persist to the (demo) service
+      // Persist to the backend service
       try {
         await updateItemPosition(moodboard.id, id, position);
-      } catch {
-        // Silent — demo mode is in-memory; surface only if a real backend fails
+      } catch (error) {
+        // Surface the error — position update failed
+        console.warn('Position update failed:', error);
       }
     },
     [moodboard],
@@ -627,16 +666,66 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
     [haptic, moodboard],
   );
 
+  const handleDeleteSelected = useCallback(
+    async () => {
+      if (!moodboard || selectedItemIds.size === 0) return;
+      haptic.warning();
+      const ids = Array.from(selectedItemIds);
+      setMultiSelectMode(false);
+      setSelectedItemIds(new Set());
+      setSaving(true);
+      try {
+        await Promise.all(ids.map((id) => removeItemFromMoodboard(moodboard.id, id)));
+        const mb = await fetchMoodboardDetail(moodboard.id);
+        if (mb) setMoodboard(mb);
+      } catch {
+        haptic.error();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [haptic, moodboard, selectedItemIds],
+  );
+
+  const handleBringAllToFront = useCallback(
+    async () => {
+      if (!moodboard || selectedItemIds.size === 0) return;
+      haptic.selection();
+      // Preserve relative layer order: bring to front in back→front (array) order.
+      const ids = moodboard.items
+        .map((it) => it.id)
+        .filter((id) => selectedItemIds.has(id));
+      setSaving(true);
+      try {
+        for (const id of ids) {
+          await reorderItem(moodboard.id, id, 'front');
+        }
+        const mb = await fetchMoodboardDetail(moodboard.id);
+        if (mb) setMoodboard(mb);
+      } catch {
+        haptic.error();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [haptic, moodboard, selectedItemIds],
+  );
+
   const handleThemeChange = useCallback(
     (themeId: string) => {
       haptic.selection();
       setActiveThemeId(themeId);
-      // Optimistic — theme is a local canvas property in demo mode
+      // Optimistic local update — persisted via the moodboard API
       setMoodboard((prev) =>
         prev ? { ...prev, theme: themeId, updatedAt: new Date().toISOString() } : prev,
       );
+      if (moodboard) {
+        void updateMoodboardTheme(moodboard.id, themeId).catch((error) => {
+          console.warn('Theme update failed:', error);
+        });
+      }
     },
-    [haptic],
+    [haptic, moodboard],
   );
 
   const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
@@ -648,9 +737,13 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   }, []);
 
   const handleCanvasBackgroundPress = useCallback(() => {
-    // Tapping empty canvas deselects
-    setSelectedItemId(null);
-  }, []);
+    if (multiSelectMode) {
+      setMultiSelectMode(false);
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemId(null);
+    }
+  }, [multiSelectMode]);
 
   // ── Derived ──
   const selectedItem = useMemo(
@@ -717,7 +810,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
 
       {/* Offline banner */}
       {isOffline && (
-        <OfflineBanner message="Offline — changes are saved locally" />
+        <OfflineBanner message="Offline — changes are not saved. Reconnect to persist your work." />
       )}
 
       {/* Demo mode banner — truthful per AGENTS.md §11 */}
@@ -725,7 +818,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         <View style={styles.demoBanner}>
           <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are saved locally. Connect the backend to share publicly.
+            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
           </Text>
         </View>
       )}
@@ -779,7 +872,8 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             item={item}
             canvasWidth={canvasWidth}
             canvasHeight={canvasHeight}
-            isSelected={selectedItemId === item.id}
+            isSelected={multiSelectMode ? selectedItemIds.has(item.id) : selectedItemId === item.id}
+            multiSelectMode={multiSelectMode}
             reducedMotion={reducedMotion}
             onSelect={handleSelect}
             onPositionCommit={handlePositionCommit}
@@ -787,29 +881,70 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
           />
         ))}
 
-        {/* Selection controls — overlaid on canvas, above items */}
-        {selectedItem && (
-          <View style={styles.selectionControlsRow} pointerEvents="box-none">
-            <SelectionControl
-              icon="arrow-up"
-              label="Bring to front"
-              hint="Moves this item above all others"
-              onPress={() => void handleReorder(selectedItem.id, 'front')}
-            />
-            <SelectionControl
-              icon="arrow-down"
-              label="Send to back"
-              hint="Moves this item below all others"
-              onPress={() => void handleReorder(selectedItem.id, 'back')}
-            />
-            <SelectionControl
-              icon="trash-outline"
-              label="Remove from moodboard"
-              hint="Deletes this item from the canvas"
-              onPress={() => void handleDeleteItem(selectedItem.id)}
-              destructive
-            />
+        {/* Multi-select badge — count + cancel, overlaid at the top of the canvas */}
+        {multiSelectMode && (
+          <View style={styles.multiSelectBadge} pointerEvents="box-none">
+            <View style={styles.multiSelectPill}>
+              <Text style={styles.multiSelectCountText}>
+                {selectedItemIds.size} selected
+              </Text>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={handleCancelMultiSelect}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel multi-select"
+                accessibilityHint="Exits multi-select mode"
+              >
+                <Text style={styles.multiSelectCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
           </View>
+        )}
+
+        {/* Selection controls — overlaid on canvas, above items.
+            In multi-select mode, batch controls replace the single-item controls. */}
+        {multiSelectMode ? (
+          selectedItemIds.size >= 2 && (
+            <View style={styles.selectionControlsRow} pointerEvents="box-none">
+              <SelectionControl
+                icon="arrow-up"
+                label="Bring all to front"
+                hint="Moves all selected items above the others"
+                onPress={() => void handleBringAllToFront()}
+              />
+              <SelectionControl
+                icon="trash-outline"
+                label="Delete all selected"
+                hint="Deletes all selected items from the canvas"
+                onPress={() => void handleDeleteSelected()}
+                destructive
+              />
+            </View>
+          )
+        ) : (
+          selectedItem && (
+            <View style={styles.selectionControlsRow} pointerEvents="box-none">
+              <SelectionControl
+                icon="arrow-up"
+                label="Bring to front"
+                hint="Moves this item above all others"
+                onPress={() => void handleReorder(selectedItem.id, 'front')}
+              />
+              <SelectionControl
+                icon="arrow-down"
+                label="Send to back"
+                hint="Moves this item below all others"
+                onPress={() => void handleReorder(selectedItem.id, 'back')}
+              />
+              <SelectionControl
+                icon="trash-outline"
+                label="Remove from moodboard"
+                hint="Deletes this item from the canvas"
+                onPress={() => void handleDeleteItem(selectedItem.id)}
+                destructive
+              />
+            </View>
+          )
         )}
 
         {/* Saving indicator */}
@@ -1069,7 +1204,7 @@ function useStyles() {
           backgroundColor: colors.brand,
         },
         savingText: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
         },
@@ -1177,6 +1312,32 @@ function useStyles() {
           flexDirection: 'row',
           justifyContent: 'center',
           gap: Space.sm,
+        },
+        multiSelectBadge: {
+          position: 'absolute',
+          top: Space.sm,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+        },
+        multiSelectPill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.md,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.full,
+          backgroundColor: colors.overlay,
+        },
+        multiSelectCountText: {
+          fontSize: Type.bodyStrong.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.scrimTextPrimary,
+        },
+        multiSelectCancelText: {
+          fontSize: Type.bodyStrong.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.scrimTextPrimary,
         },
         savingOverlay: {
           ...StyleSheet.absoluteFill,

@@ -125,7 +125,7 @@ export function CoOwnWalletBreakdown({
         {localFiatLabel && !balanceHidden && (
           <View style={styles.localFiatRow}>
             <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${localFiatSource ? ` · ${localFiatSource}` : ''}`}>
               {localFiatLabel}
               {localFiatSource ? ` · ${localFiatSource}` : ''}
             </Text>
@@ -140,7 +140,7 @@ export function CoOwnWalletBreakdown({
             Settled claim
           </Text>
           {safeguardingPartner && (
-            <View style={[styles.safeguardChip, { backgroundColor: colors.brand + '12' }]}>
+            <View style={[styles.safeguardChip, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="lock-closed-outline" size={11} color={colors.brand} />
               <Text style={[styles.safeguardChipText, { color: colors.brand }]} numberOfLines={1}>
                 Safeguarded at {safeguardingPartner}
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   localFiatRow: {
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   safeguardChip: {
@@ -413,10 +413,10 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   withdrawableRow: {
     flexDirection: 'row',

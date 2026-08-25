@@ -106,3 +106,89 @@ test('resolveCountryCapabilities normalizes invalid country input via compliance
   assert.equal(capabilities.effectiveCountryCode, 'GB');
   assert.equal(capabilities.countryCluster, 'UK');
 });
+
+test('resolveCountryCapabilities returns tax rules per cluster', () => {
+  const uk = resolveCountryCapabilities({ countryCode: 'GB' });
+  assert.equal(uk.tax.type, 'vat');
+  assert.equal(uk.tax.standardRate, 20);
+  assert.equal(uk.tax.basis, 'destination');
+  assert.ok(uk.tax.zeroRatedCategories.includes('books'));
+
+  const us = resolveCountryCapabilities({ countryCode: 'US' });
+  assert.equal(us.tax.type, 'sales_tax');
+  assert.equal(us.tax.standardRate, 7.25);
+  assert.equal(us.tax.reducedRate, null);
+
+  const inCapabilities = resolveCountryCapabilities({ countryCode: 'IN' });
+  assert.equal(inCapabilities.tax.type, 'gst');
+  assert.equal(inCapabilities.tax.standardRate, 18);
+  assert.equal(inCapabilities.tax.digitalServicesRate, 18);
+
+  const global = resolveCountryCapabilities({ countryCode: 'BR' });
+  assert.equal(global.tax.type, 'none');
+  assert.equal(global.tax.standardRate, 0);
+  assert.equal(global.tax.registrationThresholdGbp, null);
+});
+
+test('resolveCountryCapabilities returns restricted items per cluster', () => {
+  const uk = resolveCountryCapabilities({ countryCode: 'GB' });
+  const ukIvory = uk.restrictedItems.find((r) => r.category === 'ivory_wildlife');
+  assert.ok(ukIvory, 'UK should restrict ivory');
+  assert.equal(ukIvory?.severity, 'prohibited');
+  assert.equal(ukIvory?.requiresLicense, false);
+
+  const us = resolveCountryCapabilities({ countryCode: 'US' });
+  const usFirearms = us.restrictedItems.find((r) => r.category === 'firearms');
+  assert.ok(usFirearms, 'US should restrict firearms');
+  assert.equal(usFirearms?.severity, 'restricted');
+  assert.equal(usFirearms?.requiresLicense, true);
+
+  const me = resolveCountryCapabilities({ countryCode: 'AE' });
+  const meAdult = me.restrictedItems.find((r) => r.category === 'adult_content');
+  assert.ok(meAdult, 'Middle East should prohibit adult content');
+  assert.equal(meAdult?.severity, 'prohibited');
+
+  // All clusters prohibit counterfeit
+  for (const code of ['GB', 'US', 'FR', 'AE', 'CN', 'IN', 'BR']) {
+    const caps = resolveCountryCapabilities({ countryCode: code });
+    const counterfeit = caps.restrictedItems.find((r) => r.category === 'counterfeit');
+    assert.ok(counterfeit, `${code} should restrict counterfeit`);
+    assert.equal(counterfeit?.severity, 'prohibited');
+  }
+});
+
+test('resolveCountryCapabilities returns age restrictions per cluster', () => {
+  const us = resolveCountryCapabilities({ countryCode: 'US' });
+  const usAlcohol = us.ageRestrictions.find((ar) => ar.categories.includes('alcohol'));
+  assert.ok(usAlcohol, 'US should have alcohol age restriction');
+  assert.equal(usAlcohol?.minimumAge, 21);
+  assert.equal(usAlcohol?.verificationRequired, true);
+
+  const uk = resolveCountryCapabilities({ countryCode: 'GB' });
+  const ukAlcohol = uk.ageRestrictions.find((ar) => ar.categories.includes('alcohol'));
+  assert.ok(ukAlcohol, 'UK should have alcohol age restriction');
+  assert.equal(ukAlcohol?.minimumAge, 18);
+
+  // All clusters have a general 16 minimum
+  for (const code of ['GB', 'US', 'FR', 'AE', 'CN', 'IN', 'BR']) {
+    const caps = resolveCountryCapabilities({ countryCode: code });
+    const general = caps.ageRestrictions.find((ar) => ar.categories.includes('general'));
+    assert.ok(general, `${code} should have general age restriction`);
+    assert.equal(general?.minimumAge, 16);
+  }
+});
+
+test('resolveCountryCapabilities returns shipping zones per cluster', () => {
+  const uk = resolveCountryCapabilities({ countryCode: 'GB' });
+  assert.ok(uk.shippingZones.includes('domestic'));
+  assert.ok(uk.shippingZones.includes('europe'));
+  assert.ok(uk.shippingZones.includes('global'));
+
+  const us = resolveCountryCapabilities({ countryCode: 'US' });
+  assert.ok(us.shippingZones.includes('north_america'));
+  assert.ok(!us.shippingZones.includes('europe'));
+
+  const global = resolveCountryCapabilities({ countryCode: 'BR' });
+  assert.deepEqual(global.shippingZones, ['global']);
+  assert.ok(!global.shippingZones.includes('domestic'));
+});

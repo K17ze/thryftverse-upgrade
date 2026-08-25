@@ -355,7 +355,7 @@ function createStyles(colors: any) {
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
       paddingHorizontal: Space.md,
-      paddingBottom: 32,
+      paddingBottom: Space.xl,
       paddingTop: Space.sm,
       gap: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
@@ -368,7 +368,7 @@ function createStyles(colors: any) {
     handle: {
       width: 36,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.full,
       backgroundColor: colors.borderSubtle,
     },
     title: {

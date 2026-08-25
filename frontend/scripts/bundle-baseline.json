@@ -1,0 +1,12 @@
+{
+  "ios": {
+    "jsBundleSizeKB": 15000,
+    "hermesBytecodeSizeKB": 12000
+  },
+  "android": {
+    "jsBundleSizeKB": 15000,
+    "hermesBytecodeSizeKB": 12000
+  },
+  "lastUpdated": "2026-08-21",
+  "notes": "Baseline established before React Compiler enablement. Adjust after compiler optimisation stabilises."
+}

@@ -3,6 +3,8 @@ import {
   CreatorDocument,
   CreatorLayer,
   safeValidateDocument,
+  hasFullBleedMedia,
+  isDefaultBackground,
 } from './composition';
 import type { LookCreateBody, LookCreateTag } from '../services/looksApi';
 import type { PosterStoryCreateBody, PosterStickerType } from '../services/postersApi';
@@ -132,10 +134,53 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
     }
   }
 
+  // 9. Unsupported interactive layer validation
+  // Interactive layer types that have no backend sticker projection must be
+  // rejected at publish time rather than silently dropped or coerced.
+  // Decorative/visual layers (decorative, draw, gif, time, weather, adjustment)
+  // are permitted — they simply produce no sticker rows and live only in the
+  // compositionDocument.
+  const UNSUPPORTED_INTERACTIVE_TYPES = new Set([
+    'quiz', 'question', 'emojiSlider', 'countdown', 'link', 'location', 'hashtag', 'music',
+  ]);
+  for (const page of validated.pages) {
+    for (const layer of page.layers) {
+      if (UNSUPPORTED_INTERACTIVE_TYPES.has(layer.type)) {
+        errors.push(
+          `Layer ${layer.id}: type '${layer.type}' is not supported for publication. Remove this layer or use a supported alternative.`,
+        );
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     sanitizedDoc: errors.length === 0 ? validated : undefined,
+  };
+}
+
+/**
+ * Returns a copy of the document with the canvas background set to
+ * 'transparent' when a full-bleed media layer exists and the background
+ * is still the factory default. This ensures the viewer renders the
+ * media as the canvas surface (no card frame around it), matching the
+ * editor's "media IS the canvas" architecture.
+ *
+ * User-customised backgrounds (gradient, image, non-default colors) are
+ * preserved — the user chose them.
+ */
+function withMediaAsCanvasBackground(doc: CreatorDocument): CreatorDocument {
+  const hasMedia = doc.pages.some((p) => hasFullBleedMedia(p));
+  if (!hasMedia || !isDefaultBackground(doc.canvas.background, doc.type)) {
+    return doc;
+  }
+  return {
+    ...doc,
+    canvas: {
+      ...doc.canvas,
+      background: { ...doc.canvas.background, value: 'transparent' },
+    },
   };
 }
 
@@ -180,6 +225,14 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
   const hasComposableLayers = page.layers.some(
     (l) => !l.hidden && l.id !== mediaLayer.id,
   );
+  const primaryMediaHasAuthoredState = mediaLayer.type === 'media' && (
+    (mediaLayer.payload.effects?.length ?? 0) > 0
+    || mediaLayer.payload.speed !== undefined
+    || mediaLayer.payload.trimStartMs !== undefined
+    || mediaLayer.payload.trimEndMs !== undefined
+    || mediaLayer.payload.reversed === true
+    || mediaLayer.payload.freezeDurationMs !== undefined
+  );
 
   return {
     payload: {
@@ -187,10 +240,23 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       title: doc.metadata.title || 'Untitled Look',
       caption: doc.metadata.caption,
       mediaUrl: mediaLayer.type === 'media' ? mediaLayer.payload.mediaUri : '',
-      visibility: doc.metadata.visibility,
+      mediaFinalizationId: mediaLayer.type === 'media'
+        ? mediaLayer.payload.mediaFinalizationId
+        : undefined,
+      mediaAssetId: mediaLayer.type === 'media'
+        ? mediaLayer.payload.mediaAssetId
+        : undefined,
+      mediaType: mediaLayer.type === 'media' && mediaLayer.payload.mediaType === 'video'
+        ? 'video'
+        : 'image',
+      visibility: doc.metadata.visibility === 'closeFriends'
+        ? 'followers'
+        : doc.metadata.visibility,
       tags,
       status: 'published',
-      ...(hasComposableLayers ? { compositionDocument: doc } : {}),
+      ...((hasComposableLayers || primaryMediaHasAuthoredState)
+        ? { compositionDocument: withMediaAsCanvasBackground(doc) }
+        : {}),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,
@@ -222,6 +288,12 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       mediaUrl: mediaLayer?.type === 'media'
         ? mediaLayer.payload.mediaUri
         : undefined,
+      mediaFinalizationId: mediaLayer?.type === 'media'
+        ? mediaLayer.payload.mediaFinalizationId
+        : undefined,
+      mediaAssetId: mediaLayer?.type === 'media'
+        ? mediaLayer.payload.mediaAssetId
+        : undefined,
       caption: textLayer?.type === 'text'
         ? textLayer.payload.text
         : '',
@@ -229,23 +301,33 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       sortOrder: i,
       stickers: page.layers
         .filter((l) => l.type !== 'media' && !(l.type === 'text' && l.id.startsWith('caption_')))
-        .map((l, si) => ({
-          id: l.id,
-          type: mapLayerTypeToStickerType(l.type),
-          x: l.x,
-          y: l.y,
-          scale: l.scale,
-          rotation: l.rotation,
-          payload: extractStickerPayload(l),
-          sortOrder: si,
-        })),
+        .map((l, si) => {
+          const stickerType = mapLayerTypeToStickerType(l.type);
+          if (stickerType === null) return null; // no backend projection — lives only in compositionDocument
+          return {
+            id: l.id,
+            type: stickerType,
+            x: l.x,
+            y: l.y,
+            scale: l.scale,
+            rotation: l.rotation,
+            payload: extractStickerPayload(l),
+            sortOrder: si,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null),
     };
   });
 
   return {
     payload: {
       id: doc.id,
-      audience: doc.metadata.visibility,
+      // The Poster API currently has no close-friends graph projection. Old
+      // drafts using that value fail closed to private rather than widening
+      // their audience or sending a contract-invalid value.
+      audience: doc.metadata.visibility === 'closeFriends'
+        ? 'private'
+        : doc.metadata.visibility,
       allowReplies: doc.metadata.allowReplies,
       allowReactions: doc.metadata.allowReactions,
       expiresInHours: doc.metadata.expiresInHours ?? 24,
@@ -254,7 +336,7 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       // Persist the full versioned composition document so the viewer can
       // render the exact authored result (WYSIWYG) instead of reconstructing
       // from the narrowed frame/sticker contract.
-      compositionDocument: doc,
+      compositionDocument: withMediaAsCanvasBackground(doc),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,
@@ -266,57 +348,30 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
 // ── Helpers ───────────────────────────────────────────────────────
 function mapLayerTypeToStickerType(
   type: string,
-): PosterStickerType {
+): PosterStickerType | null {
   switch (type) {
     case 'text': return 'text';
     case 'mention': return 'mention';
     case 'product': return 'listing';
     case 'look': return 'look';
     case 'vote': return 'style_vote';
-    case 'quiz': return 'quiz';
-    case 'question': return 'question';
-    case 'emojiSlider': return 'poll';
-    case 'countdown': return 'countdown';
-    // Decorative/non-interactive layers that don't have a backend sticker type
-    // are serialised as 'text' so the backend accepts them. The full
-    // compositionDocument preserves the original type for WYSIWYG rendering.
-    default: return 'text';
+    // Layer types with no backend sticker projection return null. They
+    // fall into two categories:
+    //  1. Decorative/visual (decorative, draw, gif, time, weather,
+    //     adjustment) — permitted at publish, live only in
+    //     compositionDocument for WYSIWYG rendering.
+    //  2. Interactive but unsupported (music, link, location, hashtag,
+    //     quiz, question, emojiSlider, countdown) — REJECTED by
+    //     validateForPublish before reaching this function. Listed here
+    //     for documentation; they must NOT be coerced to a different
+    //     semantic sticker type.
+    default: return null;
   }
 }
 
 function extractStickerPayload(layer: CreatorLayer): Record<string, unknown> {
   const p = layer.payload as Record<string, unknown>;
   switch (layer.type) {
-    case 'question': {
-      // Creator uses `prompt`; backend expects `question`
-      return { question: p.prompt ?? p.question };
-    }
-    case 'countdown': {
-      // Creator uses `endDateTime`; backend expects `targetDate`
-      return {
-        label: p.label,
-        targetDate: p.endDateTime ?? p.targetDate,
-        endLabel: p.endLabel,
-      };
-    }
-    case 'emojiSlider': {
-      // Emoji slider maps to poll — synthesize two options from the slider
-      return {
-        question: p.question,
-        options: [
-          { id: 'low', label: '😐' },
-          { id: 'high', label: p.emoji ?? '😍' },
-        ],
-      };
-    }
-    case 'quiz': {
-      // Only send fields the backend contract accepts
-      return {
-        question: p.question,
-        options: p.options,
-        correctOptionId: p.correctOptionId,
-      };
-    }
     case 'vote': {
       return {
         question: p.question,

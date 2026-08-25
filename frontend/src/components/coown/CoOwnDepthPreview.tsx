@@ -51,7 +51,7 @@ export function CoOwnDepthPreview({
         <Text style={[styles.header, { color: colors.textMuted }]}>
           Depth impact
         </Text>
-        <View style={[styles.warningRow, { backgroundColor: colors.warning + '14' }]}>
+        <View style={[styles.warningRow, { backgroundColor: colors.warningSubtle }]}>
           <Ionicons name="warning-outline" size={14} color={colors.warning} />
           <Text style={[styles.warningText, { color: colors.warning }]}>
             Slippage beyond visible depth — use limit
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   barRow: {
@@ -127,10 +127,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   barLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     minWidth: 36,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',

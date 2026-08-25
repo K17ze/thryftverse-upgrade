@@ -13,9 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, shipOrder, assertHandoff, type CommerceOrder } from '../services/commerceApi';
@@ -32,18 +30,15 @@ import {
   classifyShippingError,
   SHIPPING_ERROR_RECOVERY,
   getDropOffUrl,
-  getProviderMetadata,
+  type ShippingProviderErrorCode,
 } from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { haptics } from '../utils/haptics';
+import { t } from '../i18n';
+
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
-
-const haptics = {
-  tap: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-  heavyPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
-  selection: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid),
-};
 
 // Carriers offered only for MANUAL shipping (when the buyer did NOT purchase
 // an integrated service). For integrated purchases, the buyer-selected
@@ -89,7 +84,6 @@ export default function SellerFulfilmentScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<SellerFulfilmentRoute>();
-  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
@@ -111,6 +105,7 @@ export default function SellerFulfilmentScreen() {
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false);
   const [generatedLabelUrl, setGeneratedLabelUrl] = useState<string | null>(null);
   const [labelError, setLabelError] = useState<string | null>(null);
+  const [labelErrorCode, setLabelErrorCode] = useState<ShippingProviderErrorCode | null>(null);
 
   const isMountedRef = useRef(true);
 
@@ -167,7 +162,8 @@ export default function SellerFulfilmentScreen() {
   const deliveryMode: 'integrated' | 'manual' | 'local' | 'unknown' =
     snapshot?.deliveryMode ?? 'unknown';
   const isIntegrated = deliveryMode === 'integrated';
-  const isManualMode = deliveryMode === 'manual' || (!isIntegrated && deliveryMode === 'unknown');
+  const labelGenerationUnavailable =
+    isIntegrated && labelErrorCode === 'LABEL_GENERATION_UNAVAILABLE' && !generatedLabelUrl;
 
   const shipByDate = order ? getShipByDate(order) : null;
   const shipByLabel = formatShipByDate(shipByDate);
@@ -188,6 +184,7 @@ export default function SellerFulfilmentScreen() {
     if (isGeneratingLabel) return;
     setIsGeneratingLabel(true);
     setLabelError(null);
+    setLabelErrorCode(null);
     haptics.tap();
     try {
       const carrier = (snapshot?.carrierId ?? shippingProvider) || 'Royal Mail';
@@ -207,6 +204,7 @@ export default function SellerFulfilmentScreen() {
       if (!isMountedRef.current) return;
       // Typed error classification via provider registry — no free-text matching.
       const errorCode = classifyShippingError(error);
+      setLabelErrorCode(errorCode);
       setLabelError(SHIPPING_ERROR_RECOVERY[errorCode]);
     } finally {
       if (isMountedRef.current) setIsGeneratingLabel(false);
@@ -223,21 +221,6 @@ export default function SellerFulfilmentScreen() {
     });
   }, [generatedLabelUrl, navigation]);
 
-  const handlePrintLabel = useCallback(async () => {
-    if (!generatedLabelUrl) return;
-    haptics.tap();
-    try {
-      const supported = await Linking.canOpenURL(generatedLabelUrl);
-      if (!supported) {
-        show('Unable to open label for printing', 'error');
-        return;
-      }
-      await Linking.openURL(generatedLabelUrl);
-    } catch {
-      show('Unable to open label for printing', 'error');
-    }
-  }, [generatedLabelUrl, show]);
-
   const handleFindDropOff = useCallback(() => {
     const carrierId = snapshot?.carrierId ?? shippingProvider ?? null;
     const url = getDropOffUrl(carrierId);
@@ -250,16 +233,6 @@ export default function SellerFulfilmentScreen() {
       show('Unable to open drop-off finder', 'error');
     });
   }, [snapshot, shippingProvider, show]);
-
-  const handleMessageBuyer = useCallback(() => {
-    if (!order) return;
-    haptics.tap();
-    navigation.navigate('Chat', {
-      conversationId: `${order.buyerId}_${order.listingId}`,
-      partnerUserId: order.buyerId,
-      itemId: order.listingId,
-    });
-  }, [order, navigation]);
 
   // Manual dispatch: seller enters tracking and confirms.
   const handleManualDispatch = useCallback(async () => {
@@ -353,11 +326,92 @@ export default function SellerFulfilmentScreen() {
 
   const shortOrderId = order.id.slice(0, 8).toUpperCase();
   const statusLabel = humaniseStatus(order.status);
-  const itemPrice = formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' });
+
+  // ─── Manual shipping form (rendered as primary content in manual mode,
+  //     and as the fallback path when integrated label generation is
+  //     unavailable). Extracted so both branches share one authored block. ───
+  const renderManualForm = () => (
+    <>
+      <Text style={styles.inputLabel}>Carrier</Text>
+      <Pressable
+        style={styles.carrierSelector}
+        onPress={() => { haptics.tap(); setShowCarrierDropdown(!showCarrierDropdown); }}
+        accessibilityRole="button"
+        accessibilityLabel="Select carrier"
+      >
+        <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
+          {shippingProvider || 'Select carrier'}
+        </Text>
+        <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} aria-hidden={true} />
+      </Pressable>
+
+      {showCarrierDropdown && (
+        <View style={styles.carrierDropdown}>
+          {MANUAL_CARRIERS.map((carrier) => (
+            <Pressable
+              key={carrier}
+              style={styles.carrierOption}
+              onPress={() => {
+                haptics.selection();
+                setShippingProvider(carrier);
+                setShowCarrierDropdown(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${carrier}`}
+            >
+              <Text style={[
+                styles.carrierOptionText,
+                shippingProvider === carrier && styles.carrierOptionTextActive,
+              ]}>
+                {carrier}
+              </Text>
+              {shippingProvider === carrier && (
+                <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <Text style={styles.inputLabel}>Tracking number</Text>
+      <TextInput
+        style={styles.textInput}
+        placeholder="Enter tracking number"
+        placeholderTextColor={colors.textMuted}
+        value={trackingNumber}
+        onChangeText={setTrackingNumber}
+        autoCapitalize="none"
+        autoCorrect={false}
+        accessibilityLabel="Tracking number"
+      />
+
+      <Text style={styles.hintText}>
+        A valid tracking number is required to confirm dispatch. The buyer will receive it automatically.
+      </Text>
+    </>
+  );
+
+  // ─── Escrow footnote: quiet, single line, only when the server provides an
+  //     evidenced estimatedReleaseAt. No invented countdown, no decorative
+  //     panel, no "safely held" narrative. ───
+  const escrowFootnote = (() => {
+    const isHeld =
+      normalised === 'paid' ||
+      normalised === 'shipped' ||
+      normalised === 'in transit' ||
+      normalised === 'out for delivery';
+    if (!isHeld) return null;
+    const releaseAt = (order as any)?.moneyProjection?.estimatedReleaseAt;
+    const releaseTime = releaseAt ? new Date(releaseAt).getTime() : null;
+    if (!releaseTime || Number.isNaN(releaseTime)) return null;
+    const daysLeft = Math.ceil((releaseTime - Date.now()) / (24 * 60 * 60 * 1000));
+    if (daysLeft == null || daysLeft <= 0) return null;
+    return `Funds held in escrow · Auto-releases in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+  })();
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Ship this order" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title={`Order #${shortOrderId}`} onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -365,322 +419,175 @@ export default function SellerFulfilmentScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
       >
-        {/* ─── 1. Ship-by deadline headline ─── */}
-        <View style={[
-            styles.deadlineHeader,
-            shipByOverdue
-              ? { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }
-              : shipByUrgent
-                ? { backgroundColor: `${colors.warning}10`, borderColor: `${colors.warning}30` }
-                : { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}>
-            <View style={styles.deadlineText}>
-              <Text style={[
-                styles.deadlineDate,
-                { color: shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textPrimary },
-              ]}>
-                {shipByLabel
-                  ? shipByOverdue
-                    ? `Past dispatch deadline · ${shipByLabel}`
+        {/* ─── A. Item-dominant header ───
+            Merges the former deadline panel, item row, and service card into
+            one authored composition. The item image is the visual anchor; the
+            ship-by urgency colour applies to the "Ship by" text only, not a
+            full panel background. No separate deadline panel, no separate
+            service card. */}
+        <View style={styles.itemHeader}>
+          {order.listingImageUrl ? (
+            <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
+          ) : (
+            <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
+              <Ionicons name="image-outline" size={24} color={colors.textMuted} aria-hidden={true} />
+            </View>
+          )}
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemTitle} numberOfLines={2}>
+              {order.listingTitle || 'Ordered item'}
+            </Text>
+            <Text
+              style={[
+                styles.shipByLine,
+                {
+                  color: shipByOverdue
+                    ? colors.danger
                     : shipByUrgent
-                      ? `Ship by ${shipByLabel}`
-                      : `Ship by ${shipByLabel}`
-                  : 'Dispatch deadline unavailable'}
+                      ? colors.warning
+                      : colors.textSecondary,
+                },
+              ]}
+            >
+              {shipByLabel
+                ? shipByOverdue
+                  ? `Past deadline · ${shipByLabel}`
+                  : `Ship by ${shipByLabel}${shipByDaysLeft != null && shipByDaysLeft >= 0
+                    ? ` · ${shipByDaysLeft === 0 ? 'today' : `${shipByDaysLeft} day${shipByDaysLeft === 1 ? '' : 's'} left`}`
+                    : ''}`
+                : 'Dispatch deadline unavailable'}
+            </Text>
+            {serviceName && (
+              <Text style={styles.serviceLine} numberOfLines={1}>
+                {serviceName}
+                {snapshot?.trackingIncluded ? ' · Tracked' : ''}
+                {etaWindow ? ` · ETA ${etaWindow}` : ''}
               </Text>
-              {shipByDaysLeft != null && !shipByOverdue && (
-                <Text style={styles.deadlineSub}>
-                  {shipByDaysLeft === 0
-                    ? 'Dispatch today to stay within policy'
-                    : shipByDaysLeft === 1
-                      ? '1 day left to dispatch'
-                      : `${shipByDaysLeft} days left to dispatch`}
-                </Text>
-              )}
-              {shipByOverdue && (
-                <Text style={styles.deadlineSub}>
-                  Dispatch immediately or the buyer may cancel.
-                </Text>
-              )}
-            </View>
-          </View>
-
-        {/* ─── 2. Item summary ─── */}
-        <View style={styles.itemRow}>
-            {order.listingImageUrl ? (
-              <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
-            ) : (
-              <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-                <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-              </View>
             )}
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemTitle} numberOfLines={2}>{order.listingTitle || 'Ordered item'}</Text>
-              <Text style={styles.itemMeta}>ORDER #{shortOrderId} · {statusLabel}</Text>
-              <Text style={styles.itemPrice}>{itemPrice}</Text>
-            </View>
+          </View>
         </View>
 
-        {/* ─── 3. Buyer-selected service (immutable snapshot) ─── */}
-        {serviceName ? (
-          <View style={styles.serviceCard}>
-            <Text style={styles.serviceName}>{serviceName}</Text>
-              <View style={styles.serviceMetaRow}>
-                {etaWindow && (
-                  <View style={styles.serviceMetaItem}>
-                    <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-                    <Text style={styles.serviceMetaText}>ETA {etaWindow}</Text>
-                  </View>
-                )}
-                {snapshot?.trackingIncluded && (
-                  <View style={styles.serviceMetaItem}>
-                    <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-                    <Text style={styles.serviceMetaText}>Tracked</Text>
-                  </View>
-                )}
-                {isIntegrated && (
-                  <View style={styles.serviceMetaItem}>
-                    <Ionicons name="qr-code-outline" size={13} color={colors.textMuted} />
-                    <Text style={styles.serviceMetaText}>Label included</Text>
-                  </View>
-                )}
-              </View>
-              {snapshot?.destinationSummary && (
-                <Text style={styles.destinationText}>To: {snapshot.destinationSummary}</Text>
-              )}
-            </View>
-        ) : null}
+        {/* ─── D. Escrow footnote ─── */}
+        {escrowFootnote && <Text style={styles.escrowFootnote}>{escrowFootnote}</Text>}
 
-        {/* ─── 4. Escrow narrative ─── */}
-        {(() => {
-            const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
-            if (!isHeld) return null;
-            // Escrow release timing is server-derived, not client-invented.
-            // If the server provides an estimatedReleaseAt, show it.
-            // If not, show no countdown — do not invent a 14-day fallback.
-            const releaseAt = (order as any)?.moneyProjection?.estimatedReleaseAt;
-            const releaseTime = releaseAt ? new Date(releaseAt).getTime() : null;
-            const now = Date.now();
-            const daysLeft = releaseTime && !Number.isNaN(releaseTime)
-              ? Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000))
-              : null;
-            return (
-              <View style={styles.escrowBanner}>
-                <Ionicons name="lock-closed" size={14} color={colors.success} />
-                <View style={styles.escrowTextWrap}>
-                  <Text style={styles.escrowTitle}>Funds held in escrow</Text>
-                  <Text style={styles.escrowSub}>
-                    {normalised === 'paid'
-                      ? 'Buyer\'s payment is safely held. Dispatch your item to start the release process.'
-                      : 'Buyer\'s payment is held until they confirm receipt.'}
-                  </Text>
-                  {daysLeft != null && daysLeft > 0 && (
-                    <Text style={styles.escrowCountdown}>
-                      Auto-releases to you in {daysLeft} day{daysLeft === 1 ? '' : 's'} if the buyer doesn't act
-                    </Text>
-                  )}
-                </View>
-              </View>
-            );
-          })()}
-
-        <View style={styles.sectionDivider} />
-
-        {/* ─── 5. Integrated shipping: label / QR / drop-off ─── */}
-        {isIntegrated && canDispatch && (
-          <>
-            <Text style={styles.sectionLabel}>Dispatch steps</Text>
-
-            {/* Step 1: Get label */}
-            <View style={styles.stepRow}>
-              <View style={[styles.stepNumber, generatedLabelUrl && styles.stepNumberDone]}>
-                <Text style={[styles.stepNumberText, generatedLabelUrl && styles.stepNumberTextDone]}>
-                  {generatedLabelUrl ? '✓' : '1'}
-                </Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>
-                  {generatedLabelUrl ? 'Shipping label ready' : 'Get your shipping label'}
-                </Text>
-                <Text style={styles.stepSub}>
-                  {generatedLabelUrl
-                    ? 'Show the QR code at drop-off or print the label.'
-                    : 'Generate a pre-paid label for the buyer-selected service.'}
-                </Text>
-              </View>
-            </View>
-
-            {!generatedLabelUrl && (
-              <Pressable
-                style={[styles.primaryStepBtn, isGeneratingLabel && styles.primaryStepBtnDisabled]}
-                onPress={handleGenerateLabel}
-                disabled={isGeneratingLabel}
-                accessibilityRole="button"
-                accessibilityLabel="Generate shipping label"
-              >
-                {isGeneratingLabel ? (
-                  <ActivityIndicator size="small" color={colors.brand} />
-                ) : (
-                  <>
-                    <Ionicons name="document-text-outline" size={18} color={colors.brand} />
-                    <Text style={styles.primaryStepBtnText}>Get shipping label</Text>
-                  </>
-                )}
-              </Pressable>
-            )}
-
-            {labelError && !generatedLabelUrl && (
-              <View style={styles.labelErrorBanner}>
-                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
-                <Text style={styles.labelErrorText}>{labelError}</Text>
-              </View>
-            )}
-
-            {/* Step 2: Drop-off */}
-            {generatedLabelUrl && (
-              <>
-                <View style={styles.stepRow}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>2</Text>
-                  </View>
-                  <View style={styles.stepContent}>
-                    <Text style={styles.stepTitle}>Drop off the parcel</Text>
-                    <Text style={styles.stepSub}>
-                      Take the parcel to a {serviceName ?? 'carrier'} drop-off point. Show the QR code or attach the printed label.
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.secondaryActions}>
-                  <Pressable
-                    style={styles.secondaryBtn}
-                    onPress={handleShowQR}
-                    accessibilityRole="button"
-                    accessibilityLabel="Show drop-off QR code"
-                  >
-                    <Ionicons name="qr-code-outline" size={18} color={colors.brand} />
-                    <Text style={styles.secondaryBtnText}>Show QR code</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.secondaryBtn}
-                    onPress={handlePrintLabel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Print shipping label"
-                  >
-                    <Ionicons name="print-outline" size={18} color={colors.textPrimary} />
-                    <Text style={styles.secondaryBtnTextDark}>Print label</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.secondaryBtn}
-                    onPress={handleFindDropOff}
-                    accessibilityRole="button"
-                    accessibilityLabel="Find nearest drop-off point"
-                  >
-                    <Ionicons name="location-outline" size={18} color={colors.textPrimary} />
-                    <Text style={styles.secondaryBtnTextDark}>Find drop-off</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.secondaryBtn}
-                    onPress={handleMessageBuyer}
-                    accessibilityRole="button"
-                    accessibilityLabel="Message the buyer"
-                  >
-                    <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
-                    <Text style={styles.secondaryBtnTextDark}>Message buyer</Text>
-                  </Pressable>
-                </View>
-
-                <Text style={styles.waitingStateLabel}>Waiting for carrier scan</Text>
-                <Text style={styles.autoScanHint}>
-                  The carrier's first scan will automatically update the order to "in transit". You don't need to mark it shipped manually.
-                </Text>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ─── 6. Manual shipping: tracking input ─── */}
-        {isManualMode && canDispatch && (
-          <>
-            <Text style={styles.sectionLabel}>Arrange shipping</Text>
-            <Text style={styles.manualIntro}>
-              The buyer paid for tracked shipping. Arrange a tracked service, enter the details below, then confirm dispatch.
-            </Text>
-
-            <Text style={styles.inputLabel}>Carrier</Text>
-            <Pressable
-              style={styles.carrierSelector}
-              onPress={() => { haptics.tap(); setShowCarrierDropdown(!showCarrierDropdown); }}
-              accessibilityRole="button"
-              accessibilityLabel="Select carrier"
-            >
-              <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
-                {shippingProvider || 'Select carrier'}
-              </Text>
-              <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
-            </Pressable>
-
-            {showCarrierDropdown && (
-              <View style={styles.carrierDropdown}>
-                {MANUAL_CARRIERS.map((carrier) => (
-                  <Pressable
-                    key={carrier}
-                    style={styles.carrierOption}
-                    onPress={() => {
-                      haptics.selection();
-                      setShippingProvider(carrier);
-                      setShowCarrierDropdown(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Select ${carrier}`}
-                  >
-                    <Text style={[
-                      styles.carrierOptionText,
-                      shippingProvider === carrier && styles.carrierOptionTextActive,
-                    ]}>
-                      {carrier}
-                    </Text>
-                    {shippingProvider === carrier && (
-                      <Ionicons name="checkmark" size={16} color={colors.brand} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
-            <Text style={styles.inputLabel}>Tracking number</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter tracking number"
-              placeholderTextColor={colors.textMuted}
-              value={trackingNumber}
-              onChangeText={setTrackingNumber}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Tracking number"
-            />
-
-            <Text style={styles.hintText}>
-              A valid tracking number is required to confirm dispatch. The buyer will receive it automatically.
-            </Text>
-          </>
-        )}
-
-        {/* ─── 7. Cannot dispatch ─── */}
-        {!canDispatch && (
-          <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+        {/* ─── B. One next action ───
+            Only the current next action is shown. Completed steps are
+            replaced, not retained as "done" cards. */}
+        {!canDispatch ? (
+          /* ─── Cannot dispatch ─── */
+          <View style={styles.warningInline}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
             <Text style={styles.warningText}>
               This order cannot be dispatched from its current status ({statusLabel}).
             </Text>
           </View>
+        ) : isIntegrated && !labelGenerationUnavailable ? (
+          /* ─── Integrated shipping ─── */
+          generatedLabelUrl ? (
+            /* Label ready — REPLACES the get-label button with QR/drop-off
+               state. No "Step 1: done" card above. */
+            <View style={styles.actionSection}>
+              <Pressable
+                style={styles.qrPreview}
+                onPress={handleShowQR}
+                accessibilityRole="button"
+                accessibilityLabel="Show shipping label QR code"
+              >
+                <Ionicons name="qr-code-outline" size={48} color={colors.brand} aria-hidden={true} />
+                <Text style={styles.qrPreviewText}>Tap to view label / QR code</Text>
+              </Pressable>
+
+              <Text style={styles.dropOffLine}>
+                Drop off by {shipByLabel ?? 'soon'}
+              </Text>
+
+              <Pressable
+                style={styles.findLocationLink}
+                onPress={handleFindDropOff}
+                accessibilityRole="link"
+                accessibilityLabel="Find a drop-off location"
+              >
+                <Text style={styles.findLocationText}>Find a drop-off location</Text>
+              </Pressable>
+
+              <Text style={styles.waitingLine}>Waiting for carrier scan</Text>
+              <Text style={styles.waitingHint}>
+                The carrier's first scan will update the order to "in transit" automatically.
+              </Text>
+
+              {/* ─── E. Recovery — quiet text link, no footer panel, no
+                   Alert.alert. The handoff assertion is visibly labelled as
+                   the seller's claim; carrier truth remains the scan. ─── */}
+              <Pressable
+                style={styles.recoveryLink}
+                onPress={handleDroppedOffRecovery}
+                disabled={isDispatching}
+                accessibilityRole="button"
+                accessibilityLabel="Mark as dropped off — handoff assertion"
+              >
+                {isDispatching ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={styles.recoveryLinkText}>
+                    I dropped it off but tracking hasn't updated
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            /* No label yet — one dominant action. */
+            <View style={styles.actionSection}>
+              <Text style={styles.actionContext}>Pack the item</Text>
+              <Pressable
+                style={[styles.dominantBtn, isGeneratingLabel && styles.dominantBtnDisabled]}
+                onPress={handleGenerateLabel}
+                disabled={isGeneratingLabel}
+                accessibilityRole="button"
+                accessibilityLabel="Get shipping label"
+              >
+                {isGeneratingLabel ? (
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                ) : (
+                  <Text style={styles.dominantBtnText}>Get shipping label</Text>
+                )}
+              </Pressable>
+
+              {/* Label errors stay attached to the label action with retry. */}
+              {labelError && (
+                <View style={styles.labelErrorInline}>
+                  <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
+                  <Text style={styles.labelErrorText}>{labelError}</Text>
+                </View>
+              )}
+            </View>
+          )
+        ) : (
+          /* ─── Manual mode OR label generation unavailable ───
+              The carrier picker + tracking input is the primary content, not
+              a secondary section. When label generation is unavailable, the
+              error is shown above the manual form as the alternative path. */
+          <View style={styles.actionSection}>
+            {labelGenerationUnavailable && labelError && (
+              <View style={styles.labelErrorInline}>
+                <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
+                <Text style={styles.labelErrorText}>{labelError}</Text>
+              </View>
+            )}
+            {labelGenerationUnavailable && (
+              <Text style={styles.manualAltHint}>
+                Integrated label unavailable. Arrange a tracked service below.
+              </Text>
+            )}
+            {renderManualForm()}
+          </View>
         )}
       </ScrollView>
 
-      {/* ─── Footer: manual dispatch (integrated shipping has no manual confirm) ─── */}
-      {canDispatch && !isIntegrated && (
+      {/* ─── F. Footer: manual dispatch confirm ───
+          Integrated shipping has no manual confirm button (the carrier scan
+          advances state). The button says "Confirm dispatch" — the tracking
+          input is already visible above. */}
+      {canDispatch && (!isIntegrated || labelGenerationUnavailable) && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
           <Pressable
             style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
@@ -700,44 +607,12 @@ export default function SellerFulfilmentScreen() {
             }}
             disabled={isDispatching}
             accessibilityRole="button"
-            accessibilityLabel="Add tracking and confirm dispatch"
+            accessibilityLabel="Confirm dispatch"
           >
             {isDispatching ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Text style={styles.dispatchBtnText}>Add tracking & confirm dispatch</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
-
-      {/* ─── Footer: integrated recovery (only after label is generated) ─── */}
-      {canDispatch && isIntegrated && generatedLabelUrl && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Text style={styles.recoveryStateLabel}>Still no carrier scan</Text>
-          <Pressable
-            style={[styles.recoveryBtn, isDispatching && styles.dispatchBtnDisabled]}
-            onPress={() => {
-              Alert.alert(
-                'Still no carrier scan?',
-                'If you\'ve handed the parcel to the carrier but tracking hasn\'t updated yet, mark it as handed over. The carrier scan will confirm tracking automatically. You can also check the label, contact the carrier, or report a drop-off issue.',
-                [
-                  { text: 'Not yet', style: 'cancel' },
-                  { text: 'I dropped it off', style: 'default', onPress: handleDroppedOffRecovery },
-                ]
-              );
-            }}
-            disabled={isDispatching}
-            accessibilityRole="button"
-            accessibilityLabel="Still no carrier scan — mark as dropped off"
-          >
-            {isDispatching ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <>
-                <Ionicons name="help-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.recoveryBtnText}>I dropped it off but tracking hasn't updated</Text>
-              </>
+              <Text style={styles.dispatchBtnText}>Confirm dispatch</Text>
             )}
           </Pressable>
         </View>
@@ -750,42 +625,18 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
+      paddingTop: Space.md,
     },
-    // ─── Deadline header ───
-    deadlineHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    deadlineText: {
-      flex: 1,
-      gap: 2,
-    },
-    deadlineDate: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
-    },
-    deadlineSub: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.size + 4,
-    },
-    // ─── Item row ───
-    itemRow: {
+    // ─── A. Item-dominant header ───
+    itemHeader: {
       flexDirection: 'row',
       gap: Space.md,
       paddingVertical: Space.sm,
     },
     itemImage: {
-      width: Space.xl * 2,
-      height: Space.xxl + Space.xl,
-      borderRadius: Radius.sm,
+      width: 64,
+      height: 64,
+      borderRadius: Radius.md,
     },
     itemImagePlaceholder: {
       backgroundColor: colors.surface,
@@ -798,176 +649,64 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     itemTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.itemTitle.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      lineHeight: Type.bodyEmphasis.size + 5,
+      lineHeight: Type.itemTitle.lineHeight,
     },
-    itemMeta: {
+    shipByLine: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.medium,
+      lineHeight: Type.captionElevated.lineHeight,
+    },
+    serviceLine: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      lineHeight: Type.caption.lineHeight,
     },
-    itemPrice: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      marginTop: 2,
-    },
-    // ─── Service card ───
-    serviceCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-      marginBottom: Space.sm,
-    },
-    serviceName: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      marginBottom: Space.xs,
-    },
-    serviceMetaRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-    },
-    serviceMetaItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs / 2,
-    },
-    serviceMetaText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
-    destinationText: {
-      fontSize: Type.caption.size,
+    // ─── D. Escrow footnote ───
+    escrowFootnote: {
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginTop: Space.xs,
+      marginBottom: Space.lg,
     },
-    // ─── Escrow ───
-    escrowBanner: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.xs + 2,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + 2,
-      borderRadius: Radius.lg,
-      backgroundColor: `${colors.success}08`,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.success}25`,
-      marginBottom: Space.sm,
-    },
-    escrowTextWrap: {
-      flex: 1,
-      gap: Space.xs / 2,
-    },
-    escrowTitle: {
-      fontSize: Type.captionElevated.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    escrowSub: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.size + 4,
-    },
-    escrowCountdown: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      marginTop: Space.xs / 2,
-    },
-    // ─── Sections ───
-    sectionDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginVertical: Space.sm,
-    },
-    sectionLabel: {
-      fontSize: Type.captionElevated.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
-      marginBottom: Space.sm,
-    },
-    // ─── Steps (integrated) ───
-    stepRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
+    // ─── B. One next action ───
+    actionSection: {
+      marginTop: Space.md,
       gap: Space.sm,
-      marginBottom: Space.sm,
     },
-    stepNumber: {
-      width: Space.lg + 4,
-      height: Space.lg + 4,
-      borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}15`,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    stepNumberDone: {
-      backgroundColor: `${colors.success}20`,
-    },
-    stepNumberText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.bold,
-      color: colors.brand,
-    },
-    stepNumberTextDone: {
-      color: colors.success,
-    },
-    stepContent: {
-      flex: 1,
-      gap: 2,
-    },
-    stepTitle: {
+    actionContext: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      marginBottom: Space.xs,
     },
-    stepSub: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.size + 4,
-    },
-    primaryStepBtn: {
-      flexDirection: 'row',
+    // Dominant button — the single next action
+    dominantBtn: {
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm + 2,
+      paddingVertical: Space.md,
       borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      borderColor: colors.brand,
-      backgroundColor: `${colors.brand}08`,
-      marginBottom: Space.sm,
+      backgroundColor: colors.brand,
+      minHeight: Control.hit + Space.sm,
     },
-    primaryStepBtnDisabled: {
+    dominantBtnDisabled: {
       opacity: 0.6,
     },
-    primaryStepBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
+    dominantBtnText: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textInverse,
     },
-    labelErrorBanner: {
+    // Label error — attached to the label action, not a separate banner
+    labelErrorInline: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
-      padding: Space.sm,
-      borderRadius: Radius.md,
-      backgroundColor: `${colors.danger}08`,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.danger}20`,
-      marginBottom: Space.sm,
+      paddingVertical: Space.xs + 2,
     },
     labelErrorText: {
       flex: 1,
@@ -976,51 +715,68 @@ function createStyles(colors: ThemeColors) {
       color: colors.danger,
       lineHeight: Type.caption.size + 4,
     },
-    secondaryActions: {
-      gap: Space.xs,
-      marginBottom: Space.sm,
-    },
-    secondaryBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surface,
-      minHeight: Control.hit,
-    },
-    secondaryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
-    secondaryBtnTextDark: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    autoScanHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      lineHeight: Type.caption.size + 4,
-      marginTop: Space.xs,
-    },
-    waitingStateLabel: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginTop: Space.sm,
-    },
-    // ─── Manual shipping ───
-    manualIntro: {
+    manualAltHint: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       lineHeight: Type.caption.size + 4,
-      marginBottom: Space.sm,
+      marginBottom: Space.xs,
     },
+    // QR / label preview (replaces the get-label button)
+    qrPreview: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.lg,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      minHeight: Control.hit + Space.lg,
+    },
+    qrPreviewText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
+    dropOffLine: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    findLocationLink: {
+      minHeight: Control.hit,
+      justifyContent: 'center',
+    },
+    findLocationText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+    },
+    waitingLine: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginTop: Space.xs,
+    },
+    waitingHint: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      lineHeight: Type.caption.size + 4,
+    },
+    // Recovery — quiet text link, not a footer panel
+    recoveryLink: {
+      minHeight: Control.hit,
+      justifyContent: 'center',
+      marginTop: Space.xs,
+    },
+    recoveryLinkText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      textDecorationLine: 'underline',
+    },
+    // ─── Manual shipping form ───
     inputLabel: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
@@ -1033,13 +789,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      height: Space.xl + Space.xl - 4,
+      height: Control.hit,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
-      minHeight: Space.xl + Space.xl - 4,
     },
     carrierSelectorText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
     },
@@ -1063,7 +818,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit,
     },
     carrierOptionText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
     },
@@ -1073,36 +828,34 @@ function createStyles(colors: ThemeColors) {
     },
     textInput: {
       paddingHorizontal: Space.md,
-      height: Space.xl + Space.xl - 4,
+      height: Control.hit,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
-      minHeight: Space.xl + Space.xl - 4,
     },
     hintText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginTop: Space.xs,
-      lineHeight: Type.captionElevated.size + 5,
+      lineHeight: Type.caption.size + 5,
     },
-    // ─── Warning ───
-    warningBanner: {
+    // ─── Warning (cannot dispatch) ───
+    warningInline: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: Space.xs + 2,
       marginTop: Space.md,
-      padding: Space.sm,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surface,
+      paddingVertical: Space.sm,
     },
     warningText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.danger,
+      lineHeight: Type.caption.size + 4,
     },
     // ─── Footer ───
     footer: {
@@ -1128,33 +881,9 @@ function createStyles(colors: ThemeColors) {
       opacity: 0.6,
     },
     dispatchBtnText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
       color: colors.textInverse,
-    },
-    recoveryBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm + 2,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
-      minHeight: Control.hit,
-    },
-    recoveryBtnText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
-    recoveryStateLabel: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginBottom: Space.sm,
-      textAlign: 'center',
     },
   });
 }

@@ -48,7 +48,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 6,
   },
   errorItem: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.danger,
     marginBottom: 2,

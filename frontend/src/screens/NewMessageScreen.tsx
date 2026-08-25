@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, Modal, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,7 +8,8 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
-import { createDmConversationOnApi } from '../services/chatApi';
+import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/chatApi';
+import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
@@ -50,21 +51,19 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     quickActions: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.md,
-      gap: Space.sm,
     },
     quickActionRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + 2,
-      paddingVertical: Space.sm + 2,
-      paddingHorizontal: Space.sm + 2,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
+      gap: Space.sm,
+      minHeight: 64,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     quickActionIcon: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -125,7 +124,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       borderRadius: Radius.full,
     },
     contactAvatarText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.title.fontFamily,
       color: colors.textPrimary,
     },
@@ -156,7 +155,41 @@ export default function NewMessageScreen({ navigation, route }: Props) {
   const [remoteResults, setRemoteResults] = useState<UserSearchResult[]>([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
   const [agentPickerVisible, setAgentPickerVisible] = useState(false);
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [joinLinkInput, setJoinLinkInput] = useState('');
   const availableAgents = useMemo(() => getAvailableAgents(), []);
+
+  // Join a group via invite link. Opens a cross-platform modal with a
+  // text input for pasting the invite link. Works on both iOS and Android.
+  const handleJoinGroupByLink = useCallback(() => {
+    haptic.light();
+    setJoinLinkInput('');
+    setJoinModalVisible(true);
+  }, [haptic]);
+
+  const handleConfirmJoinGroup = useCallback(async () => {
+    const link = joinLinkInput.trim();
+    if (!link) return;
+    setJoinModalVisible(false);
+    setIsJoiningGroup(true);
+    try {
+      const token = link.includes('/join/')
+        ? link.split('/join/').pop() ?? link
+        : link;
+      const result = await joinGroupByInviteOnApi(token);
+      upsertConversation(result.conversation);
+      show('Joined group', 'success');
+      navigation.navigate('GroupChat', {
+        groupId: result.conversation.id,
+        groupName: result.conversation.title ?? 'Group',
+      });
+    } catch (err) {
+      show(parseApiError(err, 'Could not join group. Check the link and try again.').message, 'error');
+    } finally {
+      setIsJoiningGroup(false);
+    }
+  }, [joinLinkInput, navigation, show, upsertConversation]);
 
   // Start a direct chat with an AI agent. Creates a local demo conversation
   // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
@@ -392,7 +425,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Create a new group conversation with multiple people"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+            <View style={styles.quickActionIcon}>
               <Ionicons name="people-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
@@ -402,11 +435,35 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
 
+          {/* Join group by invite link */}
+          <AnimatedPressable
+            style={styles.quickActionRow}
+            onPress={handleJoinGroupByLink}
+            activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityLabel="Join group by link"
+            accessibilityHint="Paste an invite link to join an existing group"
+            accessibilityRole="button"
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="link-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={styles.quickActionBody}>
+              <BodyEmphasis numberOfLines={1}>Join group by link</BodyEmphasis>
+              <Caption color={colors.textMuted} numberOfLines={1}>Have an invite link? Paste it here</Caption>
+            </View>
+            {isJoiningGroup ? (
+              <ActivityIndicator size="small" color={colors.brand} />
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            )}
+          </AnimatedPressable>
+
           {/* Chat with AI assistant — deploy a demo AI agent into a direct chat */}
           <AnimatedPressable
             style={styles.quickActionRow}
             onPress={() => {
-              haptic.light();
               setAgentPickerVisible(true);
             }}
             activeOpacity={0.85}
@@ -416,12 +473,12 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Start a conversation with an AI shopping, styling, or negotiation assistant"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+            <View style={styles.quickActionIcon}>
               <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>
-              <Caption color={colors.textMuted} numberOfLines={1}>Shop Scout, Style Muse, Deal Maker & more</Caption>
+              <Caption color={colors.textMuted} numberOfLines={1}>Shopping, style and offer guidance</Caption>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
@@ -437,7 +494,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel={`${messageRequests.length} message requests`}
               accessibilityRole="button"
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.quickActionIcon}>
                 <Ionicons name="mail-unread-outline" size={20} color={colors.textSecondary} />
               </View>
               <View style={styles.quickActionBody}>
@@ -492,7 +549,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           <EmptyState
             icon="people-outline"
             title="No recent contacts yet"
-            subtitle="Start a group chat, or message a seller from one of their listings to build your contact list."
+            subtitle="Start a chat or message a seller."
             ctaLabel="Start group chat"
             onCtaPress={() => navigation.navigate('CreateGroupChat')}
           />
@@ -514,6 +571,105 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         onDeploy={handleStartAgentChat}
         deployedAgentIds={[]}
       />
+
+      {/* Join-by-link modal — cross-platform (iOS + Android) */}
+      <Modal
+        visible={joinModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setJoinModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: 'padding', android: undefined })}
+          style={joinStyles.overlay}
+        >
+          <View style={[joinStyles.sheet, { backgroundColor: colors.surface }]}>
+            <Text style={[joinStyles.title, { color: colors.textPrimary }]}>
+              Join group
+            </Text>
+            <Text style={[joinStyles.subtitle, { color: colors.textMuted }]}>
+              Paste the invite link you received.
+            </Text>
+            <TextInput
+              style={[joinStyles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={joinLinkInput}
+              onChangeText={setJoinLinkInput}
+              placeholder="Paste invite link"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              accessibilityLabel="Invite link input"
+            />
+            <View style={joinStyles.actions}>
+              <Pressable
+                onPress={() => setJoinModalVisible(false)}
+                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={[joinStyles.actionText, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirmJoinGroup}
+                disabled={!joinLinkInput.trim()}
+                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }, !joinLinkInput.trim() && { opacity: 0.4 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Join group"
+              >
+                <Text style={[joinStyles.actionText, { color: colors.brand }]}>Join</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </FlagshipScreen>
   );
 }
+
+const joinStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.lg,
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+    gap: Space.sm,
+  },
+  title: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  subtitle: {
+    fontSize: Type.caption.size,
+  },
+  input: {
+    minHeight: 44,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Space.md,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Space.md,
+    marginTop: Space.xs,
+  },
+  actionBtn: {
+    minHeight: 44,
+    paddingHorizontal: Space.md,
+    justifyContent: 'center',
+  },
+  actionText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+});

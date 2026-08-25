@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 
 export type SyncStatusTone = 'live' | 'syncing' | 'offline';
@@ -12,43 +12,40 @@ interface SyncStatusPillProps {
   compact?: boolean;
 }
 
-const IS_LIGHT = ActiveTheme === 'light';
-
-const TONE_STYLES: Record<
-  SyncStatusTone,
-  {
-    icon: keyof typeof Ionicons.glyphMap;
-    background: string;
-    border: string;
-    iconColor: string;
-    textColor: string;
+function resolveToneStyles(tone: SyncStatusTone, colors: ThemeColors) {
+  switch (tone) {
+    case 'live':
+      return {
+        icon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
+        background: colors.successSubtle,
+        border: colors.borderSubtle,
+        iconColor: colors.success,
+        textColor: colors.success,
+      };
+    case 'syncing':
+      return {
+        icon: 'sync-outline' as keyof typeof Ionicons.glyphMap,
+        background: colors.warningSubtle,
+        border: colors.borderSubtle,
+        iconColor: colors.warning,
+        textColor: colors.warning,
+      };
+    case 'offline':
+    default:
+      return {
+        icon: 'cloud-offline-outline' as keyof typeof Ionicons.glyphMap,
+        background: colors.dangerSubtle,
+        border: colors.borderSubtle,
+        iconColor: colors.danger,
+        textColor: colors.danger,
+      };
   }
-> = {
-  live: {
-    icon: 'checkmark-circle',
-    background: IS_LIGHT ? '#e8f4ec' : '#193327',
-    border: IS_LIGHT ? '#b8d8c2' : '#2f5d48',
-    iconColor: IS_LIGHT ? '#2d7a4b' : '#78d89f',
-    textColor: IS_LIGHT ? '#2d7a4b' : '#9ae7b8',
-  },
-  syncing: {
-    icon: 'sync-outline',
-    background: IS_LIGHT ? '#efe8dc' : '#2d261e',
-    border: IS_LIGHT ? '#d5c6ad' : '#4d3f31',
-    iconColor: IS_LIGHT ? '#8f6f3f' : '#d7b987',
-    textColor: IS_LIGHT ? '#7b6036' : '#e0c69d',
-  },
-  offline: {
-    icon: 'cloud-offline-outline',
-    background: IS_LIGHT ? '#f1e7e7' : '#331f1f',
-    border: IS_LIGHT ? '#ddc1c1' : '#5d3535',
-    iconColor: IS_LIGHT ? '#8b4c4c' : '#d39b9b',
-    textColor: IS_LIGHT ? '#7a4545' : '#e1adad',
-  },
-};
+}
 
 export function SyncStatusPill({ tone, label, compact = false }: SyncStatusPillProps) {
-  const toneStyle = TONE_STYLES[tone];
+  const { colors } = useAppTheme();
+  const toneStyle = resolveToneStyles(tone, colors);
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
     <View
@@ -69,7 +66,7 @@ export function SyncStatusPill({ tone, label, compact = false }: SyncStatusPillP
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -87,7 +84,7 @@ const styles = StyleSheet.create({
     maxWidth: 130,
   },
   text: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,

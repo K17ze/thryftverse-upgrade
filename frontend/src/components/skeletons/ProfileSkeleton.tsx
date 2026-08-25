@@ -40,7 +40,7 @@ export function ProfileSkeleton() {
       <SkeletonLoader
         width={W}
         height={COVER_HEIGHT}
-        borderRadius={0}
+        borderRadius={Radius.none}
       />
 
       {/* ── 2–4. Identity hero + stats (offset to overlap cover seam) ── */}
@@ -64,7 +64,7 @@ export function ProfileSkeleton() {
         {/* Username */}
         <SkeletonLoader
           width={120}
-          height={Type.captionElevated.size}
+          height={Type.caption.size}
           borderRadius={Radius.sm}
           style={styles.skeletonUsername}
         />
@@ -83,7 +83,7 @@ export function ProfileSkeleton() {
             <View key={i} style={styles.statItem}>
               <SkeletonLoader
                 width={48}
-                height={Type.bodyEmphasis.size}
+                height={Type.bodyStrong.size}
                 borderRadius={Radius.sm}
               />
               <SkeletonLoader
@@ -103,7 +103,7 @@ export function ProfileSkeleton() {
           <SkeletonLoader
             key={i}
             width={70}
-            height={Type.bodyEmphasis.size}
+            height={Type.bodyStrong.size}
             borderRadius={Radius.sm}
           />
         ))}

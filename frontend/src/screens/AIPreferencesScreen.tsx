@@ -29,6 +29,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -44,19 +45,85 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AIPreferences'>;
 // Demo mode flag — the preference service is mock in this build.
 const AI_PREFERENCES_DEMO_MODE = __DEV__;
 
+const AI_PREFS_KEY = '@thryftverse/ai_prefs';
+
+interface AIPrefs {
+  masterEnabled: boolean;
+  listingSuggestions: boolean;
+  photoEnhancement: boolean;
+  searchAutocomplete: boolean;
+  chatAgents: boolean;
+  smartSell: boolean;
+  confidenceDisplay: boolean;
+}
+
+const DEFAULT_PREFS: AIPrefs = {
+  masterEnabled: true,
+  listingSuggestions: true,
+  photoEnhancement: true,
+  searchAutocomplete: true,
+  chatAgents: true,
+  smartSell: false,
+  confidenceDisplay: true,
+};
+
 export default function AIPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Local preference state — persisted to AsyncStorage in a real implementation.
-  const [masterEnabled, setMasterEnabled] = React.useState(true);
-  const [listingSuggestions, setListingSuggestions] = React.useState(true);
-  const [photoEnhancement, setPhotoEnhancement] = React.useState(true);
-  const [searchAutocomplete, setSearchAutocomplete] = React.useState(true);
-  const [chatAgents, setChatAgents] = React.useState(true);
-  const [smartSell, setSmartSell] = React.useState(false);
-  const [confidenceDisplay, setConfidenceDisplay] = React.useState(true);
+  // Preference state — persisted to AsyncStorage so it survives app restarts.
+  // The backend account-preferences endpoint does not yet support AI feature
+  // toggles, so these are device-local (truthful per AGENTS.md §11).
+  const [masterEnabled, setMasterEnabled] = React.useState(DEFAULT_PREFS.masterEnabled);
+  const [listingSuggestions, setListingSuggestions] = React.useState(DEFAULT_PREFS.listingSuggestions);
+  const [photoEnhancement, setPhotoEnhancement] = React.useState(DEFAULT_PREFS.photoEnhancement);
+  const [searchAutocomplete, setSearchAutocomplete] = React.useState(DEFAULT_PREFS.searchAutocomplete);
+  const [chatAgents, setChatAgents] = React.useState(DEFAULT_PREFS.chatAgents);
+  const [smartSell, setSmartSell] = React.useState(DEFAULT_PREFS.smartSell);
+  const [confidenceDisplay, setConfidenceDisplay] = React.useState(DEFAULT_PREFS.confidenceDisplay);
+  const [hydrated, setHydrated] = React.useState(false);
+
+  // Hydrate from AsyncStorage on mount.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(AI_PREFS_KEY);
+        if (!mounted || !raw) return;
+        const parsed = JSON.parse(raw) as Partial<AIPrefs>;
+        if (typeof parsed.masterEnabled === 'boolean') setMasterEnabled(parsed.masterEnabled);
+        if (typeof parsed.listingSuggestions === 'boolean') setListingSuggestions(parsed.listingSuggestions);
+        if (typeof parsed.photoEnhancement === 'boolean') setPhotoEnhancement(parsed.photoEnhancement);
+        if (typeof parsed.searchAutocomplete === 'boolean') setSearchAutocomplete(parsed.searchAutocomplete);
+        if (typeof parsed.chatAgents === 'boolean') setChatAgents(parsed.chatAgents);
+        if (typeof parsed.smartSell === 'boolean') setSmartSell(parsed.smartSell);
+        if (typeof parsed.confidenceDisplay === 'boolean') setConfidenceDisplay(parsed.confidenceDisplay);
+      } catch {
+        // AsyncStorage read failure — keep defaults
+      } finally {
+        if (mounted) setHydrated(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Persist to AsyncStorage whenever preferences change (after hydration).
+  React.useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(
+      AI_PREFS_KEY,
+      JSON.stringify({
+        masterEnabled,
+        listingSuggestions,
+        photoEnhancement,
+        searchAutocomplete,
+        chatAgents,
+        smartSell,
+        confidenceDisplay,
+      } satisfies AIPrefs),
+    ).catch(() => {});
+  }, [hydrated, masterEnabled, listingSuggestions, photoEnhancement, searchAutocomplete, chatAgents, smartSell, confidenceDisplay]);
 
   const activeCount = [
     listingSuggestions,
@@ -90,7 +157,6 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Listing suggestions"
-          subtitle="Preferences"
           onBack={() => navigation.goBack()}
         />
       }
@@ -109,21 +175,14 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Hero summary — posture with active count ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: masterEnabled && activeCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="settings-outline" size={20} color={masterEnabled && activeCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {masterEnabled ? `${activeCount} of 6 features on` : 'All features off'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {activeCount === 6 ? 'All features enabled' : activeCount === 0 ? 'No features active' : 'Some features paused'}
-              </Text>
-            </View>
-          </View>
+      {/* ── Summary — flat intro block with active count ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {masterEnabled ? `${activeCount} of 6 features on` : 'All features off'}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {activeCount === 6 ? 'All features enabled' : activeCount === 0 ? 'No features active' : 'Some features paused'}
+          </Text>
           <View style={styles.progressRow}>
             <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
               <View
@@ -251,34 +310,21 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
       marginBottom: Space.md,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+    summaryTitle: {
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
     },
     progressRow: {
       flexDirection: 'row',
@@ -318,7 +364,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     dataUsageTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },

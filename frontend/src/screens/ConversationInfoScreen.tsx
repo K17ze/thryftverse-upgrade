@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -15,6 +15,8 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { deleteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
+import { blockUser, unblockUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -41,14 +43,13 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
-  const participantNameLookup = useStore(
-    (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
-  );
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId]
   );
+
+  const [isTogglingMute, setIsTogglingMute] = useState(false);
 
   if (!conversation) {
     return (
@@ -63,17 +64,27 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     );
   }
 
-  const counterpartyId = conversation.participantIds?.find((id) => id !== 'me');
+  const counterpartyId = conversation.participantIds?.find(
+    (id) => id !== 'me' && id !== currentUser?.id,
+  );
   const isMuted = mutedIds.includes(conversationId);
   const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
+  const counterpartyProfile = counterpartyId
+    ? conversation.participantProfiles?.find((p) => p.id === counterpartyId)
+    : undefined;
   const displayName =
-    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ||
+    counterpartyProfile?.displayName ||
+    counterpartyProfile?.username ||
     conversation.title ||
     'Thryft user';
   const avatarUrl =
     conversation.avatar ||
     (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar || null : null);
-  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
+  const handle = counterpartyId
+    ? counterpartyProfile?.username
+      ? `@${counterpartyProfile.username}`
+      : 'Member'
+    : 'Direct message';
   const mediaCount = conversation.messages?.filter((message) => message.mediaUri).length ?? 0;
   const linkCount =
     conversation.messages?.filter((message) => message.text && /https?:\/\//.test(message.text)).length ?? 0;
@@ -86,40 +97,74 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     if (counterpartyId) openProfile(navigation, counterpartyId, currentUser?.id);
   };
 
-  const toggleMute = () => {
+  const toggleMute = async () => {
     haptic.light();
-    toggleMuted(conversationId);
-    show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    setIsTogglingMute(true);
+    try {
+      await toggleMuted(conversationId);
+      show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+    } catch {
+      show('Could not update mute status. Check your connection and try again.', 'error');
+    } finally {
+      setIsTogglingMute(false);
+    }
   };
 
-  const archive = () => {
+  const reportUser = () => {
+    if (!counterpartyId) return;
+    haptic.light();
+    navigation.navigate('Report', { type: 'user', targetId: counterpartyId });
+  };
+
+  const archive = async () => {
     haptic.medium();
-    archiveConversation(conversationId);
-    show('Conversation archived', 'success');
-    navigation.navigate('MainTabs', { screen: 'Inbox' });
+    try {
+      await archiveConversationOnApi(conversationId);
+      archiveConversation(conversationId);
+      show('Conversation archived', 'success');
+      navigation.navigate('MainTabs', { screen: 'Inbox' });
+    } catch {
+      show('Could not archive this conversation. Check your connection and try again.', 'error');
+    }
   };
 
-  const toggleBlock = () => {
+  const toggleBlock = async () => {
     if (!counterpartyId) return;
     haptic.heavy();
-    toggleBlockedUser(counterpartyId);
-    show(isBlocked ? 'User unblocked' : 'User blocked', isBlocked ? 'success' : 'info');
+    try {
+      if (isBlocked) {
+        await unblockUser(counterpartyId);
+        toggleBlockedUser(counterpartyId);
+        show('User unblocked', 'success');
+      } else {
+        await blockUser(counterpartyId);
+        toggleBlockedUser(counterpartyId);
+        show('User blocked', 'info');
+      }
+    } catch {
+      show('Could not update block status. Check your connection and try again.', 'error');
+    }
   };
 
   const deleteForMe = () => {
     Alert.alert(
-      'Delete for me?',
+      'Remove from inbox?',
       'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete for me',
+          text: 'Remove',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteConversation(conversationId);
-            show('Conversation removed from your inbox', 'info');
-            navigation.navigate('MainTabs', { screen: 'Inbox' });
+            try {
+              await deleteConversationOnApi(conversationId, 'me');
+              deleteConversation(conversationId);
+              show('Conversation removed from your inbox', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch {
+              show('Could not delete this conversation. Check your connection and try again.', 'error');
+            }
           },
         },
       ]
@@ -173,6 +218,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
             label={isMuted ? 'Unmute' : 'Mute'}
             onPress={toggleMute}
+            busy={isTogglingMute}
           />
         </View>
 
@@ -221,7 +267,13 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             onPress={toggleBlock}
             danger={!isBlocked}
           />
-          <ChatInfoRow icon="trash-outline" label="Delete for me" onPress={deleteForMe} danger />
+          <ChatInfoRow
+            icon="flag-outline"
+            label="Report user"
+            onPress={reportUser}
+            showChevron
+          />
+          <ChatInfoRow icon="trash-outline" label="Remove from inbox" onPress={deleteForMe} danger />
         </ChatInfoSection>
       </ScrollView>
     </FlagshipScreen>
@@ -232,10 +284,12 @@ function QuickAction({
   icon,
   label,
   onPress,
+  busy,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  busy?: boolean;
 }) {
   const { colors } = useAppTheme();
   const quickThemed = useMemo(() => ({
@@ -250,8 +304,14 @@ function QuickAction({
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ busy }}
+      disabled={busy}
     >
-      <Ionicons name={icon} size={21} color={colors.textPrimary} />
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.textPrimary} />
+      ) : (
+        <Ionicons name={icon} size={21} color={colors.textPrimary} />
+      )}
       <Text style={[styles.quickActionLabel, quickThemed.quickActionLabel]}>{label}</Text>
     </AnimatedPressable>
   );
@@ -300,7 +360,7 @@ const styles = StyleSheet.create({
   },
   handle: {
     fontFamily: TypeStyles.body.fontFamily,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     marginTop: Space.xs / 2 + 1,
   },
   quickActions: {

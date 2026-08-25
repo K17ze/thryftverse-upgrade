@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, FontFamily, Control } from '../theme/designTokens';
+import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
@@ -203,7 +204,7 @@ export function CreatorFolderOrganizeSheet({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="close" size={20} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </Pressable>
         </View>
 
@@ -222,9 +223,9 @@ export function CreatorFolderOrganizeSheet({
               accessibilityRole="button"
               scale={0.97}
             >
-              <Ionicons name="folder-open-outline" size={20} color={colors.brand} />
+              <Ionicons name="folder-open-outline" size={IconGrammar.standard} color={colors.brand} />
               <Text style={styles.newFolderText}>New Folder</Text>
-              <Ionicons name="add" size={20} color={colors.brand} />
+              <Ionicons name="add" size={IconGrammar.standard} color={colors.brand} />
             </PressScale>
 
             {/* Folders list */}
@@ -256,7 +257,7 @@ export function CreatorFolderOrganizeSheet({
                     >
                       <Ionicons
                         name={isSelected ? 'folder' : 'folder-outline'}
-                        size={22}
+                        size={IconGrammar.standard}
                         color={isSelected ? colors.brand : colors.textSecondary}
                       />
                       <View style={styles.folderInfo}>
@@ -282,7 +283,7 @@ export function CreatorFolderOrganizeSheet({
                             accessibilityRole="button"
                             hitSlop={8}
                           >
-                            <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+                            <Ionicons name="create-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                           </Pressable>
                           <Pressable
                             onPress={() => handleStartDelete(folder)}
@@ -291,7 +292,7 @@ export function CreatorFolderOrganizeSheet({
                             accessibilityRole="button"
                             hitSlop={8}
                           >
-                            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
                           </Pressable>
                         </View>
                       )}
@@ -333,6 +334,7 @@ export function CreatorFolderOrganizeSheet({
                       <Pressable
                         key={draft.id}
                         onPress={() => handleToggleDraft(draft.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={({ pressed }) => [
                           styles.draftPickRow,
                           isSelected && styles.draftPickRowSelected,
@@ -349,7 +351,7 @@ export function CreatorFolderOrganizeSheet({
                                 ? 'folder'
                                 : 'ellipse-outline'
                           }
-                          size={20}
+                          size={IconGrammar.standard}
                           color={
                             isSelected
                               ? colors.brand
@@ -375,7 +377,7 @@ export function CreatorFolderOrganizeSheet({
                             accessibilityRole="button"
                             hitSlop={8}
                           >
-                            <Ionicons name="remove-circle-outline" size={18} color={colors.danger} />
+                            <Ionicons name="remove-circle-outline" size={IconGrammar.metadata} color={colors.danger} />
                           </Pressable>
                         )}
                       </Pressable>
@@ -588,7 +590,7 @@ function createStyles(colors: ThemeColors) {
     },
     newFolderText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.brand,
     },
     scrollArea: {
@@ -599,8 +601,8 @@ function createStyles(colors: ThemeColors) {
     },
     sectionLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.metaElevated.size,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: Type.label.size,
+      letterSpacing: Type.label.letterSpacing,
       color: colors.textMuted,
       marginTop: Space.sm,
       marginBottom: Space.xs,
@@ -629,7 +631,7 @@ function createStyles(colors: ThemeColors) {
     },
     folderName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
     },
     folderNameSelected: {
@@ -665,7 +667,7 @@ function createStyles(colors: ThemeColors) {
     assignTitle: {
       flex: 1,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
     },
     assignConfirmBtn: {
@@ -800,7 +802,7 @@ function createStyles(colors: ThemeColors) {
     },
     nameInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
       borderWidth: 1,
       borderColor: colors.border,
@@ -821,7 +823,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageDangerBtn: {
@@ -833,7 +835,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageDangerText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageCancelBtn: {

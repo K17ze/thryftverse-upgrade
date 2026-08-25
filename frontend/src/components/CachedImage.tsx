@@ -14,9 +14,11 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Radius } from '../theme/designTokens';
 
 interface CachedImageProps {
   uri: string;
@@ -72,11 +74,24 @@ interface CachedImageProps {
    * original URI is used as-is.
    */
   downscaleWidth?: number;
+  /**
+   * Optional Reanimated shared-element transition tag. When set, the
+   * image's animated wrapper participates in a shared-element transition
+   * (e.g. card → PDP hero). Allows focal-point art-directed images to
+   * retain the transition that `SharedTransitionImage` provides.
+   */
+  sharedTransitionTag?: string;
+  /** Accessibility role for screen readers (e.g. 'image'). */
+  accessibilityRole?: 'image' | 'button' | 'link' | 'none';
+  /** Accessibility label describing the image for screen readers. */
+  accessibilityLabel?: string;
+  /** When true, hides this element and its descendants from the screen reader. */
+  accessibilityElementsHidden?: boolean;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
-export function CachedImage({
+function CachedImageComponent({
   uri,
   previewUri,
   style,
@@ -96,8 +111,13 @@ export function CachedImage({
   isLooping = true,
   showPlayBadge = false,
   downscaleWidth,
+  sharedTransitionTag,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityElementsHidden,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
@@ -121,7 +141,7 @@ export function CachedImage({
 
     shimmerX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 })
       ),
       -1,
@@ -238,14 +258,19 @@ export function CachedImage({
     setFailed(true);
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: 0 });
-    previewOpacity.value = withTiming(0, { duration: 80 });
+    previewOpacity.value = withTiming(0, { duration: Motion.duration.touch });
     onError?.();
   }, [imageOpacity, previewOpacity, onError]);
 
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
     return (
-      <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
+      <View
+        style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+      >
         <ImageEmptyGraphic
           label={emptyLabel}
           icon={emptyIcon}
@@ -256,7 +281,12 @@ export function CachedImage({
   }
 
   return (
-    <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
+    <View
+      style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityElementsHidden={accessibilityElementsHidden}
+    >
       {/* Premium fallback for failed loads (404, network error, etc.) —
           never leaves a broken/blank image rectangle. */}
       {failed ? (
@@ -294,7 +324,10 @@ export function CachedImage({
         </Reanimated.View>
       )}
 
-      <Reanimated.View style={[StyleSheet.absoluteFill, imageStyle]}>
+      <Reanimated.View
+        style={[StyleSheet.absoluteFill, imageStyle]}
+        sharedTransitionTag={sharedTransitionTag}
+      >
         {isVideoSource ? (
           <Video
             source={{ uri: sourceUri }}
@@ -339,8 +372,8 @@ export function CachedImage({
           video chrome (audit §Media pipeline / AGENTS §15). */}
       {isVideoSource && showPlayBadge && !shouldPlay && (
         <View pointerEvents="none" style={styles.playBadge}>
-          <View style={[styles.playBadgeCircle, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
-            <Ionicons name="play" size={14} color="#fff" />
+          <View style={[styles.playBadgeCircle, { backgroundColor: colors.overlay }]}>
+            <Ionicons name="play" size={14} color={colors.surfaceElevated} />
           </View>
         </View>
       )}
@@ -350,7 +383,75 @@ export function CachedImage({
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Custom comparator for React.memo — checks the props that actually affect
+ * the rendered output, skipping `style`/`containerStyle` when they are
+ * StyleSheet references (referentially stable). This prevents the 565
+ * CachedImage instances from re-rendering on every parent update (research
+ * doc §5: "76 React.memo usages for 565 CachedImage usages").
+ */
+function cachedImagePropsEqual(prev: CachedImageProps, next: CachedImageProps): boolean {
+  if (
+    prev.uri !== next.uri ||
+    prev.previewUri !== next.previewUri ||
+    prev.contentFit !== next.contentFit ||
+    prev.transition !== next.transition ||
+    prev.blurhash !== next.blurhash ||
+    prev.priority !== next.priority ||
+    prev.isVisible !== next.isVisible ||
+    prev.cacheBuster !== next.cacheBuster ||
+    prev.downscaleWidth !== next.downscaleWidth ||
+    prev.sharedTransitionTag !== next.sharedTransitionTag ||
+    prev.shouldPlay !== next.shouldPlay ||
+    prev.isLooping !== next.isLooping ||
+    prev.showPlayBadge !== next.showPlayBadge ||
+    prev.emptyLabel !== next.emptyLabel ||
+    prev.emptyIcon !== next.emptyIcon ||
+    prev.accessibilityRole !== next.accessibilityRole ||
+    prev.accessibilityLabel !== next.accessibilityLabel ||
+    prev.accessibilityElementsHidden !== next.accessibilityElementsHidden ||
+    prev.onError !== next.onError ||
+    prev.onLoad !== next.onLoad
+  ) {
+    return false;
+  }
+  // Focal point is an object — shallow compare
+  const pf = prev.focalPoint;
+  const nf = next.focalPoint;
+  if (pf && nf) {
+    if (pf.x !== nf.x || pf.y !== nf.y) return false;
+  } else if (pf !== nf) {
+    return false;
+  }
+  // Skip style comparison when both are StyleSheet references (numbers —
+  // StyleSheet.create returns opaque numeric IDs that are referentially
+  // stable). Only deep-check when at least one side is a dynamic object.
+  if (prev.style !== next.style) {
+    // If either is a number (StyleSheet ID), they're stable — only
+    // re-render if the reference actually changed, which the !== above
+    // already caught. For dynamic style objects/arrays we let React's
+    // default shallow compare handle it by returning false.
+    if (typeof prev.style !== 'number' && typeof next.style !== 'number') {
+      return false;
+    }
+  }
+  if (prev.containerStyle !== next.containerStyle) {
+    if (typeof prev.containerStyle !== 'number' && typeof next.containerStyle !== 'number') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Memoized CachedImage — prevents unnecessary re-renders across the 565
+ * usage sites. The custom comparator checks content-affecting props and
+ * skips style comparison when styles are StyleSheet references (research
+ * doc §6: "Wrap CachedImage in React.memo with a custom comparator").
+ */
+export const CachedImage = React.memo(CachedImageComponent, cachedImagePropsEqual);
+
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     overflow: 'hidden',
   },
@@ -366,10 +467,10 @@ const styles = StyleSheet.create({
   playBadgeCircle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: colors.surfaceElevated,
   },
 });

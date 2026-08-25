@@ -7,6 +7,8 @@ import Reanimated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { Typography, Space } from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
@@ -16,20 +18,28 @@ interface AnimatedBadgeProps {
 
 export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(1);
 
   useEffect(() => {
     if (count > 0) {
-      // Quick scale pop then settle — timing-based, no bounce
-      scale.value = withSequence(
-        withTiming(1.3, { duration: 100 }),
-        withTiming(1, { duration: 120 })
-      );
+      if (reducedMotion) {
+        // Reduced motion: collapse scale travel to zero — keep opacity
+        // state-change communication (§2.5).
+        scale.value = 1;
+      } else {
+        // Quick scale pop then settle — timing-based, no bounce
+        scale.value = withSequence(
+          withTiming(1.3, { duration: Motion.duration.fast }),
+          withTiming(1, { duration: Motion.duration.normal })
+        );
+      }
     } else {
-      scale.value = withTiming(0, { duration: 200 }); // Shrink out if 0
+      // Shrink out if 0 — under reduced motion, collapse to instant
+      scale.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.normal });
     }
-  }, [count]);
+  }, [count, reducedMotion, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -64,10 +74,10 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     top: -4,
     right: -4,
     borderWidth: 1.5,
-    borderColor: '#111',
+    borderColor: colors.background,
   },
   text: {
-    color: '#fff',
+    color: colors.surfaceElevated,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center',

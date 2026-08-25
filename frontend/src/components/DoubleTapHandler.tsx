@@ -10,8 +10,10 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Motion } from '../theme/motionTokens';
 
 interface DoubleTapHandlerProps {
   children: React.ReactNode;
@@ -19,9 +21,12 @@ interface DoubleTapHandlerProps {
 }
 
 export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const reducedMotion = useReducedMotion();
+  const haptic = useHaptic();
 
   const triggerAnimation = useCallback(() => {
     if (reducedMotion) return;
@@ -30,20 +35,20 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
 
     // Pop up fast, stay a bit, then quickly dissolve and shrink
     scale.value = withSequence(
-      withTiming(1, { duration: 140 }),
-      withDelay(400, withTiming(0.8, { duration: 150 }))
+      withTiming(1, { duration: Motion.duration.fast }),
+      withDelay(400, withTiming(0.8, { duration: Motion.duration.normal }))
     );
     opacity.value = withSequence(
-      withTiming(1, { duration: 100 }),
-      withDelay(400, withTiming(0, { duration: 150 }))
+      withTiming(1, { duration: Motion.duration.fast }),
+      withDelay(400, withTiming(0, { duration: Motion.duration.normal }))
     );
   }, [scale, opacity, reducedMotion]);
 
-  const onDoubleTapJS = useCallback(async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const onDoubleTapJS = useCallback(() => {
+    haptic.patterns.like();
     triggerAnimation();
     onDoubleTap();
-  }, [onDoubleTap, triggerAnimation]);
+  }, [onDoubleTap, triggerAnimation, haptic]);
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
@@ -62,7 +67,7 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
         {children}
         <View style={styles.heartOverlay} pointerEvents="none">
           <Reanimated.View style={animatedStyle}>
-            <Ionicons name="heart" size={100} color="#fff" style={styles.shadow} />
+            <Ionicons name="heart" size={100} color={colors.surfaceElevated} style={styles.shadow} />
           </Reanimated.View>
         </View>
       </View>
@@ -70,7 +75,7 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
@@ -83,7 +88,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   shadow: {
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
     shadowRadius: 20,

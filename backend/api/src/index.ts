@@ -21,6 +21,15 @@ import {
   type ApiVersion,
 } from './lib/apiVersioning.js';
 import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
+import { validateCompositionDocument } from './lib/compositionValidation.js';
+import { performUserErasure } from './lib/userErasure.js';
+import {
+  propagateUserDeletion,
+  moderationProvider,
+  aiProvider,
+  pushProvider,
+  analyticsProvider,
+} from './lib/vendorDeletion.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -47,6 +56,11 @@ import {
   verifyAccessToken,
   verifyPassword,
 } from './lib/auth.js';
+import {
+  detectTokenReuse,
+  trackRefreshTokenUse,
+  invalidateAllUserSessions as invalidateAllTrackedRefreshTokens,
+} from './lib/tokenRefresh.js';
 import { sendAuthEmail } from './lib/authEmail.js';
 import {
   assertOnezeOperatorToken,
@@ -73,6 +87,7 @@ import {
   type ProviderPaymentStatus,
   type ProviderSlug,
   verifyAndNormalizeWebhook,
+  normalizeWebhookEvent,
 } from './lib/paymentProviders.js';
 import {
   MONEY_REGISTRY_VERSION,
@@ -108,8 +123,10 @@ import {
   enqueueOnezeMintReserveJob,
   enqueueOutboxDrainJob,
   enqueueReconciliationJob,
+  enqueueRetentionSweepJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
+  enqueueMediaIngestJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -190,9 +207,16 @@ import {
   runPerIntentReconciliation,
   getPerIntentReconciliationItems,
   perIntentReconciliationTableAvailable,
+  runThreeWayReconciliation,
+  runSafeguardingCheck,
+  getReconciliationBreaks,
+  getSafeguardingChecks,
   type DailyReconciliationRun,
   type PerIntentReconciliationItem,
   type PerIntentReconciliationStatus,
+  type ReconciliationBreak,
+  type SafeguardingCheck,
+  type ThreeWayReconciliationResult,
 } from './lib/reconciliation.js';
 import {
   collectOperationalAlerts,
@@ -204,13 +228,40 @@ import {
   isKycProviderReady,
   verifyKycProviderWebhook,
 } from './lib/kycProvider.js';
+import { registerHealthRoutes } from './routes/health.js';
+import { registerSecurityRoutes } from './routes/security.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerCollectionRoutes } from './routes/collections.js';
+import { registerSearchRoutes } from './routes/search.js';
+import { createKysely } from './lib/kysely.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerSmsRoutes } from './routes/sms.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerSupportReviewRoutes } from './routes/supportReviews.js';
+import { registerSupportRoutes } from './routes/support.js';
+import { registerOperatorSupportRoutes } from './routes/operatorSupport.js';
+import { registerVendorWebhookRoutes } from './routes/vendorWebhooks.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
+import { registerModerationRoutes } from './routes/moderation.js';
+import { registerAppealsRoutes } from './routes/appeals.js';
+import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
+import { moderateListingText } from './lib/moderation/moderationService.js';
+import { processMediaAsset } from './lib/media/pipeline.js';
+import {
+  processCatalogImportDiscovery,
+  processCatalogImportHydration,
+  processCatalogImportMedia,
+  processCatalogImportNormalisation,
+  processCatalogImportPublication,
+  processCatalogImportRetention,
+  processCatalogImportReconcile,
+  processMediaEmbeddingJob,
+  processModerationTriageJob,
+  processImporterExtraction,
+  processRetentionSweep,
+} from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
@@ -220,7 +271,49 @@ import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
+import { registerAccountSecurityRoutes } from './routes/accountSecurity.js';
+import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
+import { registerComplianceRoutes } from './routes/compliance.js';
+import { registerSyncRoutes } from './routes/sync.js';
+import { registerImpactRoutes } from './routes/impact.js';
+import { registerStreamingRoutes } from './routes/streaming.js';
+import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
+import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
+import { registerAdminAuditRoutes } from './routes/adminAudit.js';
+import { registerRetentionRoutes } from './routes/retention.js';
+import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
+import { registerBotsRoutes } from './routes/bots.js';
+import { registerV2Routes } from './routes/v2.js';
+import { registerSellerRoutes } from './routes/sellers.js';
+import { registerSellerHubRoutes } from './routes/sellerHub.js';
+import { registerPoliciesRoutes } from './routes/policies.js';
+import { registerFeedRoutes } from './routes/feed.js';
+import { registerGalleriaRoutes } from './routes/galleria.js';
+import { registerMoodboardRoutes } from './routes/moodboards.js';
+import { registerConversationalSearchRoutes } from './routes/conversationalSearch.js';
+import { registerVisualSearchRoutes } from './routes/visualSearch.js';
+import { registerPosterRoutes } from './routes/posters.js';
+import { registerLookRoutes } from './routes/looks.js';
+import { registerSearchExtendedRoutes } from './routes/searchExtended.js';
+import { registerOracleRoutes } from './routes/oracle.js';
+import { registerPriceRoutes } from './routes/price.js';
+import { registerTaxonomyRoutes } from './routes/taxonomy.js';
+import { registerCatalogImportRoutes } from './routes/catalogImports.js';
+import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
+import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
+import { registerReturnRoutes } from './routes/returns.js';
+import { registerRefundRoutes } from './routes/refunds.js';
+import { registerExceptionQueueRoutes } from './routes/exceptionQueue.js';
+import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
+import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
+import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
+import { createIpReputationProvider } from './lib/ipReputationProviders.js';
+import {
+  notifyOrderShipped,
+  notifyOrderDelivered,
+  notifyOrderException,
+} from './lib/sms/notificationService.js';
 import {
   PRODUCT_RECOMMENDATION_POLICY_VERSION,
   scoreProductRecommendation,
@@ -262,6 +355,11 @@ import {
 } from './lib/searchIndex.js';
 import { logger } from './lib/logger.js';
 import { validateListingActivation } from './lib/listingCategoryPolicy.js';
+import {
+  configureSearchIndex,
+  removeListingFromIndex,
+  syncSingleListing,
+} from './lib/searchSync.js';
 
 const app = Fastify({
   logger: {
@@ -419,6 +517,25 @@ void app.register(rateLimit, {
   timeWindow: config.apiRateLimitWindow,
   redis,
   nameSpace: 'thryftverse:rate-limit',
+  addHeaders: {
+    'x-ratelimit-limit': true,
+    'x-ratelimit-remaining': true,
+    'x-ratelimit-reset': true,
+    'retry-after': true,
+  },
+  addHeadersOnExceeding: {
+    'x-ratelimit-limit': true,
+    'x-ratelimit-remaining': true,
+    'x-ratelimit-reset': true,
+  },
+  errorResponseBuilder: (_request, context) => {
+    return {
+      statusCode: context.ban ? 403 : 429,
+      error: context.ban ? 'Forbidden' : 'Too Many Requests',
+      message: `Rate limit exceeded, retry in ${context.after}`,
+      retryAfterSeconds: Math.ceil(context.ttl / 1000),
+    };
+  },
   // IPv6-safe key generator — fixes GHSA-grpc-p53c-r64v where IPv6 address
   // rotation bypasses rate limits. We bucket by the /64 prefix (first 4
   // groups) so rotated addresses from the same /64 are counted together.
@@ -1124,6 +1241,9 @@ function isPublicRoute(method: string, path: string) {
     'GET /metrics',
     'GET /listings',
     'GET /search/listings',
+    'GET /search',
+    'GET /search/autocomplete',
+    'GET /search/health',
     'GET /feed/looks',
     'GET /oracle/gold/latest',
     'POST /auth/signup',
@@ -1139,6 +1259,8 @@ function isPublicRoute(method: string, path: string) {
     'POST /auth/password-reset/confirm',
     'POST /compliance/kyc/webhook',
     'POST /compliance/kyc/webhooks/stripe',
+    'GET /compliance/privacy-policy',
+    'GET /compliance/data-categories',
     // Authenticated by the dedicated service-token check in the route module.
     'POST /offers/sweep-expired',
   ]);
@@ -1173,6 +1295,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/looks\/[^/]+$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && /^\/auctions\/(?!watchlist$)[^/]+$/.test(path)) {
     return true;
   }
@@ -1194,6 +1320,10 @@ function isPublicRoute(method: string, path: string) {
   }
 
   if (method === 'GET' && path === '/feed/home') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/feed/discover') {
     return true;
   }
 
@@ -1256,6 +1386,22 @@ function isPublicRoute(method: string, path: string) {
 
   // T04: Policy documents are publicly viewable (published versions only).
   if (method === 'GET' && /^\/policies\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/streaming/sessions') {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/streaming\/sessions\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  // Ops console routes use a separate workforce identity plane (JWT audience
+  // "thryftverse-ops") and their own deny-by-default authorization middleware.
+  // Consumer auth must not interfere — these routes are public to the consumer
+  // preHandler but gated by workforce auth inside the route module.
+  if (path.startsWith('/ops/v1/')) {
     return true;
   }
 
@@ -1483,6 +1629,10 @@ app.addHook('preHandler', async (request, reply) => {
   const requestPath = getRoutePath(request.raw.url ?? request.url);
 
   if (isPublicRoute(request.method, requestPath)) {
+    // Public discovery routes still benefit from optional viewer context:
+    // saved/liked state, owner visibility, and relationship-aware content
+    // must not silently downgrade authenticated people to anonymous users.
+    await optionalAuthenticate(request, requestPath);
     return;
   }
 
@@ -1600,14 +1750,16 @@ type LedgerAccountCode =
   | 'ize_pending_redemption'
   | 'ize_outstanding'
   | 'ize_fiat_received'
-  | 'reserve_hold';
+  | 'reserve_hold'
+  | 'provider_cash_clearing';
 type PaymentIntentStatus =
   | 'requires_payment_method'
   | 'requires_confirmation'
   | 'processing'
   | 'succeeded'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'provider_submission_pending';
 type PaymentIntentTerminalStatus = 'succeeded' | 'failed' | 'cancelled';
 type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
 type MintOperationState =
@@ -1838,6 +1990,19 @@ interface ChatGroupMembershipRoleRow {
   role: ChatGroupMemberRole;
 }
 
+interface OwnedGroupAvatarReceipt {
+  finalization_id: string;
+  finalization_url: string;
+  finalization_status: string;
+  content_type: string;
+  folder: string;
+  scope: string;
+  owner_id: string;
+  media_asset_id: string | null;
+  media_asset_status: string | null;
+  canonical_url: string | null;
+}
+
 function buildGroupInviteLink(inviteToken: string): string {
   return `thryftverse://group-invite?token=${encodeURIComponent(inviteToken)}`;
 }
@@ -1929,6 +2094,172 @@ async function ensureGroupManagementAccess(
     ownerId: conversation.owner_id,
     membershipRole,
   });
+}
+
+async function ensureOwnedGroupMediaReceipt(
+  client: DbQueryable,
+  input: {
+    actorUserId: string;
+    finalizationId: string;
+    mediaUrl: string;
+    folder: 'avatars' | 'covers';
+    scope: 'avatar' | 'cover';
+  }
+): Promise<void> {
+  const result = await client.query<OwnedGroupAvatarReceipt>(
+    `
+      SELECT
+        uf.id AS finalization_id,
+        uf.public_url AS finalization_url,
+        uf.status AS finalization_status,
+        uf.content_type,
+        uf.folder,
+        uf.scope,
+        uf.owner_id,
+        ma.id AS media_asset_id,
+        ma.status AS media_asset_status,
+        ma.canonical_url
+      FROM upload_finalizations uf
+      LEFT JOIN media_assets ma ON ma.upload_finalization_id = uf.id
+      WHERE uf.id = $1
+      LIMIT 1
+    `,
+    [input.finalizationId]
+  );
+
+  const receipt = result.rows[0];
+  const invalidAssetStatuses = new Set([
+    'upload_expired',
+    'integrity_failed',
+    'quarantined',
+    'rejected',
+    'revoked',
+    'deleted',
+  ]);
+  const urlMatchesReceipt = Boolean(
+    receipt
+    && (input.mediaUrl === receipt.finalization_url || input.mediaUrl === receipt.canonical_url)
+  );
+
+  const label = input.folder === 'covers' ? 'cover photo' : 'group photo';
+  if (
+    !receipt
+    || receipt.owner_id !== input.actorUserId
+    || receipt.finalization_status !== 'finalized'
+    || !receipt.content_type.startsWith('image/')
+    || receipt.folder !== input.folder
+    || receipt.scope !== input.scope
+    || !receipt.media_asset_id
+    || (receipt.media_asset_status !== null && invalidAssetStatuses.has(receipt.media_asset_status))
+    || !urlMatchesReceipt
+  ) {
+    throw createApiError(
+      'CHAT_GROUP_AVATAR_INVALID',
+      `Group ${label} must be a finalized image uploaded by the current user`,
+      { finalizationId: input.finalizationId }
+    );
+  }
+}
+
+// Backward-compatible alias for existing call sites that upload avatars.
+async function ensureOwnedGroupAvatarReceipt(
+  client: DbQueryable,
+  input: {
+    actorUserId: string;
+    finalizationId: string;
+    avatarUrl: string;
+  }
+): Promise<void> {
+  return ensureOwnedGroupMediaReceipt(client, {
+    actorUserId: input.actorUserId,
+    finalizationId: input.finalizationId,
+    mediaUrl: input.avatarUrl,
+    folder: 'avatars',
+    scope: 'avatar',
+  });
+}
+
+// ── Chat message serialization ───────────────────────────────────────────
+// P0.1/P0.7/P0.8/P0.9: Canonical message serializer that includes all
+// lifecycle fields — clientMessageId, replyToMessageId, reactions, edit
+// state, deleted state. Used by both the list and create routes so the
+// contract is identical everywhere.
+
+interface ChatMessageRow {
+  id: string;
+  sender_type: ChatSenderType;
+  sender_user_id: string | null;
+  sender_bot_id: string | null;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  client_message_id: string | null;
+  reply_to_message_id: string | null;
+  deleted_for_everyone_at: string | null;
+  edit_version: number;
+  edited_at: string | null;
+}
+
+function formatReactionsMap(
+  reactionsByMessage: Map<string, Map<string, string[]>>,
+  messageId: string,
+): Array<{ emoji: string; userIds: string[] }> {
+  const byEmoji = reactionsByMessage.get(messageId);
+  if (!byEmoji) return [];
+  return Array.from(byEmoji.entries()).map(([emoji, userIds]) => ({ emoji, userIds }));
+}
+
+// Batch serializer — loads reactions for all messages in a single query to
+// avoid N+1. Used by the list route which returns multiple messages.
+async function serializeChatMessageRows(
+  rows: ChatMessageRow[],
+  actorUserId: string,
+): Promise<Record<string, unknown>[]> {
+  if (rows.length === 0) return [];
+
+  const messageIds = rows.map((r) => r.id);
+  const reactionsResult = await db.query<{ message_id: string; emoji: string; user_id: string }>(
+    `SELECT message_id, emoji, user_id FROM chat_message_reactions WHERE message_id = ANY($1::text[])`,
+    [messageIds]
+  );
+
+  const reactionsByMessage = new Map<string, Map<string, string[]>>();
+  for (const r of reactionsResult.rows) {
+    let byEmoji = reactionsByMessage.get(r.message_id);
+    if (!byEmoji) {
+      byEmoji = new Map();
+      reactionsByMessage.set(r.message_id, byEmoji);
+    }
+    const existing = byEmoji.get(r.emoji);
+    if (existing) existing.push(r.user_id);
+    else byEmoji.set(r.emoji, [r.user_id]);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    senderType: row.sender_type,
+    senderUserId: row.sender_user_id,
+    senderBotId: row.sender_bot_id,
+    body: row.body,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    clientMessageId: row.client_message_id ?? undefined,
+    replyToMessageId: row.reply_to_message_id ?? undefined,
+    deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
+    editVersion: row.edit_version,
+    editedAt: row.edited_at ?? undefined,
+    reactions: formatReactionsMap(reactionsByMessage, row.id),
+  }));
+}
+
+// Single-message serializer — for the create route where only one message
+// is returned. Uses the batch serializer with a single-element array.
+async function serializeChatMessageRow(
+  row: ChatMessageRow,
+  actorUserId: string,
+): Promise<Record<string, unknown>> {
+  const results = await serializeChatMessageRows([row], actorUserId);
+  return results[0];
 }
 
 async function listChatParticipantIds(client: DbQueryable, conversationId: string): Promise<string[]> {
@@ -5108,8 +5439,12 @@ async function postCommerceOrderLedgerEntries(
 
 async function hasCommerceOrderRefundReversalPosted(
   client: DbQueryable,
-  orderId: string
+  orderId: string,
+  refundRef: string
 ): Promise<boolean> {
+  // PAY-09 fix: Key the dedup by the specific refund reference, not just
+  // the order ID. This allows multiple partial refunds on the same order
+  // while preventing duplicate postings for the same refund operation.
   const result = await client.query<{ exists: boolean }>(
     `
       SELECT EXISTS (
@@ -5118,9 +5453,10 @@ async function hasCommerceOrderRefundReversalPosted(
         WHERE source_id = $1
           AND source_type = 'refund'
           AND line_type = 'buyer_refund'
+          AND metadata->>'refundRef' = $2
       ) AS exists
     `,
-    [orderId]
+    [orderId, refundRef]
   );
 
   return Boolean(result.rows[0]?.exists);
@@ -5130,7 +5466,8 @@ async function postCommerceOrderRefundLedgerReversal(
   client: DbQueryable,
   orderId: string,
   buyerId: string,
-  totalGbp: number
+  totalGbp: number,
+  refundRef: string
 ): Promise<{ reversed: boolean; alreadyReversed: boolean }> {
   if (totalGbp <= 0) {
     return {
@@ -5139,7 +5476,7 @@ async function postCommerceOrderRefundLedgerReversal(
     };
   }
 
-  if (await hasCommerceOrderRefundReversalPosted(client, orderId)) {
+  if (await hasCommerceOrderRefundReversalPosted(client, orderId, refundRef)) {
     return {
       reversed: false,
       alreadyReversed: true,
@@ -5167,6 +5504,7 @@ async function postCommerceOrderRefundLedgerReversal(
     sourceType: 'refund',
     sourceId: orderId,
     lineType: 'buyer_refund',
+    metadata: { refundRef },
   });
 
   await appendLedgerEntry(client, {
@@ -5177,6 +5515,7 @@ async function postCommerceOrderRefundLedgerReversal(
     sourceType: 'refund',
     sourceId: orderId,
     lineType: 'buyer_refund',
+    metadata: { refundRef },
   });
 
   const orderResult = await client.query<{ buyer_protection_fee_gbp: number, postage_fee_gbp: number }>(
@@ -5201,6 +5540,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'platform_commission_reversal',
+      metadata: { refundRef },
     });
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
@@ -5210,6 +5550,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'platform_commission_reversal',
+      metadata: { refundRef },
     });
   }
 
@@ -5222,6 +5563,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'postage_fee_reversal',
+      metadata: { refundRef },
     });
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
@@ -5231,6 +5573,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'postage_fee_reversal',
+      metadata: { refundRef },
     });
   }
 
@@ -5451,7 +5794,7 @@ async function releaseCommerceOrderEscrowToSeller(
     accountId: sellerPayableAccountId,
     counterpartyAccountId: escrowAccountId,
     direction: 'credit',
-    amountGbp: creditedToSellerGbp,
+    amountGbp: subtotalGbp,
     sourceType: 'order_delivery',
     sourceId: input.orderId,
     lineType: 'seller_payable_release',
@@ -6348,6 +6691,8 @@ async function createGatewayPaymentIntent(input: {
   platformFeeAmountGbp?: number | null;
   // Stripe Radar fraud scoring session ID from the frontend SDK
   radarSessionId?: string | null;
+  // Buyer's email for providers that require customer identity (Flutterwave)
+  customerEmail?: string | null;
 }): Promise<{
   providerIntentRef: string;
   clientSecret: string | null;
@@ -6522,7 +6867,7 @@ async function createGatewayPaymentIntent(input: {
         currency: normalizedCurrency,
         redirect_url: input.returnUrl ?? 'https://thryftverse.app/payments/return',
         customer: {
-          email: 'payments@thryftverse.app',
+          email: input.customerEmail ?? 'payments@thryftverse.app',
         },
         customizations: {
           title: 'Thryftverse Payment',
@@ -6684,7 +7029,7 @@ async function createGatewayRefund(input: {
         reason: input.reason ? 'requested_by_customer' : undefined,
         metadata: toStripeMetadata(refundMetadata),
       },
-      { idempotencyKey: `refund:${input.intentId}` }
+      { idempotencyKey: `refund:${input.intentId}:${input.metadata?.refundOperationId ?? Date.now()}` }
     );
 
     return {
@@ -7323,6 +7668,33 @@ async function settlePaymentIntent(
   };
 }
 
+/**
+ * Mark a payment intent as failed after a provider call error.
+ * Used when the provider I/O phase fails after the intent was already
+ * persisted in 'provider_submission_pending' state.
+ */
+async function markIntentFailed(
+  db: DbQueryable,
+  intentId: string,
+  failureCode: string,
+  failureMessage: string
+): Promise<void> {
+  try {
+    await db.query(
+      `UPDATE payment_intents
+       SET status = 'failed',
+           failure_code = $2,
+           failure_message = $3,
+           updated_at = NOW()
+       WHERE id = $1 AND status = 'provider_submission_pending'`,
+      [intentId, failureCode, failureMessage]
+    );
+  } catch {
+    // Best-effort — the intent stays in provider_submission_pending
+    // for recovery by the background worker.
+  }
+}
+
 async function transitionPaymentIntentStatus(
   client: PoolClient,
   input: {
@@ -7405,6 +7777,7 @@ async function transitionPaymentIntentStatus(
     requires_payment_method: ['requires_confirmation', 'cancelled'],
     requires_confirmation: ['processing', 'succeeded', 'failed', 'cancelled'],
     processing: ['succeeded', 'failed', 'cancelled'],
+    provider_submission_pending: ['requires_payment_method', 'requires_confirmation', 'processing', 'succeeded', 'failed', 'cancelled'],
     succeeded: [],
     failed: [],
     cancelled: [],
@@ -7541,7 +7914,7 @@ async function upsertPaymentRefund(
     intentId: string;
     gatewayId: string;
     providerRefundRef: string;
-    status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    status: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
     money?: Money;
     rawProviderAmount?: string;
     providerAmountUnit?: ProviderAmountUnit;
@@ -7550,6 +7923,7 @@ async function upsertPaymentRefund(
     currency?: string;
     reason?: string;
     metadata?: Record<string, unknown>;
+    idempotencyKey?: string;
   }
 ): Promise<void> {
   const id = `rf_${input.gatewayId}_${input.providerRefundRef}`;
@@ -7577,9 +7951,10 @@ async function upsertPaymentRefund(
         provider_refund_ref,
         reason,
         metadata,
+        idempotency_key,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, $16, NOW())
       ON CONFLICT (gateway_id, provider_refund_ref)
       DO UPDATE
         SET
@@ -7615,6 +7990,7 @@ async function upsertPaymentRefund(
         ...(input.metadata ?? {}),
         canonicalMoney: input.money ?? null,
       }),
+      input.idempotencyKey ?? null,
     ]
   );
 }
@@ -7860,11 +8236,14 @@ async function settlePayoutRequest(
         input.userId,
         'withdrawal_pending'
       );
-      const withdrawableBalanceAccountId = await ensureLedgerAccount(
+      // PAY-07 fix: credit provider_cash_clearing (platform money sent to
+      // the seller's bank via the provider) instead of withdrawable_balance
+      // (which would imply the funds are still available to withdraw).
+      const providerCashClearingAccountId = await ensureLedgerAccount(
         client,
-        'user',
-        input.userId,
-        'withdrawable_balance'
+        'platform',
+        'platform',
+        'provider_cash_clearing'
       );
 
       const payoutMetadataObj = asObject(payoutRequest.metadata);
@@ -7906,7 +8285,7 @@ async function settlePayoutRequest(
       if (netPayoutGbp > 0) {
         await appendLedgerEntry(client, {
           accountId: withdrawalPendingAccountId,
-          counterpartyAccountId: withdrawableBalanceAccountId,
+          counterpartyAccountId: providerCashClearingAccountId,
           direction: 'debit',
           amountGbp: netPayoutGbp,
           sourceType: 'payout',
@@ -7916,7 +8295,7 @@ async function settlePayoutRequest(
         });
 
         await appendLedgerEntry(client, {
-          accountId: withdrawableBalanceAccountId,
+          accountId: providerCashClearingAccountId,
           counterpartyAccountId: withdrawalPendingAccountId,
           direction: 'credit',
           amountGbp: netPayoutGbp,
@@ -8604,6 +8983,50 @@ async function queueCommerceParcelSettlementNotifications(input: {
   }
 }
 
+async function sendCommerceOrderSmsNotifications(input: {
+  orderId: string;
+  orderStatus: string;
+  trackingNumber?: string | null;
+  shippingProvider?: string | null;
+  reason?: string;
+}): Promise<void> {
+  let phoneNumber: string | null = null;
+  try {
+    const result = await db.query<{ phone: string | null }>(
+      `SELECT u.phone
+       FROM orders o
+       JOIN users u ON u.id = o.buyer_id
+       WHERE o.id = $1
+       LIMIT 1`,
+      [input.orderId],
+    );
+    phoneNumber = result.rows[0]?.phone ?? null;
+  } catch (error) {
+    app.log.error({ err: error, orderId: input.orderId }, 'Failed to fetch buyer phone for SMS notification');
+    return;
+  }
+
+  if (!phoneNumber) {
+    return;
+  }
+
+  if (input.orderStatus === 'shipped') {
+    notifyOrderShipped(input.orderId, phoneNumber, {
+      orderNumber: input.orderId,
+      trackingNumber: input.trackingNumber ?? undefined,
+      carrier: input.shippingProvider ?? undefined,
+    }).catch(() => {});
+  } else if (input.orderStatus === 'delivered') {
+    notifyOrderDelivered(input.orderId, phoneNumber).catch(() => {});
+  } else if (input.orderStatus === 'cancelled' || input.orderStatus === 'exception') {
+    notifyOrderException(
+      input.orderId,
+      phoneNumber,
+      input.reason ?? `Order status changed to ${input.orderStatus}`,
+    ).catch(() => {});
+  }
+}
+
 async function queuePayoutProcessedNotification(input: {
   payoutRequest: ReturnType<typeof toPayoutRequestPayload>;
   source: string;
@@ -9236,6 +9659,31 @@ function stopDomainOutboxScheduler(): void {
   }
   clearInterval(domainOutboxTimer);
   domainOutboxTimer = null;
+}
+
+let retentionSweepTimer: NodeJS.Timeout | null = null;
+
+function startRetentionSweepScheduler(): void {
+  if (retentionSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueRetentionSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling retention sweep job');
+    });
+  };
+
+  retentionSweepTimer = setInterval(enqueueSweep, config.retentionSweepIntervalMs);
+  retentionSweepTimer.unref?.();
+}
+
+function stopRetentionSweepScheduler(): void {
+  if (!retentionSweepTimer) {
+    return;
+  }
+  clearInterval(retentionSweepTimer);
+  retentionSweepTimer = null;
 }
 
 function startAuctionSweepScheduler(): void {
@@ -11237,61 +11685,36 @@ function stopOpsAlertingScheduler(): void {
   opsAlertingTimer = null;
 }
 
-app.get('/health', async () => {
-  const [{ now }] = (await db.query<{ now: string }>('SELECT NOW() AS now')).rows;
-  const redisPing = await redis.ping();
+// ── Fraud shadow scoring service (Phase 6) ───────────────────────────
+// Shared across all fraud check call sites. When FRAUD_SHADOW_ENABLED is
+// false, this is null and shadow scoring is skipped entirely. When enabled,
+// every fraud check also scores the event with the shadow ML model and logs
+// both scores to fraud_scoring_ledger. The shadow score NEVER affects the
+// user-facing fraud decision — the rule engine remains the champion.
+const fraudShadowService = config.fraudShadowEnabled
+  ? new FraudShadowScoringService({
+      db,
+      mlServiceUrl: config.decisionServiceUrl,
+      mlServiceToken: config.decisionServiceToken,
+      timeoutMs: config.fraudShadowTimeoutMs,
+    })
+  : null;
 
-  return {
-    ok: true,
-    service: 'thryftverse-api',
-    now,
-    redis: redisPing,
-  };
-});
+// ── IP reputation provider (FR-09) ───────────────────────────────────
+// When IP_REPUTATION_PROVIDER is 'noop' (default), the noOp provider
+// returns 'unknown' for all queries — the system never fabricates a
+// clean reputation. Production wires 'spur', 'maxmind', or 'composite'.
+const ipReputationProvider = createIpReputationProvider(config, app.log);
 
-// Liveness — just confirms the process is alive (no dependency checks).
-app.get('/health/live', async () => ({ ok: true, service: 'thryftverse-api', timestamp: new Date().toISOString() }));
-
-// Readiness — checks all dependencies. Returns 503 if any are down.
-app.get('/health/ready', async (_request, reply) => {
-  const checks: Record<string, string> = {};
-  let allHealthy = true;
-
-  try {
-    const result = await db.query('SELECT 1');
-    if (result.rowCount !== null) checks.database = 'ok';
-    else { checks.database = 'degraded'; allHealthy = false; }
-  } catch {
-    checks.database = 'down';
-    allHealthy = false;
-  }
-
-  try {
-    const pong = await redis?.ping();
-    checks.redis = pong === 'PONG' ? 'ok' : 'degraded';
-    if (pong !== 'PONG') allHealthy = false;
-  } catch {
-    checks.redis = 'down';
-    allHealthy = false;
-  }
-
-  const body = { ok: allHealthy, service: 'thryftverse-api', checks, timestamp: new Date().toISOString() };
-  if (!allHealthy) {
-    reply.code(503);
-  }
-  return body;
-});
-
-app.get('/metrics', {
-  preHandler: [docsAuthHook],
-}, async (_request, reply) => {
-  observeDatabasePool({ pool: 'primary', ...databasePoolSnapshot(db) });
-  if (replicaConfigured) {
-    observeDatabasePool({ pool: 'replica', ...databasePoolSnapshot(readDb) });
-  }
-  observeRedisConnection(redis?.status === 'ready');
-  reply.header('Content-Type', metricsContentType());
-  return renderMetrics();
+// ── Health & metrics routes (extracted to routes/health.ts) ──────────
+registerHealthRoutes({
+  app,
+  db,
+  readDb,
+  replicaConfigured,
+  redis,
+  docsAuthHook,
+  ensureSecurityAdminAccess,
 });
 
 app.post('/ops/auctions/sweep', async (request, reply) => {
@@ -11840,168 +12263,12 @@ app.post('/ops/oneze/auto-adjust', async (request, reply) => {
   }
 });
 
-app.get('/health/deep', async (request, reply) => {
-  const securityAdminError = ensureSecurityAdminAccess(request, reply);
-  if (securityAdminError) {
-    return securityAdminError;
-  }
-
-  const status = {
-    api: 'ok',
-    postgres: 'unknown',
-    replica: 'unknown',
-    redis: 'unknown',
-    keyService: 'unknown',
-    ml: 'unknown',
-    s3: 'unknown',
-  } as const;
-
-  const result: {
-    ok: boolean;
-    checks: {
-      api: string;
-      postgres: string;
-      replica: string;
-      redis: string;
-      keyService: string;
-      ml: string;
-      s3: string;
-    };
-    details?: Record<string, unknown>;
-  } = {
-    ok: true,
-    checks: {
-      ...status,
-    },
-    details: {},
-  };
-
-  try {
-    await db.query('SELECT 1');
-    result.checks.postgres = 'ok';
-  } catch (error) {
-    result.ok = false;
-    result.checks.postgres = 'error';
-    result.details!.postgres = (error as Error).message;
-  }
-
-  if (replicaConfigured) {
-    try {
-      await readDb.query('SELECT 1');
-      result.checks.replica = 'ok';
-    } catch (error) {
-      result.ok = false;
-      result.checks.replica = 'error';
-      result.details!.replica = (error as Error).message;
-    }
-  } else {
-    result.checks.replica = 'not_configured';
-  }
-  result.details!.databasePools = {
-    primary: databasePoolSnapshot(db),
-    replica: replicaConfigured ? databasePoolSnapshot(readDb) : null,
-  };
-
-  try {
-    const redisPing = await redis.ping();
-    result.checks.redis = redisPing === 'PONG' ? 'ok' : 'error';
-    if (redisPing !== 'PONG') {
-      result.ok = false;
-      result.details!.redis = `Unexpected ping result: ${redisPing}`;
-    }
-  } catch (error) {
-    result.ok = false;
-    result.checks.redis = 'error';
-    result.details!.redis = (error as Error).message;
-  }
-
-  try {
-    await assertKeyServiceConnectivity();
-    result.checks.keyService = 'ok';
-  } catch (error) {
-    result.ok = false;
-    result.checks.keyService = 'error';
-    result.details!.keyService = (error as Error).message;
-  }
-
-  try {
-    const decisionResponse = await fetch(`${config.decisionServiceUrl}/health`);
-    if (!decisionResponse.ok) {
-      throw new Error(`Decision service responded ${decisionResponse.status}`);
-    }
-    result.checks.ml = 'ok';
-  } catch (error) {
-    result.ok = false;
-    result.checks.ml = 'error';
-    result.details!.ml = (error as Error).message;
-  }
-
-  try {
-    await assertS3BucketConnectivity();
-    result.checks.s3 = 'ok';
-  } catch (error) {
-    result.ok = false;
-    result.checks.s3 = 'error';
-    result.details!.s3 = (error as Error).message;
-  }
-
-  const paymentClusters = getConfiguredClusters();
-  const resultWithClusters = {
-    ...result,
-    paymentClusters,
-  };
-
-  if (resultWithClusters.ok) {
-    delete resultWithClusters.details;
-    return resultWithClusters;
-  }
-
-  if (config.nodeEnv === 'production') {
-    delete resultWithClusters.details;
-  }
-
-  reply.code(503);
-  return resultWithClusters;
-});
-
-app.post('/security/keys/:keyName/rotate', async (request, reply) => {
-  const paramsSchema = z.object({
-    keyName: z.enum(['profile', 'message', 'wallet']),
-  });
-  const bodySchema = z.object({
-    rewrapExisting: z.boolean().default(true),
-    maxRows: z.number().int().min(1).max(5000).default(1000),
-  });
-
-  const { keyName } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const securityAdminError = ensureSecurityAdminAccess(request, reply);
-  if (securityAdminError) {
-    return securityAdminError;
-  }
-
-  try {
-    const rotated = await rotateKeyVersion(keyName);
-    let rewrap = { rowsScanned: 0, rowsRewrapped: 0 };
-
-    if (payload.rewrapExisting) {
-      rewrap = await rewrapDomainRows(keyName, rotated.keyVersion, payload.maxRows);
-    }
-
-    return {
-      ok: true,
-      keyName,
-      keyVersion: rotated.keyVersion,
-      rewrap,
-    };
-  } catch (error) {
-    reply.code(502);
-    return {
-      ok: false,
-      error: `Key rotation failed: ${(error as Error).message}`,
-    };
-  }
+// ── Security key rotation route (extracted to routes/security.ts) ────
+registerSecurityRoutes({
+  app,
+  ensureSecurityAdminAccess,
+  rotateKeyVersion,
+  rewrapDomainRows,
 });
 
 type AuthUserRow = {
@@ -12012,6 +12279,8 @@ type AuthUserRow = {
   password_hash: string | null;
   email_verified_at: string | null;
   two_factor_enabled: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 type ProfileUserRow = {
@@ -12033,441 +12302,8 @@ type ProfileUserRow = {
   updated_at: string;
 };
 
-type OAuthIdentityLookupRow = {
-  user_id: string;
-};
-
-type MagicLinkTokenRow = {
-  id: number;
-  user_id: string | null;
-  email: string;
-  expires_at: string;
-  consumed_at: string | null;
-};
-
-type OtpChallengeRow = {
-  id: string;
-  user_id: string | null;
-  email: string;
-  code_hash: string;
-  attempts: number;
-  max_attempts: number;
-  expires_at: string;
-  consumed_at: string | null;
-};
-
-type TotpFactorRow = {
-  user_id: string;
-  secret_ciphertext: string;
-  enabled: boolean;
-};
-
-type RecoveryCodeRow = {
-  id: number;
-  code_hash: string;
-  consumed_at: string | null;
-};
-
-function normalizeAuthEmail(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function createUsernameSeed(email: string | null, fallback = 'member'): string {
-  const source = (email ? email.split('@')[0] : fallback).toLowerCase();
-  const normalized = source.replace(/[^a-z0-9_]/g, '').slice(0, 22);
-  const base = normalized.length >= 3 ? normalized : fallback;
-  const suffix = crypto.randomBytes(3).toString('hex');
-  return `${base}_${suffix}`.slice(0, 32);
-}
-
-function createFutureIsoTimestamp(ttlSeconds: number): string {
-  return new Date(Date.now() + ttlSeconds * 1000).toISOString();
-}
-
-function createOtpCode(): string {
-  return crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-}
-
-function normalizeOtpCode(value: string): string {
-  return value.replace(/\s+/g, '').trim();
-}
-
-function normalizeRecoveryCode(value: string): string {
-  return value.trim().toUpperCase();
-}
-
-function buildMagicLinkUrl(token: string, email: string): string {
-  const separator = config.authMagicLinkBaseUrl.includes('?') ? '&' : '?';
-  return `${config.authMagicLinkBaseUrl}${separator}token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
-}
-
-function buildMagicLinkEmail(url: string) {
-  return {
-    subject: 'Your Thryftverse login link',
-    text: `Use this secure login link to access your Thryftverse account: ${url}\n\nThis link expires in ${Math.round(config.authMagicLinkTtlSeconds / 60)} minutes.`,
-    html: `
-      <div style="font-family: Inter, Arial, sans-serif; line-height: 1.5; color: #171717;">
-        <h2 style="margin-bottom: 12px;">Sign in to Thryftverse</h2>
-        <p style="margin-bottom: 16px;">Use the secure link below to continue:</p>
-        <p style="margin-bottom: 20px;"><a href="${url}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;border-radius:999px;text-decoration:none;">Sign in now</a></p>
-        <p style="margin-bottom: 0; color: #525252;">This link expires in ${Math.round(config.authMagicLinkTtlSeconds / 60)} minutes.</p>
-      </div>
-    `.trim(),
-  };
-}
-
-function buildOtpEmail(code: string) {
-  return {
-    subject: 'Your Thryftverse verification code',
-    text: `Your Thryftverse one-time code is ${code}. It expires in ${Math.round(config.authOtpTtlSeconds / 60)} minutes.`,
-    html: `
-      <div style="font-family: Inter, Arial, sans-serif; line-height: 1.5; color: #171717;">
-        <h2 style="margin-bottom: 12px;">Your one-time code</h2>
-        <p style="margin-bottom: 12px;">Enter this code to continue signing in:</p>
-        <p style="font-size: 30px; letter-spacing: 6px; font-weight: 700; margin: 0 0 16px;">${code}</p>
-        <p style="margin-bottom: 0; color: #525252;">This code expires in ${Math.round(config.authOtpTtlSeconds / 60)} minutes.</p>
-      </div>
-    `.trim(),
-  };
-}
-
-function resolveTotpAccountLabel(user: Pick<AuthUserRow, 'email' | 'username'>): string {
-  if (user.email && user.email.trim().length > 0) {
-    return user.email;
-  }
-
-  return user.username;
-}
-
-async function loadTotpFactor(client: Pool | PoolClient, userId: string, forUpdate = false): Promise<TotpFactorRow | null> {
-  const lockClause = forUpdate ? 'FOR UPDATE' : '';
-  const result = await client.query<TotpFactorRow>(
-    `
-      SELECT user_id, secret_ciphertext, enabled
-      FROM user_totp_factors
-      WHERE user_id = $1
-      LIMIT 1
-      ${lockClause}
-    `,
-    [userId]
-  );
-
-  return result.rows[0] ?? null;
-}
-
-async function readTotpSecret(client: Pool | PoolClient, userId: string): Promise<string | null> {
-  const factor = await loadTotpFactor(client, userId, false);
-  if (!factor) {
-    return null;
-  }
-
-  const decrypted = await decryptJsonPayload<{ secret: string }>(
-    factor.secret_ciphertext,
-    `totp-factor:${userId}`
-  );
-
-  if (!decrypted?.secret || typeof decrypted.secret !== 'string') {
-    return null;
-  }
-
-  return decrypted.secret;
-}
-
-async function validateTwoFactorTokenForUser(
-  client: Pool | PoolClient,
-  user: AuthUserRow,
-  token: string
-): Promise<{ ok: boolean; error?: string; status?: number; code?: string }> {
-  const normalizedToken = normalizeOtpCode(token);
-  if (normalizedToken.length < 6) {
-    return {
-      ok: false,
-      error: 'Two-factor authentication code is required',
-      status: 400,
-      code: 'TWO_FACTOR_CODE_REQUIRED',
-    };
-  }
-
-  const secret = await readTotpSecret(client, user.id);
-  if (!secret) {
-    return {
-      ok: false,
-      error: 'Two-factor authentication is not fully configured for this account',
-      status: 409,
-      code: 'TWO_FACTOR_NOT_CONFIGURED',
-    };
-  }
-
-  const tokenValid = verifyTotp(secret, normalizedToken, {
-    stepSeconds: 30,
-    digits: 6,
-    window: 1,
-  });
-
-  if (tokenValid) {
-    return { ok: true };
-  }
-
-  return {
-    ok: false,
-    error: 'Invalid two-factor authentication code',
-    status: 401,
-    code: 'TWO_FACTOR_CODE_INVALID',
-  };
-}
-
-async function validateRecoveryCodeForUser(
-  client: Pool | PoolClient,
-  userId: string,
-  recoveryCode: string
-): Promise<{ ok: boolean; error?: string; status?: number; code?: string }> {
-  const normalizedCode = normalizeRecoveryCode(recoveryCode);
-  if (!normalizedCode) {
-    return {
-      ok: false,
-      error: 'Recovery code is required',
-      status: 400,
-      code: 'RECOVERY_CODE_REQUIRED',
-    };
-  }
-
-  const codeHash = hashOpaqueValue(normalizedCode);
-  const result = await client.query<RecoveryCodeRow>(
-    `
-      SELECT id, code_hash, consumed_at
-      FROM user_recovery_codes
-      WHERE user_id = $1
-        AND code_hash = $2
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [userId, codeHash]
-  );
-
-  const row = result.rows[0];
-  if (!row || row.consumed_at) {
-    return {
-      ok: false,
-      error: 'Recovery code is invalid or already used',
-      status: 401,
-      code: 'RECOVERY_CODE_INVALID',
-    };
-  }
-
-  await client.query(
-    `
-      UPDATE user_recovery_codes
-      SET consumed_at = NOW()
-      WHERE id = $1
-    `,
-    [row.id]
-  );
-
-  return { ok: true };
-}
-
-async function loadAuthUserById(client: Pool | PoolClient, userId: string, forUpdate = false): Promise<AuthUserRow | null> {
-  const lockClause = forUpdate ? 'FOR UPDATE' : '';
-  const result = await client.query<AuthUserRow>(
-    `
-      SELECT id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-      ${lockClause}
-    `,
-    [userId]
-  );
-
-  return result.rows[0] ?? null;
-}
-
-async function loadAuthUserByEmail(client: Pool | PoolClient, email: string, forUpdate = false): Promise<AuthUserRow | null> {
-  const lockClause = forUpdate ? 'FOR UPDATE' : '';
-  const result = await client.query<AuthUserRow>(
-    `
-      SELECT id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-      FROM users
-      WHERE LOWER(email) = LOWER($1)
-      LIMIT 1
-      ${lockClause}
-    `,
-    [email]
-  );
-
-  return result.rows[0] ?? null;
-}
-
-async function createAuthUserFromIdentity(
-  client: Pool | PoolClient,
-  input: {
-    email: string | null;
-    emailVerified: boolean;
-    usernameHint?: string | null;
-  }
-): Promise<AuthUserRow> {
-  const userId = createPublicToken('usr');
-  const emailVerifiedAt = input.email && input.emailVerified ? new Date().toISOString() : null;
-  const username = createUsernameSeed(input.email, input.usernameHint?.trim() || 'member');
-
-  const result = await client.query<AuthUserRow>(
-    `
-      INSERT INTO users (id, username, email, role, email_verified_at)
-      VALUES ($1, $2, $3, 'user', $4)
-      RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-    `,
-    [userId, username, input.email, emailVerifiedAt]
-  );
-
-  return result.rows[0];
-}
-
-function toAuthSuccessPayload(
-  user: AuthUserRow,
-  authSession: Awaited<ReturnType<typeof issueAuthSession>>
-) {
-  return {
-    ok: true,
-    user: toAuthUserPayload(user),
-    accessToken: authSession.accessToken,
-    refreshToken: authSession.refreshToken,
-    accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
-    refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
-  };
-}
-
-async function issueSessionForAuthUser(
-  user: AuthUserRow,
-  request: {
-    headers: Record<string, string | string[] | undefined>;
-    ip: string;
-  }
-) {
-  const authSession = await issueAuthSession(
-    {
-      userId: user.id,
-      role: normalizeAuthRole(user.role),
-    },
-    {
-      userAgent: resolveRequestUserAgent(request) ?? undefined,
-      ipAddress: request.ip,
-    }
-  );
-
-  return toAuthSuccessPayload(user, authSession);
-}
-
-async function resolveUserFromSocialIdentity(identity: VerifiedSocialIdentity): Promise<AuthUserRow> {
-  const normalizedEmail = identity.email && identity.emailVerified
-    ? normalizeAuthEmail(identity.email)
-    : null;
-  const client = await db.connect();
-  let createdUserId: string | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    const identityResult = await client.query<OAuthIdentityLookupRow>(
-      `
-        SELECT user_id
-        FROM auth_oauth_identities
-        WHERE provider = $1
-          AND provider_user_id = $2
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [identity.provider, identity.providerUserId]
-    );
-
-    let user: AuthUserRow | null = null;
-
-    if (identityResult.rowCount) {
-      user = await loadAuthUserById(client, identityResult.rows[0].user_id, true);
-    }
-
-    if (!user && normalizedEmail) {
-      user = await loadAuthUserByEmail(client, normalizedEmail, true);
-    }
-
-    if (!user) {
-      user = await createAuthUserFromIdentity(client, {
-        email: normalizedEmail,
-        emailVerified: identity.emailVerified,
-        usernameHint: identity.provider,
-      });
-      createdUserId = user.id;
-    } else if (normalizedEmail) {
-      const maybeUpdated = await client.query<AuthUserRow>(
-        `
-          UPDATE users
-          SET
-            email = COALESCE(email, $2),
-            email_verified_at = CASE
-              WHEN $3 THEN COALESCE(email_verified_at, NOW())
-              ELSE email_verified_at
-            END
-          WHERE id = $1
-          RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-        `,
-        [user.id, normalizedEmail, identity.emailVerified]
-      );
-      user = maybeUpdated.rows[0] ?? user;
-    }
-
-    const upsertIdentityResult = await client.query<OAuthIdentityLookupRow>(
-      `
-        INSERT INTO auth_oauth_identities (provider, provider_user_id, user_id, email, email_verified)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (provider, provider_user_id)
-        DO UPDATE
-          SET
-            user_id = auth_oauth_identities.user_id,
-            email = COALESCE(EXCLUDED.email, auth_oauth_identities.email),
-            email_verified = auth_oauth_identities.email_verified OR EXCLUDED.email_verified,
-            updated_at = NOW(),
-            last_login_at = NOW()
-        RETURNING user_id
-      `,
-      [identity.provider, identity.providerUserId, user.id, normalizedEmail, identity.emailVerified]
-    );
-
-    const resolvedUserId = upsertIdentityResult.rows[0]?.user_id;
-    if (!resolvedUserId) {
-      throw new Error('Unable to resolve social identity');
-    }
-
-    if (createdUserId && createdUserId !== resolvedUserId) {
-      await client.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-            AND NOT EXISTS (
-              SELECT 1
-              FROM auth_oauth_identities
-              WHERE user_id = $1
-            )
-        `,
-        [createdUserId]
-      );
-    }
-
-    if (user.id !== resolvedUserId) {
-      const resolvedUser = await loadAuthUserById(client, resolvedUserId, true);
-      if (!resolvedUser) {
-        throw new Error('Unable to load social account');
-      }
-      user = resolvedUser;
-    }
-
-    await client.query('COMMIT');
-    return user;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
+// ── Auth routes (extracted to routes/auth.ts) ────────────────────────
+registerAuthRoutes({ app, db, redis, fraudShadowService, ipReputationProvider });
 
 function normalizeAuthRole(role: string | null | undefined): AuthRole {
   if (role === 'seller' || role === 'moderator' || role === 'admin') {
@@ -12526,1420 +12362,6 @@ function toPublicProfilePayload(row: ProfileUserRow) {
   };
 }
 
-app.post(
-  '/auth/signup',
-  {
-    // Auth routes only accept email/username/password — cap at 4 KB to
-    // prevent oversized auth payloads from consuming server resources.
-    bodyLimit: 4096,
-    // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
-    // security best practices. Validates structure before the handler runs;
-    // Zod in the handler provides semantic validation (email format, etc.).
-    schema: {
-      body: {
-        type: 'object',
-        required: ['email', 'username', 'password'],
-        properties: {
-          email: { type: 'string', maxLength: 320 },
-          username: { type: 'string', minLength: 3, maxLength: 32 },
-          password: { type: 'string', minLength: 8, maxLength: 128 },
-        },
-        additionalProperties: false,
-      },
-    },
-    config: {
-      // Account-creation spam protection — 5 req/min per OWASP guidance.
-      rateLimit: {
-        max: 5,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      email: z.string().trim().email().max(320),
-      username: z.string().trim().min(3).max(32),
-      password: z.string().min(8).max(128),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-    const email = payload.email.trim().toLowerCase();
-
-    const existing = await db.query<{ id: string }>(
-      `
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = LOWER($1)
-        LIMIT 1
-      `,
-      [email]
-    );
-
-    if (existing.rowCount) {
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'An account with this email already exists',
-      };
-    }
-
-    const userId = createPublicToken('usr');
-    const passwordHash = await hashPassword(payload.password);
-
-    const createResult = await db.query<AuthUserRow>(
-      `
-        INSERT INTO users (id, username, email, password_hash, role)
-        VALUES ($1, $2, $3, $4, 'user')
-        RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-      `,
-      [userId, payload.username.trim(), email, passwordHash]
-    );
-
-    const user = createResult.rows[0];
-    const authSession = await issueAuthSession(
-      {
-        userId: user.id,
-        role: normalizeAuthRole(user.role),
-      },
-      {
-        userAgent: request.headers['user-agent'],
-        ipAddress: request.ip,
-      }
-    );
-
-    // Fraud check — non-blocking: score and log, don't reject unless high risk.
-    // This catches duplicate accounts from the same device (ban evasion) and
-    // bot-driven account creation velocity (AGENTS.md §11 — truthful signals).
-    try {
-      await checkFraudNonBlocking(
-        redis,
-        {
-          eventType: 'signup',
-          userId: user.id,
-          email,
-          headers: request.headers as Record<string, string | string[] | undefined>,
-          ip: request.ip,
-        },
-        undefined,
-        request.log,
-      );
-    } catch {
-      // Fraud check failures must never break signup (AGENTS.md §6).
-    }
-
-    reply.code(201);
-    return {
-      ok: true,
-      user: toAuthUserPayload(user),
-      accessToken: authSession.accessToken,
-      refreshToken: authSession.refreshToken,
-      accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
-      refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
-    };
-  }
-);
-
-app.post(
-  '/auth/login',
-  {
-    // Auth routes only accept email/password — cap at 4 KB to
-    // prevent oversized auth payloads from consuming server resources.
-    bodyLimit: 4096,
-    // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
-    // security best practices. Validates structure before the handler runs;
-    // Zod in the handler provides semantic validation (email format, etc.).
-    schema: {
-      body: {
-        type: 'object',
-        required: ['email', 'password'],
-        properties: {
-          email: { type: 'string', maxLength: 320 },
-          password: { type: 'string', minLength: 1, maxLength: 128 },
-          twoFactorCode: { type: 'string', minLength: 4, maxLength: 12 },
-          recoveryCode: { type: 'string', minLength: 6, maxLength: 32 },
-        },
-        additionalProperties: false,
-      },
-    },
-    config: {
-      // Brute-force protection — 5 req/min per OWASP guidance.
-      rateLimit: {
-        max: 5,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      email: z.string().trim().email().max(320),
-      password: z.string().min(1).max(128),
-      twoFactorCode: z.string().trim().min(4).max(12).optional(),
-      recoveryCode: z.string().trim().min(6).max(32).optional(),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    const userResult = await db.query<AuthUserRow>(
-      `
-        SELECT id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-        FROM users
-        WHERE LOWER(email) = LOWER($1)
-        LIMIT 1
-      `,
-      [payload.email.trim().toLowerCase()]
-    );
-
-    const user = userResult.rows[0];
-    const passwordHash = user?.password_hash;
-
-    if (!user || !passwordHash) {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Invalid credentials',
-      };
-    }
-
-    const passwordMatches = await verifyPassword(payload.password, passwordHash);
-    if (!passwordMatches) {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Invalid credentials',
-      };
-    }
-
-    if (user.two_factor_enabled) {
-      const client = await db.connect();
-      try {
-        await client.query('BEGIN');
-
-        const lockedUser = await loadAuthUserById(client, user.id, true);
-        if (!lockedUser || !lockedUser.two_factor_enabled) {
-          await client.query('ROLLBACK');
-        } else if (payload.recoveryCode) {
-          const recoveryValidation = await validateRecoveryCodeForUser(
-            client,
-            lockedUser.id,
-            payload.recoveryCode
-          );
-
-          if (!recoveryValidation.ok) {
-            await client.query('ROLLBACK');
-            reply.code(recoveryValidation.status ?? 401);
-            return {
-              ok: false,
-              error: recoveryValidation.error ?? 'Two-factor authentication failed',
-              code: recoveryValidation.code,
-            };
-          }
-
-          await client.query('COMMIT');
-        } else {
-          const tokenValidation = await validateTwoFactorTokenForUser(
-            client,
-            lockedUser,
-            payload.twoFactorCode ?? ''
-          );
-
-          if (!tokenValidation.ok) {
-            await client.query('ROLLBACK');
-            reply.code(tokenValidation.status ?? 401);
-            return {
-              ok: false,
-              error: tokenValidation.error ?? 'Two-factor authentication failed',
-              code: tokenValidation.code,
-            };
-          }
-
-          await client.query('COMMIT');
-        }
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
-    }
-
-    const authSession = await issueAuthSession(
-      {
-        userId: user.id,
-        role: normalizeAuthRole(user.role),
-      },
-      {
-        userAgent: request.headers['user-agent'],
-        ipAddress: request.ip,
-      }
-    );
-
-    return {
-      ok: true,
-      user: toAuthUserPayload(user),
-      accessToken: authSession.accessToken,
-      refreshToken: authSession.refreshToken,
-      accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
-      refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
-    };
-  }
-);
-
-app.post(
-  '/auth/2fa/enroll',
-  {
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    if (!request.authUser) {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Unauthorized',
-      };
-    }
-
-    const user = await loadAuthUserById(db, request.authUser.userId, false);
-    if (!user) {
-      reply.code(404);
-      return {
-        ok: false,
-        error: 'User not found',
-      };
-    }
-
-    const secret = generateTotpSecret();
-    const encrypted = await encryptJsonPayload(
-      'profile',
-      { secret },
-      `totp-factor:${user.id}`
-    );
-
-    await db.query(
-      `
-        INSERT INTO user_totp_factors (user_id, secret_ciphertext, enabled, updated_at)
-        VALUES ($1, $2, FALSE, NOW())
-        ON CONFLICT (user_id)
-        DO UPDATE
-          SET secret_ciphertext = EXCLUDED.secret_ciphertext,
-              enabled = FALSE,
-              updated_at = NOW()
-      `,
-      [user.id, encrypted.ciphertext]
-    );
-
-    await db.query(
-      `
-        UPDATE users
-        SET two_factor_enabled = FALSE
-        WHERE id = $1
-      `,
-      [user.id]
-    );
-
-    const accountLabel = resolveTotpAccountLabel(user);
-    const issuer = 'Thryftverse';
-    const otpauthUrl = createOtpauthUrl({
-      secret,
-      issuer,
-      accountName: accountLabel,
-      digits: 6,
-      period: 30,
-    });
-
-    return {
-      ok: true,
-      issuer,
-      accountName: accountLabel,
-      secret,
-      otpauthUrl,
-    };
-  }
-);
-
-app.post(
-  '/auth/2fa/verify',
-  {
-    config: {
-      rateLimit: {
-        max: 20,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    if (!request.authUser) {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Unauthorized',
-      };
-    }
-
-    const bodySchema = z.object({
-      code: z.string().trim().min(4).max(12),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-
-      const user = await loadAuthUserById(client, request.authUser.userId, true);
-      if (!user) {
-        await client.query('ROLLBACK');
-        reply.code(404);
-        return {
-          ok: false,
-          error: 'User not found',
-        };
-      }
-
-      const factor = await loadTotpFactor(client, user.id, true);
-      if (!factor) {
-        await client.query('ROLLBACK');
-        reply.code(400);
-        return {
-          ok: false,
-          error: 'Start two-factor enrollment before verification',
-          code: 'TWO_FACTOR_ENROLLMENT_REQUIRED',
-        };
-      }
-
-      const tokenValidation = await validateTwoFactorTokenForUser(client, user, payload.code);
-      if (!tokenValidation.ok) {
-        await client.query('ROLLBACK');
-        reply.code(tokenValidation.status ?? 401);
-        return {
-          ok: false,
-          error: tokenValidation.error ?? 'Invalid two-factor authentication code',
-          code: tokenValidation.code,
-        };
-      }
-
-      const recoveryCodes = generateRecoveryCodes(8);
-      const recoveryCodeHashes = recoveryCodes.map((code) => hashOpaqueValue(code));
-
-      await client.query('DELETE FROM user_recovery_codes WHERE user_id = $1', [user.id]);
-      for (const hash of recoveryCodeHashes) {
-        await client.query(
-          `
-            INSERT INTO user_recovery_codes (user_id, code_hash)
-            VALUES ($1, $2)
-          `,
-          [user.id, hash]
-        );
-      }
-
-      await client.query(
-        `
-          UPDATE user_totp_factors
-          SET enabled = TRUE, updated_at = NOW()
-          WHERE user_id = $1
-        `,
-        [user.id]
-      );
-
-      await client.query(
-        `
-          UPDATE users
-          SET two_factor_enabled = TRUE
-          WHERE id = $1
-        `,
-        [user.id]
-      );
-
-      await client.query('COMMIT');
-
-      return {
-        ok: true,
-        message: 'Two-factor authentication enabled',
-        recoveryCodes,
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-);
-
-app.post('/auth/2fa/disable', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return {
-      ok: false,
-      error: 'Unauthorized',
-    };
-  }
-
-  const bodySchema = z.object({
-    code: z.string().trim().min(4).max(12).optional(),
-    recoveryCode: z.string().trim().min(6).max(32).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-  const client = await db.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const user = await loadAuthUserById(client, request.authUser.userId, true);
-    if (!user) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return {
-        ok: false,
-        error: 'User not found',
-      };
-    }
-
-    if (user.two_factor_enabled) {
-      if (!payload.code && !payload.recoveryCode) {
-        await client.query('ROLLBACK');
-        reply.code(400);
-        return {
-          ok: false,
-          error: 'Two-factor verification code is required to disable 2FA',
-          code: 'TWO_FACTOR_CODE_REQUIRED',
-        };
-      }
-
-      const validation = payload.recoveryCode
-        ? await validateRecoveryCodeForUser(client, user.id, payload.recoveryCode)
-        : await validateTwoFactorTokenForUser(client, user, payload.code ?? '');
-
-      if (!validation.ok) {
-        await client.query('ROLLBACK');
-        reply.code(validation.status ?? 401);
-        return {
-          ok: false,
-          error: validation.error ?? 'Two-factor authentication failed',
-          code: validation.code,
-        };
-      }
-    }
-
-    await client.query(
-      `
-        UPDATE users
-        SET two_factor_enabled = FALSE
-        WHERE id = $1
-      `,
-      [request.authUser.userId]
-    );
-
-    await client.query(
-      `
-        UPDATE user_totp_factors
-        SET enabled = FALSE, updated_at = NOW()
-        WHERE user_id = $1
-      `,
-      [request.authUser.userId]
-    );
-
-    await client.query('DELETE FROM user_recovery_codes WHERE user_id = $1', [request.authUser.userId]);
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      message: 'Two-factor authentication disabled',
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-app.post(
-  '/auth/oauth/google',
-  {
-    config: {
-      rateLimit: {
-        max: 20,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      idToken: z.string().min(20),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    let identity: VerifiedSocialIdentity;
-    try {
-      identity = await verifyGoogleIdentityToken(payload.idToken);
-    } catch {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Google identity token is invalid',
-      };
-    }
-
-    const user = await resolveUserFromSocialIdentity(identity);
-    return issueSessionForAuthUser(user, request);
-  }
-);
-
-app.post(
-  '/auth/oauth/apple',
-  {
-    config: {
-      rateLimit: {
-        max: 20,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      identityToken: z.string().min(20),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    let identity: VerifiedSocialIdentity;
-    try {
-      identity = await verifyAppleIdentityToken(payload.identityToken);
-    } catch {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Apple identity token is invalid',
-      };
-    }
-
-    const user = await resolveUserFromSocialIdentity(identity);
-    return issueSessionForAuthUser(user, request);
-  }
-);
-
-app.post(
-  '/auth/magic-link/request',
-  {
-    config: {
-      rateLimit: {
-        max: 12,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      email: z.string().trim().email().max(320),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-    const normalizedEmail = normalizeAuthEmail(payload.email);
-
-    const userLookup = await db.query<{ id: string }>(
-      `
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = LOWER($1)
-        LIMIT 1
-      `,
-      [normalizedEmail]
-    );
-
-    const token = createPublicToken('mlk');
-    const tokenHash = hashOpaqueValue(token);
-    const expiresAt = createFutureIsoTimestamp(config.authMagicLinkTtlSeconds);
-
-    await db.query(
-      `
-        INSERT INTO auth_magic_links (
-          user_id,
-          email,
-          token_hash,
-          expires_at,
-          requested_ip,
-          requested_user_agent
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `,
-      [
-        userLookup.rows[0]?.id ?? null,
-        normalizedEmail,
-        tokenHash,
-        expiresAt,
-        resolveRequestIpAddress(request),
-        resolveRequestUserAgent(request),
-      ]
-    );
-
-    const magicLinkUrl = buildMagicLinkUrl(token, normalizedEmail);
-    const magicEmail = buildMagicLinkEmail(magicLinkUrl);
-
-    try {
-      await sendAuthEmail({
-        to: normalizedEmail,
-        subject: magicEmail.subject,
-        html: magicEmail.html,
-        text: magicEmail.text,
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'Magic link email delivery failed');
-      reply.code(502);
-      return {
-        ok: false,
-        error: 'Unable to send magic link right now',
-      };
-    }
-
-    const response: {
-      ok: true;
-      message: string;
-      developmentMagicLink?: string;
-      developmentToken?: string;
-    } = {
-      ok: true,
-      message: 'If your email is valid, a sign-in link has been sent.',
-    };
-
-    if (config.nodeEnv !== 'production' && config.authExposeDevelopmentArtifacts) {
-      response.developmentMagicLink = magicLinkUrl;
-      response.developmentToken = token;
-    }
-
-    return response;
-  }
-);
-
-app.post(
-  '/auth/magic-link/consume',
-  {
-    config: {
-      rateLimit: {
-        max: 20,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      token: z.string().min(20),
-      email: z.string().trim().email().max(320).optional(),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-    const tokenHash = hashOpaqueValue(payload.token);
-    const normalizedRequestEmail = payload.email ? normalizeAuthEmail(payload.email) : null;
-
-    const client = await db.connect();
-    let user: AuthUserRow | null = null;
-    let failure:
-      | {
-          status: number;
-          body: { ok: false; error: string; code: string };
-        }
-      | null = null;
-
-    try {
-      await client.query('BEGIN');
-
-      const tokenResult = await client.query<MagicLinkTokenRow>(
-        `
-          SELECT id, user_id, email, expires_at, consumed_at
-          FROM auth_magic_links
-          WHERE token_hash = $1
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [tokenHash]
-      );
-
-      const tokenRow = tokenResult.rows[0];
-      if (!tokenRow || tokenRow.consumed_at || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
-        await client.query('ROLLBACK');
-        failure = {
-          status: 400,
-          body: {
-            ok: false,
-            error: 'Magic link is invalid or expired',
-            code: 'MAGIC_LINK_INVALID',
-          },
-        };
-      } else {
-        const tokenEmail = normalizeAuthEmail(tokenRow.email);
-        if (normalizedRequestEmail && normalizedRequestEmail !== tokenEmail) {
-          await client.query('ROLLBACK');
-          failure = {
-            status: 400,
-            body: {
-              ok: false,
-              error: 'Magic link email does not match',
-              code: 'MAGIC_LINK_EMAIL_MISMATCH',
-            },
-          };
-        } else {
-          if (tokenRow.user_id) {
-            user = await loadAuthUserById(client, tokenRow.user_id, true);
-          }
-
-          if (!user) {
-            user = await loadAuthUserByEmail(client, tokenEmail, true);
-          }
-
-          if (!user) {
-            user = await createAuthUserFromIdentity(client, {
-              email: tokenEmail,
-              emailVerified: true,
-              usernameHint: 'email',
-            });
-          } else {
-            const maybeVerified = await client.query<AuthUserRow>(
-              `
-                UPDATE users
-                SET
-                  email = COALESCE(email, $2),
-                  email_verified_at = COALESCE(email_verified_at, NOW())
-                WHERE id = $1
-                RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-              `,
-              [user.id, tokenEmail]
-            );
-            user = maybeVerified.rows[0] ?? user;
-          }
-
-          await client.query(
-            `
-              UPDATE auth_magic_links
-              SET
-                consumed_at = NOW(),
-                user_id = $2
-              WHERE id = $1
-            `,
-            [tokenRow.id, user.id]
-          );
-
-          await client.query('COMMIT');
-        }
-      }
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    if (failure) {
-      reply.code(failure.status);
-      return failure.body;
-    }
-
-    if (!user) {
-      reply.code(500);
-      return {
-        ok: false,
-        error: 'Unable to complete magic-link sign in',
-      };
-    }
-
-    return issueSessionForAuthUser(user, request);
-  }
-);
-
-app.post(
-  '/auth/otp/request',
-  {
-    config: {
-      rateLimit: {
-        max: 12,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      email: z.string().trim().email().max(320),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-    const normalizedEmail = normalizeAuthEmail(payload.email);
-
-    const userLookup = await db.query<{ id: string }>(
-      `
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = LOWER($1)
-        LIMIT 1
-      `,
-      [normalizedEmail]
-    );
-
-    const challengeId = createPublicToken('otp');
-    const code = createOtpCode();
-    const codeHash = hashOpaqueValue(code);
-    const expiresAt = createFutureIsoTimestamp(config.authOtpTtlSeconds);
-
-    await db.query(
-      `
-        INSERT INTO auth_otp_challenges (
-          id,
-          user_id,
-          email,
-          code_hash,
-          max_attempts,
-          expires_at,
-          requested_ip,
-          requested_user_agent
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `,
-      [
-        challengeId,
-        userLookup.rows[0]?.id ?? null,
-        normalizedEmail,
-        codeHash,
-        config.authOtpMaxAttempts,
-        expiresAt,
-        resolveRequestIpAddress(request),
-        resolveRequestUserAgent(request),
-      ]
-    );
-
-    const otpEmail = buildOtpEmail(code);
-
-    try {
-      await sendAuthEmail({
-        to: normalizedEmail,
-        subject: otpEmail.subject,
-        html: otpEmail.html,
-        text: otpEmail.text,
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'OTP email delivery failed');
-      reply.code(502);
-      return {
-        ok: false,
-        error: 'Unable to send OTP right now',
-      };
-    }
-
-    const response: {
-      ok: true;
-      challengeId: string;
-      expiresInSeconds: number;
-      developmentCode?: string;
-    } = {
-      ok: true,
-      challengeId,
-      expiresInSeconds: config.authOtpTtlSeconds,
-    };
-
-    if (config.nodeEnv !== 'production' && config.authExposeDevelopmentArtifacts) {
-      response.developmentCode = code;
-    }
-
-    return response;
-  }
-);
-
-app.post(
-  '/auth/otp/verify',
-  {
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    const bodySchema = z.object({
-      challengeId: z.string().min(20),
-      code: z.string().trim().min(4).max(10),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    const client = await db.connect();
-    let user: AuthUserRow | null = null;
-    let failure:
-      | {
-          status: number;
-          body: { ok: false; error: string; code: string; attemptsRemaining?: number };
-        }
-      | null = null;
-
-    try {
-      await client.query('BEGIN');
-
-      const challengeResult = await client.query<OtpChallengeRow>(
-        `
-          SELECT id, user_id, email, code_hash, attempts, max_attempts, expires_at, consumed_at
-          FROM auth_otp_challenges
-          WHERE id = $1
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [payload.challengeId]
-      );
-
-      const challenge = challengeResult.rows[0];
-      if (!challenge || challenge.consumed_at) {
-        await client.query('ROLLBACK');
-        failure = {
-          status: 400,
-          body: {
-            ok: false,
-            error: 'OTP challenge is invalid or already used',
-            code: 'OTP_CHALLENGE_INVALID',
-          },
-        };
-      } else if (new Date(challenge.expires_at).getTime() <= Date.now()) {
-        await client.query('ROLLBACK');
-        failure = {
-          status: 400,
-          body: {
-            ok: false,
-            error: 'OTP challenge has expired',
-            code: 'OTP_CHALLENGE_EXPIRED',
-          },
-        };
-      } else if (challenge.attempts >= challenge.max_attempts) {
-        await client.query('ROLLBACK');
-        failure = {
-          status: 429,
-          body: {
-            ok: false,
-            error: 'Maximum OTP attempts reached',
-            code: 'OTP_ATTEMPTS_EXCEEDED',
-            attemptsRemaining: 0,
-          },
-        };
-      } else {
-        const providedHash = hashOpaqueValue(payload.code.trim());
-        if (providedHash !== challenge.code_hash) {
-          const nextAttempts = challenge.attempts + 1;
-          const attemptsRemaining = Math.max(0, challenge.max_attempts - nextAttempts);
-
-          await client.query(
-            `
-              UPDATE auth_otp_challenges
-              SET attempts = $2
-              WHERE id = $1
-            `,
-            [challenge.id, nextAttempts]
-          );
-
-          await client.query('COMMIT');
-
-          failure = {
-            status: attemptsRemaining === 0 ? 429 : 400,
-            body: {
-              ok: false,
-              error: attemptsRemaining === 0 ? 'Maximum OTP attempts reached' : 'OTP code is invalid',
-              code: attemptsRemaining === 0 ? 'OTP_ATTEMPTS_EXCEEDED' : 'OTP_CODE_INVALID',
-              attemptsRemaining,
-            },
-          };
-        } else {
-          if (challenge.user_id) {
-            user = await loadAuthUserById(client, challenge.user_id, true);
-          }
-
-          if (!user) {
-            user = await loadAuthUserByEmail(client, challenge.email, true);
-          }
-
-          if (!user) {
-            user = await createAuthUserFromIdentity(client, {
-              email: normalizeAuthEmail(challenge.email),
-              emailVerified: true,
-              usernameHint: 'otp',
-            });
-          } else {
-            const maybeVerified = await client.query<AuthUserRow>(
-              `
-                UPDATE users
-                SET
-                  email = COALESCE(email, $2),
-                  email_verified_at = COALESCE(email_verified_at, NOW())
-                WHERE id = $1
-                RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-              `,
-              [user.id, normalizeAuthEmail(challenge.email)]
-            );
-            user = maybeVerified.rows[0] ?? user;
-          }
-
-          await client.query(
-            `
-              UPDATE auth_otp_challenges
-              SET
-                attempts = attempts + 1,
-                consumed_at = NOW(),
-                user_id = $2
-              WHERE id = $1
-            `,
-            [challenge.id, user.id]
-          );
-
-          await client.query('COMMIT');
-        }
-      }
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    if (failure) {
-      reply.code(failure.status);
-      return failure.body;
-    }
-
-    if (!user) {
-      reply.code(500);
-      return {
-        ok: false,
-        error: 'Unable to complete OTP sign in',
-      };
-    }
-
-    return issueSessionForAuthUser(user, request);
-  }
-);
-
-app.post('/auth/refresh', async (request, reply) => {
-  const bodySchema = z.object({
-    refreshToken: z.string().min(20),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  try {
-    const authSession = await rotateRefreshSession(payload.refreshToken, {
-      userAgent: request.headers['user-agent'],
-      ipAddress: request.ip,
-    });
-
-    const userResult = await db.query<AuthUserRow>(
-      `
-        SELECT id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-        FROM users
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [authSession.userId]
-    );
-
-    const user = userResult.rows[0];
-    if (!user) {
-      reply.code(401);
-      return {
-        ok: false,
-        error: 'Session is no longer valid',
-      };
-    }
-
-    return {
-      ok: true,
-      user: toAuthUserPayload(user),
-      accessToken: authSession.accessToken,
-      refreshToken: authSession.refreshToken,
-      accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
-      refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
-    };
-  } catch {
-    reply.code(401);
-    return {
-      ok: false,
-      error: 'Refresh token invalid or expired',
-    };
-  }
-});
-
-app.get('/auth/me', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return {
-      ok: false,
-      error: 'Unauthorized',
-    };
-  }
-
-  const result = await db.query<AuthUserRow>(
-    `
-      SELECT id, username, email, role, password_hash, email_verified_at, two_factor_enabled
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [request.authUser.userId]
-  );
-
-  const user = result.rows[0];
-  if (!user) {
-    reply.code(404);
-    return {
-      ok: false,
-      error: 'User not found',
-    };
-  }
-
-  return {
-    ok: true,
-    user: toAuthUserPayload(user),
-  };
-});
-
-app.post('/auth/logout', async (request) => {
-  const bodySchema = z.object({
-    refreshToken: z.string().min(20).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  if (payload.refreshToken) {
-    await revokeSessionByRefreshToken(payload.refreshToken);
-  }
-
-  if (request.authUser) {
-    await db.query(
-      `
-        UPDATE user_sessions
-        SET revoked_at = NOW()
-        WHERE id = $1
-          AND user_id = $2
-          AND revoked_at IS NULL
-      `,
-      [request.authUser.sessionId, request.authUser.userId]
-    );
-
-    await db.query(
-      `
-        UPDATE refresh_tokens
-        SET revoked_at = NOW()
-        WHERE session_id = $1
-          AND user_id = $2
-          AND revoked_at IS NULL
-      `,
-      [request.authUser.sessionId, request.authUser.userId]
-    );
-  }
-
-  return { ok: true };
-});
-
-app.post(
-  '/auth/password/change',
-  {
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-      },
-    },
-  },
-  async (request, reply) => {
-    if (!request.authUser) {
-      reply.code(401);
-      return { ok: false, error: 'Unauthorized' };
-    }
-
-    const bodySchema = z.object({
-      currentPassword: z.string().min(1).max(128),
-      newPassword: z.string().min(8).max(128),
-    });
-
-    const payload = bodySchema.parse(request.body ?? {});
-
-    if (payload.currentPassword === payload.newPassword) {
-      reply.code(400);
-      return { ok: false, error: 'New password must be different from current password' };
-    }
-
-    const userResult = await db.query<{ id: string; password_hash: string | null }>(
-      `
-        SELECT id, password_hash
-        FROM users
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [request.authUser.userId]
-    );
-
-    const user = userResult.rows[0];
-    if (!user) {
-      reply.code(404);
-      return { ok: false, error: 'User not found' };
-    }
-
-    if (!user.password_hash) {
-      reply.code(400);
-      return {
-        ok: false,
-        error: 'This account does not use a password. Use your sign-in provider instead.',
-      };
-    }
-
-    const currentMatches = await verifyPassword(payload.currentPassword, user.password_hash);
-    if (!currentMatches) {
-      reply.code(401);
-      return { ok: false, error: 'Current password is incorrect' };
-    }
-
-    const nextPasswordHash = await hashPassword(payload.newPassword);
-
-    await db.query(
-      `
-        UPDATE users
-        SET
-          password_hash = $2,
-          password_changed_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [user.id, nextPasswordHash]
-    );
-
-    await revokeOtherUserSessions(user.id, request.authUser.sessionId);
-
-    return {
-      ok: true,
-      message: 'Password updated. Other devices have been signed out.',
-    };
-  }
-);
-
-app.post('/auth/password-reset/request', async (request) => {
-  const bodySchema = z.object({
-    email: z.string().trim().email().max(320),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-  const normalizedEmail = payload.email.trim().toLowerCase();
-
-  const userResult = await db.query<{ id: string }>(
-    `
-      SELECT id
-      FROM users
-      WHERE LOWER(email) = LOWER($1)
-      LIMIT 1
-    `,
-    [normalizedEmail]
-  );
-
-  let developmentToken: string | undefined;
-
-  if (userResult.rowCount) {
-    const userId = userResult.rows[0].id;
-    const resetToken = createPublicToken('pwd');
-    const resetTokenHash = hashOpaqueValue(resetToken);
-    const expiresAt = new Date(Date.now() + config.authPasswordResetTokenTtlSeconds * 1000).toISOString();
-
-    await db.query(
-      `
-        INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
-      `,
-      [userId, resetTokenHash, expiresAt]
-    );
-
-    if (config.nodeEnv !== 'production' && config.authExposeDevelopmentArtifacts) {
-      developmentToken = resetToken;
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'If an account exists for that email, a reset link has been issued.',
-    developmentToken,
-  };
-});
-
-app.post('/auth/password-reset/confirm', async (request, reply) => {
-  const bodySchema = z.object({
-    token: z.string().min(20),
-    newPassword: z.string().min(8).max(128),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-  const tokenHash = hashOpaqueValue(payload.token);
-
-  const tokenResult = await db.query<{
-    id: number;
-    user_id: string;
-    expires_at: string;
-    used_at: string | null;
-  }>(
-    `
-      SELECT id, user_id, expires_at, used_at
-      FROM password_reset_tokens
-      WHERE token_hash = $1
-      LIMIT 1
-    `,
-    [tokenHash]
-  );
-
-  const tokenRow = tokenResult.rows[0];
-  if (!tokenRow || tokenRow.used_at || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
-    reply.code(400);
-    return {
-      ok: false,
-      error: 'Reset token invalid or expired',
-    };
-  }
-
-  const nextPasswordHash = await hashPassword(payload.newPassword);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    await client.query(
-      `
-        UPDATE users
-        SET
-          password_hash = $2,
-          password_changed_at = NOW(),
-          two_factor_enabled = COALESCE(two_factor_enabled, FALSE)
-        WHERE id = $1
-      `,
-      [tokenRow.user_id, nextPasswordHash]
-    );
-
-    await client.query(
-      `
-        UPDATE password_reset_tokens
-        SET used_at = NOW()
-        WHERE id = $1
-      `,
-      [tokenRow.id]
-    );
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  await revokeAllUserSessions(tokenRow.user_id);
-
-  return {
-    ok: true,
-    message: 'Password reset complete. Please log in again.',
-  };
-});
-
 const complianceMarketSchema = z.enum(['co-own', 'auctions', 'wallet', 'p2p']);
 const kycStatusSchema = z.enum(['not_started', 'pending', 'verified', 'rejected', 'expired']);
 const kycLevelSchema = z.enum(['none', 'basic', 'enhanced']);
@@ -13986,6 +12408,16 @@ app.get('/compliance/profile/:userId', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
 
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
   await ensureUserExists(userId);
   const profile = await getOrCreateComplianceProfile(db, userId);
 
@@ -14009,6 +12441,16 @@ app.patch('/compliance/profile/:userId', async (request, reply) => {
 
   const { userId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   await ensureUserExists(userId);
   const current = await getOrCreateComplianceProfile(db, userId);
@@ -14253,6 +12695,8 @@ app.post('/compliance/kyc-session', async (request, reply) => {
   });
   const body = bodySchema.parse(request.body ?? {});
 
+  const userId = authUser.userId;
+
   // Update compliance profile with provided info before starting KYC
   if (body.legalName || body.dateOfBirth || body.countryCode) {
     await db.query(
@@ -14263,7 +12707,7 @@ app.post('/compliance/kyc-session', async (request, reply) => {
            kyc_status = 'pending',
            updated_at = NOW()
        WHERE user_id = $1`,
-      [authUser.userId, body.legalName ?? null, body.dateOfBirth ?? null, body.countryCode]
+      [userId, body.legalName ?? null, body.dateOfBirth ?? null, body.countryCode]
     );
   }
 
@@ -14273,25 +12717,165 @@ app.post('/compliance/kyc-session', async (request, reply) => {
      SET kyc_status = 'pending',
          updated_at = NOW()
      WHERE user_id = $1`,
-    [authUser.userId]
+    [userId]
   );
 
   // Log compliance audit event
   await appendComplianceAuditSafe(request, {
     eventType: 'compliance.kyc.session_started',
-    subjectUserId: authUser.userId,
+    subjectUserId: userId,
     payload: {
       legalName: body.legalName,
       countryCode: body.countryCode,
     },
   });
 
+  if (!isKycProviderReady()) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'KYC provider is unavailable',
+      code: 'KYC_PROVIDER_NOT_CONFIGURED',
+    };
+  }
+
+  const vendor = config.kycDefaultVendor;
+  const caseId = createComplianceId('kyc_case');
+  const userAgent = resolveRequestUserAgent(request);
+  const ipAddress = resolveRequestIpAddress(request);
+  let providerSession: Awaited<ReturnType<typeof createKycProviderSession>>;
+  try {
+    providerSession = await createKycProviderSession({
+      caseId,
+      userId,
+      requireLiveness: true,
+    });
+  } catch (error) {
+    request.log.error({ err: error, userId }, 'Failed creating KYC provider session');
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'KYC provider is temporarily unavailable',
+      code: 'KYC_PROVIDER_UNAVAILABLE',
+    };
+  }
+  const kycVendorRef = providerSession.providerSessionId;
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `
+        UPDATE user_compliance_profiles
+        SET
+          kyc_status = 'pending',
+          kyc_vendor = $2,
+          kyc_vendor_ref = $3,
+          document_status = CASE
+            WHEN document_status = 'approved' THEN document_status
+            ELSE 'submitted'
+          END,
+          liveness_status = CASE
+            WHEN liveness_status = 'passed' THEN liveness_status
+            ELSE 'pending'
+          END,
+          trading_enabled = FALSE,
+          metadata = metadata || $4::jsonb,
+          updated_at = NOW()
+        WHERE user_id = $1
+      `,
+      [
+        userId,
+        vendor,
+        kycVendorRef,
+        toJsonString({
+          latestKycCaseId: caseId,
+          initiatedAt: new Date().toISOString(),
+        }),
+      ]
+    );
+
+    await client.query(
+      `
+        INSERT INTO kyc_cases (
+          id,
+          user_id,
+          vendor,
+          vendor_case_ref,
+          status,
+          kyc_level,
+          required_checks,
+          document_status,
+          liveness_status,
+          sanctions_status,
+          payload
+        )
+        VALUES ($1, $2, $3, $4, 'pending', 'basic', $5::jsonb, 'submitted', 'pending', 'unknown', $6::jsonb)
+      `,
+      [
+        caseId,
+        userId,
+        vendor,
+        kycVendorRef,
+        toJsonString(['document', 'liveness']),
+        toJsonString({
+          requestedBy: authUser.userId,
+          userAgent,
+          ipAddress,
+        }),
+      ]
+    );
+
+    await client.query(
+      `
+        INSERT INTO kyc_verification_events (
+          user_id,
+          case_id,
+          event_type,
+          status,
+          vendor,
+          vendor_ref,
+          payload,
+          ip_address,
+          user_agent
+        )
+        VALUES ($1, $2, 'session_created', 'pending', $3, $4, $5::jsonb, $6, $7)
+      `,
+      [
+        userId,
+        caseId,
+        vendor,
+        kycVendorRef,
+        toJsonString({ requiredChecks: ['document', 'liveness'] }),
+        ipAddress,
+        userAgent,
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    try {
+      await cancelKycProviderSession(providerSession.providerSessionId);
+    } catch (cancellationError) {
+      request.log.error(
+        { err: cancellationError, providerSessionId: providerSession.providerSessionId },
+        'Failed cancelling orphaned KYC provider session'
+      );
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  reply.header('Cache-Control', 'no-store');
   return {
     ok: true,
     session: {
-      id: `kyc_pending_${authUser.userId}`,
-      verificationUrl: null,
-      vendor: config.kycDefaultVendor,
+      id: caseId,
+      verificationUrl: providerSession.verificationUrl,
+      vendor,
       status: 'pending',
     },
   };
@@ -14324,6 +12908,55 @@ app.get('/compliance/kyc-status/:userId', async (request, reply) => {
       documentStatus: profile.documentStatus,
       livenessStatus: profile.livenessStatus,
       tradingEnabled: profile.tradingEnabled,
+    },
+  };
+});
+
+// GET /compliance/age-assurance/:userId
+// Returns the user's age assurance level under the ICO/Ofcom "waterfall" approach:
+// self-declaration is the first step, KYC verification (Stripe Identity DOB) is the
+// second step. Self-declaration alone is not sufficient for high-risk features such
+// as selling/trading per the ICO/Ofcom joint statement (25 March 2026).
+app.get('/compliance/age-assurance/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const profile = await getOrCreateComplianceProfile(db, userId);
+
+  const dateOfBirthVerified =
+    profile.kycStatus === 'verified' && profile.dateOfBirth != null;
+
+  const kycStatus = profile.kycStatus as string;
+
+  let level: 'self_declared' | 'pending' | 'kyc_verified';
+  if (dateOfBirthVerified) {
+    level = 'kyc_verified';
+  } else if (kycStatus === 'pending' || kycStatus === 'in_review') {
+    level = 'pending';
+  } else {
+    level = 'self_declared';
+  }
+
+  // Real-time status — must not be cached.
+  reply.header('Cache-Control', 'no-store');
+
+  return {
+    ok: true,
+    ageAssurance: {
+      level,
+      kycStatus: profile.kycStatus,
+      dateOfBirthVerified,
+      requiresKycForTrading: true,
     },
   };
 });
@@ -14503,6 +13136,42 @@ app.patch('/users/me/preferences', async (request, reply) => {
     preferences: {
       holidayMode: row.holiday_mode,
       privateProfile: row.private_profile,
+    },
+  };
+});
+
+// GET /users/me/postage — fetch the current user's postage settings
+app.get('/users/me/postage', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    postage_carrier_key: string;
+    postage_free_shipping: boolean;
+    postage_bundle_discount: boolean;
+  }>(
+    `
+      SELECT postage_carrier_key, postage_free_shipping, postage_bundle_discount
+      FROM users
+      WHERE id = $1
+    `,
+    [request.authUser.userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    postage: {
+      carrierKey: row.postage_carrier_key,
+      freeShipping: row.postage_free_shipping,
+      bundleDiscount: row.postage_bundle_discount,
     },
   };
 });
@@ -14868,8 +13537,10 @@ app.get('/users/me/chat-privacy', async (request, reply) => {
   const result = await db.query<{
     read_receipts_enabled: boolean;
     allow_messages_from: string;
+    offers_in_chat_enabled: boolean;
+    order_updates_in_chat_enabled: boolean;
   }>(
-    `SELECT read_receipts_enabled, allow_messages_from FROM users WHERE id = $1`,
+    `SELECT read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled FROM users WHERE id = $1`,
     [request.authUser.userId]
   );
 
@@ -14883,6 +13554,8 @@ app.get('/users/me/chat-privacy', async (request, reply) => {
     chatPrivacy: {
       readReceiptsEnabled: result.rows[0].read_receipts_enabled,
       allowMessagesFrom: result.rows[0].allow_messages_from,
+      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
+      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
     },
   };
 });
@@ -14897,6 +13570,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const bodySchema = z.object({
     readReceiptsEnabled: z.boolean().optional(),
     allowMessagesFrom: z.enum(['everyone', 'following', 'nobody']).optional(),
+    offersInChatEnabled: z.boolean().optional(),
+    orderUpdatesInChatEnabled: z.boolean().optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
@@ -14904,6 +13579,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const allowed: Record<string, unknown> = {};
   if (payload.readReceiptsEnabled !== undefined) allowed.read_receipts_enabled = payload.readReceiptsEnabled;
   if (payload.allowMessagesFrom !== undefined) allowed.allow_messages_from = payload.allowMessagesFrom;
+  if (payload.offersInChatEnabled !== undefined) allowed.offers_in_chat_enabled = payload.offersInChatEnabled;
+  if (payload.orderUpdatesInChatEnabled !== undefined) allowed.order_updates_in_chat_enabled = payload.orderUpdatesInChatEnabled;
 
   if (Object.keys(allowed).length === 0) {
     reply.code(400);
@@ -14913,9 +13590,9 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
   const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
   const values = Object.values(allowed);
 
-  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string }>(
+  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string; offers_in_chat_enabled: boolean; order_updates_in_chat_enabled: boolean }>(
     `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
-     RETURNING read_receipts_enabled, allow_messages_from`,
+     RETURNING read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled`,
     [request.authUser.userId, ...values]
   );
 
@@ -14929,6 +13606,8 @@ app.patch('/users/me/chat-privacy', async (request, reply) => {
     chatPrivacy: {
       readReceiptsEnabled: result.rows[0].read_receipts_enabled,
       allowMessagesFrom: result.rows[0].allow_messages_from,
+      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
+      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
     },
   };
 });
@@ -15856,113 +14535,7 @@ app.get('/users/me/co-own/tax-documents', async (request, reply) => {
   };
 });
 
-app.get('/sellers/:sellerId', async (request, reply) => {
-  const paramsSchema = z.object({ sellerId: z.string().min(2) });
-  const { sellerId } = paramsSchema.parse(request.params);
-  const viewerUserId = request.authUser?.userId ?? null;
-
-  const userResult = await readDb.query<{
-    id: string;
-    username: string;
-    avatar: string | null;
-    location: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, username, avatar, location, created_at FROM users WHERE id = $1 LIMIT 1`,
-    [sellerId]
-  );
-
-  const user = userResult.rows[0];
-  if (!user) {
-    reply.code(404);
-    return { ok: false, error: 'Seller not found' };
-  }
-
-  const reviewStats = await readDb.query<{
-    avg_rating: string | null;
-    review_count: string;
-  }>(
-    `SELECT AVG(rating)::numeric(3,2) AS avg_rating, COUNT(*)::text AS review_count FROM order_reviews WHERE seller_id = $1`,
-    [sellerId]
-  );
-
-  const salesResult = await readDb.query<{ completed_sales: string }>(
-    `SELECT COUNT(*)::text AS completed_sales FROM orders WHERE seller_id = $1 AND status = 'completed'`,
-    [sellerId]
-  );
-
-  const activeListingsResult = await readDb.query<{ active_count: string }>(
-    `SELECT COUNT(*)::text AS active_count FROM listings WHERE seller_id = $1 AND status = 'active'`,
-    [sellerId]
-  );
-
-  let isFollowing = false;
-  if (viewerUserId) {
-    const followResult = await readDb.query<{ id: string }>(
-      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-      [viewerUserId, sellerId]
-    );
-    isFollowing = (followResult.rowCount ?? 0) > 0;
-  }
-
-  const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
-  const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
-  const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
-  const activeListingCount = activeListingsResult.rows[0]?.active_count ? Number(activeListingsResult.rows[0].active_count) : 0;
-
-  return {
-    ok: true,
-    seller: {
-      id: user.id,
-      username: user.username,
-      avatar: user.avatar,
-      location: user.location,
-      rating: avgRating,
-      reviewCount,
-      completedSales,
-      activeListingCount,
-      memberSince: user.created_at,
-      isFollowing,
-    },
-  };
-});
-
-app.post('/sellers/:sellerId/follow', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ sellerId: z.string().min(2) });
-  const { sellerId } = paramsSchema.parse(request.params);
-  const userId = request.authUser.userId;
-
-  if (userId === sellerId) {
-    reply.code(400);
-    return { ok: false, error: 'Cannot follow yourself' };
-  }
-
-  const existing = await readDb.query<{ id: string }>(
-    `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-    [userId, sellerId]
-  );
-
-  if ((existing.rowCount ?? 0) > 0) {
-    await db.query(
-      `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
-      [userId, sellerId]
-    );
-    return { ok: true, isFollowing: false };
-  }
-
-  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  await db.query(
-    `INSERT INTO user_follows (id, follower_id, following_id, created_at) VALUES ($1, $2, $3, NOW())`,
-    [followId, userId, sellerId]
-  );
-
-  return { ok: true, isFollowing: true };
-});
+registerSellerRoutes({ app, db, readDb });
 
 // Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
 app.post('/users/:userId/follow', async (request, reply) => {
@@ -16075,288 +14648,6 @@ app.get('/users/:userId/profile', async (request, reply) => {
   };
 });
 
-// ── Seller reviews: summary + paginated list ─────────────────────────
-
-app.get('/sellers/:sellerId/reviews', async (request, reply) => {
-  const paramsSchema = z.object({ sellerId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(50).default(20),
-    cursor: z.string().optional(),
-  });
-  const { sellerId } = paramsSchema.parse(request.params);
-  const { limit, cursor } = querySchema.parse(request.query ?? {});
-
-  const sellerExists = await readDb.query<{ id: string }>(
-    `SELECT id FROM users WHERE id = $1 LIMIT 1`,
-    [sellerId]
-  );
-  if (!sellerExists.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Seller not found' };
-  }
-
-  // Summary: average, total, distribution
-  const summaryRes = await readDb.query<{
-    avg_rating: string | null;
-    review_count: string;
-    d1: string;
-    d2: string;
-    d3: string;
-    d4: string;
-    d5: string;
-  }>(
-    `SELECT
-       AVG(rating)::numeric(3,2) AS avg_rating,
-       COUNT(*)::text AS review_count,
-       COUNT(*) FILTER (WHERE rating = 1)::text AS d1,
-       COUNT(*) FILTER (WHERE rating = 2)::text AS d2,
-       COUNT(*) FILTER (WHERE rating = 3)::text AS d3,
-       COUNT(*) FILTER (WHERE rating = 4)::text AS d4,
-       COUNT(*) FILTER (WHERE rating = 5)::text AS d5
-     FROM order_reviews WHERE seller_id = $1`,
-    [sellerId]
-  );
-
-  const summaryRow = summaryRes.rows[0];
-  const ratingAverage = summaryRow?.avg_rating ? Number(summaryRow.avg_rating) : null;
-  const reviewCount = Number(summaryRow?.review_count ?? '0');
-  const distribution = [
-    { rating: 5, count: Number(summaryRow?.d5 ?? '0') },
-    { rating: 4, count: Number(summaryRow?.d4 ?? '0') },
-    { rating: 3, count: Number(summaryRow?.d3 ?? '0') },
-    { rating: 2, count: Number(summaryRow?.d2 ?? '0') },
-    { rating: 1, count: Number(summaryRow?.d1 ?? '0') },
-  ];
-
-  // Paginated review list with reviewer identity + associated listing context
-  const conditions: string[] = ['r.seller_id = $1'];
-  const args: unknown[] = [sellerId];
-  if (cursor) {
-    conditions.push(`r.created_at < $${args.length + 1}`);
-    args.push(cursor);
-  }
-  const fetchLimit = limit + 1;
-
-  const reviewsRes = await readDb.query<{
-    id: string;
-    rating: number;
-    comment: string | null;
-    created_at: string;
-    reviewer_username: string | null;
-    reviewer_display_name: string | null;
-    reviewer_avatar: string | null;
-    listing_id: string | null;
-    listing_title: string | null;
-    listing_image_url: string | null;
-  }>(
-    `
-      SELECT
-        r.id, r.rating, r.comment, r.created_at,
-        u.username AS reviewer_username,
-        u.display_name AS reviewer_display_name,
-        u.avatar AS reviewer_avatar,
-        l.id AS listing_id,
-        l.title AS listing_title,
-        l.image_url AS listing_image_url
-      FROM order_reviews r
-      LEFT JOIN users u ON u.id = r.reviewer_id
-      LEFT JOIN orders o ON o.id = r.order_id
-      LEFT JOIN listings l ON l.id = o.listing_id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY r.created_at DESC
-      LIMIT $${args.length + 1}
-    `,
-    [...args, fetchLimit]
-  );
-
-  const hasMore = reviewsRes.rows.length > limit;
-  const rows = hasMore ? reviewsRes.rows.slice(0, limit) : reviewsRes.rows;
-  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
-
-  return {
-    ok: true,
-    summary: {
-      ratingAverage,
-      reviewCount,
-      distribution,
-    },
-    items: rows.map((row) => ({
-      id: row.id,
-      rating: row.rating,
-      comment: row.comment,
-      createdAt: row.created_at,
-      reviewer: {
-        id: null as string | null,
-        username: row.reviewer_username,
-        displayName: row.reviewer_display_name,
-        avatar: row.reviewer_avatar,
-      },
-      listing: row.listing_id
-        ? {
-            id: row.listing_id,
-            title: row.listing_title,
-            imageUrl: row.listing_image_url,
-          }
-        : null,
-    })),
-    nextCursor,
-  };
-});
-
-/* ── Seller Analytics ── */
-
-// GET /sellers/:sellerId/analytics — seller performance dashboard data
-app.get('/sellers/:sellerId/analytics', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ sellerId: z.string().min(2) });
-  const { sellerId } = paramsSchema.parse(request.params);
-
-  if (request.authUser.userId !== sellerId) {
-    reply.code(403);
-    return { ok: false, error: 'You can only view your own analytics' };
-  }
-
-  const querySchema = z.object({
-    period: z.enum(['7d', '30d', '90d']).default('30d'),
-  });
-  const { period } = querySchema.parse(request.query);
-
-  const intervalMap: Record<string, string> = {
-    '7d': "INTERVAL '7 days'",
-    '30d': "INTERVAL '30 days'",
-    '90d': "INTERVAL '90 days'",
-  };
-  const interval = intervalMap[period];
-
-  const listingsResult = await db.query<{
-    total_listings: string | number;
-    total_views: string | number;
-    total_likes: string | number;
-    total_saves: string | number;
-    items_sold: string | number;
-    revenue_gbp_minor: string | number;
-  }>(
-    `
-      SELECT
-        COUNT(DISTINCT l.id) AS total_listings,
-        COALESCE(SUM(l.views_count), 0) AS total_views,
-        COALESCE(SUM(l.likes_count), 0) AS total_likes,
-        COALESCE(SUM(l.saved_count), 0) AS total_saves,
-        COUNT(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN 1 END) AS items_sold,
-        COALESCE(SUM(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN l.price_gbp_minor ELSE 0 END), 0) AS revenue_gbp_minor
-      FROM listings l
-      WHERE l.seller_id = $1
-    `,
-    [sellerId]
-  );
-
-  const reviewsResult = await db.query<{
-    avg_rating: string | number | null;
-    review_count: string | number;
-  }>(
-    `
-      SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
-      FROM order_reviews r
-      WHERE r.reviewee_id = $1 AND r.created_at > NOW() - ${interval}
-    `,
-    [sellerId]
-  );
-
-  const trustResult = await db.query<{
-    response_rate: string | number | null;
-    ship_within_days: number | null;
-    total_sales: string | number | null;
-    positive_rating_pct: string | number | null;
-  }>(
-    `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
-     FROM seller_trust WHERE user_id = $1 LIMIT 1`,
-    [sellerId]
-  );
-
-  const row = listingsResult.rows[0] ?? {};
-  const reviews = reviewsResult.rows[0] ?? {};
-  const trust = trustResult.rows[0] ?? {};
-
-  return {
-    ok: true,
-    analytics: {
-      totalListings: Number(row.total_listings ?? 0),
-      totalViews: Number(row.total_views ?? 0),
-      totalLikes: Number(row.total_likes ?? 0),
-      totalSaves: Number(row.total_saves ?? 0),
-      itemsSold: Number(row.items_sold ?? 0),
-      revenueGbpMinor: Number(row.revenue_gbp_minor ?? 0),
-      avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
-      reviewCount: Number(reviews.review_count ?? 0),
-      responseRate: trust.response_rate ? Number(trust.response_rate) : null,
-      shipWithinDays: trust.ship_within_days ?? null,
-      totalSales: trust.total_sales ? Number(trust.total_sales) : null,
-      positiveRatingPct: trust.positive_rating_pct ? Number(trust.positive_rating_pct) : null,
-      period,
-    },
-  };
-});
-
-// GET /sellers/:sellerId/analytics/top-performers — top performing listings
-app.get('/sellers/:sellerId/analytics/top-performers', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ sellerId: z.string().min(2) });
-  const { sellerId } = paramsSchema.parse(request.params);
-
-  if (request.authUser.userId !== sellerId) {
-    reply.code(403);
-    return { ok: false, error: 'You can only view your own analytics' };
-  }
-
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(50).default(10),
-  });
-  const { limit } = querySchema.parse(request.query);
-
-  const result = await db.query<{
-    id: string;
-    title: string;
-    price_gbp_minor: number | string;
-    views_count: number;
-    likes_count: number;
-    saved_count: number;
-    status: string;
-    created_at: string;
-  }>(
-    `
-      SELECT id, title, price_gbp_minor, views_count, likes_count, saved_count, status, created_at
-      FROM listings
-      WHERE seller_id = $1
-      ORDER BY (views_count + likes_count * 3 + saved_count * 5) DESC
-      LIMIT $2
-    `,
-    [sellerId, limit]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      priceGbpMinor: Number(row.price_gbp_minor),
-      viewsCount: row.views_count,
-      likesCount: row.likes_count,
-      savedCount: row.saved_count,
-      status: row.status,
-      createdAt: row.created_at,
-      engagementScore: row.views_count + row.likes_count * 3 + row.saved_count * 5,
-    })),
-  };
-});
-
 // ── Follow counts + follower/following lists ─────────────────────────
 
 app.get('/users/:userId/follow-counts', async (request, reply) => {
@@ -16414,12 +14705,25 @@ app.get('/users/:userId/followers', async (request, reply) => {
   const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
   const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
 
+  // Resolve isFollowing for the authenticated viewer so the client can
+  // derive FollowButton state from server data instead of mutation vars.
+  const viewerUserId = request.authUser?.userId;
+  let followingSet = new Set<string>();
+  if (viewerUserId && rows.length > 0) {
+    const followingResult = await readDb.query<{ following_id: string }>(
+      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
+      [viewerUserId, rows.map((r) => r.id)]
+    );
+    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
+  }
+
   return {
     items: rows.map((row) => ({
       id: row.id,
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: followingSet.has(row.id),
     })),
     nextCursor,
   };
@@ -16462,12 +14766,25 @@ app.get('/users/:userId/following', async (request, reply) => {
   const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
   const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
 
+  // Resolve isFollowing for the authenticated viewer so the client can
+  // derive FollowButton state from server data instead of mutation vars.
+  const viewerUserId = request.authUser?.userId;
+  let followingSet = new Set<string>();
+  if (viewerUserId && rows.length > 0) {
+    const followingResult = await readDb.query<{ following_id: string }>(
+      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
+      [viewerUserId, rows.map((r) => r.id)]
+    );
+    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
+  }
+
   return {
     items: rows.map((row) => ({
       id: row.id,
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: followingSet.has(row.id),
     })),
     nextCursor,
   };
@@ -16532,7 +14849,11 @@ app.post('/users/:userId/report', async (request, reply) => {
   }
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const bodySchema = z.object({
-    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    reason: z.enum([
+      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
+      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
+      'privacy', 'impersonation', 'minor_safety', 'other',
+    ]),
     details: z.string().min(1).max(2000).optional(),
   });
   const { userId } = paramsSchema.parse(request.params);
@@ -16568,10 +14889,18 @@ app.get('/users/search', async (request, reply) => {
   });
   const { q, limit, cursor } = querySchema.parse(request.query ?? {});
 
-  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null }>(
+  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null; is_following: boolean }>(
     `
       WITH params AS (SELECT $1::text AS q)
-      SELECT u.id, u.username, u.display_name, u.avatar
+      SELECT
+        u.id,
+        u.username,
+        u.display_name,
+        u.avatar,
+        EXISTS (
+          SELECT 1 FROM user_follows f
+          WHERE f.follower_id = $2 AND f.following_id = u.id
+        ) AS is_following
       FROM users u, params
       WHERE u.id <> $2
         AND u.id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = $2)
@@ -16601,6 +14930,7 @@ app.get('/users/search', async (request, reply) => {
       username: row.username,
       displayName: row.display_name,
       avatar: row.avatar,
+      isFollowing: row.is_following,
     })),
     nextCursor: result.rows.length === limit ? result.rows[result.rows.length - 1].username : undefined,
   };
@@ -16619,6 +14949,16 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body ?? {});
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== payload.userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   if (payload.vendor !== 'stripe_identity') {
     reply.code(400);
@@ -16837,6 +15177,73 @@ app.post('/compliance/kyc/webhooks/stripe', async (request, reply) => {
   }
 
   if (!event) {
+    // verifyKycProviderWebhook returns null for event types it does not map
+    // (e.g. identity.verification_session.redacted). The signature was already
+    // verified above, so re-construct the raw event to handle redaction.
+    if (stripe && config.kycWebhookSecret) {
+      try {
+        const signature = request.headers['stripe-signature'];
+        const signatureValue = Array.isArray(signature) ? signature[0] : signature;
+        if (!signatureValue) {
+          return { ok: true, ignored: true };
+        }
+        const webhookSecret = config.kycWebhookSecret;
+        const rawEvent = stripe.webhooks.constructEvent(
+          rawBody,
+          signatureValue,
+          webhookSecret
+        );
+
+        if (rawEvent.type === 'identity.verification_session.redacted') {
+          const session = rawEvent.data.object as Stripe.Identity.VerificationSession;
+          const caseId = session.metadata?.thryftverse_case_id;
+          const redactedUserId = session.metadata?.thryftverse_user_id;
+          if (caseId && redactedUserId) {
+            try {
+              await db.query(
+                `UPDATE kyc_cases
+                 SET redaction_status = 'redacted',
+                     redacted_at = NOW(),
+                     updated_at = NOW()
+                 WHERE id = $1
+                   AND user_id = $2
+                   AND vendor = 'stripe_identity'
+                   AND vendor_case_ref = $3`,
+                [caseId, redactedUserId, session.id]
+              );
+            } catch (redactionError) {
+              // redaction_status / redacted_at columns may not exist yet —
+              // a migration is required to add them to kyc_cases.
+              request.log.warn(
+                { err: redactionError, caseId, userId: redactedUserId },
+                'KYC redaction update failed (redaction_status/redacted_at columns may be missing — migration required)'
+              );
+            }
+
+            await appendComplianceAuditSafe(request, {
+              eventType: 'kyc.provider-webhook.redacted',
+              subjectUserId: redactedUserId,
+              payload: {
+                caseId,
+                providerSessionId: session.id,
+                providerEventId: rawEvent.id,
+              },
+            });
+
+            return {
+              ok: true,
+              redacted: true,
+            };
+          }
+        }
+      } catch (verifyError) {
+        request.log.warn(
+          { err: verifyError },
+          'Failed re-verifying KYC webhook for redaction handling'
+        );
+      }
+    }
+
     return {
       ok: true,
       ignored: true,
@@ -17254,6 +15661,16 @@ app.get('/compliance/kyc/:userId', async (request, reply) => {
 
   const { userId } = paramsSchema.parse(request.params);
   const { caseLimit, eventLimit } = querySchema.parse(request.query);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   await ensureUserExists(userId);
   const profile = await getOrCreateComplianceProfile(db, userId);
@@ -18420,75 +16837,7 @@ app.delete('/users/me', async (request, reply) => {
       ]
     );
 
-    const anonymizedUsername = `deleted_user_${Date.now()}`;
-
-    await client.query(
-      `
-        UPDATE users
-        SET
-          username = $2,
-          email = NULL,
-          password_hash = NULL,
-          email_verified_at = NULL,
-          last_login_at = NULL,
-          two_factor_enabled = FALSE,
-          is_erased = TRUE,
-          erased_at = NOW(),
-          deleted_at = NOW(),
-          password_changed_at = NOW(),
-          role = 'user'
-        WHERE id = $1
-      `,
-      [userId, anonymizedUsername]
-    );
-
-    await client.query('DELETE FROM user_addresses WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_payment_methods WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_secure_profiles WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM wallet_secure_snapshots WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM secure_messages WHERE sender_id = $1 OR recipient_id = $1', [userId]);
-    await client.query('DELETE FROM interactions WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM recommendations WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM recommendation_feedback WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM notification_devices WHERE user_id = $1', [userId]);
-
-    await client.query(
-      `
-        UPDATE notification_events
-        SET
-          title = '[erased]',
-          body = '[erased]',
-          payload = '{}'::jsonb,
-          metadata = metadata || '{"gdprErased": true}'::jsonb
-        WHERE user_id = $1
-      `,
-      [userId]
-    );
-
-    await client.query('DELETE FROM user_totp_factors WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_recovery_codes WHERE user_id = $1', [userId]);
-    await client.query('UPDATE user_sessions SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1', [userId]);
-    await client.query('UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
-
-    await client.query(
-      `
-        UPDATE user_compliance_profiles
-        SET
-          legal_name = NULL,
-          date_of_birth = NULL,
-          kyc_status = 'expired',
-          document_status = 'unsubmitted',
-          liveness_status = 'unsubmitted',
-          sanctions_status = 'unknown',
-          pep_status = 'unknown',
-          trading_enabled = FALSE,
-          metadata = metadata || '{"gdprErased": true}'::jsonb,
-          updated_at = NOW()
-        WHERE user_id = $1
-      `,
-      [userId]
-    );
+    await performUserErasure(client, userId, 'gdpr');
 
     await client.query(
       `
@@ -18531,6 +16880,7 @@ app.delete('/users/me', async (request, reply) => {
 
 app.get('/listings', async (request) => {
   const querySchema = z.object({
+    q: z.string().trim().min(1).max(120).optional(),
     category: z.string().optional(),
     brand: z.string().optional(),
     size: z.string().optional(),
@@ -18545,6 +16895,16 @@ app.get('/listings', async (request) => {
 
   const conditions: string[] = ["status = 'active'"];
   const args: unknown[] = [];
+
+  if (params.q) {
+    conditions.push(`(
+      l.title ILIKE $${args.length + 1}
+      OR COALESCE(l.description, '') ILIKE $${args.length + 1}
+      OR COALESCE(l.brand, '') ILIKE $${args.length + 1}
+      OR COALESCE(l.category, '') ILIKE $${args.length + 1}
+    )`);
+    args.push(`%${params.q}%`);
+  }
 
   if (params.category) {
     conditions.push(`category = $${args.length + 1}`);
@@ -18723,1910 +17083,34 @@ app.get('/listings', async (request) => {
   };
 });
 
-app.get('/search/listings', async (request) => {
-  const querySchema = z.object({
-    q: z.string().trim().min(2).max(120),
-    limit: z.coerce.number().int().min(1).max(100).default(24),
-    category: z.string().min(1).optional(),
-    condition: z.string().min(1).optional(),
-    size: z.string().min(1).optional(),
-    priceMin: z.coerce.number().min(0).optional(),
-    priceMax: z.coerce.number().min(0).optional(),
-    sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc']).default('relevance'),
-    page: z.coerce.number().int().min(1).max(100).default(1),
-  });
+// ── Search extended routes ────────────────────────────────────────
+registerSearchExtendedRoutes({ app, readDb, redis });
 
-  const { q, limit, category, condition, size, priceMin, priceMax, sort, page } =
-    querySchema.parse(request.query);
-  const searchPolicyVersion = 'listing-search-postgres-v3.0';
-  const startTime = Date.now();
+registerFeedRoutes({ app, db, readDb });
 
-  // Build cache params from the normalized query
-  const cacheParams: SearchQueryParams = {
-    q,
-    filters: {
-      category,
-      condition,
-      size,
-      priceMin,
-      priceMax,
-    },
-    sort,
-    page,
-    limit,
-  };
-
-  // ── Cache-first read with stale-while-revalidate ──
-  const revalidate = async (): Promise<void> => {
-    const freshResult = await computeSearchResults(
-      readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-      searchPolicyVersion,
-    );
-    await setCachedSearchResult(redis, cacheParams, freshResult);
-  };
-
-  const cached = await getCachedOrRevalidate(redis, cacheParams, revalidate);
-  if (cached) {
-    const responseTimeMs = Date.now() - startTime;
-    const zeroResults = cached.items.length === 0;
-
-    // Track analytics (fire-and-forget)
-    void recordSearchAnalytics(redis, {
-      query: q,
-      responseTimeMs,
-      zeroResults,
-      cacheHit: true,
-    });
-    void trackQueryFrequency(redis, q);
-
-    return {
-      ...cached,
-      fromCache: true,
-      responseTimeMs,
-    };
-  }
-
-  // ── Cache miss: compute results from DB ──
-  const computed = await computeSearchResults(
-    readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-    searchPolicyVersion,
-  );
-
-  const responseTimeMs = Date.now() - startTime;
-  const zeroResults = computed.items.length === 0;
-
-  // Cache the result (fire-and-forget, don't block response)
-  void setCachedSearchResult(redis, cacheParams, computed);
-
-  // Track analytics and query frequency (fire-and-forget)
-  void recordSearchAnalytics(redis, {
-    query: q,
-    responseTimeMs,
-    zeroResults,
-    cacheHit: false,
-  });
-  void trackQueryFrequency(redis, q);
-
-  return {
-    ...computed,
-    fromCache: false,
-    responseTimeMs,
-  };
-});
-
-/**
- * Compute search results from the database. Extracted as a helper
- * so it can be called both on cache miss and during background
- * revalidation.
- */
-async function computeSearchResults(
-  dbPool: typeof readDb,
-  q: string,
-  limit: number,
-  category: string | undefined,
-  condition: string | undefined,
-  size: string | undefined,
-  priceMin: number | undefined,
-  priceMax: number | undefined,
-  sort: string,
-  page: number,
-  searchPolicyVersion: string,
-): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
-  const offset = (page - 1) * limit;
-
-  // Build dynamic WHERE clause for filters
-  const filterConditions: string[] = [];
-  const filterArgs: unknown[] = [];
-  let filterIdx = 2; // $1 is the query text
-
-  if (category) {
-    filterConditions.push(`l.category = $${filterIdx++}`);
-    filterArgs.push(category);
-  }
-  if (condition) {
-    filterConditions.push(`l.condition = $${filterIdx++}`);
-    filterArgs.push(condition);
-  }
-  if (size) {
-    filterConditions.push(`l.size = $${filterIdx++}`);
-    filterArgs.push(size);
-  }
-  if (priceMin !== undefined) {
-    filterConditions.push(`l.price_gbp >= $${filterIdx++}`);
-    filterArgs.push(priceMin);
-  }
-  if (priceMax !== undefined) {
-    filterConditions.push(`l.price_gbp <= $${filterIdx++}`);
-    filterArgs.push(priceMax);
-  }
-
-  const filterClause = filterConditions.length > 0
-    ? `AND ${filterConditions.join(' AND ')}`
-    : '';
-
-  // Determine ORDER BY based on sort option
-  let orderBy: string;
-  switch (sort) {
-    case 'recent':
-      orderBy = 'l.created_at DESC, l.id DESC';
-      break;
-    case 'price_asc':
-      orderBy = 'l.price_gbp ASC, l.id DESC';
-      break;
-    case 'price_desc':
-      orderBy = 'l.price_gbp DESC, l.id DESC';
-      break;
-    case 'relevance':
-    default:
-      orderBy = 'rank_score::numeric DESC, l.created_at DESC, l.id DESC';
-      break;
-  }
-
-  const result = await dbPool.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: string;
-    image_url: string | null;
-    created_at: string;
-    rank_score: string;
-    seller_username: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    category: string | null;
-  }>(
-    `
-      SELECT
-        l.id,
-        l.seller_id,
-        l.title,
-        l.description,
-        l.price_gbp::text,
-        l.image_url,
-        l.created_at::text,
-        ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score,
-        u.username AS seller_username,
-        l.brand,
-        l.size,
-        l.condition,
-        l.category
-      FROM listings l
-      LEFT JOIN users u ON u.id = l.seller_id
-      WHERE l.status = 'active'
-        AND (
-          l.search_vector @@ websearch_to_tsquery('simple', $1)
-          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
-        )
-        ${filterClause}
-      ORDER BY ${orderBy}
-      LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
-    `,
-    [q, ...filterArgs, limit, offset]
-  );
-
-  if (result.rowCount && result.rowCount > 0) {
-    return {
-      ok: true,
-      query: q,
-      decision: {
-        policyVersion: searchPolicyVersion,
-        capabilityLevel: 'postgres_lexical',
-        fallback: false,
-      },
-      items: result.rows.map((row) => ({
-        id: row.id,
-        sellerId: row.seller_id,
-        title: row.title,
-        description: row.description,
-        priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
-        rank: Number(row.rank_score),
-        createdAt: row.created_at,
-        // Commerce facts are passed through as-is (including null). The
-        // frontend renders only known facts and never fabricates a brand,
-        // size, or condition (audit P0.4).
-        brand: row.brand,
-        size: row.size,
-        condition: row.condition,
-        category: row.category,
-        seller: row.seller_username
-          ? {
-              id: row.seller_id,
-              username: row.seller_username,
-              avatar: null,
-              rating: null,
-              reviewCount: null,
-              location: null,
-            }
-          : null,
-      })),
-    };
-  }
-
-  // Fallback: ILIKE search when full-text search returns nothing
-  const fallback = await dbPool.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: string;
-    image_url: string | null;
-    created_at: string;
-    seller_username: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    category: string | null;
-  }>(
-    `
-      SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp::text, l.image_url, l.created_at::text,
-        u.username AS seller_username,
-        l.brand, l.size, l.condition, l.category
-      FROM listings l
-      LEFT JOIN users u ON u.id = l.seller_id
-      WHERE l.status = 'active'
-        AND (
-          POSITION(lower($1) IN lower(l.title)) > 0
-          OR POSITION(lower($1) IN lower(l.description)) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
-        )
-        ${filterClause}
-      ORDER BY ${sort === 'price_asc' ? 'l.price_gbp ASC' : sort === 'price_desc' ? 'l.price_gbp DESC' : 'l.created_at DESC'}, l.id DESC
-      LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
-    `,
-    [q, ...filterArgs, limit, offset]
-  );
-
-  return {
-    ok: true,
-    query: q,
-    fallback: true,
-    decision: {
-      policyVersion: searchPolicyVersion,
-      capabilityLevel: 'postgres_lexical',
-      fallback: true,
-    },
-    items: fallback.rows.map((row) => ({
-      id: row.id,
-      sellerId: row.seller_id,
-      title: row.title,
-      description: row.description,
-      priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
-      rank: 0,
-      createdAt: row.created_at,
-      // Commerce facts passed through as-is (including null) so the
-      // frontend renders only known facts (audit P0.4).
-      brand: row.brand,
-      size: row.size,
-      condition: row.condition,
-      category: row.category,
-      seller: row.seller_username
-        ? {
-            id: row.seller_id,
-            username: row.seller_username,
-            avatar: null,
-            rating: null,
-            reviewCount: null,
-            location: null,
-          }
-        : null,
-    })),
-  };
-}
-
-// ── Autocomplete endpoint ─────────────────────────────────────────────────────
-
-app.get('/search/autocomplete', async (request) => {
-  const querySchema = z.object({
-    q: z.string().trim().min(1).max(120),
-    limit: z.coerce.number().int().min(1).max(20).default(8),
-  });
-
-  const { q, limit } = querySchema.parse(request.query);
-  const startTime = Date.now();
-
-  // Check autocomplete cache first
-  const { getCachedAutocomplete, setCachedAutocomplete } = await import('./lib/searchCache.js');
-  const cached = await getCachedAutocomplete(redis, q);
-  if (cached) {
-    return {
-      ok: true,
-      query: q,
-      suggestions: cached.slice(0, limit),
-      fromCache: true,
-      responseTimeMs: Date.now() - startTime,
-    };
-  }
-
-  // Query database for autocomplete suggestions
-  const result = await readDb.query<{ term: string; frequency: string }>(
-    `
-      SELECT term, COUNT(*)::text AS frequency
-      FROM (
-        SELECT lower(l.title) AS term
-        FROM listings l
-        WHERE l.status = 'active' AND lower(l.title) LIKE lower($1 || '%')
-        UNION ALL
-        SELECT lower(COALESCE(l.brand, '')) AS term
-        FROM listings l
-        WHERE l.status = 'active' AND lower(COALESCE(l.brand, '')) LIKE lower($1 || '%')
-        UNION ALL
-        SELECT lower(COALESCE(l.category, '')) AS term
-        FROM listings l
-        WHERE l.status = 'active' AND lower(COALESCE(l.category, '')) LIKE lower($1 || '%')
-      ) AS suggestions
-      WHERE term != ''
-      GROUP BY term
-      ORDER BY frequency DESC
-      LIMIT $2
-    `,
-    [q, limit]
-  );
-
-  const suggestions = result.rows.map((row) => ({
-    text: row.term,
-    type: 'query' as const,
-    score: Number(row.frequency),
-  }));
-
-  // Cache the suggestions (fire-and-forget)
-  void setCachedAutocomplete(redis, q, suggestions);
-
-  return {
-    ok: true,
-    query: q,
-    suggestions,
-    fromCache: false,
-    responseTimeMs: Date.now() - startTime,
-  };
-});
-
-// ── Search analytics endpoint ─────────────────────────────────────────────────
-
-app.get('/search/analytics', async () => {
-  const { getSearchAnalytics } = await import('./lib/searchCache.js');
-  const analytics = await getSearchAnalytics(redis, 5);
-  return { ok: true, analytics };
-});
-
-app.get('/feed/looks', async () => {
-  const now = Date.now();
-
-  const realLooksResult = await db.query<{
-    id: string;
-    creator_id: string;
-    title: string;
-    media_url: string;
-    created_at: string;
-  }>(
-    `
-      SELECT id, creator_id, title, media_url, created_at
-      FROM looks
-      WHERE status = 'published'
-      ORDER BY created_at DESC
-      LIMIT 12
-    `
-  );
-
-  const realLooks = realLooksResult.rows.map((row, idx) => {
-    const createdAtMs = new Date(row.created_at).getTime();
-    const ageHours = Math.max(1, Math.floor((now - createdAtMs) / (60 * 60 * 1000)));
-    const timeAgo = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
-    return {
-      id: row.id,
-      rank: idx + 1,
-      creator: {
-        id: row.creator_id,
-        name: row.creator_id,
-        avatar: '',
-        isVerified: false,
-      },
-      title: row.title,
-      description: '',
-      coverImage: row.media_url,
-      items: [] as Array<{ id: string; label: string }>,
-      likes: 0,
-      comments: 0,
-      timeAgo,
-    };
-  });
-
-  return {
-    items: realLooks.sort((a, b) => a.rank - b.rank),
-  };
-});
-
-app.get('/feed/home', async () => {
-  const listingsResult = await readDb.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: number | string;
-    image_url: string | null;
-    status: string;
-    category: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    original_price_gbp: number | string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT id, seller_id, title, description, price_gbp, image_url,
-        status, category, brand, size, condition, original_price_gbp, created_at
-      FROM listings
-      WHERE status = 'active'
-      ORDER BY created_at DESC
-      LIMIT 20
-    `
-  );
-
-  const listingIds = listingsResult.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
-
-  const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-  }
-
-  const postersResult = await readDb.query<{
-    id: string;
-    creator_id: string;
-    media_url: string;
-    caption: string;
-    created_at: string;
-  }>(
-    `
-      SELECT id, creator_id, media_url, caption, created_at
-      FROM posters
-      WHERE status = 'published'
-      ORDER BY created_at DESC
-      LIMIT 6
-    `
-  );
-
-  const looksResult = await readDb.query<{
-    id: string;
-    creator_id: string;
-    title: string;
-    media_url: string;
-    created_at: string;
-  }>(
-    `
-      SELECT id, creator_id, title, media_url, created_at
-      FROM looks
-      WHERE status = 'published'
-      ORDER BY created_at DESC
-      LIMIT 6
-    `
-  );
-
-  return {
-    listings: listingsResult.rows.map((row) => ({
-      id: row.id,
-      sellerId: row.seller_id,
-      title: row.title,
-      description: row.description,
-      priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
-      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
-      status: row.status,
-      category: row.category,
-      brand: row.brand,
-      size: row.size,
-      condition: row.condition,
-      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
-      createdAt: row.created_at,
-    })),
-    posters: postersResult.rows.map((row) => ({
-      id: row.id,
-      creatorId: row.creator_id,
-      mediaUrl: row.media_url,
-      caption: row.caption,
-      createdAt: row.created_at,
-    })),
-    looks: looksResult.rows.map((row) => ({
-      id: row.id,
-      creatorId: row.creator_id,
-      title: row.title,
-      mediaUrl: row.media_url,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// GET /feed/trending — trending listings based on engagement velocity.
-// Public endpoint. Supports window (24h/7d/30d), category filter, and limit.
-app.get('/feed/trending', async (request) => {
-  const querySchema = z.object({
-    window: z.enum(['24h', '7d', '30d']).default('24h'),
-    category: z.string().max(64).optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
-  });
-  const { window: timeWindow, category, limit } = querySchema.parse(request.query);
-
-  const intervalMap: Record<string, string> = {
-    '24h': "INTERVAL '24 hours'",
-    '7d': "INTERVAL '7 days'",
-    '30d': "INTERVAL '30 days'",
-  };
-  const interval = intervalMap[timeWindow];
-
-  const params: Array<string | number> = [];
-  let categoryClause = '';
-  if (category) {
-    params.push(category);
-    categoryClause = `AND l.category = $${params.length}`;
-  }
-  params.push(limit);
-
-  const result = await readDb.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: number | string;
-    image_url: string | null;
-    status: string;
-    category: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    original_price_gbp: number | string | null;
-    created_at: string;
-    recent_events: string | number;
-    velocity: string | number;
-  }>(
-    `
-      SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
-             l.status, l.category, l.brand, l.size, l.condition,
-             l.original_price_gbp, l.created_at,
-             COALESCE(e.recent_events, 0) AS recent_events,
-             COALESCE(e.recent_events, 0)::float /
-               GREATEST(EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 3600, 1) AS velocity
-      FROM listings l
-      LEFT JOIN (
-        SELECT listing_id, COUNT(*) AS recent_events
-        FROM listing_events
-        WHERE created_at > NOW() - ${interval}
-        GROUP BY listing_id
-      ) e ON e.listing_id = l.id
-      WHERE l.status = 'active'
-        AND l.sold_at IS NULL
-        ${categoryClause}
-        AND l.created_at > NOW() - INTERVAL '30 days'
-      ORDER BY velocity DESC, l.created_at DESC
-      LIMIT $${params.length}
-    `,
-    params
-  );
-
-  const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
-
-  const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-  }
-
-  return {
-    ok: true,
-    window: timeWindow,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      sellerId: row.seller_id,
-      title: row.title,
-      description: row.description,
-      priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
-      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
-      status: row.status,
-      category: row.category,
-      brand: row.brand,
-      size: row.size,
-      condition: row.condition,
-      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
-      createdAt: row.created_at,
-      velocity: Number(row.velocity),
-    })),
-  };
-});
-
-// GET /feed/following — social activity feed from followed users.
-// Auth required. Returns recent listings and looks from followed sellers.
-app.get('/feed/following', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(100).default(50),
-    cursor: z.string().optional(),
-  });
-  const { limit, cursor } = querySchema.parse(request.query);
-
-  const cursorCondition = cursor
-    ? `AND created_at < $2`
-    : `AND created_at > NOW() - INTERVAL '7 days'`;
-  const cursorParams = cursor ? [request.authUser.userId, cursor, limit] : [request.authUser.userId, limit];
-
-  // Union of listings and looks from followed users
-  const listingsResult = await db.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    price_gbp: number | string;
-    image_url: string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT l.id, l.seller_id, l.title, l.price_gbp, l.image_url, l.created_at
-      FROM listings l
-      JOIN user_follows uf ON uf.followee_id = l.seller_id
-      WHERE uf.follower_id = $1
-        AND l.status = 'active'
-        ${cursorCondition}
-      ORDER BY l.created_at DESC
-      LIMIT $${cursorParams.length}
-    `,
-    cursorParams
-  );
-
-  const looksResult = await db.query<{
-    id: string;
-    creator_id: string;
-    title: string;
-    media_url: string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT lk.id, lk.creator_id, lk.title, lk.media_url, lk.created_at
-      FROM looks lk
-      JOIN user_follows uf ON uf.followee_id = lk.creator_id
-      WHERE uf.follower_id = $1
-        AND lk.status = 'published'
-        ${cursorCondition}
-      ORDER BY lk.created_at DESC
-      LIMIT $${cursorParams.length}
-    `,
-    cursorParams
-  );
-
-  // Merge and sort by created_at DESC
-  const items: Array<{
-    activityType: string;
-    entityId: string;
-    entityTitle: string;
-    actorId: string;
-    createdAt: string;
-    images: string[] | null;
-    priceGbpMinor: number | null;
-  }> = [
-    ...listingsResult.rows.map((r) => ({
-      activityType: 'listing',
-      entityId: r.id,
-      entityTitle: r.title,
-      actorId: r.seller_id,
-      createdAt: r.created_at,
-      images: r.image_url ? [r.image_url] : [],
-      priceGbpMinor: Math.round(Number(r.price_gbp) * 100),
-    })),
-    ...looksResult.rows.map((r) => ({
-      activityType: 'look',
-      entityId: r.id,
-      entityTitle: r.title,
-      actorId: r.creator_id,
-      createdAt: r.created_at,
-      images: r.media_url ? [r.media_url] : null,
-      priceGbpMinor: null,
-    })),
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  const sliced = items.slice(0, limit);
-  const nextCursor = items.length > limit ? sliced[sliced.length - 1]?.createdAt ?? null : null;
-
-  return { ok: true, items: sliced, nextCursor };
-});
-
-app.post('/visual-search', async (request, reply) => {
-  // Visual Search — honest hybrid implementation.
-  // Image-similarity ML is not deployed. Instead we run a real filtered query
-  // (category + brand + price + description text) over active listings, reusing
-  // the same row shape as GET /listings. The response carries visualMatching=false
-  // so the frontend can label results truthfully ("Similar by category, brand &
-  // description") rather than claiming AI image matching.
-  const bodySchema = z.object({
-    imageUrl: z.string().optional(),
-    imageBase64: z.string().optional(),
-    query: z.string().trim().max(120).optional(),
-    category: z.string().optional(),
-    brand: z.string().optional(),
-    size: z.string().optional(),
-    condition: z.string().optional(),
-    minPrice: z.coerce.number().nonnegative().optional(),
-    maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
-    limit: z.coerce.number().int().min(1).max(100).optional().default(48),
-  });
-  const payload = bodySchema.parse(request.body ?? {});
-
-  // Telemetry: keep logging requests for future ML training/integration.
-  if (payload.imageUrl) {
-    try {
-      await db.query(
-        `INSERT INTO visual_search_requests (id, image_url, created_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING`,
-        [`vs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, payload.imageUrl]
-      );
-    } catch {
-      // Telemetry is best-effort; never fail the request on it.
-    }
-  }
-
-  const conditions: string[] = ["l.status = 'active'"];
-  const args: unknown[] = [];
-
-  if (payload.category) {
-    conditions.push(`l.category = $${args.length + 1}`);
-    args.push(payload.category);
-  }
-  if (payload.brand) {
-    conditions.push(`l.brand ILIKE $${args.length + 1}`);
-    args.push(`%${payload.brand}%`);
-  }
-  if (payload.size) {
-    conditions.push(`l.size ILIKE $${args.length + 1}`);
-    args.push(`%${payload.size}%`);
-  }
-  if (payload.condition) {
-    conditions.push(`l.condition ILIKE $${args.length + 1}`);
-    args.push(`%${payload.condition}%`);
-  }
-  if (payload.minPrice !== undefined) {
-    conditions.push(`l.price_gbp >= $${args.length + 1}`);
-    args.push(payload.minPrice);
-  }
-  if (payload.maxPrice !== undefined) {
-    conditions.push(`l.price_gbp <= $${args.length + 1}`);
-    args.push(payload.maxPrice);
-  }
-  if (payload.query) {
-    conditions.push(`(l.title ILIKE $${args.length + 1} OR l.description ILIKE $${args.length + 1} OR l.brand ILIKE $${args.length + 1})`);
-    args.push(`%${payload.query}%`);
-  }
-
-  const orderBy =
-    payload.sort === 'price_asc'
-      ? 'l.price_gbp ASC, l.id ASC'
-      : payload.sort === 'price_desc'
-        ? 'l.price_gbp DESC, l.id DESC'
-        : 'l.created_at DESC, l.id DESC';
-
-  const result = await readDb.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: number | string;
-    image_url: string | null;
-    status: string;
-    category: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    original_price_gbp: number | string | null;
-    created_at: string;
-    seller_username: string | null;
-  }>(
-    `
-      SELECT
-        l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
-        l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-        u.username AS seller_username
-      FROM listings l
-      LEFT JOIN users u ON u.id = l.seller_id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY ${orderBy}
-      LIMIT $${args.length + 1}
-    `,
-    [...args, payload.limit]
-  );
-
-  const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
-
-  const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-  }
-
-  reply.code(200);
-  return {
-    ok: true,
-    runtimeAvailable: true,
-    // Truthful flag: results are filter-based, not ML image-similarity.
-    visualMatching: false,
-    note: 'Results are matched by category, brand, and description.',
-    items: result.rows.map((row) => ({
-      id: row.id,
-      sellerId: row.seller_id,
-      title: row.title,
-      description: row.description,
-      priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
-      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
-      status: row.status,
-      category: row.category,
-      brand: row.brand,
-      size: row.size,
-      condition: row.condition,
-      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
-      createdAt: row.created_at,
-      seller: row.seller_username
-        ? {
-            id: row.seller_id,
-            username: row.seller_username,
-            avatar: null,
-            rating: null,
-            reviewCount: null,
-            location: null,
-          }
-        : null,
-    })),
-  };
-});
+registerVisualSearchRoutes({ app, db, readDb });
 
 // ── Posters API ────────────────────────────────────────────────────
 
-app.post('/posters', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const bodySchema = z.object({
-    id: z.string().min(2).max(120),
-    mediaUrl: z.string().url().min(3),
-    caption: z.string().max(500).default(''),
-    textOverlay: z.record(z.unknown()).optional(),
-    backgroundColor: z.string().max(30).optional(),
-    layout: z.string().max(30).default('single'),
-    status: z.enum(['draft', 'published', 'archived']).default('published'),
-    expiryHours: z.number().int().min(1).max(720).default(24),
-  });
-  const payload = bodySchema.parse(request.body);
+registerPosterRoutes({ app, db, resolveAuthenticatedUserId });
 
-  await db.query(
-    `
-      INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (id) DO UPDATE
-      SET media_url = EXCLUDED.media_url,
-          caption = EXCLUDED.caption,
-          text_overlay = EXCLUDED.text_overlay,
-          background_color = EXCLUDED.background_color,
-          layout = EXCLUDED.layout,
-          status = EXCLUDED.status,
-          expiry_hours = EXCLUDED.expiry_hours
-    `,
-    [
-      payload.id,
-      actorUserId,
-      payload.mediaUrl,
-      payload.caption,
-      payload.textOverlay ? JSON.stringify(payload.textOverlay) : null,
-      payload.backgroundColor ?? null,
-      payload.layout,
-      payload.status,
-      payload.expiryHours,
-    ]
-  );
-
-  reply.code(201);
-  return { ok: true, posterId: payload.id };
-});
-
-app.get('/posters', async (request) => {
-  const querySchema = z.object({
-    creatorId: z.string().optional(),
-    status: z.enum(['draft', 'published', 'archived']).optional(),
-    limit: z.coerce.number().int().min(1).max(120).default(40),
-  });
-  const params = querySchema.parse(request.query ?? {});
-
-  const conditions: string[] = ['1 = 1'];
-  const args: unknown[] = [];
-
-  if (params.creatorId) {
-    conditions.push(`creator_id = $${args.length + 1}`);
-    args.push(params.creatorId);
-  }
-  if (params.status) {
-    conditions.push(`status = $${args.length + 1}`);
-    args.push(params.status);
-  }
-
-  const result = await db.query<{
-    id: string;
-    creator_id: string;
-    media_url: string;
-    caption: string;
-    text_overlay: string | null;
-    background_color: string | null;
-    layout: string;
-    status: string;
-    expiry_hours: number;
-    created_at: string;
-  }>(
-    `
-      SELECT id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at
-      FROM posters
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC
-      LIMIT $${args.length + 1}
-    `,
-    [...args, params.limit]
-  );
-
-  return {
-    items: result.rows.map((row) => ({
-      id: row.id,
-      creatorId: row.creator_id,
-      mediaUrl: row.media_url,
-      caption: row.caption,
-      textOverlay: row.text_overlay
-        ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
-        : null,
-      backgroundColor: row.background_color,
-      layout: row.layout,
-      status: row.status,
-      expiryHours: row.expiry_hours,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-app.get('/posters/:posterId', async (request, reply) => {
-  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
-  const { posterId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    id: string;
-    creator_id: string;
-    media_url: string;
-    caption: string;
-    text_overlay: string | null;
-    background_color: string | null;
-    layout: string;
-    status: string;
-    expiry_hours: number;
-    created_at: string;
-  }>(
-    `
-      SELECT id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at
-      FROM posters
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [posterId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Poster not found' };
-  }
-
-  const row = result.rows[0];
-  return {
-    ok: true,
-    poster: {
-      id: row.id,
-      creatorId: row.creator_id,
-      mediaUrl: row.media_url,
-      caption: row.caption,
-      textOverlay: row.text_overlay
-        ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
-        : null,
-      backgroundColor: row.background_color,
-      layout: row.layout,
-      status: row.status,
-      expiryHours: row.expiry_hours,
-      createdAt: row.created_at,
-    },
-  };
-});
-
-app.delete('/posters/:posterId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
-  const { posterId } = paramsSchema.parse(request.params);
-
-  const ownerResult = await db.query<{ creator_id: string }>(
-    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
-    [posterId]
-  );
-
-  const owner = ownerResult.rows[0];
-  if (!owner) {
-    reply.code(404);
-    return { ok: false, error: 'Poster not found' };
-  }
-
-  if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden' };
-  }
-
-  await db.query(`DELETE FROM posters WHERE id = $1`, [posterId]);
-  return { ok: true };
-});
-
-// ── Poster product tags (shoppable pins) ────────────────────────────────
-
-// POST /posters/:posterId/tags — add a product tag to a poster
-app.post('/posters/:posterId/tags', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
-  const { posterId } = paramsSchema.parse(request.params);
-
-  const bodySchema = z.object({
-    id: z.string().min(2).max(120).optional(),
-    listingId: z.string().max(120).optional(),
-    label: z.string().max(200).default(''),
-    x: z.number().min(0).max(1),
-    y: z.number().min(0).max(1),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  const ownerResult = await db.query<{ creator_id: string }>(
-    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
-    [posterId]
-  );
-  if (!ownerResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Poster not found' };
-  }
-  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden' };
-  }
-
-  const tagId = payload.id ?? `${posterId}_tag_${crypto.randomUUID()}`;
-  await db.query(
-    `INSERT INTO poster_tags (id, poster_id, listing_id, label, x, y)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (id) DO UPDATE
-     SET poster_id = EXCLUDED.poster_id,
-         listing_id = EXCLUDED.listing_id,
-         label = EXCLUDED.label,
-         x = EXCLUDED.x,
-         y = EXCLUDED.y`,
-    [tagId, posterId, payload.listingId ?? null, payload.label, payload.x, payload.y]
-  );
-
-  reply.code(201);
-  return { ok: true, tagId };
-});
-
-// GET /posters/:posterId/tags — list product tags for a poster
-app.get('/posters/:posterId/tags', async (request, reply) => {
-  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
-  const { posterId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    id: string;
-    poster_id: string;
-    listing_id: string | null;
-    label: string;
-    x: string;
-    y: string;
-    click_count: number;
-    last_clicked_at: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, poster_id, listing_id, label, x, y, click_count, last_clicked_at, created_at
-     FROM poster_tags
-     WHERE poster_id = $1
-     ORDER BY created_at ASC`,
-    [posterId]
-  );
-
-  return {
-    items: result.rows.map((row) => ({
-      id: row.id,
-      posterId: row.poster_id,
-      listingId: row.listing_id,
-      label: row.label,
-      x: Number(row.x),
-      y: Number(row.y),
-      clickCount: row.click_count,
-      lastClickedAt: row.last_clicked_at,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// DELETE /posters/:posterId/tags/:tagId — remove a product tag
-app.delete('/posters/:posterId/tags/:tagId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({
-    posterId: z.string().min(2).max(120),
-    tagId: z.string().min(2).max(120),
-  });
-  const { posterId, tagId } = paramsSchema.parse(request.params);
-
-  const ownerResult = await db.query<{ creator_id: string }>(
-    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
-    [posterId]
-  );
-  if (!ownerResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Poster not found' };
-  }
-  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden' };
-  }
-
-  await db.query(`DELETE FROM poster_tags WHERE id = $1 AND poster_id = $2`, [tagId, posterId]);
-  return { ok: true };
-});
-
-// POST /posters/:posterId/tags/:tagId/click — record a product tag click (public)
-app.post('/posters/:posterId/tags/:tagId/click', async (request, reply) => {
-  const paramsSchema = z.object({
-    posterId: z.string().min(2).max(120),
-    tagId: z.string().min(2).max(120),
-  });
-  const { posterId, tagId } = paramsSchema.parse(request.params);
-
-  const result = await db.query(
-    `UPDATE poster_tags
-     SET click_count = click_count + 1,
-         last_clicked_at = NOW()
-     WHERE id = $1 AND poster_id = $2
-     RETURNING id`,
-    [tagId, posterId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Tag not found' };
-  }
-
-  return { ok: true };
-});
 
 
 // ── Looks API ──────────────────────────────────────────────────────
 
-async function enrichLooks(
-  lookRows: Array<{
-    id: string;
-    creator_id: string;
-    title: string;
-    caption: string;
-    media_url: string;
-    status: string;
-    visibility: string;
-    created_at: string;
-    updated_at: string;
-    creator_username: string | null;
-    creator_avatar: string | null;
-  }>,
-  viewerUserId: string | null
-): Promise<Array<Record<string, unknown>>> {
-  const lookIds = lookRows.map((r) => r.id);
+registerLookRoutes({ app, db, resolveAuthenticatedUserId });
 
-  const tagsResult = lookIds.length
-    ? await db.query<{
-        look_id: string;
-        id: string;
-        listing_id: string | null;
-        label: string;
-        x: string;
-        y: string;
-      }>(
-        `SELECT look_id, id, listing_id, label, x, y FROM look_tags WHERE look_id = ANY($1)`,
-        [lookIds]
-      )
-    : { rows: [] };
-
-  const tagsByLook = new Map<string, Array<Record<string, unknown>>>();
-  for (const t of tagsResult.rows) {
-    const arr = tagsByLook.get(t.look_id) ?? [];
-    arr.push({
-      id: t.id,
-      listingId: t.listing_id,
-      label: t.label,
-      x: Number(t.x),
-      y: Number(t.y),
-    });
-    tagsByLook.set(t.look_id, arr);
-  }
-
-  const likeCountsResult = lookIds.length
-    ? await db.query<{ look_id: string; count: string }>(
-        `SELECT look_id, COUNT(*)::text AS count FROM look_likes WHERE look_id = ANY($1) GROUP BY look_id`,
-        [lookIds]
-      )
-    : { rows: [] };
-  const likeCountMap = new Map<string, number>();
-  for (const r of likeCountsResult.rows) {
-    likeCountMap.set(r.look_id, Number(r.count));
-  }
-
-  const commentCountsResult = lookIds.length
-    ? await db.query<{ look_id: string; count: string }>(
-        `SELECT look_id, COUNT(*)::text AS count FROM look_comments WHERE look_id = ANY($1) GROUP BY look_id`,
-        [lookIds]
-      )
-    : { rows: [] };
-  const commentCountMap = new Map<string, number>();
-  for (const r of commentCountsResult.rows) {
-    commentCountMap.set(r.look_id, Number(r.count));
-  }
-
-  const saveCountsResult = lookIds.length
-    ? await db.query<{ look_id: string; count: string }>(
-        `SELECT look_id, COUNT(*)::text AS count FROM look_saves WHERE look_id = ANY($1) GROUP BY look_id`,
-        [lookIds]
-      )
-    : { rows: [] };
-  const saveCountMap = new Map<string, number>();
-  for (const r of saveCountsResult.rows) {
-    saveCountMap.set(r.look_id, Number(r.count));
-  }
-
-  let viewerLikesSet = new Set<string>();
-  let viewerSavesSet = new Set<string>();
-  if (viewerUserId && lookIds.length) {
-    const viewerLikesResult = await db.query<{ look_id: string }>(
-      `SELECT look_id FROM look_likes WHERE user_id = $1 AND look_id = ANY($2)`,
-      [viewerUserId, lookIds]
-    );
-    viewerLikesSet = new Set(viewerLikesResult.rows.map((r) => r.look_id));
-
-    const viewerSavesResult = await db.query<{ look_id: string }>(
-      `SELECT look_id FROM look_saves WHERE user_id = $1 AND look_id = ANY($2)`,
-      [viewerUserId, lookIds]
-    );
-    viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
-  }
-
-  return lookRows.map((row) => ({
-    id: row.id,
-    creatorId: row.creator_id,
-    creator: {
-      id: row.creator_id,
-      username: row.creator_username,
-      avatar: row.creator_avatar,
-    },
-    title: row.title,
-    caption: row.caption,
-    mediaUrl: row.media_url,
-    visibility: row.visibility,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    tags: tagsByLook.get(row.id) ?? [],
-    likeCount: likeCountMap.get(row.id) ?? 0,
-    commentCount: commentCountMap.get(row.id) ?? 0,
-    saveCount: saveCountMap.get(row.id) ?? 0,
-    likedByViewer: viewerLikesSet.has(row.id),
-    savedByViewer: viewerSavesSet.has(row.id),
-  }));
-}
-
-const LOOK_SELECT_COLUMNS = `
-  l.id, l.creator_id, l.title, l.caption, l.media_url, l.status, l.visibility,
-  l.created_at, l.updated_at,
-  u.username AS creator_username,
-  u.avatar AS creator_avatar
-`;
-
-// ── Look access control ────────────────────────────────────────────
-
-type LookAccessRow = {
-  id: string;
-  creator_id: string;
-  status: 'draft' | 'published' | 'archived';
-  visibility: 'public' | 'followers' | 'private';
-};
-
-function canViewerAccessLook(
-  look: LookAccessRow,
-  viewerUserId: string | null
-): boolean {
-  if (viewerUserId && look.creator_id === viewerUserId) {
-    return true;
-  }
-  return look.status === 'published' && look.visibility === 'public';
-}
-
-async function getAccessibleLook(
-  lookId: string,
-  viewerUserId: string | null
-): Promise<LookAccessRow | null> {
-  const result = await db.query<LookAccessRow>(
-    `SELECT id, creator_id, status, visibility FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-  const row = result.rows[0];
-  if (!row) return null;
-  if (!canViewerAccessLook(row, viewerUserId)) return null;
-  return row;
-}
-
-// ── Looks routes ───────────────────────────────────────────────────
-
-app.post('/looks', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const bodySchema = z.object({
-    id: z.string().min(2).max(120),
-    title: z.string().max(120).default(''),
-    caption: z.string().max(500).default(''),
-    mediaUrl: z.string().url().min(3),
-    visibility: z.enum(['public', 'followers', 'private']).default('public'),
-    tags: z.array(
-      z.object({
-        id: z.string().min(2).max(120),
-        listingId: z.string().max(120).optional(),
-        label: z.string().max(200).default(''),
-        x: z.number().min(0).max(1),
-        y: z.number().min(0).max(1),
-      })
-    ).default([]),
-    status: z.enum(['draft', 'published', 'archived']).default('published'),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    const existing = await client.query<{ creator_id: string }>(
-      `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
-      [payload.id]
-    );
-
-    if (existing.rowCount) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Look ID already exists' };
-    }
-
-    await client.query(
-      `INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [payload.id, actorUserId, payload.title, payload.caption, payload.mediaUrl, payload.status, payload.visibility]
-    );
-
-    for (const tag of payload.tags) {
-      const tagId = `${payload.id}_${tag.id}`;
-      await client.query(
-        `INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (id) DO UPDATE
-         SET look_id = EXCLUDED.look_id,
-             listing_id = EXCLUDED.listing_id,
-             label = EXCLUDED.label,
-             x = EXCLUDED.x,
-             y = EXCLUDED.y`,
-        [tagId, payload.id, tag.listingId ?? null, tag.label, tag.x, tag.y]
-      );
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  reply.code(201);
-  return { ok: true, lookId: payload.id };
-});
-
-app.get('/looks', async (request) => {
-  const querySchema = z.object({
-    creatorId: z.string().optional(),
-    status: z.enum(['draft', 'published', 'archived']).optional(),
-    limit: z.coerce.number().int().min(1).max(120).default(40),
-  });
-  const params = querySchema.parse(request.query ?? {});
-  const viewerUserId = request.authUser?.userId ?? null;
-
-  const conditions: string[] = ['1 = 1'];
-  const args: unknown[] = [];
-
-  if (params.creatorId) {
-    conditions.push(`l.creator_id = $${args.length + 1}`);
-    args.push(params.creatorId);
-  }
-
-  if (params.status && params.status !== 'published') {
-    if (!viewerUserId) {
-      return { items: [] };
-    }
-    conditions.push(`l.status = $${args.length + 1}`);
-    args.push(params.status);
-    conditions.push(`l.creator_id = $${args.length + 1}`);
-    args.push(viewerUserId);
-  } else {
-    conditions.push(`l.status = 'published'`);
-    if (viewerUserId) {
-      conditions.push(`(l.visibility = 'public' OR l.creator_id = $${args.length + 1})`);
-      args.push(viewerUserId);
-    } else {
-      conditions.push(`l.visibility = 'public'`);
-    }
-  }
-
-  if (params.creatorId && viewerUserId && params.creatorId !== viewerUserId && params.status && params.status !== 'published') {
-    return { items: [] };
-  }
-
-  const looksResult = await db.query<{
-    id: string;
-    creator_id: string;
-    title: string;
-    caption: string;
-    media_url: string;
-    status: string;
-    visibility: string;
-    created_at: string;
-    updated_at: string;
-    creator_username: string | null;
-    creator_avatar: string | null;
-  }>(
-    `
-      SELECT ${LOOK_SELECT_COLUMNS}
-      FROM looks l
-      LEFT JOIN users u ON u.id = l.creator_id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY l.created_at DESC
-      LIMIT $${args.length + 1}
-    `,
-    [...args, params.limit]
-  );
-
-  const items = await enrichLooks(looksResult.rows, viewerUserId);
-
-  return { items };
-});
-
-app.get('/looks/:lookId', async (request, reply) => {
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-  const viewerUserId = request.authUser?.userId ?? null;
-
-  const accessRow = await getAccessibleLook(lookId, viewerUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  const lookResult = await db.query<{
-    id: string;
-    creator_id: string;
-    title: string;
-    caption: string;
-    media_url: string;
-    status: string;
-    visibility: string;
-    created_at: string;
-    updated_at: string;
-    creator_username: string | null;
-    creator_avatar: string | null;
-  }>(
-    `SELECT ${LOOK_SELECT_COLUMNS} FROM looks l LEFT JOIN users u ON u.id = l.creator_id WHERE l.id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  if (!lookResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  const enriched = (await enrichLooks([lookResult.rows[0]], viewerUserId))[0];
-
-  return { ok: true, look: enriched };
-});
-
-app.patch('/looks/:lookId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const bodySchema = z.object({
-    title: z.string().max(120).optional(),
-    caption: z.string().max(500).optional(),
-    visibility: z.enum(['public', 'followers', 'private']).optional(),
-    status: z.enum(['draft', 'published', 'archived']).optional(),
-    tags: z.array(z.object({
-      productId: z.string().min(2).max(120).optional(),
-      x: z.number().min(0).max(1).optional(),
-      y: z.number().min(0).max(1).optional(),
-      label: z.string().max(120).optional(),
-    })).optional(),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  // Ownership check
-  const existing = await db.query<{ creator_id: string }>(
-    'SELECT creator_id FROM looks WHERE id = $1 LIMIT 1',
-    [lookId]
-  );
-  if (existing.rows.length === 0) {
-    return reply.code(404).send({ error: 'Look not found' });
-  }
-  if (existing.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-    return reply.code(403).send({ error: 'Not authorised to edit this look' });
-  }
-
-  // Build update query dynamically
-  const updates: string[] = [];
-  const values: any[] = [];
-  let paramIdx = 1;
-
-  if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
-  if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
-  if (payload.visibility !== undefined) { updates.push(`visibility = $${paramIdx++}`); values.push(payload.visibility); }
-  if (payload.status !== undefined) { updates.push(`status = $${paramIdx++}`); values.push(payload.status); }
-  updates.push(`updated_at = NOW()`);
-
-  if (updates.length > 1) {
-    values.push(lookId);
-    await db.query(`UPDATE looks SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
-  }
-
-  // Update tags if provided
-  if (payload.tags !== undefined) {
-    await db.query('DELETE FROM look_tags WHERE look_id = $1', [lookId]);
-    for (const tag of payload.tags) {
-      if (tag.productId) {
-        await db.query(
-          'INSERT INTO look_tags (look_id, product_id, x, y, label) VALUES ($1, $2, $3, $4, $5)',
-          [lookId, tag.productId, tag.x ?? 0.5, tag.y ?? 0.5, tag.label ?? '']
-        );
-      }
-    }
-  }
-
-  return { ok: true, lookId };
-});
-
-app.delete('/looks/:lookId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const ownerResult = await db.query<{ creator_id: string }>(
-    `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
-    [lookId]
-  );
-
-  const owner = ownerResult.rows[0];
-  if (!owner) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  if (owner.creator_id !== actorUserId && request.authUser?.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden' };
-  }
-
-  await db.query(`DELETE FROM looks WHERE id = $1`, [lookId]);
-  return { ok: true };
-});
-
-// ── Look likes ─────────────────────────────────────────────────────
-
-app.post('/looks/:lookId/like', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  await db.query(
-    `INSERT INTO look_likes (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [lookId, actorUserId]
-  );
-
-  const countResult = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
-    [lookId]
-  );
-
-  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: true };
-});
-
-app.delete('/looks/:lookId/like', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  await db.query(
-    `DELETE FROM look_likes WHERE look_id = $1 AND user_id = $2`,
-    [lookId, actorUserId]
-  );
-
-  const countResult = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM look_likes WHERE look_id = $1`,
-    [lookId]
-  );
-
-  return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: false };
-});
-
-// ── Look saves ─────────────────────────────────────────────────────
-
-app.post('/looks/:lookId/save', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  await db.query(
-    `INSERT INTO look_saves (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [lookId, actorUserId]
-  );
-
-  const countResult = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
-    [lookId]
-  );
-
-  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: true };
-});
-
-app.delete('/looks/:lookId/save', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  await db.query(
-    `DELETE FROM look_saves WHERE look_id = $1 AND user_id = $2`,
-    [lookId, actorUserId]
-  );
-
-  const countResult = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM look_saves WHERE look_id = $1`,
-    [lookId]
-  );
-
-  return { ok: true, saveCount: Number(countResult.rows[0]?.count ?? 0), savedByViewer: false };
-});
-
-// ── Look comments ──────────────────────────────────────────────────
-
-app.get('/looks/:lookId/comments', async (request, reply) => {
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-  const viewerUserId = request.authUser?.userId ?? null;
-
-  const accessRow = await getAccessibleLook(lookId, viewerUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  const commentsResult = await db.query<{
-    id: string;
-    look_id: string;
-    author_id: string;
-    body: string;
-    created_at: string;
-    updated_at: string;
-    author_username: string | null;
-    author_avatar: string | null;
-  }>(
-    `
-      SELECT c.id, c.look_id, c.author_id, c.body, c.created_at, c.updated_at,
-        u.username AS author_username,
-        u.avatar AS author_avatar
-      FROM look_comments c
-      LEFT JOIN users u ON u.id = c.author_id
-      WHERE c.look_id = $1
-      ORDER BY c.created_at ASC
-      LIMIT 200
-    `,
-    [lookId]
-  );
-
-  return {
-    items: commentsResult.rows.map((row) => ({
-      id: row.id,
-      lookId: row.look_id,
-      authorId: row.author_id,
-      author: {
-        id: row.author_id,
-        username: row.author_username,
-        avatar: row.author_avatar,
-      },
-      body: row.body,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.post('/looks/:lookId/comments', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
-  const { lookId } = paramsSchema.parse(request.params);
-
-  const bodySchema = z.object({
-    id: z.string().min(2).max(120),
-    body: z.string().trim().min(1).max(1000),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  await db.query(
-    `INSERT INTO look_comments (id, look_id, author_id, body) VALUES ($1, $2, $3, $4)`,
-    [payload.id, lookId, actorUserId, payload.body]
-  );
-
-  const commentResult = await db.query<{
-    id: string;
-    author_id: string;
-    body: string;
-    created_at: string;
-    updated_at: string;
-    author_username: string | null;
-    author_avatar: string | null;
-  }>(
-    `
-      SELECT c.id, c.author_id, c.body, c.created_at, c.updated_at,
-        u.username AS author_username,
-        u.avatar AS author_avatar
-      FROM look_comments c
-      LEFT JOIN users u ON u.id = c.author_id
-      WHERE c.id = $1 LIMIT 1
-    `,
-    [payload.id]
-  );
-
-  const row = commentResult.rows[0];
-  if (!row) {
-    reply.code(500);
-    return { ok: false, error: 'Failed to create comment' };
-  }
-
-  reply.code(201);
-  return {
-    ok: true,
-    comment: {
-      id: row.id,
-      lookId,
-      authorId: row.author_id,
-      author: {
-        id: row.author_id,
-        username: row.author_username,
-        avatar: row.author_avatar,
-      },
-      body: row.body,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    },
-  };
-});
-
-app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({
-    lookId: z.string().min(2).max(120),
-    commentId: z.string().min(2).max(120),
-  });
-  const { lookId, commentId } = paramsSchema.parse(request.params);
-
-  const accessRow = await getAccessibleLook(lookId, actorUserId);
-  if (!accessRow) {
-    reply.code(404);
-    return { ok: false, error: 'Look not found' };
-  }
-
-  const commentResult = await db.query<{ author_id: string }>(
-    `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
-    [commentId, lookId]
-  );
-
-  const comment = commentResult.rows[0];
-  if (!comment) {
-    reply.code(404);
-    return { ok: false, error: 'Comment not found' };
-  }
-
-  if (comment.author_id !== actorUserId && request.authUser?.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden' };
-  }
-
-  await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
-  return { ok: true };
-});
-
+// ── Catalogue Import API ───────────────────────────────────────────
+registerCatalogImportRoutes({ app, db, readDb });
 
 // ── Listings API ───────────────────────────────────────────────────
 app.post('/listings', {
+  config: {
+    rateLimit: {
+      max: 20,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation (URL format, etc.).
@@ -20710,6 +17194,24 @@ app.post('/listings', {
         missingRequired: validation.missingRequired,
       };
     }
+  }
+
+  const listingText = `${payload.title}\n${payload.description}`;
+  const textModerationResult = await moderateListingText(payload.id, listingText);
+  if (textModerationResult.status === 'rejected') {
+    reply.code(422);
+    return {
+      ok: false,
+      error: 'Listing text was rejected by content moderation',
+      code: 'MODERATION_REJECTED',
+      labels: textModerationResult.labels,
+    };
+  }
+  if (textModerationResult.status === 'review') {
+    request.log.warn(
+      { listingId: payload.id, labels: textModerationResult.labels },
+      'Listing text flagged for human review',
+    );
   }
 
   let resolvedCoverImageUrl = payload.imageUrl ?? null;
@@ -20944,7 +17446,7 @@ app.post('/listings', {
     // Catches bulk listing creation (counterfeit/non-existent goods) and
     // new-account listing velocity (AGENTS.md §11 — truthful signals).
     try {
-      await checkFraudNonBlocking(
+      const fraudResult = await checkFraudNonBlocking(
         redis,
         {
           eventType: 'listing',
@@ -20955,7 +17457,18 @@ app.post('/listings', {
         },
         undefined,
         request.log,
+        fraudShadowService,
       );
+      // Listing events map to `allow_low_risk_flow` when the fraud service
+      // is unavailable — listing creation continues and can be reviewed
+      // post-hoc. No caller action needed beyond the audit log already
+      // written by checkFraudNonBlocking.
+      if (fraudResult.evaluationStatus === 'unavailable') {
+        request.log.warn(
+          { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
+          'Listing fraud check unavailable — continuing with failover policy'
+        );
+      }
     } catch {
       // Fraud check failures must never break listing creation (AGENTS.md §6).
     }
@@ -20966,6 +17479,9 @@ app.post('/listings', {
     void invalidateSearchCache(redis).catch((cacheError) => {
       app.log.error({ err: cacheError, listingId: payload.id }, 'Failed to invalidate search cache after listing upsert');
     });
+
+    // Sync the new/updated listing into the search index (fire-and-forget)
+    void syncSingleListing(db, payload.id).catch(() => {});
 
     return { ok: true, listingId: payload.id };
   } catch (error) {
@@ -21151,9 +17667,10 @@ app.get('/listings/:listingId', async (request, reply) => {
           'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
       },
       returnPolicy: {
-        accepted: true,
-        windowDays: 14,
-        conditions: 'Item must be returned in the same condition as received.',
+        accepted: null,
+        windowDays: null,
+        conditions: null,
+        summary: 'Return policy confirmed at checkout based on seller status and your location.',
       },
       authenticity: {
         status: 'not_offered' as const,
@@ -21162,70 +17679,7 @@ app.get('/listings/:listingId', async (request, reply) => {
   };
 });
 
-// T04: Policy/protection versioning — authoritative policy endpoint.
-// Returns the currently published version of a policy document by key.
-// The product detail screen references this instead of hardcoding terms.
-app.get('/policies/:policyKey', async (request, reply) => {
-  const paramsSchema = z.object({ policyKey: z.string().min(2).max(80) });
-  const { policyKey } = paramsSchema.parse(request.params);
-
-  let policyRow: {
-    id: string;
-    version: number;
-    title: string;
-    summary: string;
-    body: string;
-    jurisdiction: string | null;
-    effective_at: string;
-    published_at: string | null;
-  } | null = null;
-
-  try {
-    const result = await readDb.query<{
-      id: string;
-      version: number;
-      title: string;
-      summary: string;
-      body: string;
-      jurisdiction: string | null;
-      effective_at: string;
-      published_at: string | null;
-    }>(
-      `
-        SELECT id, version, title, summary, body, jurisdiction, effective_at, published_at
-        FROM policy_documents
-        WHERE policy_key = $1 AND status = 'published'
-        ORDER BY version DESC
-        LIMIT 1
-      `,
-      [policyKey]
-    );
-    policyRow = result.rows[0] ?? null;
-  } catch {
-    // Table may not exist yet — fall through to null.
-    policyRow = null;
-  }
-
-  if (!policyRow) {
-    reply.code(404);
-    return { ok: false, error: 'Policy not found', code: 'POLICY_NOT_FOUND' };
-  }
-
-  return {
-    ok: true,
-    policy: {
-      id: policyRow.id,
-      policyKey,
-      version: policyRow.version,
-      title: policyRow.title,
-      summary: policyRow.summary,
-      body: policyRow.body,
-      jurisdiction: policyRow.jurisdiction,
-      effectiveAt: policyRow.effective_at,
-      publishedAt: policyRow.published_at,
-    },
-  };
-});
+registerPoliciesRoutes({ app, readDb });
 
 app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
@@ -21516,7 +17970,11 @@ app.post('/listings/:listingId/report', async (request, reply) => {
   }
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const bodySchema = z.object({
-    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    reason: z.enum([
+      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
+      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
+      'privacy', 'impersonation', 'minor_safety', 'other',
+    ]),
     details: z.string().trim().max(500).optional(),
   });
   const { listingId } = paramsSchema.parse(request.params);
@@ -22405,6 +18863,9 @@ app.patch('/listings/:listingId', async (request, reply) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing update');
   });
 
+  // Sync the updated listing into the search index (fire-and-forget)
+  void syncSingleListing(db, listingId).catch(() => {});
+
   return { ok: true, listingId, alertEvaluation };
 });
 
@@ -22443,138 +18904,13 @@ app.delete('/listings/:listingId', async (request, reply) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing delete');
   });
 
+  // Remove the deleted listing from the search index (fire-and-forget)
+  void removeListingFromIndex(listingId).catch(() => {});
+
   return { ok: true };
 });
 
-// ── Seller Hub Overview ────────────────────────────────────────────────
-// Server-backed aggregate that computes real money, tasks, and inventory
-// from the orders, listing_offers, and listings tables.
-// Per closure program 05_SELLER_HUB_AND_PROFILE_OS: no frontend
-// approximation of financial KPIs.
-app.get('/seller-hub/overview', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const sellerId = request.authUser.userId;
-
-  // Inventory counts from listings (real statuses)
-  const inventoryResult = await readDb.query<{
-    active: string;
-    drafts: string;
-    paused: string;
-    sold: string;
-    active_value: string | null;
-  }>(
-    `
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'active') AS active,
-        COUNT(*) FILTER (WHERE status = 'draft') AS drafts,
-        COUNT(*) FILTER (WHERE status = 'paused') AS paused,
-        COUNT(*) FILTER (WHERE status = 'sold') AS sold,
-        COALESCE(SUM(price_gbp) FILTER (WHERE status = 'active'), 0) AS active_value
-      FROM listings
-      WHERE seller_id = $1 AND status != 'deleted'
-    `,
-    [sellerId]
-  );
-
-  // Order tasks: orders that need shipping (status = 'paid')
-  const shipOrdersResult = await readDb.query<{ count: string; oldest_created: string | null }>(
-    `
-      SELECT COUNT(*) AS count, MIN(created_at)::text AS oldest_created
-      FROM orders
-      WHERE seller_id = $1 AND status = 'paid'
-    `,
-    [sellerId]
-  );
-
-  // Offer tasks: pending offers on seller's listings
-  const offersResult = await readDb.query<{ count: string }>(
-    `
-      SELECT COUNT(*) AS count
-      FROM listing_offers
-      WHERE seller_id = $1 AND status = 'pending' AND expires_at > NOW()
-    `,
-    [sellerId]
-  );
-
-  // Sales performance (last 30 days) — real settled order totals
-  const performanceResult = await readDb.query<{
-    gross_sales: string | null;
-    orders: string;
-  }>(
-    `
-      SELECT
-        COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
-        COUNT(*) AS orders
-      FROM orders
-      WHERE seller_id = $1
-        AND status IN ('paid', 'shipped', 'delivered')
-        AND created_at >= NOW() - INTERVAL '30 days'
-    `,
-    [sellerId]
-  );
-
-  // Listing issues: active listings missing required fields (title, price, or image)
-  const listingIssuesResult = await readDb.query<{ count: string }>(
-    `
-      SELECT COUNT(*) AS count
-      FROM listings
-      WHERE seller_id = $1
-        AND status = 'active'
-        AND (title IS NULL OR title = '' OR price_gbp IS NULL OR price_gbp <= 0 OR image_url IS NULL)
-    `,
-    [sellerId]
-  );
-
-  const inventory = inventoryResult.rows[0] ?? { active: '0', drafts: '0', paused: '0', sold: '0', active_value: '0' };
-  const shipOrders = shipOrdersResult.rows[0] ?? { count: '0', oldest_created: null };
-  const offers = offersResult.rows[0] ?? { count: '0' };
-  const performance = performanceResult.rows[0] ?? { gross_sales: '0', orders: '0' };
-  const listingIssues = listingIssuesResult.rows[0] ?? { count: '0' };
-
-  // Build tasks array (only include tasks with count > 0)
-  const tasks: Array<
-    | { type: 'ship_order'; count: number; oldestDueAt?: string }
-    | { type: 'respond_offer'; count: number }
-    | { type: 'listing_issue'; count: number }
-  > = [];
-
-  const shipCount = parseInt(shipOrders.count, 10) || 0;
-  if (shipCount > 0) {
-    tasks.push({ type: 'ship_order', count: shipCount, oldestDueAt: shipOrders.oldest_created ?? undefined });
-  }
-  const offerCount = parseInt(offers.count, 10) || 0;
-  if (offerCount > 0) {
-    tasks.push({ type: 'respond_offer', count: offerCount });
-  }
-  const issueCount = parseInt(listingIssues.count, 10) || 0;
-  if (issueCount > 0) {
-    tasks.push({ type: 'listing_issue', count: issueCount });
-  }
-
-  return {
-    ok: true,
-    overview: {
-      generatedAt: new Date().toISOString(),
-      inventory: {
-        active: parseInt(inventory.active, 10) || 0,
-        drafts: parseInt(inventory.drafts, 10) || 0,
-        paused: parseInt(inventory.paused, 10) || 0,
-        sold: parseInt(inventory.sold, 10) || 0,
-        listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
-      },
-      tasks,
-      performance: {
-        period: '30d' as const,
-        grossSalesGbp: parseFloat(String(performance.gross_sales ?? '0')) || 0,
-        orders: parseInt(performance.orders, 10) || 0,
-      },
-    },
-  };
-});
+registerSellerHubRoutes({ app, readDb });
 
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -22991,98 +19327,7 @@ app.post('/listings/:listingId/media/unfreeze', async (request, reply) => {
   return { ok: true };
 });
 
-app.post('/secure-profiles', async (request, reply) => {
-  const bodySchema = z.object({
-    userId: z.string().min(2),
-    fullName: z.string().min(2),
-    email: z.string().email(),
-    phone: z.string().min(6).max(40).optional(),
-    address: z.string().min(5).max(220).optional(),
-    countryCode: z.string().length(2).optional(),
-    preferences: z.array(z.string().min(2).max(60)).max(20).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.userId);
-
-  const aad = `secure-profile:${payload.userId}`;
-  const encrypted = await encryptJsonPayload(
-    'profile',
-    {
-      fullName: payload.fullName,
-      email: payload.email,
-      phone: payload.phone,
-      address: payload.address,
-      countryCode: payload.countryCode,
-      preferences: payload.preferences ?? [],
-      updatedAt: new Date().toISOString(),
-    },
-    aad
-  );
-
-  await db.query(
-    `
-      INSERT INTO user_secure_profiles (user_id, ciphertext, key_version)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id) DO UPDATE
-      SET ciphertext = EXCLUDED.ciphertext,
-          key_version = EXCLUDED.key_version,
-          updated_at = NOW()
-    `,
-    [payload.userId, encrypted.ciphertext, encrypted.keyVersion]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    userId: payload.userId,
-    keyVersion: encrypted.keyVersion,
-  };
-});
-
-app.get('/secure-profiles/:userId', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    user_id: string;
-    ciphertext: string;
-    key_version: number;
-    updated_at: string;
-  }>(
-    `
-      SELECT user_id, ciphertext, key_version, updated_at
-      FROM user_secure_profiles
-      WHERE user_id = $1
-      LIMIT 1
-    `,
-    [userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'Secure profile not found' };
-  }
-
-  const profile = await decryptJsonPayload<{
-    fullName: string;
-    email: string;
-    phone?: string;
-    address?: string;
-    countryCode?: string;
-    preferences?: string[];
-    updatedAt?: string;
-  }>(row.ciphertext, `secure-profile:${userId}`);
-
-  return {
-    ok: true,
-    userId,
-    keyVersion: row.key_version,
-    storedAt: row.updated_at,
-    profile,
-  };
-});
+registerSecureProfilesRoutes({ app, db, ensureUserExists });
 
 registerRealtimeRoutes({ app, db });
 
@@ -23094,152 +19339,27 @@ registerNotificationRoutes({
   toJsonString,
 });
 
-registerFraudDetectionRoutes({ app, redis });
+registerSmsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-app.post('/secure-messages', async (request, reply) => {
-  const bodySchema = z.object({
-    conversationId: z.string().min(2).max(80),
-    senderId: z.string().min(2),
-    recipientId: z.string().min(2),
-    message: z.string().min(1).max(4000),
-  });
+registerFraudDetectionRoutes({ app, db, redis });
 
-  const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.senderId);
-  await ensureUserExists(payload.recipientId);
+registerAccountSecurityRoutes({ app, db, redis });
 
-  const aad = `secure-message:${payload.conversationId}:${payload.senderId}:${payload.recipientId}`;
-  const encrypted = await encryptJsonPayload(
-    'message',
-    {
-      message: payload.message,
-      sentAt: new Date().toISOString(),
-    },
-    aad
-  );
+registerFraudShadowRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-  const result = await db.query<{ id: number; created_at: string }>(
-    `
-      INSERT INTO secure_messages (
-        conversation_id,
-        sender_id,
-        recipient_id,
-        ciphertext,
-        key_version
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, created_at
-    `,
-    [
-      payload.conversationId,
-      payload.senderId,
-      payload.recipientId,
-      encrypted.ciphertext,
-      encrypted.keyVersion,
-    ]
-  );
+registerAdminAuditRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-  publishRealtimeEvent({
-    topic: `chat.conversation:${payload.conversationId}`,
-    type: 'chat.message.created',
-    payload: {
-      id: result.rows[0].id,
-      conversationId: payload.conversationId,
-      senderId: payload.senderId,
-      recipientId: payload.recipientId,
-      sentAt: result.rows[0].created_at,
-    },
-  });
+registerRetentionRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-  if (payload.senderId !== payload.recipientId) {
-    try {
-      await queueUserNotification({
-        userId: payload.recipientId,
-        title: 'New message',
-        body: 'You have a new secure message in Thryftverse.',
-        payload: {
-          conversationId: payload.conversationId,
-          messageId: result.rows[0].id,
-          senderId: payload.senderId,
-          event: 'chat_message',
-        },
-        metadata: {
-          source: 'secure_messages',
-        },
-      });
-    } catch (error) {
-      request.log.error({ err: error }, 'Failed to queue push notification for secure message');
-    }
-  }
+registerOpsConsoleRoutes({ app });
 
-  reply.code(201);
-  return {
-    ok: true,
-    id: result.rows[0].id,
-    createdAt: result.rows[0].created_at,
-  };
-});
+registerModelArtifactRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-app.get('/secure-messages/:conversationId', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(80) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-  });
+registerMediaEmbeddingRoutes({ app, db, createApiError });
 
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query);
+registerImporterExtractionRoutes({ app, db, readDb });
 
-  const result = await db.query<{
-    id: number;
-    conversation_id: string;
-    sender_id: string;
-    recipient_id: string;
-    ciphertext: string;
-    key_version: number;
-    created_at: string;
-  }>(
-    `
-      SELECT id, conversation_id, sender_id, recipient_id, ciphertext, key_version, created_at
-      FROM secure_messages
-      WHERE conversation_id = $1
-      ORDER BY created_at DESC
-      LIMIT $2
-    `,
-    [conversationId, limit]
-  );
-
-  const messages = [] as Array<{
-    id: number;
-    senderId: string;
-    recipientId: string;
-    message: string;
-    sentAt: string;
-    keyVersion: number;
-  }>;
-
-  for (const row of result.rows) {
-    const aad = `secure-message:${row.conversation_id}:${row.sender_id}:${row.recipient_id}`;
-    const decrypted = await decryptJsonPayload<{
-      message: string;
-      sentAt?: string;
-    }>(row.ciphertext, aad);
-
-    messages.push({
-      id: row.id,
-      senderId: row.sender_id,
-      recipientId: row.recipient_id,
-      message: decrypted.message,
-      sentAt: decrypted.sentAt ?? row.created_at,
-      keyVersion: row.key_version,
-    });
-  }
-
-  return {
-    ok: true,
-    conversationId,
-    items: messages,
-  };
-});
+// registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
 
 app.post('/chat/dm', async (request, reply) => {
   const bodySchema = z.object({
@@ -23301,6 +19421,30 @@ app.post('/chat/dm', async (request, reply) => {
       };
     }
 
+    // P0.13: Enforce recipient privacy — check allow_messages_from.
+    // 'everyone' → accepted immediately. 'following' → pending if not
+    // mutually following. 'nobody' → pending (request must be accepted).
+    const recipientPrivacy = await client.query<{ allow_messages_from: string }>(
+      `SELECT allow_messages_from FROM users WHERE id = $1 LIMIT 1`,
+      [payload.recipientUserId]
+    );
+    const recipientAllowMessages = recipientPrivacy.rows[0]?.allow_messages_from ?? 'everyone';
+    let requestStatus: 'pending' | 'accepted' = 'accepted';
+
+    if (recipientAllowMessages === 'nobody') {
+      requestStatus = 'pending';
+    } else if (recipientAllowMessages === 'following') {
+      // Check if the recipient follows the actor (mutual follow = accepted)
+      const followResult = await client.query<{ id: string }>(
+        `SELECT id FROM user_follows
+         WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+        [payload.recipientUserId, actorUserId]
+      );
+      if (!followResult.rowCount) {
+        requestStatus = 'pending';
+      }
+    }
+
     const existingResult = await client.query<{ id: string }>(
       `
         SELECT c.id
@@ -23333,6 +19477,14 @@ app.post('/chat/dm', async (request, reply) => {
          WHERE id = $1`,
         [existingResult.rows[0].id, dmPairKey],
       );
+      // P0.13: Fetch the actor's request status for this conversation so the
+      // client knows whether messages can be sent or are pending acceptance.
+      const actorState = await client.query<{ request_status: string }>(
+        `SELECT request_status FROM chat_conversation_user_state
+         WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
+        [actorUserId, existingResult.rows[0].id]
+      );
+      const existingRequestStatus = actorState.rows[0]?.request_status ?? 'accepted';
       await client.query('COMMIT');
       const conversationId = existingResult.rows[0].id;
       reply.code(200);
@@ -23345,6 +19497,7 @@ app.post('/chat/dm', async (request, reply) => {
           itemId: payload.itemId ?? null,
           ownerId: actorUserId,
           participantIds: [actorUserId, payload.recipientUserId],
+          requestStatus: existingRequestStatus,
         },
       };
     }
@@ -23376,6 +19529,23 @@ app.post('/chat/dm', async (request, reply) => {
       [conversationId, payload.recipientUserId]
     );
 
+    // P0.13: Create per-user conversation state with the correct request
+    // status. The sender is always 'accepted' (they initiated). The recipient
+    // gets 'pending' if their privacy settings require it.
+    await client.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
+       VALUES ($1, $2, 'accepted')
+       ON CONFLICT (user_id, conversation_id) DO NOTHING`,
+      [actorUserId, conversationId]
+    );
+    await client.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, conversation_id)
+       DO UPDATE SET request_status = EXCLUDED.request_status, updated_at = NOW()`,
+      [payload.recipientUserId, conversationId, requestStatus]
+    );
+
     await client.query(
       `UPDATE chat_conversations SET updated_at = NOW() WHERE id = $1`,
       [conversationId]
@@ -23390,27 +19560,32 @@ app.post('/chat/dm', async (request, reply) => {
         conversationId,
         ownerId: actorUserId,
         participantIds: [actorUserId, payload.recipientUserId],
+        requestStatus,
       },
     });
 
-    try {
-      await queueUserNotification({
-        userId: payload.recipientUserId,
-        title: 'New conversation',
-        body: 'Someone started a conversation with you.',
-        payload: {
-          conversationId,
-          event: 'chat_dm_created',
-        },
-        metadata: {
-          source: 'chat.dm.create',
-        },
-      });
-    } catch (error) {
-      request.log.error(
-        { err: error, conversationId, recipientUserId: payload.recipientUserId },
-        'Failed to queue DM notification'
-      );
+    // Only notify the recipient if the request is accepted (pending requests
+    // appear in the Requests inbox, not as push notifications)
+    if (requestStatus === 'accepted') {
+      try {
+        await queueUserNotification({
+          userId: payload.recipientUserId,
+          title: 'New conversation',
+          body: 'Someone started a conversation with you.',
+          payload: {
+            conversationId,
+            event: 'chat_dm_created',
+          },
+          metadata: {
+            source: 'chat.dm.create',
+          },
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error, conversationId, recipientUserId: payload.recipientUserId },
+          'Failed to queue DM notification'
+        );
+      }
     }
 
     reply.code(201);
@@ -23423,6 +19598,7 @@ app.post('/chat/dm', async (request, reply) => {
         itemId: payload.itemId ?? null,
         ownerId: actorUserId,
         participantIds: [actorUserId, payload.recipientUserId],
+        requestStatus,
       },
     };
   } catch (error) {
@@ -23440,6 +19616,24 @@ app.post('/chat/groups', async (request, reply) => {
     itemId: z.string().trim().min(2).max(120).optional(),
     description: z.string().trim().max(280).optional(),
     avatar: z.string().trim().max(512).optional(),
+    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+    coverPhoto: z.string().trim().max(512).optional(),
+    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
+  }).superRefine((value, context) => {
+    if (value.avatar && !value.avatarFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['avatarFinalizationId'],
+        message: 'A finalized upload receipt is required for a group photo',
+      });
+    }
+    if (value.coverPhoto && !value.coverPhotoFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['coverPhotoFinalizationId'],
+        message: 'A finalized upload receipt is required for a cover photo',
+      });
+    }
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -23453,6 +19647,24 @@ app.post('/chat/groups', async (request, reply) => {
     .filter((value) => value.length > 0);
 
   await Promise.all(normalizedMemberIds.map((memberId) => ensureUserExists(memberId)));
+
+  if (payload.avatar && payload.avatarFinalizationId) {
+    await ensureOwnedGroupAvatarReceipt(db, {
+      actorUserId,
+      finalizationId: payload.avatarFinalizationId,
+      avatarUrl: payload.avatar,
+    });
+  }
+
+  if (payload.coverPhoto && payload.coverPhotoFinalizationId) {
+    await ensureOwnedGroupMediaReceipt(db, {
+      actorUserId,
+      finalizationId: payload.coverPhotoFinalizationId,
+      mediaUrl: payload.coverPhoto,
+      folder: 'covers',
+      scope: 'cover',
+    });
+  }
 
   if (payload.itemId) {
     const listingResult = await db.query<{ id: string }>(
@@ -23515,6 +19727,13 @@ app.post('/chat/groups', async (request, reply) => {
           createdVia: 'chat_groups_api',
           ...(payload.description ? { description: payload.description } : {}),
           ...(payload.avatar ? { avatar: payload.avatar } : {}),
+          ...(payload.avatarFinalizationId
+            ? { avatarFinalizationId: payload.avatarFinalizationId }
+            : {}),
+          ...(payload.coverPhoto ? { coverPhoto: payload.coverPhoto } : {}),
+          ...(payload.coverPhotoFinalizationId
+            ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
+            : {}),
         }),
       ]
     );
@@ -23556,7 +19775,16 @@ app.post('/chat/groups', async (request, reply) => {
         title,
         itemId: payload.itemId ?? null,
         ownerId: actorUserId,
+        description: payload.description ?? null,
+        avatar: payload.avatar ?? null,
+        coverPhoto: payload.coverPhoto ?? null,
         participantIds: normalizedMemberIds,
+        memberRoles: Object.fromEntries(
+          normalizedMemberIds.map((memberId) => [
+            memberId,
+            memberId === actorUserId ? 'owner' : 'member',
+          ])
+        ),
         botIds: [] as string[],
         lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
         lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
@@ -23632,7 +19860,15 @@ app.post('/chat/groups', async (request, reply) => {
       conversationId,
       title,
       ownerId: actorUserId,
+      description: payload.description ?? null,
+      avatar: payload.avatar ?? null,
       participantIds: normalizedMemberIds,
+      memberRoles: Object.fromEntries(
+        normalizedMemberIds.map((memberId) => [
+          memberId,
+          memberId === actorUserId ? 'owner' : 'member',
+        ])
+      ),
     },
   });
 
@@ -23645,7 +19881,15 @@ app.post('/chat/groups', async (request, reply) => {
       title,
       itemId: payload.itemId ?? null,
       ownerId: actorUserId,
+      description: payload.description ?? null,
+      avatar: payload.avatar ?? null,
       participantIds: normalizedMemberIds,
+      memberRoles: Object.fromEntries(
+        normalizedMemberIds.map((memberId) => [
+          memberId,
+          memberId === actorUserId ? 'owner' : 'member',
+        ])
+      ),
       botIds: [] as string[],
       lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
       lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
@@ -23682,6 +19926,7 @@ app.get('/chat/conversations', async (request) => {
     title: string | null;
     owner_id: string;
     item_id: string | null;
+    metadata: Record<string, unknown> | null;
     updated_at: string;
     last_message: string | null;
     last_message_created_at: string | null;
@@ -23693,6 +19938,7 @@ app.get('/chat/conversations', async (request) => {
         c.title,
         c.owner_id,
         c.item_id,
+        c.metadata,
         c.updated_at::text,
         lm.body AS last_message,
         lm.created_at::text AS last_message_created_at
@@ -23721,10 +19967,11 @@ app.get('/chat/conversations', async (request) => {
     };
   }
 
-  const [memberRows, botRows] = await Promise.all([
+  const [memberRows, botRows, stateRows, readStateRows] = await Promise.all([
     db.query<{
       conversation_id: string;
       user_id: string;
+      role: ChatGroupMemberRole;
       username: string;
       display_name: string | null;
       avatar: string | null;
@@ -23734,6 +19981,7 @@ app.get('/chat/conversations', async (request) => {
         SELECT
           cm.conversation_id,
           cm.user_id,
+          cm.role,
           u.username,
           u.display_name,
           u.avatar,
@@ -23754,9 +20002,36 @@ app.get('/chat/conversations', async (request) => {
       `,
       [conversationIds]
     ),
+    db.query<{
+      conversation_id: string;
+      is_muted: boolean;
+      is_archived: boolean;
+      request_status: string;
+      pinned_rank: number;
+      marked_unread_message_id: string | null;
+    }>(
+      `
+        SELECT conversation_id, is_muted, is_archived, request_status, pinned_rank, marked_unread_message_id
+        FROM chat_conversation_user_state
+        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
+      `,
+      [actorUserId, conversationIds]
+    ),
+    db.query<{
+      conversation_id: string;
+      last_read_at: string | null;
+    }>(
+      `
+        SELECT conversation_id, last_read_at::text
+        FROM chat_members
+        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
+      `,
+      [actorUserId, conversationIds]
+    ),
   ]);
 
   const membersByConversation = new Map<string, string[]>();
+  const rolesByConversation = new Map<string, Record<string, ChatGroupMemberRole>>();
   const memberProfilesByConversation = new Map<string, Array<{
     id: string;
     username: string;
@@ -23768,6 +20043,9 @@ app.get('/chat/conversations', async (request) => {
     const current = membersByConversation.get(row.conversation_id) ?? [];
     current.push(row.user_id);
     membersByConversation.set(row.conversation_id, current);
+    const roles = rolesByConversation.get(row.conversation_id) ?? {};
+    roles[row.user_id] = row.role;
+    rolesByConversation.set(row.conversation_id, roles);
     const profiles = memberProfilesByConversation.get(row.conversation_id) ?? [];
     profiles.push({
       id: row.user_id,
@@ -23786,21 +20064,56 @@ app.get('/chat/conversations', async (request) => {
     botsByConversation.set(row.conversation_id, current);
   }
 
+  const stateByConversation = new Map<string, { isMuted: boolean; isArchived: boolean; requestStatus: string; pinnedRank: number; markedUnreadMessageId: string | null }>();
+  for (const row of stateRows.rows) {
+    stateByConversation.set(row.conversation_id, {
+      isMuted: row.is_muted,
+      isArchived: row.is_archived,
+      requestStatus: row.request_status,
+      pinnedRank: row.pinned_rank,
+      markedUnreadMessageId: row.marked_unread_message_id,
+    });
+  }
+
+  // Build last_read_at map for unread computation.
+  const lastReadByConversation = new Map<string, string | null>();
+  for (const row of readStateRows.rows) {
+    lastReadByConversation.set(row.conversation_id, row.last_read_at);
+  }
+
   return {
     ok: true,
-    items: conversationsResult.rows.map((row) => ({
-      id: row.id,
-      type: row.type,
-      title: row.title,
-      ownerId: row.owner_id,
-      itemId: row.item_id,
-      participantIds: membersByConversation.get(row.id) ?? [],
-      participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
-      botIds: botsByConversation.get(row.id) ?? [],
-      lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
-      lastMessageTime: row.last_message_created_at ?? row.updated_at,
-      unread: false,
-    })),
+    items: conversationsResult.rows.map((row) => {
+      const state = stateByConversation.get(row.id);
+      const metadata = asObject(row.metadata);
+      return {
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        ownerId: row.owner_id,
+        description: typeof metadata.description === 'string' ? metadata.description : null,
+        avatar: typeof metadata.avatar === 'string' ? metadata.avatar : null,
+        coverPhoto: typeof metadata.coverPhoto === 'string' ? metadata.coverPhoto : null,
+        itemId: row.item_id,
+        participantIds: membersByConversation.get(row.id) ?? [],
+        memberRoles: rolesByConversation.get(row.id) ?? {},
+        participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
+        botIds: botsByConversation.get(row.id) ?? [],
+        lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
+        lastMessageTime: row.last_message_created_at ?? row.updated_at,
+        unread: (() => {
+          const lastRead = lastReadByConversation.get(row.id);
+          const lastMsgTime = row.last_message_created_at ?? row.updated_at;
+          if (!lastRead || !lastMsgTime) return false;
+          return new Date(lastRead) < new Date(lastMsgTime);
+        })(),
+        isMuted: state?.isMuted ?? false,
+        isArchived: state?.isArchived ?? false,
+        requestStatus: state?.requestStatus ?? 'accepted',
+        pinnedRank: state?.pinnedRank ?? 0,
+        markedUnread: Boolean(state?.markedUnreadMessageId),
+      };
+    }),
   };
 });
 
@@ -23808,16 +20121,124 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
   });
+  // P0.3: Keyset pagination on (created_at, id). Default returns the NEWEST
+  // page (descending), reversed for display. `before` cursor fetches older
+  // messages; `after` fetches newer ones. `aroundMessageId` fetches context
+  // around a specific message (used for jump-to-result and reply scroll).
   const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(250).default(120),
+    limit: z.coerce.number().int().min(1).max(250).default(50),
+    before: z.string().min(2).max(120).optional(),
+    after: z.string().min(2).max(120).optional(),
+    aroundMessageId: z.string().min(2).max(120).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query ?? {});
+  const { limit, before, after, aroundMessageId } = querySchema.parse(request.query ?? {});
 
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  // ── aroundMessageId: fetch a window centered on a message ──────────────
+  if (aroundMessageId) {
+    const centerResult = await db.query<{ created_at: string; id: string }>(
+      `SELECT created_at::text, id FROM chat_messages
+       WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+      [aroundMessageId, conversationId]
+    );
+    if (centerResult.rowCount) {
+      const center = centerResult.rows[0];
+      const halfLimit = Math.ceil(limit / 2);
+      const older = await db.query<{
+        id: string;
+        sender_type: ChatSenderType;
+        sender_user_id: string | null;
+        sender_bot_id: string | null;
+        body: string;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        client_message_id: string | null;
+        reply_to_message_id: string | null;
+        deleted_for_everyone_at: string | null;
+        edit_version: number;
+        edited_at: string | null;
+      }>(
+        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.metadata, m.created_at::text, m.client_message_id,
+                m.reply_to_message_id, m.deleted_for_everyone_at,
+                m.edit_version, m.edited_at::text
+         FROM chat_messages m
+         WHERE m.conversation_id = $1
+           AND m.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
+           AND (m.created_at, m.id) < ($2, $3)
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT $4`,
+        [conversationId, center.created_at, center.id, halfLimit, actorUserId]
+      );
+      const newer = await db.query<{
+        id: string;
+        sender_type: ChatSenderType;
+        sender_user_id: string | null;
+        sender_bot_id: string | null;
+        body: string;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        client_message_id: string | null;
+        reply_to_message_id: string | null;
+        deleted_for_everyone_at: string | null;
+        edit_version: number;
+        edited_at: string | null;
+      }>(
+        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.metadata, m.created_at::text, m.client_message_id,
+                m.reply_to_message_id, m.deleted_for_everyone_at,
+                m.edit_version, m.edited_at::text
+         FROM chat_messages m
+         WHERE m.conversation_id = $1
+           AND m.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
+           AND (m.created_at, m.id) >= ($2, $3)
+         ORDER BY m.created_at ASC, m.id ASC
+         LIMIT $4`,
+        [conversationId, center.created_at, center.id, limit - halfLimit, actorUserId]
+      );
+      // Combine: older (reversed to ASC) + newer (already ASC)
+      const items = [...older.rows.reverse(), ...newer.rows];
+      return {
+        ok: true,
+        conversation: {
+          id: conversation.id,
+          type: conversation.type,
+          title: conversation.title,
+          ownerId: conversation.owner_id,
+          itemId: conversation.item_id,
+        },
+        items: await serializeChatMessageRows(items, actorUserId),
+        hasMore: older.rows.length >= halfLimit,
+        oldestCursor: items.length > 0
+          ? `${items[0].created_at}|${items[0].id}` : null,
+        newestCursor: items.length > 0
+          ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
+      };
+    }
+  }
+
+  // ── Cursor-based keyset pagination ──────────────────────────────────────
+  // Default (no cursor): return the NEWEST page.
+  // `before`: messages older than the cursor (for scrolling up in history).
+  // `after`: messages newer than the cursor ( for catching up after a gap).
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
+  if (before || after) {
+    const cursorStr = (before ?? after) as string;
+    const sepIdx = cursorStr.lastIndexOf('|');
+    if (sepIdx > 0) {
+      cursorCreatedAt = cursorStr.slice(0, sepIdx);
+      cursorId = cursorStr.slice(sepIdx + 1);
+    }
+  }
+
+  const isAfter = Boolean(after);
   const result = await db.query<{
     id: string;
     sender_type: ChatSenderType;
@@ -23826,23 +20247,36 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
     body: string;
     metadata: Record<string, unknown> | null;
     created_at: string;
+    client_message_id: string | null;
+    reply_to_message_id: string | null;
+    deleted_for_everyone_at: string | null;
+    edit_version: number;
+    edited_at: string | null;
   }>(
     `
-      SELECT
-        id,
-        sender_type,
-        sender_user_id,
-        sender_bot_id,
-        body,
-        metadata,
-        created_at::text
-      FROM chat_messages
-      WHERE conversation_id = $1
-      ORDER BY created_at ASC
-      LIMIT $2
+      SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+             m.metadata, m.created_at::text, m.client_message_id,
+             m.reply_to_message_id, m.deleted_for_everyone_at,
+             m.edit_version, m.edited_at::text
+      FROM chat_messages m
+      WHERE m.conversation_id = $1
+        AND m.deleted_for_everyone_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = ${cursorCreatedAt ? '$5' : '$3'})
+        ${cursorCreatedAt ? (isAfter
+          ? 'AND (m.created_at, m.id) > ($2, $3)'
+          : 'AND (m.created_at, m.id) < ($2, $3)')
+          : ''}
+      ORDER BY m.created_at ${isAfter ? 'ASC' : 'DESC'}, m.id ${isAfter ? 'ASC' : 'DESC'}
+      LIMIT $${cursorCreatedAt ? '4' : '2'}
     `,
-    [conversationId, limit]
+    cursorCreatedAt
+      ? [conversationId, cursorCreatedAt, cursorId, limit, actorUserId]
+      : [conversationId, limit, actorUserId]
   );
+
+  // For `before` and default (DESC query), reverse to chronological ASC for display.
+  // For `after` (ASC query), keep as-is.
+  const items = isAfter ? result.rows : result.rows.reverse();
 
   return {
     ok: true,
@@ -23853,19 +20287,22 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       ownerId: conversation.owner_id,
       itemId: conversation.item_id,
     },
-    items: result.rows.map((row) => ({
-      id: row.id,
-      senderType: row.sender_type,
-      senderUserId: row.sender_user_id,
-      senderBotId: row.sender_bot_id,
-      body: row.body,
-      metadata: row.metadata ?? {},
-      createdAt: row.created_at,
-    })),
+    items: await serializeChatMessageRows(items, actorUserId),
+    hasMore: result.rows.length >= limit,
+    oldestCursor: items.length > 0
+      ? `${items[0].created_at}|${items[0].id}` : null,
+    newestCursor: items.length > 0
+      ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
   };
 });
 
 app.post('/chat/conversations/:conversationId/messages', {
+  config: {
+    rateLimit: {
+      max: 60,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation as a second layer.
@@ -23879,10 +20316,13 @@ app.post('/chat/conversations/:conversationId/messages', {
     },
     body: {
       type: 'object',
-      required: ['text'],
       properties: {
-        text: { type: 'string', minLength: 1, maxLength: 4000 },
+        type: { type: 'string', enum: ['text', 'image', 'video'] },
+        text: { type: 'string', maxLength: 4000 },
+        mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
+        clientMessageId: { type: 'string', minLength: 1, maxLength: 120 },
+        replyToMessageId: { type: 'string', minLength: 2, maxLength: 120 },
       },
       additionalProperties: false,
     },
@@ -23891,17 +20331,129 @@ app.post('/chat/conversations/:conversationId/messages', {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
   });
-  const bodySchema = z.object({
-    text: z.string().trim().min(1).max(4000),
-    metadata: z.record(z.unknown()).optional(),
-  });
+  // P0-MSG-1: Discriminated message payload. Text is required only for
+  // `type: 'text'` (or when `type` is absent for backwards compatibility).
+  // Image/video messages require a `mediaUri` and may omit the caption.
+  const bodySchema = z
+    .object({
+      type: z.enum(['text', 'image', 'video']).optional(),
+      text: z.string().trim().max(4000).optional(),
+      mediaUri: z.string().min(1).max(2048).optional(),
+      metadata: z.record(z.unknown()).optional(),
+      clientMessageId: z.string().trim().min(1).max(120).optional(),
+      replyToMessageId: z.string().trim().min(2).max(120).optional(),
+    })
+    .superRefine((val, ctx) => {
+      const isMedia = val.type === 'image' || val.type === 'video';
+      if (isMedia) {
+        if (!val.mediaUri || val.mediaUri.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'mediaUri is required for image/video messages',
+            path: ['mediaUri'],
+          });
+        }
+      } else {
+        // `type: 'text'` or absent — backwards-compatible text message.
+        if (!val.text || val.text.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'text is required for text messages',
+            path: ['text'],
+          });
+        }
+      }
+    });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
 
+  const isMediaMessage = payload.type === 'image' || payload.type === 'video';
+  // `body` is NOT NULL in chat_messages; media-only messages use an empty
+  // string so the column constraint is satisfied while the media URI lives
+  // in metadata for the read path.
+  const bodyText = payload.text ?? '';
+  const mergedMetadata: Record<string, unknown> = {
+    ...(payload.metadata ?? {}),
+    ...(isMediaMessage
+      ? { mediaUri: payload.mediaUri, mediaType: payload.type }
+      : {}),
+  };
+
   await ensureUserExists(actorUserId);
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const actorStateResult = await db.query<{ request_status: string | null }>(
+    `SELECT request_status FROM chat_conversation_user_state
+     WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
+    [actorUserId, conversationId],
+  );
+  const actorRequestStatus = actorStateResult.rowCount ? actorStateResult.rows[0].request_status : null;
+  if (actorRequestStatus === 'pending' || actorRequestStatus === 'declined') {
+    reply.code(403);
+    return { ok: false, error: 'Message request has not been accepted' };
+  }
+
+  // P0.8: Validate reply target — must exist in this conversation and not be
+  // deleted-for-everyone. This prevents cross-conversation reply spoofing.
+  if (payload.replyToMessageId) {
+    const replyTarget = await db.query<{ id: string }>(
+      `SELECT id FROM chat_messages
+       WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL
+       LIMIT 1`,
+      [payload.replyToMessageId, conversationId]
+    );
+    if (!replyTarget.rowCount) {
+      reply.code(400);
+      return { ok: false, error: 'Reply target message not found in this conversation' };
+    }
+  }
+
+  // P0-MSG-2: Idempotent replay. If the client retried a send after a dropped
+  // response, the same clientMessageId will be presented. Return the original
+  // message instead of creating a duplicate. The partial unique index on
+  // (conversation_id, sender_user_id, client_message_id) is the race-condition
+  // backstop; this lookup is the fast path.
+  if (payload.clientMessageId) {
+    const existing = await db.query<{
+      id: string;
+      body: string;
+      metadata: Record<string, unknown>;
+      created_at: string;
+      client_message_id: string | null;
+      reply_to_message_id: string | null;
+    }>(
+      `
+        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        FROM chat_messages
+        WHERE conversation_id = $1
+          AND sender_user_id = $2
+          AND client_message_id = $3
+        LIMIT 1
+      `,
+      [conversationId, actorUserId, payload.clientMessageId]
+    );
+
+    if (existing.rowCount && existing.rowCount > 0) {
+      const row = existing.rows[0];
+      reply.code(201);
+      return {
+        ok: true,
+        message: {
+          id: row.id,
+          senderType: 'user' as const,
+          senderUserId: actorUserId,
+          senderBotId: null,
+          body: row.body,
+          metadata: row.metadata ?? {},
+          createdAt: row.created_at,
+          clientMessageId: row.client_message_id ?? undefined,
+          replyToMessageId: row.reply_to_message_id ?? undefined,
+        },
+      };
+    }
+  }
 
   const messageId = createRuntimeId('chatmsg');
   const result = await db.query<{ id: string; created_at: string }>(
@@ -23913,19 +20465,112 @@ app.post('/chat/conversations/:conversationId/messages', {
         sender_user_id,
         sender_bot_id,
         body,
-        metadata
+        metadata,
+        client_message_id,
+        reply_to_message_id
       )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb)
+      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6, $7)
+      ON CONFLICT (conversation_id, sender_user_id, client_message_id)
+        WHERE client_message_id IS NOT NULL
+      DO NOTHING
       RETURNING id, created_at::text
     `,
     [
       messageId,
       conversationId,
       actorUserId,
-      payload.text,
-      toJsonString(payload.metadata ?? {}),
+      bodyText,
+      toJsonString(mergedMetadata),
+      payload.clientMessageId ?? null,
+      payload.replyToMessageId ?? null,
     ]
   );
+
+  // P0-MSG-2: Race-condition backstop. Two concurrent retries with the same
+  // clientMessageId can both pass the SELECT lookup above. The partial unique
+  // index makes the second INSERT a no-op (DO NOTHING); detect that and
+  // replay the winning row so the client still gets a 201 with the message.
+  if (result.rowCount === 0 && payload.clientMessageId) {
+    const existing = await db.query<{
+      id: string;
+      body: string;
+      metadata: Record<string, unknown>;
+      created_at: string;
+      client_message_id: string | null;
+      reply_to_message_id: string | null;
+    }>(
+      `
+        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        FROM chat_messages
+        WHERE conversation_id = $1
+          AND sender_user_id = $2
+          AND client_message_id = $3
+        LIMIT 1
+      `,
+      [conversationId, actorUserId, payload.clientMessageId]
+    );
+
+    if (existing.rowCount && existing.rowCount > 0) {
+      const row = existing.rows[0];
+      reply.code(201);
+      return {
+        ok: true,
+        message: {
+          id: row.id,
+          senderType: 'user' as const,
+          senderUserId: actorUserId,
+          senderBotId: null,
+          body: row.body,
+          metadata: row.metadata ?? {},
+          createdAt: row.created_at,
+          clientMessageId: row.client_message_id ?? undefined,
+          replyToMessageId: row.reply_to_message_id ?? undefined,
+        },
+      };
+    }
+  }
+
+  if (isMediaMessage && payload.mediaUri) {
+    const mediaUri = payload.mediaUri;
+    if (mediaUri.includes('/media/')) {
+      const assetResult = await db.query<{
+        id: string;
+        owner_id: string;
+        canonical_url: string | null;
+        status: string;
+        media_kind: string;
+      }>(
+        `SELECT id, owner_id, canonical_url, status, media_kind FROM media_assets WHERE canonical_url = $1 LIMIT 1`,
+        [mediaUri],
+      );
+      if (!assetResult.rowCount) {
+        reply.code(403);
+        return { ok: false, error: 'Media asset not found' };
+      }
+      const asset = assetResult.rows[0];
+      if (asset.owner_id !== actorUserId) {
+        reply.code(403);
+        return { ok: false, error: 'Media asset does not belong to the sender' };
+      }
+      const attachmentKind = asset.media_kind === 'video' ? 'video' : 'image';
+      await db.query(
+        `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
+      );
+    } else {
+      request.log.warn(
+        { mediaUri, conversationId, actorUserId },
+        'Chat message media URI does not match canonical media URL pattern — allowing without ownership check',
+      );
+      const attachmentKind = payload.type === 'video' ? 'video' : 'image';
+      await db.query(
+        `INSERT INTO chat_message_attachments (id, message_id, kind, canonical_url, created_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [createRuntimeId('chatatt'), result.rows[0].id, attachmentKind, mediaUri],
+      );
+    }
+  }
 
   await db.query(
     `
@@ -23933,61 +20578,169 @@ app.post('/chat/conversations/:conversationId/messages', {
       SET updated_at = NOW()
       WHERE id = $1
     `,
-    [conversationId]
+    [conversationId],
   );
 
   const participantIds = await listChatParticipantIds(db, conversationId);
   const recipientIds = participantIds.filter((memberId) => memberId !== actorUserId);
 
-  await Promise.all(
-    recipientIds.map(async (memberId) => {
-      try {
-        await queueUserNotification({
-          userId: memberId,
-          title: 'New message',
-          body: conversation.type === 'group'
-            ? `New message in ${conversation.title ?? 'your group chat'}`
-            : 'You have a new message in Thryftverse.',
-          payload: {
-            conversationId,
-            messageId: result.rows[0].id,
-            senderId: actorUserId,
-            event: 'chat_message',
-          },
-          metadata: {
-            source: 'chat.conversations.message.create',
-          },
-        });
-      } catch (error) {
-        request.log.error(
-          {
-            err: error,
-            conversationId,
-            memberId,
-          },
-          'Failed to queue chat message notification'
-        );
+  let notifiableRecipientIds = recipientIds;
+  if (recipientIds.length > 0) {
+    const stateResult = await db.query<{
+      user_id: string;
+      is_muted: boolean;
+      is_archived: boolean;
+      request_status: string | null;
+    }>(
+      `SELECT user_id, is_muted, is_archived, request_status
+       FROM chat_conversation_user_state
+       WHERE conversation_id = $1 AND user_id = ANY($2::text[])`,
+      [conversationId, recipientIds],
+    );
+    const suppressedUserIds = new Set<string>();
+    for (const row of stateResult.rows) {
+      if (row.is_muted || row.is_archived || row.request_status === 'pending' || row.request_status === 'declined') {
+        suppressedUserIds.add(row.user_id);
       }
-    })
-  );
+    }
+    notifiableRecipientIds = recipientIds.filter((id) => !suppressedUserIds.has(id));
+  }
 
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.message.created',
-    payload: {
-      id: result.rows[0].id,
-      conversationId,
-      senderType: 'user',
-      senderUserId: actorUserId,
-      senderBotId: null,
-      body: payload.text,
-      metadata: payload.metadata ?? {},
-      createdAt: result.rows[0].created_at,
-    },
-  });
+  // ── FR-05: Authoritative risk decision BEFORE fan-out ────────────────
+  // The message is already committed to the DB. We now evaluate risk before
+  // any notification fan-out, realtime event, or bot execution so that
+  // phishing/scam content is quarantined before it reaches recipients.
+  //
+  // Flow: DB insert → evaluateRisk() → conditional fan-out → response.
+  //   allow          → full fan-out (notifications, realtime, bots)
+  //   quarantine     → no fan-out; sender-visible, recipient-hidden
+  //   step_up / manual_review / delay → realtime only, no push; pending_review
+  //   deny           → no fan-out; message blocked
+  //
+  // The legacy checkFraudNonBlocking call is retained below as a shadow log.
+  let riskDecision: Awaited<ReturnType<typeof evaluateRisk>> | null = null;
+  try {
+    riskDecision = await evaluateRisk(
+      { db, redis, logger: request.log, shadowService: fraudShadowService, ipReputationProvider },
+      {
+        eventType: 'chat.message.send',
+        subjectRef: conversationId,
+        userId: actorUserId,
+        headers: request.headers as Record<string, string | string[] | undefined>,
+        ip: request.ip,
+        context: {
+          conversationId,
+          messageId: result.rows[0].id,
+          messageLength: bodyText.length,
+        },
+      },
+    );
+  } catch (err) {
+    // Risk evaluation failures must never break message sending (AGENTS.md §6).
+    // Fail open: treat as allow so the message is delivered.
+    request.log.error(
+      { err, conversationId, actorUserId, messageId: result.rows[0].id },
+      'evaluateRisk failed for chat message — failing open to allow',
+    );
+  }
 
-  // Bot runtime: check if message triggers any deployed bot commands
-  if (conversation.type === 'group') {
+  const ownerDecision = riskDecision?.ownerDecision ?? 'allow';
+  const suppressNotifications =
+    ownerDecision === 'quarantine' ||
+    ownerDecision === 'deny' ||
+    ownerDecision === 'step_up' ||
+    ownerDecision === 'manual_review' ||
+    ownerDecision === 'delay';
+  const suppressRealtimeAndBots =
+    ownerDecision === 'quarantine' || ownerDecision === 'deny';
+
+  if (ownerDecision === 'quarantine') {
+    request.log.warn(
+      {
+        conversationId,
+        actorUserId,
+        messageId: result.rows[0].id,
+        decisionId: riskDecision?.decisionId,
+        riskLevel: riskDecision?.riskLevel,
+        reasonCodes: riskDecision?.ownerReasonCodes,
+      },
+      'Chat message quarantined by risk decision — suppressing all fan-out',
+    );
+  } else if (ownerDecision === 'deny') {
+    request.log.warn(
+      {
+        conversationId,
+        actorUserId,
+        messageId: result.rows[0].id,
+        decisionId: riskDecision?.decisionId,
+        riskLevel: riskDecision?.riskLevel,
+        reasonCodes: riskDecision?.ownerReasonCodes,
+      },
+      'Chat message blocked by risk decision — suppressing all fan-out',
+    );
+  }
+
+  // Push notification fan-out — skipped for quarantine, deny, and
+  // pending_review (step_up / manual_review / delay) decisions.
+  if (!suppressNotifications && notifiableRecipientIds.length > 0) {
+    await Promise.all(
+      notifiableRecipientIds.map(async (memberId) => {
+        try {
+          await queueUserNotification({
+            userId: memberId,
+            title: 'New message',
+            body: conversation.type === 'group'
+              ? `New message in ${conversation.title ?? 'your group chat'}`
+              : 'You have a new message in Thryftverse.',
+            payload: {
+              conversationId,
+              messageId: result.rows[0].id,
+              senderId: actorUserId,
+              event: 'chat_message',
+            },
+            metadata: {
+              source: 'chat.conversations.message.create',
+            },
+          });
+        } catch (error) {
+          request.log.error(
+            {
+              err: error,
+              conversationId,
+              memberId,
+            },
+            'Failed to queue chat message notification'
+          );
+        }
+      })
+    );
+  }
+
+  // Realtime event — skipped for quarantine and deny. For pending_review
+  // (step_up / manual_review / delay) the realtime event still fires so an
+  // active recipient in the chat sees the message in real-time.
+  if (!suppressRealtimeAndBots) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.created',
+      payload: {
+        id: result.rows[0].id,
+        conversationId,
+        senderType: 'user',
+        senderUserId: actorUserId,
+        senderBotId: null,
+        body: bodyText,
+        metadata: mergedMetadata,
+        createdAt: result.rows[0].created_at,
+        clientMessageId: payload.clientMessageId ?? null,
+        replyToMessageId: payload.replyToMessageId ?? null,
+      },
+    });
+  }
+
+  // Bot runtime — skipped for quarantine and deny. Bot execution on
+  // suspicious content could trigger unwanted side-effects.
+  if (!suppressRealtimeAndBots && conversation.type === 'group') {
     try {
       await executeBotCommand(db, {
         conversationId,
@@ -23995,18 +20748,18 @@ app.post('/chat/conversations/:conversationId/messages', {
         conversationTitle: conversation.title ?? null,
         actorUserId,
         actorUserName: null,
-        messageText: payload.text,
+        messageText: bodyText,
       });
     } catch (err) {
       request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
     }
   }
 
-  // Fraud check — non-blocking: score and log, don't reject unless high risk.
-  // Catches message spam velocity and bot-driven messaging patterns
-  // (AGENTS.md §11 — truthful signals).
+  // Legacy fraud check — retained as a shadow log. The authoritative
+  // decision above (evaluateRisk) is the primary; this provides comparison
+  // data for model calibration (AGENTS.md §11 — truthful signals).
   try {
-    await checkFraudNonBlocking(
+    const fraudResult = await checkFraudNonBlocking(
       redis,
       {
         eventType: 'message',
@@ -24016,24 +20769,386 @@ app.post('/chat/conversations/:conversationId/messages', {
       },
       undefined,
       request.log,
+      fraudShadowService,
     );
+    // Message events map to `allow_low_risk_flow` when the fraud service
+    // is unavailable — messaging continues and spam can be caught post-hoc.
+    if (fraudResult.evaluationStatus === 'unavailable') {
+      request.log.warn(
+        { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
+        'Message fraud check unavailable — continuing with failover policy'
+      );
+    }
   } catch {
     // Fraud check failures must never break message sending (AGENTS.md §6).
   }
 
-  reply.code(201);
+  // Record execution status for the authoritative risk decision (FR-13).
+  if (riskDecision) {
+    const executionStatus =
+      ownerDecision === 'allow'
+        ? ('executed' as const)
+        : ownerDecision === 'deny'
+          ? ('not_executed' as const)
+          : ('executed' as const);
+    try {
+      await recordExecution(db, {
+        decisionId: riskDecision.decisionId,
+        ownerService: 'messaging',
+        executionStatus,
+        domainEntityType: 'chat_message',
+        domainEntityId: result.rows[0].id,
+      });
+    } catch (err) {
+      request.log.error(
+        { err, decisionId: riskDecision.decisionId, messageId: result.rows[0].id },
+        'Failed to record risk decision execution',
+      );
+    }
+  }
+
+  // Determine the message state to surface to the sender.
+  const messageState =
+    ownerDecision === 'quarantine'
+      ? 'quarantined'
+      : ownerDecision === 'deny'
+        ? 'blocked'
+        : ownerDecision === 'step_up' ||
+            ownerDecision === 'manual_review' ||
+            ownerDecision === 'delay'
+          ? 'pending_review'
+          : 'sent';
+
+  reply.code(ownerDecision === 'deny' ? 403 : 201);
   return {
-    ok: true,
+    ok: ownerDecision !== 'deny',
+    messageState,
     message: {
       id: result.rows[0].id,
       senderType: 'user' as const,
       senderUserId: actorUserId,
       senderBotId: null,
-      body: payload.text,
-      metadata: payload.metadata ?? {},
+      body: bodyText,
+      metadata: mergedMetadata,
       createdAt: result.rows[0].created_at,
+      clientMessageId: payload.clientMessageId ?? undefined,
+      replyToMessageId: payload.replyToMessageId ?? undefined,
     },
   };
+});
+
+// ── P0.5: Delete message — delete-for-me and delete-for-everyone ──────────
+// Two distinct semantics, never both labeled "Delete message":
+//   DELETE .../messages/:messageId           → delete-for-me (per-user tombstone)
+//   DELETE .../messages/:messageId?scope=everyone → delete-for-everyone (sender/admin, time-windowed)
+app.delete('/chat/conversations/:conversationId/messages/:messageId', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    scope: z.enum(['me', 'everyone']).default('me'),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { scope } = querySchema.parse(request.query ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const messageResult = await db.query<{
+    sender_user_id: string | null;
+    created_at: string;
+    deleted_for_everyone_at: string | null;
+  }>(
+    `SELECT sender_user_id, created_at::text, deleted_for_everyone_at
+     FROM chat_messages WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!messageResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  const msg = messageResult.rows[0];
+
+  if (msg.deleted_for_everyone_at) {
+    // Already deleted for everyone — idempotent success
+    return { ok: true, deleted: true, scope: 'everyone' };
+  }
+
+  if (scope === 'everyone') {
+    // Only the sender can delete for everyone, within a 24h window.
+    if (msg.sender_user_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the sender can delete a message for everyone' };
+    }
+    const ageMs = Date.now() - new Date(msg.created_at).getTime();
+    if (ageMs > 24 * 60 * 60 * 1000) {
+      reply.code(403);
+      return { ok: false, error: 'Delete for everyone is only available within 24 hours of sending' };
+    }
+
+    await db.query(
+      `UPDATE chat_messages
+       SET deleted_for_everyone_at = NOW(), deleted_by_user_id = $3, body = ''
+       WHERE id = $1 AND conversation_id = $2`,
+      [messageId, conversationId, actorUserId]
+    );
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.deleted',
+      payload: { conversationId, messageId, scope: 'everyone', actorUserId },
+    });
+
+    return { ok: true, deleted: true, scope: 'everyone' };
+  }
+
+  // scope === 'me' — per-user tombstone
+  await db.query(
+    `INSERT INTO chat_message_deletions (message_id, user_id)
+     VALUES ($1, $2)
+     ON CONFLICT (message_id, user_id) DO NOTHING`,
+    [messageId, actorUserId]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.deleted',
+    payload: { conversationId, messageId, scope: 'me', actorUserId },
+  });
+
+  return { ok: true, deleted: true, scope: 'me' };
+});
+
+// ── P0.9: Message reactions — add and remove ─────────────────────────────
+app.post('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    emoji: z.string().trim().min(1).max(32),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { emoji } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // Verify message exists and isn't deleted
+  const msgResult = await db.query<{ id: string }>(
+    `SELECT id FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL LIMIT 1`,
+    [messageId, conversationId]
+  );
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  await db.query(
+    `INSERT INTO chat_message_reactions (message_id, user_id, emoji)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
+    [messageId, actorUserId, emoji]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.reaction.added',
+    payload: { conversationId, messageId, userId: actorUserId, emoji },
+  });
+
+  reply.code(201);
+  return { ok: true, reacted: true, emoji };
+});
+
+app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    emoji: z.string().trim().min(1).max(32),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { emoji } = querySchema.parse(request.query ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `DELETE FROM chat_message_reactions
+     WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
+    [messageId, actorUserId, emoji]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.reaction.removed',
+    payload: { conversationId, messageId, userId: actorUserId, emoji },
+  });
+
+  return { ok: true, removed: true, emoji };
+});
+
+// ── P0.11: Conversation report route ─────────────────────────────────────
+// One canonical report workflow with evidence selection, idempotent submission,
+// and a real report ID from the server.
+app.post('/chat/conversations/:conversationId/report', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    reason: z.enum([
+      'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
+      'off_platform_payment', 'impersonation', 'other',
+    ]),
+    details: z.string().trim().max(2000).optional(),
+    messageId: z.string().trim().min(2).max(120).optional(),
+    idempotencyKey: z.string().min(2).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const reportId = createRuntimeId('chatrpt');
+
+  const insertResult = await db.query<{ id: string }>(
+    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
+     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
+     ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING id`,
+    [
+      reportId,
+      conversationId,
+      actorUserId,
+      payload.reason,
+      payload.details ?? null,
+      payload.messageId ?? null,
+      payload.idempotencyKey ?? null,
+    ]
+  );
+
+  const effectiveReportId = insertResult.rowCount && insertResult.rowCount > 0
+    ? insertResult.rows[0].id
+    : reportId;
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.conversation.reported',
+    payload: { conversationId, reportId: effectiveReportId, reason: payload.reason },
+  });
+
+  reply.code(201);
+  return { ok: true, reportId: effectiveReportId, status: 'submitted' };
+});
+
+// P0 #1 / P2 #56: Typing indicator endpoint.
+// Ephemeral realtime-only signal — no DB writes. The composer debounces
+// "started typing" (1s) and "stopped typing" (3s inactivity / on send) on
+// the client; this endpoint just fans the signal out to other participants
+// via the conversation's realtime topic so `useTypingIndicator` lights up.
+app.post('/chat/conversations/:conversationId/typing', {
+  config: {
+    rateLimit: {
+      max: 10,
+      timeWindow: '10 seconds',
+    },
+  },
+  schema: {
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', minLength: 2, maxLength: 120 },
+      },
+    },
+    body: {
+      type: 'object',
+      required: ['isTyping'],
+      properties: {
+        isTyping: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+}, async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    isTyping: z.boolean(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const { isTyping } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.typing.update',
+    payload: {
+      conversationId,
+      userId: actorUserId,
+      isTyping,
+    },
+  });
+
+  return { ok: true };
+});
+
+// ── Mark conversation as read ────────────────────────────────────────
+// Updates chat_members.last_read_at for the current user. Used by the
+// client when the user opens a conversation or scrolls to the bottom.
+// Also publishes a realtime event so other participants can see read
+// receipts update.
+app.post('/chat/conversations/:conversationId/read', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      UPDATE chat_members
+      SET last_read_at = NOW()
+      WHERE conversation_id = $1 AND user_id = $2
+    `,
+    [conversationId, actorUserId],
+  );
+
+  const readReceiptsResult = await db.query<{ read_receipts_enabled: boolean }>(
+    `SELECT read_receipts_enabled FROM users WHERE id = $1`,
+    [actorUserId],
+  );
+
+  if (readReceiptsResult.rowCount && readReceiptsResult.rows[0].read_receipts_enabled) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.read',
+      payload: {
+        conversationId,
+        userId: actorUserId,
+        readAt: new Date().toISOString(),
+      },
+    });
+  }
+
+  return { ok: true, conversationId, readAt: new Date().toISOString() };
 });
 
 app.post('/chat/conversations/:conversationId/members', async (request) => {
@@ -24247,17 +21362,237 @@ app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (r
   };
 });
 
-app.delete('/chat/conversations/:conversationId', async (request) => {
+// ── Member role management: promote/demote ───────────────────────────
+app.patch('/chat/conversations/:conversationId/members/:memberUserId/role', async (request) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
+    memberUserId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    role: z.enum(['admin', 'member']),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
+  const { role: newRole } = bodySchema.parse(request.body ?? {});
+
+  const conversation = await ensureGroupManagementAccess(
+    db,
+    conversationId,
+    actorUserId,
+    request.authUser?.role,
+  );
+
+  // Cannot change the owner's role via this route — use transfer-ownership.
+  if (conversation.owner_id === memberUserId) {
+    throw createApiError(
+      'CHAT_CANNOT_CHANGE_OWNER_ROLE',
+      'The group owner\'s role cannot be changed. Transfer ownership instead.',
+      { conversationId, memberUserId },
+    );
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const updateResult = await client.query<{ role: string }>(
+      `
+        UPDATE chat_members
+        SET role = $3
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING role
+      `,
+      [conversationId, memberUserId, newRole],
+    );
+
+    if (updateResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError(
+        'CHAT_MEMBER_NOT_FOUND',
+        'The specified user is not a member of this conversation',
+        { conversationId, memberUserId },
+      );
+    }
+
+    const rolesResult = await client.query<{ user_id: string; role: string }>(
+      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
+      [conversationId],
+    );
+    const memberRoles = Object.fromEntries(
+      rolesResult.rows.map((r) => [r.user_id, r.role]),
+    );
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.role_updated',
+      payload: {
+        conversationId,
+        actorUserId,
+        memberUserId,
+        newRole,
+      },
+    });
+
+    return {
+      ok: true,
+      memberRoles,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+// ── Transfer group ownership ─────────────────────────────────────────
+app.post('/chat/conversations/:conversationId/transfer-ownership', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    newOwnerId: z.string().trim().min(2).max(120),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
+  const { newOwnerId } = bodySchema.parse(request.body ?? {});
 
-  // Verify the user is a member of the conversation before leaving.
+  const conversation = await ensureGroupManagementAccess(
+    db,
+    conversationId,
+    actorUserId,
+    request.authUser?.role,
+  );
+
+  // Only the current owner can transfer ownership.
+  if (conversation.owner_id !== actorUserId) {
+    throw createApiError(
+      'CHAT_NOT_OWNER',
+      'Only the group owner can transfer ownership',
+      { conversationId, actorUserId, ownerId: conversation.owner_id },
+    );
+  }
+
+  if (newOwnerId === actorUserId) {
+    throw createApiError(
+      'CHAT_CANNOT_TRANSFER_TO_SELF',
+      'You are already the owner of this group',
+      { conversationId, newOwnerId },
+    );
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify the target is a member.
+    const memberCheck = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM chat_members WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, newOwnerId],
+    );
+    if (memberCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError(
+        'CHAT_MEMBER_NOT_FOUND',
+        'The specified user is not a member of this conversation',
+        { conversationId, newOwnerId },
+      );
+    }
+
+    // Promote new owner to 'owner' role, demote current owner to 'admin'.
+    await client.query(
+      `UPDATE chat_members SET role = 'owner' WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, newOwnerId],
+    );
+    await client.query(
+      `UPDATE chat_members SET role = 'admin' WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, actorUserId],
+    );
+
+    // Update the conversation owner_id.
+    await client.query(
+      `UPDATE chat_conversations SET owner_id = $2, updated_at = NOW() WHERE id = $1`,
+      [conversationId, newOwnerId],
+    );
+
+    const rolesResult = await client.query<{ user_id: string; role: string }>(
+      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
+      [conversationId],
+    );
+    const memberRoles = Object.fromEntries(
+      rolesResult.rows.map((r) => [r.user_id, r.role]),
+    );
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.group.ownership_transferred',
+      payload: {
+        conversationId,
+        actorUserId,
+        newOwnerId,
+      },
+    });
+
+    return {
+      ok: true,
+      ownerId: newOwnerId,
+      memberRoles,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+// P0.6: Separate "delete for me" (hide from inbox, per-user, reversible)
+// from "leave" (membership mutation, posts system message, irreversible for DMs).
+//   DELETE /chat/conversations/:id              → delete-for-me (archive + hide)
+//   DELETE /chat/conversations/:id?scope=leave  → leave conversation (membership mutation)
+app.delete('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    scope: z.enum(['me', 'leave']).default('me'),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const { scope } = querySchema.parse(request.query ?? {});
+
+  // Verify the user is a member of the conversation.
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  if (scope === 'me') {
+    // Delete-for-me: archive the conversation for this user only. No
+    // membership change, no system message, no effect on other participants.
+    // This is the inbox-cleanup action the UI copy describes.
+    await db.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, request_status, updated_at)
+       VALUES ($1, $2, TRUE, 'accepted', NOW())
+       ON CONFLICT (user_id, conversation_id)
+       DO UPDATE SET is_archived = TRUE, updated_at = NOW()`,
+      [actorUserId, conversationId]
+    );
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.conversation.archived',
+      payload: { conversationId, actorUserId },
+    });
+
+    return { ok: true, archived: true, scope: 'me' };
+  }
+
+  // scope === 'leave' — actual membership mutation
   const client = await db.connect();
   let participantIds: string[] = [];
   let updateMessage: { id: string; createdAt: string } | null = null;
@@ -25348,467 +22683,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/command', async (reque
 });
 
 // ── Custom bots ──────────────────────────────────────────────────────
-app.get('/bots/system', async () => {
-  const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
-    runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    icon: string | null;
-    agent_config: unknown;
-  }>(
-    `
-      SELECT
-        id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, agent_config
-      FROM chat_bots
-      WHERE type = 'system' AND is_active = TRUE
-      ORDER BY name ASC
-    `
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
-      commandHint: row.command_hint,
-      category: row.category,
-      type: row.type,
-      status: row.status,
-      runtimeMode: row.runtime_mode,
-      isDraft: row.is_draft,
-      permissions: row.permissions,
-      icon: row.icon,
-      agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
-      ...botRuntimeReadiness(row.runtime_mode),
-    })),
-  };
-});
-
-app.get('/bots', async (request) => {
-  if (!request.authUser) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const userId = request.authUser.userId;
-  const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
-    runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    icon: string | null;
-    agent_config: unknown;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT
-        id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, agent_config,
-        created_at, updated_at
-      FROM chat_bots
-      WHERE type = 'custom' AND owner_id = $1
-      ORDER BY created_at DESC
-    `,
-    [userId]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
-      commandHint: row.command_hint,
-      category: row.category,
-      type: row.type,
-      status: row.status,
-      runtimeMode: row.runtime_mode,
-      isDraft: row.is_draft,
-      permissions: row.permissions,
-      icon: row.icon,
-      agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
-      ...botRuntimeReadiness(row.runtime_mode),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.get('/bots/:botId', async (request) => {
-  if (!request.authUser) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
-  const { botId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
-    runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    icon: string | null;
-    owner_id: string | null;
-    agent_config: unknown;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT
-        id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config,
-        created_at, updated_at
-      FROM chat_bots
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [botId]
-  );
-
-  if (!result.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
-  }
-
-  const bot = result.rows[0];
-
-  if (bot.type === 'custom' && bot.owner_id !== request.authUser.userId) {
-    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can view this bot');
-  }
-
-  return {
-    ok: true,
-    item: {
-      id: bot.id,
-      slug: bot.slug,
-      name: bot.name,
-      description: bot.description,
-      commandHint: bot.command_hint,
-      category: bot.category,
-      type: bot.type,
-      status: bot.status,
-      runtimeMode: bot.runtime_mode,
-      isDraft: bot.is_draft,
-      permissions: bot.permissions,
-      icon: bot.icon,
-      ownerId: bot.owner_id,
-      agentConfig: bot.runtime_mode === 'ai' ? normalizeAgentConfig(bot.agent_config) : null,
-      ...botRuntimeReadiness(bot.runtime_mode),
-      createdAt: bot.created_at,
-      updatedAt: bot.updated_at,
-    },
-  };
-});
-
-app.post('/bots', async (request, reply) => {
-  if (!request.authUser) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const userId = request.authUser.userId;
-  const bodySchema = z.object({
-    name: z.string().trim().min(2).max(80),
-    slug: z.string().trim().min(2).max(40).optional(),
-    description: z.string().trim().min(2).max(500),
-    commandHint: z.string().trim().min(1).max(120),
-    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant', 'styling']),
-    permissions: z.array(z.string()).default([]),
-    icon: z.string().trim().max(120).optional(),
-    isDraft: z.boolean().default(false),
-    agentConfig: agentConfigSchema.optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-  const botId = createRuntimeId('bot');
-  const slug = payload.slug ?? botId;
-  const normalizedAgentConfig = normalizeAgentConfig(payload.agentConfig);
-  const validationError = payload.isDraft
-    ? null
-    : validatePublishedAgent(normalizedAgentConfig, payload.permissions);
-  if (validationError) {
-    throw createApiError('CHAT_BOT_INVALID', validationError);
-  }
-
-  await db.query(
-    `
-      INSERT INTO chat_bots (
-        id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    `,
-    [
-      botId,
-      slug,
-      payload.name,
-      payload.description,
-      payload.commandHint,
-      payload.category,
-      'custom',
-      'available',
-      'ai',
-      payload.isDraft,
-      toJsonString(payload.permissions),
-      payload.icon ?? null,
-      userId,
-      toJsonString(normalizedAgentConfig),
-    ]
-  );
-
-  await db.query(
-    `
-      INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
-      VALUES ($1, $2, $3, $4, $5)
-    `,
-    [
-      createRuntimeId('baev'),
-      botId,
-      userId,
-      'created',
-      toJsonString({ isDraft: payload.isDraft }),
-    ]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    id: botId,
-    slug,
-    name: payload.name,
-    type: 'custom',
-    status: 'available',
-    runtimeMode: 'ai',
-    isDraft: payload.isDraft,
-    agentConfig: normalizedAgentConfig,
-    ...botRuntimeReadiness('ai'),
-  };
-});
-
-app.patch('/bots/:botId', async (request) => {
-  if (!request.authUser) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
-  const bodySchema = z.object({
-    name: z.string().trim().min(2).max(80).optional(),
-    description: z.string().trim().min(2).max(500).optional(),
-    commandHint: z.string().trim().min(1).max(120).optional(),
-    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant', 'styling']).optional(),
-    permissions: z.array(z.string()).optional(),
-    icon: z.string().trim().max(120).optional(),
-    isDraft: z.boolean().optional(),
-    status: z.enum(['available', 'local-only', 'backend-required', 'disabled']).optional(),
-    runtimeMode: z.enum(['local', 'config-only', 'backend', 'ai']).optional(),
-    agentConfig: agentConfigSchema.optional(),
-  });
-
-  const { botId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  const userId = request.authUser.userId;
-
-  const existing = await db.query<{
-    owner_id: string;
-    type: 'system' | 'custom';
-    agent_config: unknown;
-    permissions: unknown;
-    is_draft: boolean;
-  }>(
-    `SELECT owner_id, type, agent_config, permissions, is_draft FROM chat_bots WHERE id = $1 LIMIT 1`,
-    [botId]
-  );
-
-  if (!existing.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
-  }
-
-  const bot = existing.rows[0];
-  if (bot.type !== 'custom' || bot.owner_id !== userId) {
-    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can update this bot');
-  }
-
-  const nextConfig = normalizeAgentConfig(payload.agentConfig ?? bot.agent_config);
-  const nextPermissions = payload.permissions
-    ?? (Array.isArray(bot.permissions) ? bot.permissions.filter((item): item is string => typeof item === 'string') : []);
-  const nextIsDraft = payload.isDraft ?? bot.is_draft;
-  const validationError = nextIsDraft
-    ? null
-    : validatePublishedAgent(nextConfig, nextPermissions);
-  if (validationError) {
-    throw createApiError('CHAT_BOT_INVALID', validationError);
-  }
-
-  const updates: string[] = [];
-  const values: unknown[] = [];
-  let paramIndex = 1;
-
-  if (payload.name !== undefined) {
-    updates.push(`name = $${paramIndex++}`);
-    values.push(payload.name);
-  }
-  if (payload.description !== undefined) {
-    updates.push(`description = $${paramIndex++}`);
-    values.push(payload.description);
-  }
-  if (payload.commandHint !== undefined) {
-    updates.push(`command_hint = $${paramIndex++}`);
-    values.push(payload.commandHint);
-  }
-  if (payload.category !== undefined) {
-    updates.push(`category = $${paramIndex++}`);
-    values.push(payload.category);
-  }
-  if (payload.permissions !== undefined) {
-    updates.push(`permissions = $${paramIndex++}`);
-    values.push(toJsonString(payload.permissions));
-  }
-  if (payload.icon !== undefined) {
-    updates.push(`icon = $${paramIndex++}`);
-    values.push(payload.icon);
-  }
-  if (payload.isDraft !== undefined) {
-    updates.push(`is_draft = $${paramIndex++}`);
-    values.push(payload.isDraft);
-  }
-  if (payload.status !== undefined) {
-    updates.push(`status = $${paramIndex++}`);
-    values.push(payload.status);
-  }
-  if (payload.runtimeMode !== undefined) {
-    updates.push(`runtime_mode = $${paramIndex++}`);
-    values.push(payload.runtimeMode);
-  }
-  if (payload.agentConfig !== undefined) {
-    updates.push(`agent_config = $${paramIndex++}`);
-    values.push(toJsonString(nextConfig));
-    if (payload.runtimeMode === undefined) {
-      updates.push(`runtime_mode = $${paramIndex++}`);
-      values.push('ai');
-    }
-    if (payload.status === undefined) {
-      updates.push(`status = $${paramIndex++}`);
-      values.push('available');
-    }
-  }
-
-  if (updates.length === 0) {
-    throw createApiError('CHAT_BOT_INVALID', 'No fields to update');
-  }
-
-  updates.push(`updated_at = $${paramIndex++}`);
-  values.push(new Date().toISOString());
-  values.push(botId);
-
-  await db.query(
-    `UPDATE chat_bots SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
-    values
-  );
-
-  await db.query(
-    `
-      INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
-      VALUES ($1, $2, $3, $4, $5)
-    `,
-    [
-      createRuntimeId('baev'),
-      botId,
-      userId,
-      'updated',
-      toJsonString({ fields: Object.keys(payload) }),
-    ]
-  );
-
-  return {
-    ok: true,
-    id: botId,
-  };
-});
-
-app.delete('/bots/:botId', async (request) => {
-  if (!request.authUser) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
-  const { botId } = paramsSchema.parse(request.params);
-  const userId = request.authUser.userId;
-
-  const existing = await db.query<{ owner_id: string; type: 'system' | 'custom'; name: string }>(
-    `SELECT owner_id, type, name FROM chat_bots WHERE id = $1 LIMIT 1`,
-    [botId]
-  );
-
-  if (!existing.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
-  }
-
-  const bot = existing.rows[0];
-  if (bot.type !== 'custom' || bot.owner_id !== userId) {
-    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can delete this bot');
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Mark all group installs as removed
-    await client.query(
-      `UPDATE chat_bot_installs SET status = 'removed', updated_at = NOW() WHERE bot_id = $1`,
-      [botId]
-    );
-
-    await client.query(
-      `
-        INSERT INTO chat_bot_audit_events (id, bot_id, actor_user_id, event_type, metadata)
-        VALUES ($1, $2, $3, $4, $5)
-      `,
-      [createRuntimeId('baev'), botId, userId, 'deleted', toJsonString({ name: bot.name })]
-    );
-
-    await client.query(
-      `DELETE FROM chat_bots WHERE id = $1`,
-      [botId]
-    );
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  return {
-    ok: true,
-    id: botId,
-    deleted: true,
-  };
-});
+registerBotsRoutes({ app, db, createApiError, createRuntimeId, toJsonString });
 
 // ── Group conversation management ────────────────────────────────────
 app.get('/chat/conversations/:conversationId', async (request) => {
@@ -25840,6 +22715,7 @@ app.get('/chat/conversations/:conversationId', async (request) => {
   );
 
   const conversation = result.rows[0];
+  const conversationMetadata = asObject(conversation.metadata);
   const memberResult = await db.query<{ user_id: string; role: string; joined_at: string }>(
     `
       SELECT user_id, role, joined_at
@@ -25873,6 +22749,15 @@ app.get('/chat/conversations/:conversationId', async (request) => {
       title: conversation.title,
       ownerId: conversation.owner_id,
       itemId: conversation.item_id,
+      description: typeof conversationMetadata.description === 'string'
+        ? conversationMetadata.description
+        : null,
+      avatar: typeof conversationMetadata.avatar === 'string'
+        ? conversationMetadata.avatar
+        : null,
+      coverPhoto: typeof conversationMetadata.coverPhoto === 'string'
+        ? conversationMetadata.coverPhoto
+        : null,
       metadata: conversation.metadata,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
@@ -25898,47 +22783,221 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
   const bodySchema = z.object({
     title: z.string().trim().min(2).max(80).optional(),
     description: z.string().trim().max(280).optional(),
-    avatar: z.string().trim().max(512).optional(),
+    avatar: z.string().trim().max(512).nullable().optional(),
+    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+    coverPhoto: z.string().trim().max(512).nullable().optional(),
+    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
+  }).superRefine((value, context) => {
+    if (typeof value.avatar === 'string' && !value.avatarFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['avatarFinalizationId'],
+        message: 'A finalized upload receipt is required for a group photo',
+      });
+    }
+    if (typeof value.coverPhoto === 'string' && !value.coverPhotoFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['coverPhotoFinalizationId'],
+        message: 'A finalized upload receipt is required for a cover photo',
+      });
+    }
+    if (
+      value.title === undefined
+      && value.description === undefined
+      && value.avatar === undefined
+      && value.coverPhoto === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one group identity field is required',
+      });
+    }
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
-  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
+  const requestHash = hashGroupCreatePayload({ conversationId, ...payload });
+  const client = await db.connect();
 
-  if (payload.title !== undefined) {
-    await db.query(
-      `UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2`,
-      [payload.title, conversationId]
+  try {
+    await client.query('BEGIN');
+    const conversation = await ensureGroupManagementAccess(
+      client,
+      conversationId,
+      actorUserId,
+      request.authUser?.role
     );
-  }
 
-  if (payload.description !== undefined || payload.avatar !== undefined) {
-    const currentMeta = await db.query<{ metadata: unknown }>(
-      `SELECT metadata FROM chat_conversations WHERE id = $1 LIMIT 1`,
+    if (idempotencyKey) {
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+        [`chat-group-edit:${actorUserId}:${idempotencyKey}`]
+      );
+      const cachedResponse = await getChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+      });
+      if (cachedResponse) {
+        await client.query('COMMIT');
+        return cachedResponse;
+      }
+    }
+
+    if (typeof payload.avatar === 'string' && payload.avatarFinalizationId) {
+      await ensureOwnedGroupAvatarReceipt(client, {
+        actorUserId,
+        finalizationId: payload.avatarFinalizationId,
+        avatarUrl: payload.avatar,
+      });
+    }
+
+    if (typeof payload.coverPhoto === 'string' && payload.coverPhotoFinalizationId) {
+      await ensureOwnedGroupMediaReceipt(client, {
+        actorUserId,
+        finalizationId: payload.coverPhotoFinalizationId,
+        mediaUrl: payload.coverPhoto,
+        folder: 'covers',
+        scope: 'cover',
+      });
+    }
+
+    const currentResult = await client.query<{
+      title: string | null;
+      metadata: Record<string, unknown> | null;
+    }>(
+      `SELECT title, metadata FROM chat_conversations WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [conversationId]
     );
-    const existingMeta = (currentMeta.rows[0]?.metadata ?? {}) as Record<string, unknown>;
-    const updatedMeta = {
-      ...existingMeta,
+    const current = currentResult.rows[0];
+    const currentMetadata = asObject(current.metadata);
+    const nextTitle = payload.title ?? current.title ?? 'Group chat';
+    const nextMetadata = {
+      ...currentMetadata,
       ...(payload.description !== undefined ? { description: payload.description } : {}),
       ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
+      ...(payload.avatarFinalizationId !== undefined
+        ? { avatarFinalizationId: payload.avatarFinalizationId }
+        : payload.avatar === null
+          ? { avatarFinalizationId: null }
+          : {}),
+      ...(payload.coverPhoto !== undefined ? { coverPhoto: payload.coverPhoto } : {}),
+      ...(payload.coverPhotoFinalizationId !== undefined
+        ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
+        : payload.coverPhoto === null
+          ? { coverPhotoFinalizationId: null }
+          : {}),
     };
-    await db.query(
-      `UPDATE chat_conversations SET metadata = $1::jsonb, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(updatedMeta), conversationId]
-    );
-  }
 
-  return {
-    ok: true,
-    conversationId,
-    updated: {
-      ...(payload.title !== undefined ? { title: payload.title } : {}),
-      ...(payload.description !== undefined ? { description: payload.description } : {}),
-      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
-    },
-  };
+    const updatedResult = await client.query<{ updated_at: string }>(
+      `
+        UPDATE chat_conversations
+        SET title = $2, metadata = $3::jsonb, updated_at = NOW()
+        WHERE id = $1
+        RETURNING updated_at::text
+      `,
+      [conversationId, nextTitle, toJsonString(nextMetadata)]
+    );
+
+    const changedFields = [
+      payload.title !== undefined ? 'name' : null,
+      payload.description !== undefined ? 'description' : null,
+      payload.avatar !== undefined ? 'photo' : null,
+      payload.coverPhoto !== undefined ? 'cover photo' : null,
+    ].filter((value): value is string => Boolean(value));
+    const identityUpdateText = changedFields.length === 1
+      ? `Group ${changedFields[0]} updated.`
+      : 'Group details updated.';
+    const systemMessage = await appendSystemChatMessage(client, {
+      conversationId,
+      text: identityUpdateText,
+      metadata: {
+        event: 'group_identity_updated',
+        actorUserId,
+        changedFields,
+      },
+    });
+
+    const responsePayload = {
+      ok: true,
+      conversation: {
+        id: conversationId,
+        type: 'group' as const,
+        title: nextTitle,
+        ownerId: conversation.owner_id,
+        itemId: conversation.item_id,
+        description: typeof nextMetadata.description === 'string' ? nextMetadata.description : null,
+        avatar: typeof nextMetadata.avatar === 'string' ? nextMetadata.avatar : null,
+        coverPhoto: typeof nextMetadata.coverPhoto === 'string' ? nextMetadata.coverPhoto : null,
+        updatedAt: updatedResult.rows[0].updated_at,
+      },
+      systemMessage: {
+        id: systemMessage.id,
+        createdAt: systemMessage.createdAt,
+      },
+    };
+
+    if (idempotencyKey) {
+      await saveChatGroupIdempotentResponse(client, {
+        creatorId: actorUserId,
+        idempotencyKey,
+        requestHash,
+        conversationId,
+        responsePayload,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    try {
+      publishRealtimeEvent({
+        topic: `chat.conversation:${conversationId}`,
+        type: 'chat.message.created',
+        payload: {
+          id: systemMessage.id,
+          conversationId,
+          senderType: 'system',
+          senderUserId: null,
+          senderBotId: null,
+          body: identityUpdateText,
+          metadata: {
+            event: 'group_identity_updated',
+            actorUserId,
+            changedFields,
+          },
+          createdAt: systemMessage.createdAt,
+        },
+      });
+      publishRealtimeEvent({
+        topic: `chat.conversation:${conversationId}`,
+        type: 'chat.group.identity.updated',
+        payload: {
+          conversationId,
+          actorUserId,
+          changedFields,
+          title: nextTitle,
+          description: responsePayload.conversation.description,
+          avatar: responsePayload.conversation.avatar,
+          updatedAt: responsePayload.conversation.updatedAt,
+        },
+      });
+    } catch (eventError) {
+      request.log.error(
+        { err: eventError, conversationId, actorUserId },
+        'Failed to publish group identity update after commit'
+      );
+    }
+
+    return responsePayload;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.get('/chat/conversations/:conversationId/members', async (request) => {
@@ -26046,6 +23105,274 @@ app.get('/chat/conversations/:conversationId/participants', async (request, repl
   };
 });
 
+// ── Per-user conversation state: mute, archive, message-request status ──
+
+app.post('/chat/conversations/:conversationId/mute', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
+      VALUES ($1, $2, TRUE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_muted = TRUE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isMuted: true };
+});
+
+app.delete('/chat/conversations/:conversationId/mute', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
+      VALUES ($1, $2, FALSE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_muted = FALSE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isMuted: false };
+});
+
+app.post('/chat/conversations/:conversationId/archive', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
+      VALUES ($1, $2, TRUE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_archived = TRUE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isArchived: true };
+});
+
+app.delete('/chat/conversations/:conversationId/archive', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
+      VALUES ($1, $2, FALSE, NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET is_archived = FALSE, updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, isArchived: false };
+});
+
+app.post('/chat/conversations/:conversationId/accept', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
+      VALUES ($1, $2, 'accepted', NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET request_status = 'accepted', updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, requestStatus: 'accepted' };
+});
+
+app.post('/chat/conversations/:conversationId/decline', async (request) => {
+  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
+      VALUES ($1, $2, 'declined', NOW())
+      ON CONFLICT (user_id, conversation_id)
+      DO UPDATE SET request_status = 'declined', updated_at = NOW()
+    `,
+    [actorUserId, conversationId]
+  );
+
+  return { ok: true, conversationId, requestStatus: 'declined' };
+});
+
+// ── Quick replies ──────────────────────────────────────────────────────
+
+app.get('/chat/quick-replies', async (request) => {
+  const querySchema = z.object({
+    role: z.enum(['buyer', 'seller']).optional(),
+  });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { role } = querySchema.parse(request.query ?? {});
+
+  const result = await db.query<{
+    id: string;
+    role: string;
+    title: string;
+    body: string;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT id, role, title, body, sort_order, created_at::text, updated_at::text
+      FROM chat_quick_replies
+      WHERE user_id = $1 ${role ? 'AND role = $2' : ''}
+      ORDER BY sort_order ASC, created_at ASC
+    `,
+    role ? [actorUserId, role] : [actorUserId]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      role: row.role,
+      title: row.title,
+      body: row.body,
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+app.post('/chat/quick-replies', async (request) => {
+  const bodySchema = z.object({
+    role: z.enum(['buyer', 'seller']),
+    title: z.string().trim().min(1).max(40),
+    body: z.string().trim().min(1).max(200),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const id = `qr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const sortOrder = payload.sortOrder ?? Date.now();
+
+  await db.query(
+    `
+      INSERT INTO chat_quick_replies (id, user_id, role, title, body, sort_order)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [id, actorUserId, payload.role, payload.title, payload.body, sortOrder]
+  );
+
+  return {
+    ok: true,
+    quickReply: {
+      id,
+      role: payload.role,
+      title: payload.title,
+      body: payload.body,
+      sortOrder,
+    },
+  };
+});
+
+app.put('/chat/quick-replies/:replyId', async (request) => {
+  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
+  const bodySchema = z.object({
+    title: z.string().trim().min(1).max(40).optional(),
+    body: z.string().trim().min(1).max(200).optional(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { replyId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const setClauses: string[] = [];
+  const values: unknown[] = [replyId, actorUserId];
+  let paramIdx = 3;
+
+  if (payload.title !== undefined) {
+    setClauses.push(`title = $${paramIdx++}`);
+    values.push(payload.title);
+  }
+  if (payload.body !== undefined) {
+    setClauses.push(`body = $${paramIdx++}`);
+    values.push(payload.body);
+  }
+  if (payload.sortOrder !== undefined) {
+    setClauses.push(`sort_order = $${paramIdx++}`);
+    values.push(payload.sortOrder);
+  }
+
+  if (setClauses.length === 0) {
+    return { ok: true, replyId, updated: {} };
+  }
+
+  setClauses.push(`updated_at = NOW()`);
+
+  const result = await db.query<{ id: string }>(
+    `
+      UPDATE chat_quick_replies
+      SET ${setClauses.join(', ')}
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+    `,
+    values
+  );
+
+  if (result.rowCount === 0) {
+    throw createApiError('NOT_FOUND', 'Quick reply not found');
+  }
+
+  return {
+    ok: true,
+    replyId,
+    updated: {
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.body !== undefined ? { body: payload.body } : {}),
+      ...(payload.sortOrder !== undefined ? { sortOrder: payload.sortOrder } : {}),
+    },
+  };
+});
+
+app.delete('/chat/quick-replies/:replyId', async (request) => {
+  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { replyId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ id: string }>(
+    `DELETE FROM chat_quick_replies WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [replyId, actorUserId]
+  );
+
+  if (result.rowCount === 0) {
+    throw createApiError('NOT_FOUND', 'Quick reply not found');
+  }
+
+  return { ok: true, replyId, deleted: true };
+});
+
 app.post('/wallets/:userId/snapshot', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const bodySchema = z.object({
@@ -26118,7 +23445,7 @@ app.get('/users/:userId/wallet/balances', async (request, reply) => {
       FROM ledger_entries
       WHERE account_id = (
         SELECT id FROM ledger_accounts
-        WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+        WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
         LIMIT 1
       )
     `,
@@ -26263,65 +23590,10 @@ app.get('/wallets/:userId/snapshot', async (request, reply) => {
   };
 });
 
-app.get('/oracle/gold/latest', async (_request, reply) => {
-  reply.code(410);
-  return {
-    ok: false,
-    error: 'Gold oracle endpoint has been decommissioned for 1ze controlled pricing.',
-    code: 'GOLD_ORACLE_DECOMMISSIONED',
-  };
-});
-
-app.post('/oracle/gold/override', async (_request, reply) => {
-  reply.code(410);
-  return {
-    ok: false,
-    error: 'Gold rate overrides are disabled. Use /update-anchor and /update-pricing controls instead.',
-    code: 'GOLD_ORACLE_DECOMMISSIONED',
-  };
-});
-
-app.get('/price', async (request, reply) => {
-  const querySchema = z.object({
-    country: z.string().min(2).max(3).default('IN'),
-  });
-
-  const payload = querySchema.parse(request.query);
-
-  if (!(await onezePricingTablesAvailable(db))) {
-    reply.code(503);
-    return {
-      ok: false,
-      error: '1ze controlled pricing tables are unavailable. Run migrations first.',
-    };
-  }
-
-  try {
-    const quote = await resolveCountryPricingQuote(db, payload.country);
-    return {
-      ok: true,
-      quote: {
-        country: quote.countryCode,
-        currency: quote.currency,
-        buyPrice: quote.buyPrice,
-        sellPrice: quote.sellPrice,
-        crossBorderPrice: quote.crossBorderSellPrice,
-        markupBps: quote.markupBps,
-        markdownBps: quote.markdownBps,
-        crossBorderFeeBps: quote.crossBorderFeeBps,
-        pppFactor: quote.pppFactor,
-        source: quote.source,
-      },
-    };
-  } catch (error) {
-    request.log.error({ err: error, payload }, 'Failed to resolve controlled 1ze price');
-    reply.code(404);
-    return {
-      ok: false,
-      error: 'Unable to resolve 1ze price for requested country',
-    };
-  }
-});
+// ── Oracle & Price routes ───────────────────────────────────────────
+registerOracleRoutes({ app });
+registerPriceRoutes({ app, db });
+registerTaxonomyRoutes({ app, db });
 
 app.get('/wallet/1ze/quote', async (request, reply) => {
   const querySchema = z.object({
@@ -27305,6 +24577,12 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     }
 
     const paymentIntentId = createRuntimeId('pi');
+    // Fetch the user's email for providers that require customer identity
+    const topupEmailRow = await client.query<{ email: string | null }>(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [actorUserId]
+    );
+    const topupCustomerEmail = topupEmailRow.rows[0]?.email ?? null;
     const gatewayIntent = await createGatewayPaymentIntent({
       gatewayId,
       intentId: paymentIntentId,
@@ -27314,6 +24592,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       stripePaymentMethodId,
       returnUrl: payload.returnUrl,
       webhookUrl: payload.webhookUrl,
+      customerEmail: topupCustomerEmail,
       metadata: {
         userId: actorUserId,
         mintOperationId,
@@ -30292,6 +27571,9 @@ registerMediaAssetRoutes({
   resolveAuthenticatedUserId,
   authorizeInternalServiceRequest,
 });
+registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerAppealsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
   db,
@@ -30472,474 +27754,7 @@ function requireStripeMobilePaymentConfiguration(reply: FastifyReply): {
   };
 }
 
-app.post('/v2/payments/customers/session', async (request, reply) => {
-  z.object({}).strict().parse(request.body ?? {});
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  await ensureUserExists(userId);
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const customerSession = await createMobileCustomerSession(
-    configured.stripeClient,
-    customer.customerId
-  );
-
-  return {
-    ok: true,
-    provider: 'stripe',
-    customerId: customer.customerId,
-    customerSessionClientSecret: customerSession.client_secret,
-    publishableKey: configured.publishableKey,
-  };
-});
-
-app.post('/v2/payments/setup-intents', async (request, reply) => {
-  const bodySchema = z.object({
-    idempotencyKey: z.string().min(12).max(180),
-  }).strict();
-  const payload = bodySchema.parse(request.body ?? {});
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  await ensureUserExists(userId);
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const [setupIntent, customerSession] = await Promise.all([
-    configured.stripeClient.setupIntents.create(
-      {
-        customer: customer.customerId,
-        payment_method_types: ['card'],
-        usage: 'off_session',
-        metadata: {
-          thryftverse_user_id: userId,
-          purpose: 'saved_payment_method',
-        },
-      },
-      {
-        idempotencyKey: `setup:${userId}:${payload.idempotencyKey}`,
-      }
-    ),
-    createMobileCustomerSession(configured.stripeClient, customer.customerId),
-  ]);
-
-  if (!setupIntent.client_secret) {
-    reply.code(502);
-    return {
-      ok: false,
-      error: 'Payment provider did not return a SetupIntent client secret',
-      code: 'PAYMENT_PROVIDER_INVALID_RESPONSE',
-    };
-  }
-
-  reply.code(201);
-  return {
-    ok: true,
-    provider: 'stripe',
-    setupIntentId: setupIntent.id,
-    setupIntentClientSecret: setupIntent.client_secret,
-    customerId: customer.customerId,
-    customerSessionClientSecret: customerSession.client_secret,
-    publishableKey: configured.publishableKey,
-    merchantDisplayName: 'Thryftverse',
-    returnUrl: 'thryftverse://payments/return',
-  };
-});
-
-app.get('/v2/payments/methods', async (request, reply) => {
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  await ensureUserExists(userId);
-  const binding = await db.query<{ provider_customer_ref: string }>(
-    `SELECT provider_customer_ref
-     FROM stripe_payment_customers
-     WHERE user_id = $1
-     LIMIT 1`,
-    [userId]
-  );
-  if (!binding.rowCount) {
-    return {
-      ok: true,
-      provider: 'stripe',
-      items: [],
-    };
-  }
-  const methods = await syncStripePaymentMethodProjections({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-    customerId: binding.rows[0].provider_customer_ref,
-    hmacSecret: config.paymentMetadataHmacSecret,
-  });
-
-  return {
-    ok: true,
-    provider: 'stripe',
-    items: methods,
-  };
-});
-
-app.delete('/v2/payments/methods/:providerMethodId', async (request, reply) => {
-  const paramsSchema = z.object({
-    providerMethodId: z.string().regex(/^pm_[A-Za-z0-9_]+$/).max(255),
-  });
-  const { providerMethodId } = paramsSchema.parse(request.params);
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const local = await db.query<{ status: string }>(
-    `SELECT status
-     FROM user_payment_methods
-     WHERE user_id = $1
-       AND provider = 'stripe'
-       AND provider_customer_ref = $2
-       AND provider_payment_method_ref = $3
-     LIMIT 1`,
-    [userId, customer.customerId, providerMethodId]
-  );
-  if (!local.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Payment method not found' };
-  }
-  if (local.rows[0].status === 'detached') {
-    return { ok: true, idempotent: true };
-  }
-
-  const providerMethod = await configured.stripeClient.paymentMethods.retrieve(providerMethodId);
-  const providerCustomerId =
-    typeof providerMethod.customer === 'string'
-      ? providerMethod.customer
-      : providerMethod.customer?.id ?? null;
-  if (providerCustomerId && providerCustomerId !== customer.customerId) {
-    reply.code(404);
-    return { ok: false, error: 'Payment method not found' };
-  }
-  if (providerCustomerId === customer.customerId) {
-    await configured.stripeClient.paymentMethods.detach(providerMethodId);
-  }
-
-  await db.query(
-    `UPDATE user_payment_methods
-     SET status = 'detached', is_default = FALSE, detached_at = NOW(), updated_at = NOW()
-     WHERE user_id = $1
-       AND provider = 'stripe'
-       AND provider_payment_method_ref = $2`,
-    [userId, providerMethodId]
-  );
-  await syncStripePaymentMethodProjections({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-    customerId: customer.customerId,
-    hmacSecret: config.paymentMetadataHmacSecret,
-  });
-
-  return { ok: true, idempotent: false };
-});
-
-app.patch('/v2/payments/methods/:providerMethodId/default', async (request, reply) => {
-  const paramsSchema = z.object({
-    providerMethodId: z.string().regex(/^pm_[A-Za-z0-9_]+$/).max(255),
-  });
-  z.object({}).strict().parse(request.body ?? {});
-  const { providerMethodId } = paramsSchema.parse(request.params);
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const ownedMethod = await db.query<{ is_default: boolean }>(
-    `SELECT is_default
-     FROM user_payment_methods
-     WHERE user_id = $1
-       AND provider = 'stripe'
-       AND provider_customer_ref = $2
-       AND provider_payment_method_ref = $3
-       AND status = 'active'
-     LIMIT 1`,
-    [userId, customer.customerId, providerMethodId]
-  );
-  if (!ownedMethod.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Payment method not found' };
-  }
-
-  const alreadyDefault = ownedMethod.rows[0].is_default;
-  if (!alreadyDefault) {
-    await configured.stripeClient.customers.update(customer.customerId, {
-      invoice_settings: {
-        default_payment_method: providerMethodId,
-      },
-    });
-  }
-  const methods = await syncStripePaymentMethodProjections({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-    customerId: customer.customerId,
-    hmacSecret: config.paymentMetadataHmacSecret,
-  });
-
-  return {
-    ok: true,
-    idempotent: alreadyDefault,
-    items: methods,
-  };
-});
-
-app.post('/v2/payments/orders/:orderId/sheet', async (request, reply) => {
-  const paramsSchema = z.object({
-    orderId: z.string().min(4).max(64),
-  });
-  z.object({}).strict().parse(request.body ?? {});
-  const { orderId } = paramsSchema.parse(request.params);
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised card collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  const result = await db.query<{
-    buyer_id: string;
-    amount_currency: string;
-    provider_intent_ref: string;
-    client_secret: string | null;
-    gateway_id: string;
-    status: string;
-  }>(
-    `SELECT
-       o.buyer_id,
-       payment.amount_currency,
-       payment.provider_intent_ref,
-       payment.client_secret,
-       payment.gateway_id,
-       payment.status
-     FROM orders o
-     JOIN payment_intents payment ON payment.id = o.payment_intent_id
-     WHERE o.id = $1
-     LIMIT 1`,
-    [orderId]
-  );
-  const row = result.rows[0];
-  if (!row || row.buyer_id !== userId) {
-    reply.code(404);
-    return { ok: false, error: 'Order payment intent not found' };
-  }
-  if (row.gateway_id !== 'stripe_americas' || !row.client_secret) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: 'This order is not eligible for Stripe PaymentSheet',
-      code: 'PAYMENT_SHEET_UNAVAILABLE',
-    };
-  }
-  if (['succeeded', 'failed', 'cancelled'].includes(row.status)) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: `PaymentSheet cannot open from payment status '${row.status}'`,
-      code: 'PAYMENT_INTENT_FINAL',
-    };
-  }
-
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const providerIntent = await configured.stripeClient.paymentIntents.retrieve(
-    row.provider_intent_ref
-  );
-  const providerCustomerId =
-    typeof providerIntent.customer === 'string'
-      ? providerIntent.customer
-      : providerIntent.customer?.id ?? null;
-  if (providerCustomerId !== customer.customerId) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: 'The payment intent is not bound to the authenticated customer',
-      code: 'PAYMENT_CUSTOMER_MISMATCH',
-    };
-  }
-
-  const customerSession = await createMobileCustomerSession(
-    configured.stripeClient,
-    customer.customerId
-  );
-
-  return {
-    ok: true,
-    provider: 'stripe',
-    orderId,
-    paymentIntentClientSecret: row.client_secret,
-    customerId: customer.customerId,
-    customerSessionClientSecret: customerSession.client_secret,
-    publishableKey: configured.publishableKey,
-    merchantDisplayName: 'Thryftverse',
-    merchantCountryCode: 'GB',
-    currency: row.amount_currency.toUpperCase(),
-    returnUrl: 'thryftverse://payments/return',
-    applePayEnabled: Boolean(config.stripeApplePayMerchantIdentifier),
-    googlePayEnabled: config.stripeGooglePayEnabled,
-  };
-});
-
-app.post('/v2/payments/intents/:intentId/sheet', async (request, reply) => {
-  const { intentId } = z.object({
-    intentId: z.string().min(4).max(140),
-  }).parse(request.params);
-  z.object({}).strict().parse(request.body ?? {});
-  const userId = resolveAuthenticatedUserId(request);
-  const configured = requireStripeMobilePaymentConfiguration(reply);
-  if (!configured) {
-    return {
-      ok: false,
-      error: 'Tokenised payment collection is not configured',
-      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-    };
-  }
-
-  const result = await db.query<{
-    user_id: string;
-    channel: PaymentIntentChannel;
-    amount_currency: string;
-    provider_intent_ref: string | null;
-    client_secret: string | null;
-    gateway_id: string;
-    status: PaymentIntentStatus;
-  }>(
-    `SELECT
-       user_id,
-       channel,
-       amount_currency,
-       provider_intent_ref,
-       client_secret,
-       gateway_id,
-       status
-     FROM payment_intents
-     WHERE id = $1
-     LIMIT 1`,
-    [intentId]
-  );
-  const row = result.rows[0];
-  if (!row || row.user_id !== userId) {
-    reply.code(404);
-    return { ok: false, error: 'Payment intent not found' };
-  }
-  if (row.gateway_id !== 'stripe_americas' || !row.client_secret || !row.provider_intent_ref) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: 'This payment intent is not eligible for Stripe PaymentSheet',
-      code: 'PAYMENT_SHEET_UNAVAILABLE',
-    };
-  }
-  if (['succeeded', 'failed', 'cancelled'].includes(row.status)) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: `PaymentSheet cannot open from payment status '${row.status}'`,
-      code: 'PAYMENT_INTENT_FINAL',
-    };
-  }
-
-  const customer = await getOrCreateStripeCustomer({
-    db,
-    stripe: configured.stripeClient,
-    userId,
-  });
-  const providerIntent = await configured.stripeClient.paymentIntents.retrieve(
-    row.provider_intent_ref
-  );
-  const providerCustomerId =
-    typeof providerIntent.customer === 'string'
-      ? providerIntent.customer
-      : providerIntent.customer?.id ?? null;
-  if (providerCustomerId !== customer.customerId) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: 'The payment intent is not bound to the authenticated customer',
-      code: 'PAYMENT_CUSTOMER_MISMATCH',
-    };
-  }
-
-  const customerSession = await createMobileCustomerSession(
-    configured.stripeClient,
-    customer.customerId
-  );
-  return {
-    ok: true,
-    provider: 'stripe',
-    intentId,
-    channel: row.channel,
-    paymentIntentClientSecret: row.client_secret,
-    customerId: customer.customerId,
-    customerSessionClientSecret: customerSession.client_secret,
-    publishableKey: configured.publishableKey,
-    merchantDisplayName: 'Thryftverse',
-    merchantCountryCode: 'GB',
-    currency: row.amount_currency.toUpperCase(),
-    returnUrl: 'thryftverse://payments/return',
-    applePayEnabled: Boolean(config.stripeApplePayMerchantIdentifier),
-    googlePayEnabled: config.stripeGooglePayEnabled,
-  };
-});
+registerV2Routes({ app, db, resolveAuthenticatedUserId, ensureUserExists, requireStripeMobilePaymentConfiguration });
 
 app.get('/users/:userId/payment-methods', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -31828,17 +28643,19 @@ app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
   for (const account of dueAccounts.rows) {
     const minimumGbp = Number(account.payout_minimum_gbp) || config.payoutDefaultMinimumGbp;
 
-    // Sum available seller_payable balance (released, not yet requested).
+    // Sum available seller_payable balance (net: credits minus debits for
+    // payouts, reserve holds, and refund reversals).
     const balanceResult = await db.query<{ available_gbp: string }>(
       `
-        SELECT COALESCE(SUM(amount_gbp), 0)::text AS available_gbp
+        SELECT COALESCE(SUM(
+          CASE WHEN direction = 'credit' THEN amount_gbp ELSE -amount_gbp END
+        ), 0)::text AS available_gbp
         FROM ledger_entries
         WHERE account_id = (
           SELECT id FROM ledger_accounts
-          WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+          WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
           LIMIT 1
         )
-        AND direction = 'credit'
         AND created_at <= NOW()
       `,
       [account.user_id]
@@ -32270,7 +29087,16 @@ app.get('/users/:userId/stripe-connect/status', async (request, reply) => {
 app.post('/users/:userId/kyc-fallback', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
-  resolveAuthenticatedUserId(request, userId);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   const bodySchema = z.object({
     provider: z.enum(['persona', 'onfido']),
@@ -33185,6 +30011,157 @@ app.get('/admin/reconciliation/report', async (request, reply) => {
   };
 });
 
+// ── Three-way reconciliation (PAY-10, PAY-11) ───────────────────────
+app.post('/admin/reconciliation/three-way-run', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const bodySchema = z.object({
+    runDate: z.string().min(8).max(20),
+    endDate: z.string().min(8).max(20).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  try {
+    const result = await runThreeWayReconciliation(db, {
+      runDate: payload.runDate,
+      endDate: payload.endDate,
+    });
+
+    if (result.status === 'critical') {
+      await setPayoutPauseState({
+        paused: true,
+        reason: 'critical_three_way_reconciliation',
+        reconciliationRunId: result.runId,
+      });
+    } else if (result.incomplete) {
+      // Incomplete runs cannot unpause payouts. The reconciliation did not
+      // have all the facts it needed (missing provider/bank tables or
+      // ingestion failures). Payouts stay in their current pause state.
+      request.log.warn(
+        { runId: result.runId, runDate: payload.runDate, status: result.status },
+        'Three-way reconciliation incomplete — payouts pause state unchanged'
+      );
+    } else {
+      // Only unpause when the run is complete AND not critical.
+      await setPayoutPauseState({
+        paused: false,
+        reason: 'three_way_reconciliation_ok',
+      });
+    }
+
+    return { ok: true, result };
+  } catch (error) {
+    request.log.error({ err: error }, 'Three-way reconciliation run failed');
+    reply.code(500);
+    return { ok: false, error: 'Unable to run three-way reconciliation' };
+  }
+});
+
+app.post('/admin/reconciliation/safeguarding-check', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const bodySchema = z.object({
+    checkDate: z.string().min(8).max(20).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+  const checkDate = payload.checkDate ?? new Date().toISOString().slice(0, 10);
+
+  try {
+    const result = await runSafeguardingCheck(db, { checkDate });
+
+    if (result.status === 'shortfall') {
+      try {
+        await dispatchOpsAlert({
+          code: 'safeguarding_shortfall',
+          severity: 'critical',
+          message: `Safeguarding shortfall for ${checkDate}: ${result.differenceMinor} minor units`,
+          metricValue: Math.abs(result.differenceMinor),
+          threshold: 0,
+          metadata: { checkDate, status: result.status },
+        });
+      } catch (alertError) {
+        request.log.error({ err: alertError }, 'Failed to dispatch safeguarding alert');
+      }
+    }
+
+    return { ok: true, result };
+  } catch (error) {
+    request.log.error({ err: error }, 'Safeguarding check failed');
+    reply.code(500);
+    return { ok: false, error: 'Unable to run safeguarding check' };
+  }
+});
+
+app.get('/admin/reconciliation/breaks', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const querySchema = z.object({
+    runId: z.string().min(4).max(140).optional(),
+    breakType: z.string().max(40).optional(),
+    severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+    status: z.enum(['open', 'investigating', 'resolved', 'wont_fix']).optional(),
+    limit: z.coerce.number().min(1).max(500).default(100),
+  });
+
+  const filters = querySchema.parse(request.query ?? {});
+
+  try {
+    const breaks = await getReconciliationBreaks(db, {
+      runId: filters.runId,
+      breakType: filters.breakType as Parameters<typeof getReconciliationBreaks>[1]['breakType'],
+      severity: filters.severity as Parameters<typeof getReconciliationBreaks>[1]['severity'],
+      status: filters.status as Parameters<typeof getReconciliationBreaks>[1]['status'],
+      limit: filters.limit,
+    });
+
+    return { ok: true, breaks };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to fetch reconciliation breaks');
+    reply.code(500);
+    return { ok: false, error: 'Unable to fetch reconciliation breaks' };
+  }
+});
+
+app.get('/admin/reconciliation/safeguarding-checks', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const querySchema = z.object({
+    fromDate: z.string().min(8).max(20).optional(),
+    toDate: z.string().min(8).max(20).optional(),
+    limit: z.coerce.number().min(1).max(365).default(30),
+  });
+
+  const filters = querySchema.parse(request.query ?? {});
+
+  try {
+    const checks = await getSafeguardingChecks(db, {
+      fromDate: filters.fromDate,
+      toDate: filters.toDate,
+      limit: filters.limit,
+    });
+
+    return { ok: true, checks };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to fetch safeguarding checks');
+    reply.code(500);
+    return { ok: false, error: 'Unable to fetch safeguarding checks' };
+  }
+});
+
 app.post('/admin/payouts/:requestId/review', async (request, reply) => {
   const securityError = ensureSecurityAdminAccess(request, reply);
   if (securityError) {
@@ -33349,6 +30326,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
   const bodySchema = z.object({
     note: z.string().max(400).optional(),
     providerPayoutRef: z.string().min(4).max(140).optional(),
+    bankPayoutConfirmed: z.boolean().optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -33585,14 +30563,17 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
           destinationAccountId: payoutRow.provider_account_ref,
           netAmountGbp: payoutBreakdown.netPayoutGbp,
         });
-        providerPayoutRef = providerTransfer.providerPayoutRef;
+        providerPayoutRef = providerTransfer.providerTransferRef;
         providerExecutionMetadata = {
           provider: 'stripe_connect',
-          providerPayoutRef,
+          providerTransferRef: providerTransfer.providerTransferRef,
           destinationAccountId: providerTransfer.destinationAccountId,
           amountMinor: providerTransfer.amountMinor,
           currency: providerTransfer.currency,
-          confirmedAt: new Date().toISOString(),
+          transferCreatedAt: new Date().toISOString(),
+          // Transfer ≠ bank payout. The payout request stays in 'processing'
+          // until Stripe's payout.paid webhook confirms bank arrival.
+          bankPayoutPending: true,
         };
       }
     } catch (error) {
@@ -33613,10 +30594,17 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
+    // After a Stripe Connect transfer, the payout is in 'processing' —
+    // the transfer moved funds to the connected account's Stripe balance,
+    // but the bank payout has not been confirmed. 'paid' is reserved for
+    // bank terminal evidence (Stripe payout.paid webhook or manual bank
+    // confirmation with explicit bankPayoutConfirmed: true).
+    const targetStatus = payload.bankPayoutConfirmed === true ? 'paid' : 'processing';
+
     const settled = await settlePayoutRequest(client, {
       userId: payoutRow.user_id,
       requestId,
-      targetStatus: 'paid',
+      targetStatus,
       providerPayoutRef: providerPayoutRef ?? undefined,
       metadata: {
         ...(payload.metadata ?? {}),
@@ -33640,7 +30628,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
 
     await client.query('COMMIT');
 
-    if (!settled.idempotent && settled.payoutRequest.status === 'paid') {
+    if (!settled.idempotent && (settled.payoutRequest.status === 'paid' || settled.payoutRequest.status === 'processing')) {
       try {
         await queuePayoutProcessedNotification({
           payoutRequest: settled.payoutRequest,
@@ -33860,6 +30848,14 @@ app.post('/admin/orders/:orderId/force-status', async (request, reply) => {
     );
 
     await client.query('COMMIT');
+
+    if (previousStatus !== updated.rows[0].status) {
+      sendCommerceOrderSmsNotifications({
+        orderId: updated.rows[0].id,
+        orderStatus: updated.rows[0].status,
+        reason: payload.note,
+      }).catch(() => {});
+    }
 
     return {
       ok: true,
@@ -34577,65 +31573,13 @@ app.post('/payments/intents', async (request, reply) => {
       }
     }
 
-    let stripeCustomerId: string | null = null;
-    let stripePaymentMethodId: string | null = null;
-    if (gatewayId === 'stripe_americas') {
-      if (!stripe) {
-        await client.query('ROLLBACK');
-        reply.code(503);
-        return {
-          ok: false,
-          error: 'Stripe payment collection is not configured',
-          code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-        };
-      }
-
-      const customer = await getOrCreateStripeCustomer({
-        db: client,
-        stripe,
-        userId: actorUserId,
-      });
-      stripeCustomerId = customer.customerId;
-
-      if (selectedPaymentMethodProjectionId) {
-        const selectedMethod = await resolveActiveStripeMethod({
-          db: client,
-          userId: actorUserId,
-          projectionId: selectedPaymentMethodProjectionId,
-        });
-        if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
-          await client.query('ROLLBACK');
-          reply.code(409);
-          return {
-            ok: false,
-            error: 'The selected payment method must be added again before checkout',
-            code: 'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
-          };
-        }
-        stripePaymentMethodId = selectedMethod.paymentMethodId;
-      }
-    }
-
+    // ── Phase 1: Persist intent with provider_submission_pending status ──
+    // The payment intent is created in 'provider_submission_pending' state
+    // BEFORE calling the provider. This ensures:
+    // 1. No provider I/O while DB locks are held (§5.1 gate)
+    // 2. If the provider call times out, the intent exists for recovery
+    // 3. The order is bound atomically, preventing concurrent checkout
     const intentId = createRuntimeId('pi');
-    const gatewayIntent = await createGatewayPaymentIntent({
-      gatewayId,
-      intentId,
-      channel,
-      money: paymentMoney,
-      stripeCustomerId,
-      stripePaymentMethodId,
-      returnUrl: payload.returnUrl,
-      webhookUrl: payload.webhookUrl,
-      platformFeeAmountGbp,
-      radarSessionId: payload.radarSessionId ?? null,
-      metadata: {
-        ...(payload.metadata ?? {}),
-        userId: actorUserId,
-        orderId,
-        coOwnOrderId,
-        platformFeeAmountGbp,
-      },
-    });
 
     const inserted = await client.query<PaymentIntentRow>(
       `
@@ -34712,21 +31656,20 @@ app.post('/payments/intents', async (request, reply) => {
         paymentMoney.minorAmount,
         paymentMoney.exponent,
         paymentMoney.registryVersion,
-        gatewayIntent.providerAmount,
-        gatewayIntent.providerAmountUnit,
-        toJsonString(gatewayIntent.conversionTrace),
-        gatewayIntent.initialStatus,
-        gatewayIntent.providerIntentRef,
-        gatewayIntent.clientSecret,
-        gatewayIntent.providerStatus ?? null,
-        gatewayIntent.nextActionUrl ?? null,
-        gatewayIntent.scaExpiresAt ?? null,
+        null,
+        null,
+        toJsonString({}),
+        'provider_submission_pending',
+        null,
+        null,
+        null,
+        null,
+        null,
         payload.idempotencyKey ?? null,
         paymentRequestHash,
         toJsonString({
           ...(payload.metadata ?? {}),
           canonicalMoney: paymentMoney,
-          providerConversion: gatewayIntent.conversionTrace,
         }),
       ]
     );
@@ -34763,15 +31706,192 @@ app.post('/payments/intents', async (request, reply) => {
       );
     }
 
+    // Commit Phase 1 — release all DB locks before provider I/O.
     await client.query('COMMIT');
-    reply.code(201);
-    return {
-      ok: true,
-      idempotent: false,
-      intent: toPaymentIntentPayload(inserted.rows[0]),
-    };
+    client.release();
+
+    // ── Phase 2: Provider I/O (no DB locks held) ──
+    // If the provider call fails or times out, the intent remains in
+    // 'provider_submission_pending'. A background worker can query the
+    // provider for the authoritative state (unknown-outcome recovery).
+    let stripeCustomerId: string | null = null;
+    let stripePaymentMethodId: string | null = null;
+    if (gatewayId === 'stripe_americas') {
+      if (!stripe) {
+        // Mark intent as failed — provider not configured.
+        await markIntentFailed(db, intentId, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Stripe payment collection is not configured');
+        reply.code(503);
+        return {
+          ok: false,
+          error: 'Stripe payment collection is not configured',
+          code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+        };
+      }
+
+      try {
+        const customer = await getOrCreateStripeCustomer({
+          db,
+          stripe,
+          userId: actorUserId,
+        });
+        stripeCustomerId = customer.customerId;
+
+        if (selectedPaymentMethodProjectionId) {
+          const selectedMethod = await resolveActiveStripeMethod({
+            db,
+            userId: actorUserId,
+            projectionId: selectedPaymentMethodProjectionId,
+          });
+          if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
+            await markIntentFailed(db, intentId, 'PAYMENT_METHOD_RECOLLECTION_REQUIRED', 'The selected payment method must be added again before checkout');
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'The selected payment method must be added again before checkout',
+              code: 'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
+            };
+          }
+          stripePaymentMethodId = selectedMethod.paymentMethodId;
+        }
+      } catch (stripeCustomerError) {
+        await markIntentFailed(db, intentId, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Failed to resolve Stripe customer');
+        throw stripeCustomerError;
+      }
+    }
+
+    // Fetch the buyer's email for providers that require customer identity
+    // (e.g. Flutterwave). Fall back to platform email if not available.
+    const buyerEmailRow = await db.query<{ email: string | null }>(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [actorUserId]
+    );
+    const customerEmail = buyerEmailRow.rows[0]?.email ?? null;
+
+    let gatewayIntent: Awaited<ReturnType<typeof createGatewayPaymentIntent>>;
+    try {
+      gatewayIntent = await createGatewayPaymentIntent({
+        gatewayId,
+        intentId,
+        channel,
+        money: paymentMoney,
+        stripeCustomerId,
+        stripePaymentMethodId,
+        returnUrl: payload.returnUrl,
+        webhookUrl: payload.webhookUrl,
+        platformFeeAmountGbp,
+        radarSessionId: payload.radarSessionId ?? null,
+        customerEmail,
+        metadata: {
+          ...(payload.metadata ?? {}),
+          userId: actorUserId,
+          orderId,
+          coOwnOrderId,
+          platformFeeAmountGbp,
+        },
+      });
+    } catch (providerError) {
+      // Provider call failed — mark intent as failed for recovery.
+      const failureCode = getApiError(providerError)?.code ?? 'PROVIDER_CALL_FAILED';
+      const failureMessage = (providerError as Error).message ?? 'Provider call failed';
+      await markIntentFailed(db, intentId, failureCode, failureMessage);
+      request.log.error(
+        { err: providerError, intentId, gatewayId },
+        'Provider payment intent creation failed'
+      );
+      const apiError = getApiError(providerError);
+      if (apiError) {
+        reply.code(502);
+        return { ok: false, error: apiError.message, code: apiError.code };
+      }
+      reply.code(502);
+      return { ok: false, error: 'Payment provider could not create the intent' };
+    }
+
+    // ── Phase 3: Update intent with provider results ──
+    const settleClient = await db.connect();
+    try {
+      await settleClient.query('BEGIN');
+
+      const updated = await settleClient.query<PaymentIntentRow>(
+        `UPDATE payment_intents
+         SET
+           provider_amount = $2,
+           provider_amount_unit = $3,
+           money_conversion_trace = $4::jsonb,
+           status = $5,
+           provider_intent_ref = $6,
+           client_secret = $7,
+           provider_status = $8,
+           next_action_url = $9,
+           sca_expires_at = $10,
+           metadata = metadata || $11::jsonb,
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING
+           id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+           instrument_id, amount_gbp, amount_currency, amount_minor,
+           currency_exponent, money_registry_version, provider_amount,
+           provider_amount_unit, money_conversion_trace, money_quarantined,
+           status, provider_intent_ref, client_secret, provider_status,
+           next_action_url, sca_expires_at, settled_at, failure_code,
+           failure_message, created_at, updated_at`,
+        [
+          intentId,
+          gatewayIntent.providerAmount,
+          gatewayIntent.providerAmountUnit,
+          toJsonString(gatewayIntent.conversionTrace),
+          gatewayIntent.initialStatus,
+          gatewayIntent.providerIntentRef,
+          gatewayIntent.clientSecret,
+          gatewayIntent.providerStatus ?? null,
+          gatewayIntent.nextActionUrl ?? null,
+          gatewayIntent.scaExpiresAt ?? null,
+          toJsonString({ providerConversion: gatewayIntent.conversionTrace }),
+        ]
+      );
+
+      await settleClient.query('COMMIT');
+
+      reply.code(201);
+      return {
+        ok: true,
+        idempotent: false,
+        intent: toPaymentIntentPayload(updated.rows[0]),
+      };
+    } catch (settleError) {
+      await settleClient.query('ROLLBACK');
+      // The provider intent was created but we couldn't persist the result.
+      // The intent stays in 'provider_submission_pending' — a background
+      // worker will query the provider and reconcile.
+      request.log.error(
+        { err: settleError, intentId, providerIntentRef: gatewayIntent.providerIntentRef },
+        'Failed to persist provider result — intent left in provider_submission_pending for recovery'
+      );
+      // Return the intent as-is (in pending state) so the client can poll.
+      const pendingIntent = await db.query<PaymentIntentRow>(
+        `SELECT id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+           instrument_id, amount_gbp, amount_currency, amount_minor,
+           currency_exponent, money_registry_version, provider_amount,
+           provider_amount_unit, money_conversion_trace, money_quarantined,
+           status, provider_intent_ref, client_secret, provider_status,
+           next_action_url, sca_expires_at, settled_at, failure_code,
+           failure_message, created_at, updated_at
+         FROM payment_intents WHERE id = $1 LIMIT 1`,
+        [intentId]
+      );
+      reply.code(201);
+      return {
+        ok: true,
+        idempotent: false,
+        intent: toPaymentIntentPayload(pendingIntent.rows[0]),
+      };
+    } finally {
+      settleClient.release();
+    }
   } catch (error) {
-    await client.query('ROLLBACK');
+    // The client may have already been released after Phase 1 commit.
+    // Only attempt rollback if the client is still held (Phase 1 error).
+    try { await client.query('ROLLBACK'); } catch { /* already released */ }
     const apiError = getApiError(error);
     if (apiError) {
       throw apiError;
@@ -34783,7 +31903,7 @@ app.post('/payments/intents', async (request, reply) => {
       error: 'Unable to create payment intent',
     };
   } finally {
-    client.release();
+    try { client.release(); } catch { /* already released */ }
   }
 });
 
@@ -34870,6 +31990,7 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
     scaExpiresAt: z.string().datetime().optional(),
     failureCode: z.string().max(80).optional(),
     failureMessage: z.string().max(240).optional(),
+    approverId: z.string().min(2).max(140).optional(),
     payload: z.record(z.unknown()).optional(),
   });
 
@@ -34909,7 +32030,15 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
       };
     }
 
-    if (!request.authUser || (request.authUser.role !== 'admin' && request.authUser.userId !== ownerRow.user_id)) {
+    // PAY-16 fix: Terminal status confirmation (succeeded/failed/cancelled)
+    // requires admin role. The intent owner must NOT be able to confirm
+    // their own payment as succeeded — that's a provider-owned terminal
+    // state. Only admin operators can override, and in production, terminal
+    // status requires a second approver (maker-checker).
+    const isTerminalStatus = payload.simulateStatus !== 'processing';
+    const isAdmin = request.authUser?.role === 'admin';
+
+    if (!request.authUser || (!isAdmin && request.authUser.userId !== ownerRow.user_id)) {
       await client.query('ROLLBACK');
       reply.code(403);
       return {
@@ -34918,13 +32047,39 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
       };
     }
 
-    if (payload.simulateStatus !== 'processing') {
-      if (config.nodeEnv === 'production' && request.authUser?.role !== 'admin') {
+    if (isTerminalStatus) {
+      // Non-admin users cannot set terminal status in any environment.
+      if (!isAdmin) {
         await client.query('ROLLBACK');
         reply.code(403);
         return {
           ok: false,
-          error: 'Forbidden: terminal status simulation is not allowed in production for non-admin users',
+          error: 'Forbidden: terminal status confirmation requires admin role',
+          code: 'TERMINAL_STATUS_REQUIRES_ADMIN',
+        };
+      }
+
+      // PAY-16: In production, terminal status requires maker-checker.
+      // The admin making the request (maker) must provide an approver ID
+      // (checker) who is a different admin. This prevents a single admin
+      // from unilaterally confirming a payment as succeeded.
+      if (config.nodeEnv === 'production' && !payload.approverId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Terminal status confirmation in production requires a second admin approver (maker-checker)',
+          code: 'MAKER_CHECKER_REQUIRED',
+        };
+      }
+
+      if (payload.approverId && payload.approverId === request.authUser.userId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'The approver must be a different admin from the one making the request',
+          code: 'APPROVER_MUST_DIFFER',
         };
       }
     }
@@ -35026,6 +32181,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
     amount: z.number().positive().optional(),
     currency: z.string().length(3).optional(),
     reason: z.string().max(240).optional(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -35092,12 +32248,18 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
       };
     }
 
-    if (!request.authUser || (request.authUser.role !== 'admin' && request.authUser.userId !== intent.user_id)) {
+    // PAY-01 fix: Only admin roles can initiate provider refunds.
+    // A buyer must NOT be able to call the provider refund endpoint for
+    // their own payment — refunds are policy-owned commands that require
+    // authorization (returns policy, dispute resolution, admin override).
+    // The buyer's cancellation creates a refund request, never a direct
+    // provider mutation.
+    if (!request.authUser || request.authUser.role !== 'admin') {
       await client.query('ROLLBACK');
       reply.code(403);
       return {
         ok: false,
-        error: 'Forbidden: payment intent access denied',
+        error: 'Forbidden: refunds can only be initiated by authorized operators',
       };
     }
 
@@ -35112,6 +32274,35 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
 
     const amount = roundTo(payload.amount ?? Number(intent.amount_gbp), 2);
     const currency = (payload.currency ?? intent.amount_currency ?? 'GBP').toUpperCase();
+
+    // PAY-02 fix: Remaining-refundable guard. Sum of succeeded + pending
+    // (in-flight) refunds must not exceed the captured amount. This
+    // prevents duplicate/concurrent refunds from over-refunding.
+    const intentAmountGbp = roundTo(Number(intent.amount_gbp), 2);
+    const existingRefundsResult = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM payment_refunds
+       WHERE intent_id = $1
+         AND status IN ('succeeded', 'pending')`,
+      [intentId]
+    );
+    const alreadyRefundedGbp = roundTo(Number(existingRefundsResult.rows[0]?.total ?? '0'), 2);
+    const remainingRefundableGbp = roundTo(intentAmountGbp - alreadyRefundedGbp, 2);
+
+    if (amount > remainingRefundableGbp + 1e-6) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Refund amount exceeds remaining refundable amount',
+        code: 'REFUND_AMOUNT_EXCEEDS_REMAINING',
+        remainingRefundableGbp,
+      };
+    }
+
+    // PAY-02 fix: Scoped idempotency key for the refund operation.
+    // If the same key is used twice, the second call is idempotent.
+    const refundOperationId = payload.idempotencyKey ?? `rf_${intentId}_${amount}_${currency}_${Date.now()}`;
     let providerRefundRef = createRuntimeId(`refund_${intent.gateway_id}`);
     let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' = 'pending';
 
@@ -35151,8 +32342,10 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
       reason: payload.reason,
       metadata: {
         source: 'manual_refund_request',
+        remainingRefundableGbp,
         ...(payload.metadata ?? {}),
       },
+      idempotencyKey: refundOperationId,
     });
 
     await client.query('COMMIT');
@@ -36168,11 +33361,33 @@ app.post('/webhooks/:provider', async (request, reply) => {
     );
 
     if (!webhookInsert.rowCount) {
-      await client.query('COMMIT');
-      return {
-        ok: true,
-        duplicate: true,
-      };
+      // PAY-03 fix: The insert returned 0 rows because this event was
+      // already received. But "received" != "processed" — a crash after
+      // the insert but before processed_at was set leaves the event
+      // unprocessed. Check whether the existing row has processed_at.
+      // If not, re-process it instead of silently returning duplicate.
+      const existingRow = await client.query<{ processed_at: string | null }>(
+        `SELECT processed_at FROM payment_webhook_events
+         WHERE gateway_id = $1 AND provider_event_id = $2
+         LIMIT 1`,
+        [expectedGateway, event.providerEventId]
+      );
+
+      if (existingRow.rows[0]?.processed_at) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          duplicate: true,
+        };
+      }
+
+      // Event was received but never processed — fall through and process it.
+      await client.query(
+        `UPDATE payment_webhook_events
+         SET event_type = $3, intent_id = $4
+         WHERE gateway_id = $1 AND provider_event_id = $2`,
+        [expectedGateway, event.providerEventId, event.eventType, intentRow?.id ?? null]
+      );
     }
 
     let settledIntent: ReturnType<typeof toPaymentIntentPayload> | undefined;
@@ -36295,7 +33510,8 @@ app.post('/webhooks/:provider', async (request, reply) => {
           intentRow.user_id,
           refundMoney?.currency === 'GBP'
             ? Number(moneyToMajorDecimal(refundMoney))
-            : Number(intentRow.amount_gbp)
+            : Number(intentRow.amount_gbp),
+          event.refund.providerRefundRef ?? event.providerEventId
         );
       }
 
@@ -36351,7 +33567,8 @@ app.post('/webhooks/:provider', async (request, reply) => {
           intentRow.user_id,
           disputeMoney?.currency === 'GBP'
             ? Number(moneyToMajorDecimal(disputeMoney))
-            : Number(intentRow.amount_gbp)
+            : Number(intentRow.amount_gbp),
+          event.dispute.providerDisputeRef ?? event.providerEventId
         );
 
         await client.query(
@@ -36649,6 +33866,11 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
       );
 
       // Re-normalize and re-process the webhook event.
+      // PAY-04 fix: Do NOT re-verify the signature with empty headers.
+      // The signature was verified once when the webhook was first received.
+      // Re-verification with {} headers always fails for signed providers
+      // (Stripe, Razorpay). Use normalizeWebhookEvent which normalizes
+      // without re-verifying the signature.
       const provider: ProviderSlug = item.gateway_id === 'stripe_americas' ? 'stripe'
         : item.gateway_id === 'razorpay_in' ? 'razorpay'
         : item.gateway_id === 'mollie_eu' ? 'mollie'
@@ -36657,18 +33879,11 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
         : item.gateway_id === 'wise_global' ? 'wise'
         : 'stripe';
 
-      const verification = await verifyAndNormalizeWebhook(
-        provider,
-        toJsonString(item.raw_payload),
-        {},
-        item.raw_payload
-      );
+      const event = await normalizeWebhookEvent(provider, item.raw_payload);
 
-      if (!verification.verified || !verification.event) {
-        throw new Error(verification.reason ?? 'Webhook re-verification failed');
+      if (!event) {
+        throw new Error('Webhook event normalization failed during retry');
       }
-
-      const event = verification.event;
       let intentRow: PaymentIntentRow | null = null;
       if (event.intentId) {
         const byId = await client.query<PaymentIntentRow>(
@@ -37169,6 +34384,13 @@ const handleShippingWebhook = async (request: FastifyRequest, reply: FastifyRepl
         );
       }
     }
+
+    sendCommerceOrderSmsNotifications({
+      orderId: applied.order.id,
+      orderStatus: applied.order.status,
+      trackingNumber: applied.order.trackingNumber,
+      shippingProvider: applied.order.shippingProvider,
+    }).catch(() => {});
 
     return {
       ok: true,
@@ -38209,6 +35431,13 @@ app.post('/orders/:orderId/parcel/events', async (request, reply) => {
       }
     }
 
+    sendCommerceOrderSmsNotifications({
+      orderId: applied.order.id,
+      orderStatus: applied.order.status,
+      trackingNumber: applied.order.trackingNumber,
+      shippingProvider: applied.order.shippingProvider,
+    }).catch(() => {});
+
     return {
       ok: true,
       idempotent: applied.idempotent,
@@ -38834,12 +36063,13 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 
   const claimsResult = await db.query<{
     id: string;
-    topic: string;
+    topic_id: string;
+    topic_label: string;
     status: string;
     created_at: string;
   }>(
-    `SELECT id, topic, status, created_at FROM support_tickets
-     WHERE order_id = $1 AND topic IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
+    `SELECT id, topic_id, topic_label, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
      ORDER BY created_at DESC`,
     [orderId]
   );
@@ -38854,7 +36084,8 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
       eligibleUntil,
       claims: claimsResult.rows.map((r) => ({
         ticketId: r.id,
-        topic: r.topic,
+        topicId: r.topic_id,
+        topicLabel: r.topic_label,
         status: r.status,
         createdAt: r.created_at,
       })),
@@ -38863,7 +36094,14 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 });
 
 // POST /orders/:orderId/protection/claim — initiate a buyer protection claim
-app.post('/orders/:orderId/protection/claim', async (request, reply) => {
+app.post('/orders/:orderId/protection/claim', {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 minute',
+    },
+  },
+}, async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
     return { ok: false, error: 'Unauthorized' };
@@ -38894,22 +36132,22 @@ app.post('/orders/:orderId/protection/claim', async (request, reply) => {
     return { ok: false, error: 'Only the buyer can file a protection claim' };
   }
 
+  const ticketId = `ticket_${crypto.randomUUID()}`;
   const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
-    `INSERT INTO support_tickets (user_id, order_id, topic, subject, body, status)
-     VALUES ($1, $2, 'buyer_protection_claim', $3, $4, 'open')
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls)
+     VALUES ($1, $2, $3, 'buyer_protection_claim', $4, $5, 'open', $6)
      RETURNING id, status, created_at`,
-    [request.authUser.userId, orderId, reason, description]
+    [
+      ticketId,
+      request.authUser.userId,
+      orderId,
+      reason,
+      description,
+      evidenceUrls && evidenceUrls.length > 0 ? evidenceUrls : [],
+    ]
   );
 
   const ticket = ticketResult.rows[0];
-  if (evidenceUrls && evidenceUrls.length > 0) {
-    for (const url of evidenceUrls) {
-      await db.query(
-        `INSERT INTO support_ticket_attachments (ticket_id, url) VALUES ($1, $2)`,
-        [ticket.id, url]
-      );
-    }
-  }
 
   reply.code(201);
   return {
@@ -39168,20 +36406,138 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
     }
 
     if (order.status !== 'paid' && order.status !== 'shipped') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: `Cannot refund order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
     }
 
-    await postCommerceOrderRefundLedgerReversal(client, orderId, authUser.userId, Number(order.total_gbp));
-    await client.query(`UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE id = $1`, [orderId]);
+    // Look up the linked payment intent to issue a real provider refund.
+    // A refund without a provider call is a false refund — the buyer's card
+    // is never credited.  Refuse if no succeeded intent is linked.
+    const intentResult = await client.query<{
+      id: string;
+      gateway_id: string;
+      provider_intent_ref: string | null;
+      amount_gbp: number | string;
+      status: string;
+    }>(
+      `SELECT id, gateway_id, provider_intent_ref, amount_gbp, status
+       FROM payment_intents
+       WHERE order_id = $1 AND status = 'succeeded'
+       ORDER BY created_at DESC LIMIT 1`,
+      [orderId]
+    );
 
-    await client.query('COMMIT');
-    return { ok: true, orderId, status: 'refunded', refunded: true, reason: body.reason ?? null };
+    const linkedIntent = intentResult.rows[0];
+    if (!linkedIntent || !linkedIntent.provider_intent_ref) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Cannot refund: no succeeded provider payment intent is linked to this order. Use the payment refund endpoint with a provider reference.',
+        code: 'NO_PROVIDER_INTENT_FOR_REFUND',
+      };
+    }
+
+    // Calculate remaining-refundable: sum of already-succeeded/pending refunds.
+    const refundedResult = await client.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM payment_refunds
+       WHERE intent_id = $1 AND status IN ('succeeded', 'pending')`,
+      [linkedIntent.id]
+    );
+    const alreadyRefunded = Number(refundedResult.rows[0].total ?? '0');
+    const refundAmount = Number(order.total_gbp) - alreadyRefunded;
+
+    if (refundAmount <= 0) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Order has already been fully refunded', code: 'ALREADY_FULLY_REFUNDED' };
+    }
+
+    // Issue the real provider refund OUTSIDE the transaction lock.
+    // We release the transaction, call the provider, then open a new
+    // transaction to record the result.  This avoids holding a DB lock
+    // across a network call.
+    await client.query('ROLLBACK');
+
+    let providerRefundRef = createRuntimeId(`refund_${linkedIntent.gateway_id}`);
+    let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown' = 'pending';
+
+    try {
+      const gatewayRefund = await createGatewayRefund({
+        gatewayId: linkedIntent.gateway_id,
+        intentId: linkedIntent.id,
+        providerIntentRef: linkedIntent.provider_intent_ref,
+        money: moneyFromMinor('GBP', String(Math.round(refundAmount * 100))),
+        refundAmount,
+        reason: body.reason,
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId, refundOperationId: providerRefundRef },
+      });
+      providerRefundRef = gatewayRefund.providerRefundRef;
+      refundStatus = gatewayRefund.refundStatus;
+    } catch (refundError) {
+      // Provider call failed or timed out — mark as unknown, not failed.
+      // The reconciliation worker will query the provider for the authoritative
+      // status.  Never claim success from a local-only update.
+      refundStatus = 'unknown';
+      request.log.error(
+        { err: refundError, intentId: linkedIntent.id, orderId },
+        'Provider refund call failed; marking as unknown for reconciliation'
+      );
+    }
+
+    // Record the refund and update order status in a new transaction.
+    const recordClient = await db.connect();
+    try {
+      await recordClient.query('BEGIN');
+      await upsertPaymentRefund(recordClient, {
+        intentId: linkedIntent.id,
+        gatewayId: linkedIntent.gateway_id,
+        providerRefundRef,
+        status: refundStatus,
+        amount: refundAmount,
+        currency: 'GBP',
+        reason: body.reason,
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId },
+      });
+      // PAY-08 fix: Only post the ledger reversal when the refund is
+      // confirmed succeeded. Unknown/pending refunds must NOT trigger a
+      // reversal — the money has not been returned to the buyer yet.
+      // The reversal is posted when the refund.* webhook confirms success
+      // or when reconciliation resolves the unknown state.
+      if (refundStatus === 'succeeded') {
+        await postCommerceOrderRefundLedgerReversal(recordClient, orderId, authUser.userId, refundAmount, providerRefundRef);
+      }
+      // Only set order to 'refunded' when the provider confirms success.
+      // For 'unknown' or 'pending', set to 'refunding' so the state is honest.
+      const orderStatus = refundStatus === 'succeeded' ? 'refunded' : 'refunding';
+      await recordClient.query(
+        `UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`,
+        [orderId, orderStatus]
+      );
+      await recordClient.query('COMMIT');
+    } catch (recordError) {
+      await recordClient.query('ROLLBACK');
+      throw recordError;
+    } finally {
+      recordClient.release();
+    }
+
+    return {
+      ok: true,
+      orderId,
+      status: refundStatus === 'succeeded' ? 'refunded' : 'refunding',
+      refunded: refundStatus === 'succeeded',
+      refundStatus,
+      reason: body.reason ?? null,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -40271,6 +37627,12 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
 });
 
 app.post('/auctions/:auctionId/bids', {
+  config: {
+    rateLimit: {
+      max: 30,
+      timeWindow: '1 minute',
+    },
+  },
   // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation as a second layer.
@@ -44275,7 +41637,14 @@ app.get('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
   };
 });
 
-app.post('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
+app.post('/co-own/assets/:assetId/buyout-offers', {
+  config: {
+    rateLimit: {
+      max: 20,
+      timeWindow: '1 minute',
+    },
+  },
+}, async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
   const bodySchema = z.object({
     bidderUserId: z.string().min(2),
@@ -47103,35 +44472,78 @@ const start = async () => {
   try {
     await startRealtimeBridge(redis);
 
-    startBackgroundWorkers({
-      handlePushJob: processPushQueueJob,
-      handleAuctionSweepJob: async ({ reason }) => {
-        await sweepExpiredAuctions(reason);
-      },
-      handleReconciliationJob: async ({ reason, runDate }) => {
-        await runPlatformReconciliation(reason, runDate);
-      },
-      handleOutboxDrainJob: async () => {
-        await processDomainOutboxBatch();
-      },
-      handleOnezeMintReserveJob: async ({ mintOperationId, initiatedBy, reason }) => {
-        await processQueuedOnezeMintReserveAllocation({
-          mintOperationId,
-          initiatedBy,
-          reason,
-        });
-      },
-      handleOnezeWithdrawalExecuteJob: async ({ withdrawalId, initiatedBy, reason }) => {
-        await processQueuedOnezeWithdrawalExecution({
-          withdrawalId,
-          initiatedBy,
-          reason,
-        });
-      },
-    });
+    // In production, workers run in a separate container (docker-compose.prod.yml worker service).
+    // Set RUN_BACKGROUND_WORKERS=false on the API service to avoid duplicate workers.
+    if (process.env.RUN_BACKGROUND_WORKERS !== 'false') {
+      startBackgroundWorkers({
+        handlePushJob: processPushQueueJob,
+        handleAuctionSweepJob: async ({ reason }) => {
+          await sweepExpiredAuctions(reason);
+        },
+        handleReconciliationJob: async ({ reason, runDate }) => {
+          await runPlatformReconciliation(reason, runDate);
+        },
+        handleOutboxDrainJob: async () => {
+          await processDomainOutboxBatch();
+        },
+        handleOnezeMintReserveJob: async ({ mintOperationId, initiatedBy, reason }) => {
+          await processQueuedOnezeMintReserveAllocation({
+            mintOperationId,
+            initiatedBy,
+            reason,
+          });
+        },
+        handleOnezeWithdrawalExecuteJob: async ({ withdrawalId, initiatedBy, reason }) => {
+          await processQueuedOnezeWithdrawalExecution({
+            withdrawalId,
+            initiatedBy,
+            reason,
+          });
+        },
+        handleMediaIngestJob: async ({ assetId, reason }) => {
+          await processMediaAsset(assetId, db);
+        },
+        handleMediaEmbeddingJob: async (job) => {
+          await processMediaEmbeddingJob(job);
+        },
+        handleModerationTriageJob: async (job) => {
+          await processModerationTriageJob(job);
+        },
+        handleImporterExtractionJob: async (job) => {
+          await processImporterExtraction(job);
+        },
+        handleCatalogImportDiscoveryJob: async ({ batchId }) => {
+          await processCatalogImportDiscovery({ batchId });
+        },
+        handleCatalogImportHydrationJob: async ({ batchId, itemId }) => {
+          await processCatalogImportHydration({ batchId, itemId });
+        },
+        handleCatalogImportMediaJob: async ({ mediaId }) => {
+          await processCatalogImportMedia({ mediaId });
+        },
+        handleCatalogImportNormalisationJob: async ({ batchId, itemId }) => {
+          await processCatalogImportNormalisation({ batchId, itemId });
+        },
+        handleCatalogImportPublicationJob: async ({ batchId }) => {
+          await processCatalogImportPublication({ batchId });
+        },
+        handleCatalogImportRetentionJob: async ({ batchId }) => {
+          await processCatalogImportRetention({ batchId });
+        },
+        handleCatalogImportReconcileJob: async ({ itemId, publicationKey }) => {
+          await processCatalogImportReconcile({ itemId, publicationKey });
+        },
+        handleRetentionSweepJob: async ({ reason }) => {
+          await processRetentionSweep({ reason });
+        },
+      });
+    } else {
+      app.log.info('[api] background workers disabled — running in separate container');
+    }
 
     startAuctionSweepScheduler();
     startDomainOutboxScheduler();
+    startRetentionSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -47139,6 +44551,11 @@ const start = async () => {
     startOnezeDailyAttestationScheduler();
     startOnezeFxSyncScheduler();
     startOnezeAutoAdjustScheduler();
+
+    // Configure the search index settings on startup (fire-and-forget).
+    // Errors are swallowed inside configureSearchIndex so a misconfigured
+    // search backend never blocks the API from serving traffic.
+    void configureSearchIndex().catch(() => {});
 
     // P0-9: AI/ML deploy-time validation. Log blocking errors and warnings
     // before serving traffic so ops can see whether the deployment may
@@ -47205,8 +44622,26 @@ const start = async () => {
 // ── Support tickets ────────────────────────────────────────────────
 
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
+registerSupportRoutes({ app, db, createApiError, queueUserNotification });
+registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification });
+registerVendorWebhookRoutes({
+  app,
+  db,
+  vendorSecrets: {
+    intercom: process.env.INTERCOM_WEBHOOK_SECRET ?? '',
+    zendesk: process.env.ZENDESK_WEBHOOK_SECRET ?? '',
+  },
+});
 
-registerCollectionRoutes({ app, db, createApiError });
+registerCollectionRoutes({ app, db: createKysely(db), createApiError });
+
+registerSearchRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerGalleriaRoutes({ app, db, readDb, createApiError, resolveAuthenticatedUserId });
+
+registerMoodboardRoutes({ app, db, createApiError, resolveAuthenticatedUserId, ensureUserExists });
+
+registerConversationalSearchRoutes({ app, db, readDb });
 
 type PosterStoryAccessRow = {
   id: string;
@@ -47406,7 +44841,7 @@ async function enrichPosterFrames(
 }
 
 async function enrichPosterStory(
-  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+  storyRow: PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
   viewerUserId: string | null
 ): Promise<Record<string, unknown>> {
   const frames = await enrichPosterFrames(storyRow.id, viewerUserId);
@@ -47438,6 +44873,7 @@ async function enrichPosterStory(
     status: storyRow.status,
     expiresAt: storyRow.expires_at,
     createdAt: storyRow.created_at,
+    compositionDocument: storyRow.composition_document ?? undefined,
     frames,
     seenByViewer: viewedFrameCount > 0,
     viewedFrameCount,
@@ -47465,7 +44901,7 @@ app.post('/poster-stories', async (request, reply) => {
     snapshotImageUrl: z.string().url().optional(),
     snapshotPriceGbp: z.number().optional(),
     lookId: z.string().min(2).max(120).optional(),
-    snapshotCaption: z.string().max(500).optional(),
+    snapshotCaption: z.string().max(2200).optional(),
     question: z.string().max(200).optional(),
     options: z.array(z.object({ id: z.string().min(1).max(60), label: z.string().min(1).max(80) })).length(2).optional(),
   });
@@ -47485,8 +44921,10 @@ app.post('/poster-stories', async (request, reply) => {
     id: z.string().min(2).max(120),
     mediaType: z.enum(['image', 'video', 'text']),
     mediaUrl: z.string().url().optional(),
+    mediaFinalizationId: z.string().min(2).max(160).optional(),
+    mediaAssetId: z.string().min(2).max(160).optional(),
     backgroundColor: z.string().max(30).optional(),
-    caption: z.string().max(500).default(''),
+    caption: z.string().max(2200).default(''),
     durationMs: z.number().int().min(1000).max(30000).default(5000),
     sortOrder: z.number().int().default(0),
     stickers: z.array(stickerSchema).default([]),
@@ -47499,9 +44937,14 @@ app.post('/poster-stories', async (request, reply) => {
     allowReactions: z.boolean().default(true),
     expiresInHours: z.number().int().min(1).max(168).default(24),
     frames: z.array(frameSchema).min(1).max(10),
+    compositionDocument: z.unknown().optional(),
   });
 
   const payload = bodySchema.parse(request.body);
+  const payloadHash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex');
 
   // Validate frame IDs unique
   const frameIds = payload.frames.map((f) => f.id);
@@ -47512,9 +44955,19 @@ app.post('/poster-stories', async (request, reply) => {
 
   // Validate media requirements
   for (const frame of payload.frames) {
-    if ((frame.mediaType === 'image' || frame.mediaType === 'video') && !frame.mediaUrl) {
-      reply.code(400);
-      return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+    if (frame.mediaType === 'image' || frame.mediaType === 'video') {
+      if (!frame.mediaUrl) {
+        reply.code(400);
+        return { ok: false, error: `Frame ${frame.id}: ${frame.mediaType} requires mediaUrl` };
+      }
+      if (!frame.mediaFinalizationId) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Frame ${frame.id}: verified upload finalization is required`,
+          code: 'MEDIA_FINALIZATION_REQUIRED',
+        };
+      }
     }
     // Validate sticker payloads per type
     for (const sticker of frame.stickers) {
@@ -47541,33 +44994,181 @@ app.post('/poster-stories', async (request, reply) => {
     }
   }
 
-  // Check for duplicate story ID
-  const existing = await db.query(`SELECT id FROM poster_stories WHERE id = $1`, [payload.id]);
-  if (existing.rowCount) {
-    reply.code(409);
-    return { ok: false, error: 'Story ID already exists' };
-  }
-
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [payload.id]);
+
+    // The document ID is the publication idempotency key. Lock and compare
+    // the accepted payload so a lost 201 response can be retried safely,
+    // while a reused key with different content fails closed.
+    const existing = await client.query<{
+      creator_id: string;
+      publication_payload_hash: string | null;
+    }>(
+      `SELECT creator_id, publication_payload_hash
+       FROM poster_stories
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.id],
+    );
+    if (existing.rowCount) {
+      const row = existing.rows[0];
+      if (
+        row.creator_id === actorUserId
+        && row.publication_payload_hash === payloadHash
+      ) {
+        await client.query('COMMIT');
+        reply.code(200);
+        return { ok: true, storyId: payload.id, replayed: true };
+      }
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: row.creator_id === actorUserId
+          ? 'Publication key was already used with different content'
+          : 'Story ID belongs to another creator',
+        code: 'IDEMPOTENCY_CONFLICT',
+      };
+    }
+
+    const verifiedMediaByFrame = new Map<string, {
+      finalizationId: string;
+      mediaAssetId: string | null;
+      resolvedUrl: string;
+    }>();
+    for (const frame of payload.frames) {
+      if (frame.mediaType === 'text') continue;
+
+      const verified = await client.query<{
+        id: string;
+        owner_id: string;
+        public_url: string;
+        content_type: string;
+        status: string;
+        scope_ref_id: string | null;
+        media_asset_id: string | null;
+        media_asset_status: string | null;
+        canonical_url: string | null;
+      }>(
+        `SELECT finalization.id, finalization.owner_id,
+                finalization.public_url, finalization.content_type,
+                finalization.status, finalization.scope_ref_id,
+                finalization.media_asset_id,
+                asset.status AS media_asset_status,
+                asset.canonical_url
+         FROM upload_finalizations finalization
+         LEFT JOIN media_assets asset
+           ON asset.id = finalization.media_asset_id
+         WHERE finalization.id = $1
+         LIMIT 1
+         FOR UPDATE OF finalization`,
+        [frame.mediaFinalizationId],
+      );
+      const receipt = verified.rows[0];
+      const expectedContentPrefix = frame.mediaType === 'video' ? 'video/' : 'image/';
+      const suppliedUrlMatches = receipt
+        && (receipt.public_url === frame.mediaUrl || receipt.canonical_url === frame.mediaUrl);
+      const suppliedAssetMatches = !frame.mediaAssetId
+        || receipt?.media_asset_id === frame.mediaAssetId;
+      const scopeMatches = !receipt?.scope_ref_id || receipt.scope_ref_id === payload.id;
+      if (
+        !receipt
+        || receipt.owner_id !== actorUserId
+        || receipt.status !== 'finalized'
+        || !receipt.content_type.startsWith(expectedContentPrefix)
+        || !suppliedUrlMatches
+        || !suppliedAssetMatches
+        || !scopeMatches
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Frame ${frame.id} does not match its verified upload`,
+          code: 'MEDIA_RECEIPT_MISMATCH',
+        };
+      }
+      if (
+        config.mediaPublicationGateEnabled
+        && (receipt.media_asset_status !== 'published' || !receipt.canonical_url)
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Frame ${frame.id} is still processing or under review`,
+          code: 'MEDIA_NOT_PUBLISHED',
+          mediaStatus: receipt.media_asset_status ?? 'missing',
+        };
+      }
+      verifiedMediaByFrame.set(frame.id, {
+        finalizationId: receipt.id,
+        mediaAssetId: receipt.media_asset_status === 'published'
+          ? receipt.media_asset_id
+          : null,
+        resolvedUrl: config.mediaPublicationGateEnabled
+          ? receipt.canonical_url!
+          : (receipt.canonical_url ?? receipt.public_url),
+      });
+    }
+
+    // Validate the composition document envelope (version, type, id)
+    // before persisting. The body is stored as opaque JSONB for WYSIWYG
+    // rendering, but the envelope must match the publication context.
+    const compositionValidation = validateCompositionDocument(
+      payload.compositionDocument,
+      { type: 'poster', id: payload.id },
+    );
+    if (!compositionValidation.ok) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return {
+        ok: false,
+        error: compositionValidation.error,
+        code: compositionValidation.code,
+      };
+    }
 
     const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);
 
     await client.query(
-      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
-      [payload.id, actorUserId, payload.audience, payload.allowReplies, payload.allowReactions, expiresAt]
+      `INSERT INTO poster_stories (
+         id, creator_id, audience, allow_replies, allow_reactions,
+         status, expires_at, composition_document, publication_payload_hash
+       )
+       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7::jsonb, $8)`,
+      [
+        payload.id,
+        actorUserId,
+        payload.audience,
+        payload.allowReplies,
+        payload.allowReactions,
+        expiresAt,
+        payload.compositionDocument ? JSON.stringify(payload.compositionDocument) : null,
+        payloadHash,
+      ]
     );
 
     for (const frame of payload.frames) {
+      const verifiedMedia = verifiedMediaByFrame.get(frame.id);
       await client.query(
-        `INSERT INTO posters (id, creator_id, media_url, caption, poster_caption, background_color, layout, status, expiry_hours, story_id, media_type, sort_order, duration_ms)
-         VALUES ($1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7, $8, $9, $10)`,
+        `INSERT INTO posters (
+           id, creator_id, media_url, caption, poster_caption,
+           background_color, layout, status, expiry_hours, story_id,
+           media_type, sort_order, duration_ms, upload_finalization_id,
+           media_asset_id
+         )
+         VALUES (
+           $1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7,
+           $8, $9, $10, $11, $12
+         )`,
         [
           frame.id,
           actorUserId,
-          frame.mediaUrl ?? '',
+          verifiedMedia?.resolvedUrl ?? '',
           frame.caption,
           frame.backgroundColor ?? null,
           payload.expiresInHours,
@@ -47575,8 +45176,38 @@ app.post('/poster-stories', async (request, reply) => {
           frame.mediaType,
           frame.sortOrder,
           frame.durationMs,
+          verifiedMedia?.finalizationId ?? null,
+          verifiedMedia?.mediaAssetId ?? null,
         ]
       );
+
+      if (verifiedMedia) {
+        await client.query(
+          `UPDATE upload_finalizations
+           SET scope = 'poster', scope_ref_id = $2, updated_at = NOW()
+           WHERE id = $1`,
+          [verifiedMedia.finalizationId, payload.id],
+        );
+        if (verifiedMedia.mediaAssetId) {
+          await client.query(
+            `INSERT INTO media_bindings (
+               id, media_asset_id, owner_id, target_type,
+               target_ref_id, role, sort_order
+             )
+             VALUES ($1, $2, $3, 'creator_document', $4, $5, $6)
+             ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+             DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+            [
+              `mbind_${crypto.randomUUID()}`,
+              verifiedMedia.mediaAssetId,
+              actorUserId,
+              payload.id,
+              `frame:${frame.sortOrder}`,
+              frame.sortOrder,
+            ],
+          );
+        }
+      }
 
       for (const sticker of frame.stickers) {
         await client.query(
@@ -47600,10 +45231,10 @@ app.post('/poster-stories', async (request, reply) => {
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
-    client.release();
     throw error;
+  } finally {
+    client.release();
   }
-  client.release();
 
   reply.code(201);
   return { ok: true, storyId: payload.id };
@@ -47644,8 +45275,10 @@ app.get('/poster-stories', async (request) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -47666,7 +45299,7 @@ app.get('/poster-stories', async (request) => {
     };
     if (!canViewerAccessPosterStory(storyRow, viewerUserId)) continue;
     const enriched = await enrichPosterStory(
-      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      { ...row, allow_replies: row.allow_replies, allow_reactions: row.allow_reactions } as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
       viewerUserId
     );
     stories.push(enriched);
@@ -47706,8 +45339,10 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -47721,7 +45356,7 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
   }
 
   const enriched = await enrichPosterStory(
-    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+    row.rows[0] as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
     viewerUserId
   );
   return enriched;
@@ -48149,8 +45784,10 @@ app.get('/poster-stories/archive', async (request) => {
     created_at: string;
     creator_username: string | null;
     creator_avatar: string | null;
+    composition_document: unknown | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
+       ps.composition_document,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -48162,7 +45799,7 @@ app.get('/poster-stories/archive', async (request) => {
   const stories: Array<Record<string, unknown>> = [];
   for (const row of result.rows) {
     const enriched = await enrichPosterStory(
-      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null },
+      row as PosterStoryAccessRow & { allow_replies: boolean; allow_reactions: boolean; created_at: string; creator_username: string | null; creator_avatar: string | null; composition_document: unknown | null },
       actorUserId
     );
     stories.push(enriched);
@@ -48730,10 +46367,18 @@ registerListingOfferRoutes({
 
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
 
+registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
 registerAiTruthRoutes({
   app,
   authorizeAdminRequest: authorizeSecurityAdminRequest,
 });
+
+registerComplianceRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerSyncRoutes({ app, db, readDb, resolveAuthenticatedUserId, createApiError });
+
+registerImpactRoutes({ app, db, resolveAuthenticatedUserId });
 
 // POST /creator/documents — create or replace a draft document
 

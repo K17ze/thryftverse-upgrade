@@ -79,6 +79,15 @@ export interface BackgroundScene {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
+/**
+ * The enhancement API is a mock until a real Photoroom / AI image service is
+ * connected. In dev (`__DEV__`), demo mode is ON so the UI can be built and
+ * validated with a truthful "Demo mode" banner. In production, demo mode is
+ * OFF and the functions throw so the UI shows an honest error instead of
+ * presenting non-functional enhancements as real (AGENTS.md §11 — fail-closed
+ * trust signals). Setting this to false without a real backend would cause
+ * the throw guards to fire, which is the correct behaviour.
+ */
 export const AI_PHOTO_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
@@ -241,6 +250,10 @@ function generateId(prefix: string): string {
  * Fetch the available enhancement options for the options rail.
  */
 export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
+  }
   await delay(280);
   return [...MOCK_ENHANCEMENT_OPTIONS];
 }
@@ -249,6 +262,10 @@ export async function fetchEnhancementOptions(): Promise<EnhancementOption[]> {
  * Fetch the available background scenes for the background-replacement picker.
  */
 export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
+  }
   await delay(240);
   return [...MOCK_BACKGROUND_SCENES];
 }
@@ -257,6 +274,10 @@ export async function fetchBackgroundScenes(): Promise<BackgroundScene[]> {
  * Fetch curated enhancement presets.
  */
 export async function fetchEnhancementPresets(): Promise<EnhancementPreset[]> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return [];
+  }
   await delay(260);
   return [...MOCK_PRESETS];
 }
@@ -271,6 +292,17 @@ export async function applyEnhancement(
   imageUri: string,
   optionId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'background_removal' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
+  }
   await delay(900); // simulate processing time for honest loading states
   const option = MOCK_ENHANCEMENT_OPTIONS.find((o) => o.id === optionId);
   if (!option) {
@@ -297,6 +329,17 @@ export async function applyPreset(
   imageUri: string,
   presetId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'color_correction' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
+  }
   await delay(1200); // presets apply multiple options, so slightly longer
   const preset = MOCK_PRESETS.find((p) => p.id === presetId);
   if (!preset) {
@@ -324,6 +367,17 @@ export async function replaceBackground(
   imageUri: string,
   sceneId: string,
 ): Promise<EnhancementResult> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return original image unchanged (AGENTS.md §truthful-UI)
+    return {
+      id: generateId('result'),
+      originalUri: imageUri,
+      enhancedUri: imageUri,
+      option: { id: '', label: '', description: '', icon: '', type: 'background_replace' },
+      appliedAt: new Date().toISOString(),
+      isDemo: false,
+    };
+  }
   await delay(1000);
   const scene = MOCK_BACKGROUND_SCENES.find((s) => s.id === sceneId);
   if (!scene) {
@@ -349,6 +403,10 @@ export async function replaceBackground(
  * Returns the original URI so the UI can update the preview.
  */
 export async function revertEnhancement(resultId: string): Promise<{ originalUri: string; isDemo: boolean }> {
+  if (!AI_PHOTO_DEMO_MODE) {
+    // Backend not yet available — return empty result (AGENTS.md §truthful-UI)
+    return { originalUri: '', isDemo: false };
+  }
   await delay(300);
   return {
     originalUri: '',

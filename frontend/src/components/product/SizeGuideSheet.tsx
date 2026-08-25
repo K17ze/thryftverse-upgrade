@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 // ── Size guide data ──────────────────────────────────────────────────────────
 // Standard retail measurement tables per category. These are reference charts,
@@ -133,6 +133,7 @@ export function SizeGuideSheet({
   onClose,
 }: SizeGuideSheetProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const guide = useMemo(() => resolveSizeGuide(category), [category]);
 
   return (
@@ -142,10 +143,11 @@ export function SizeGuideSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close size guide">
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.background }]}
           onPress={(e) => e.stopPropagation()}
+        accessibilityRole="button"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
@@ -281,11 +283,11 @@ export function SizeGuideSheet({
 
 export { resolveSizeGuide };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     borderTopLeftRadius: Radius.xl,
@@ -321,13 +323,13 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   closeText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   guideTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -387,8 +389,8 @@ const styles = StyleSheet.create({
   },
   measureTipText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.medium,
   },
   footerNote: {
@@ -400,8 +402,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
   },
   // ── Empty state ──
@@ -419,14 +421,14 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs,
   },
   emptyText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
   },

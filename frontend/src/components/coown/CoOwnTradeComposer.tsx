@@ -142,7 +142,7 @@ export function CoOwnTradeComposer({
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <Text style={[styles.productPrice, { color: colors.textSecondary }]} numberOfLines={1}>{unitPriceLabel} / unit</Text>
         </View>
-        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
           <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
             {isBuy ? 'BUY' : 'SELL'}
           </Text>
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   productTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   availValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
   quoteCard: {
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   quoteValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   totalLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     flexShrink: 1,
     minWidth: 0,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalValue: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     flexShrink: 0,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
@@ -593,10 +593,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   postTradeText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   postTradeDenom: {
     fontSize: Type.meta.size,

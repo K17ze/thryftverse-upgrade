@@ -17,9 +17,10 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
@@ -33,7 +34,7 @@ import {
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
-import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow, FlagshipFormSection } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -41,10 +42,13 @@ import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
 export default function WalletScreen({ navigation }: Props) {
+  useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
@@ -141,7 +145,7 @@ export default function WalletScreen({ navigation }: Props) {
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load wallet');
+        const parsed = parseApiError(err, t('commerce.wallet.error.unableToLoad'));
         show(parsed.message, 'error');
         setIsError(true);
       })
@@ -181,9 +185,6 @@ export default function WalletScreen({ navigation }: Props) {
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
 
   // ── Derived sub-balance values (preserving reconciliation truth) ──
-  const settledClaim =
-    balance.settledCustomerClaim ??
-    (balance.available + balance.reservedForOrders + balance.redemptionInProgress + balance.otherHolds);
   const withdrawable = balance.withdrawable ?? balance.available;
   const hasPendingAttention = balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0;
 
@@ -193,14 +194,14 @@ export default function WalletScreen({ navigation }: Props) {
 
   // ── Pending attention summary text (spec 17 viewport 1) ──
   const pendingAttentionTitle = [
-    balance.pendingDeposit > 0 ? `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending` : null,
-    balance.unsettledSaleProceeds > 0 ? `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled` : null,
+    balance.pendingDeposit > 0 ? t('commerce.wallet.depositPending', { amount: formatBalance(balance.pendingDeposit) }) : null,
+    balance.unsettledSaleProceeds > 0 ? t('commerce.wallet.proceedsUnsettled', { amount: formatBalance(balance.unsettledSaleProceeds) }) : null,
   ].filter(Boolean).join(' · ');
 
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
+    ? `≈ ${formatFromFiat(balance.available, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
     : undefined;
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
@@ -236,7 +237,7 @@ export default function WalletScreen({ navigation }: Props) {
   // Auto-prompt biometric once availability is confirmed.
   React.useEffect(() => {
     if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
-      void biometricGate.authenticate('Authenticate to view your wallet');
+      void biometricGate.authenticate(t('commerce.wallet.authenticateToView'));
     }
   }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
 
@@ -246,7 +247,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -254,7 +255,7 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <BiometricGatePrompt
           gate={biometricGate}
-          reason="Authenticate to view your wallet"
+          reason={t('commerce.wallet.authenticateToView')}
           onBack={handleBack}
         />
       </FlagshipScreen>
@@ -267,7 +268,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -314,7 +315,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -323,7 +324,7 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <CoOwnStateCanvas
           variant="error"
-          actionLabel="Try again"
+          actionLabel={t('commerce.wallet.action.tryAgain')}
           onAction={loadBalance}
         />
       </FlagshipScreen>
@@ -336,7 +337,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -345,9 +346,9 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <CoOwnStateCanvas
           variant="empty"
-          title="No 1ZE yet"
-          subtitle="Add money to start trading Co-Own units."
-          actionLabel="Add money"
+          title={t('commerce.wallet.noBalanceYet')}
+          subtitle={t('commerce.wallet.addMoneyToStart')}
+          actionLabel={t('commerce.wallet.addMoney')}
           onAction={handleAddMoney}
           emptyGraphicVariant="bag"
         />
@@ -367,7 +368,7 @@ export default function WalletScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Wallet"
+          title={t('commerce.wallet.title')}
           onBack={handleBack}
           rightAction={
             <AnimatedPressable
@@ -375,10 +376,10 @@ export default function WalletScreen({ navigation }: Props) {
               scaleValue={0.9}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="Activity"
-              accessibilityHint="View all wallet activity"
+              accessibilityLabel={t('commerce.wallet.activity')}
+              accessibilityHint={t('commerce.wallet.a11y.viewAllWalletActivity')}
             >
-              <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              <Ionicons name="receipt-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -409,17 +410,17 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Balance hero — flat, largest text on screen (spec 17 viewport 1) ── */}
         <View style={styles.balanceHero}>
           <View style={styles.balanceHeader}>
-            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Spendable now</Text>
+            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>{t('commerce.wallet.spendableNow')}</Text>
             <Pressable
               onPress={() => { haptics.tap(); handleTogglePrivacy(); }}
               style={styles.eyeToggle}
               accessibilityRole="button"
-              accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
-              accessibilityHint="Toggles privacy for your wallet balance"
+              accessibilityLabel={balanceHidden ? t('commerce.wallet.showBalance') : t('commerce.wallet.hideBalance')}
+              accessibilityHint={t('commerce.wallet.a11y.togglesPrivacy')}
             >
               <Ionicons
                 name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
+                size={IconGrammar.standard}
                 color={colors.textSecondary}
               />
             </Pressable>
@@ -427,8 +428,8 @@ export default function WalletScreen({ navigation }: Props) {
           {balanceHidden ? (
             <Text
               style={[styles.balanceMasked, { color: colors.textMuted }]}
-              accessibilityLabel="Balance hidden"
-              accessibilityHint="Activate the eye control to reveal your spendable balance"
+              accessibilityLabel={t('commerce.wallet.balanceHidden')}
+              accessibilityHint={t('commerce.wallet.a11y.activateEyeToReveal')}
             >
               ••••••
             </Text>
@@ -443,8 +444,8 @@ export default function WalletScreen({ navigation }: Props) {
           )}
           {localFiatLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
-              <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+              <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${currencyCode ? ` · ${currencyCode}` : ''}`}>
                 {localFiatLabel}
                 {currencyCode ? ` · ${currencyCode}` : ''}
               </Text>
@@ -465,11 +466,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleAddMoney}
             disabled={!isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Add money to your wallet"
-            accessibilityHint="Opens the add money flow"
+            accessibilityLabel={t('commerce.wallet.a11y.addMoneyToWallet')}
+            accessibilityHint={t('commerce.wallet.a11y.opensAddMoneyFlow')}
           >
-            <Ionicons name="add-circle-outline" size={20} color={colors.background} />
-            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>Add money</Text>
+            <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.background} />
+            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>{t('commerce.wallet.addMoney')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -482,11 +483,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleWithdraw}
             disabled={!isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Withdraw from your wallet"
-            accessibilityHint="Opens the withdraw flow"
+            accessibilityLabel={t('commerce.wallet.a11y.withdrawFromWallet')}
+            accessibilityHint={t('commerce.wallet.a11y.opensWithdrawFlow')}
           >
-            <Ionicons name="arrow-down-circle-outline" size={20} color={colors.textPrimary} />
-            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Withdraw</Text>
+            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.withdraw')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -499,11 +500,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleConvert}
             disabled={balance.available <= 0 || !isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Convert 1ZE to fiat"
-            accessibilityHint="Opens the convert screen"
+            accessibilityLabel={t('commerce.wallet.a11y.convert1zeToFiat')}
+            accessibilityHint={t('commerce.wallet.a11y.opensConvertScreen')}
           >
-            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} />
-            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Convert</Text>
+            <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.convert')}</Text>
           </Pressable>
         </View>
 
@@ -515,8 +516,8 @@ export default function WalletScreen({ navigation }: Props) {
             title={pendingAttentionTitle}
             onPress={handleViewEarnings}
             style={{ marginTop: Space.md }}
-            accessibilityLabel={`Pending attention: ${formatBalance(balance.pendingDeposit)} 1ZE deposit, ${formatBalance(balance.unsettledSaleProceeds)} 1ZE unsettled proceeds`}
-            accessibilityHint="View seller earnings and release schedule"
+            accessibilityLabel={t('commerce.wallet.a11y.pendingAttention', { deposit: `${formatBalance(balance.pendingDeposit)} 1ZE`, unsettled: `${formatBalance(balance.unsettledSaleProceeds)} 1ZE` })}
+            accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}
 
@@ -525,132 +526,117 @@ export default function WalletScreen({ navigation }: Props) {
           <FlagshipNavigationRow
             icon="pricetag-outline"
             iconColor={colors.brand}
-            title="Seller earnings"
-            subtitle={`${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available · ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
+            title={t('commerce.wallet.sellerEarnings')}
+            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
             onPress={handleViewEarnings}
-            accessibilityLabel={`Seller earnings, ${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available, ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
-            accessibilityHint="View seller earnings and release schedule"
+            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}
 
-        {/* ── Sub-balances — flat rows, below the fold (spec 17 viewport 2) ── */}
-        <View style={styles.subBalanceSection}>
-          <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Settled claim</Text>
-          {settledClaim === 0 ? (
-            <Text style={[styles.subBalanceEmpty, { color: colors.textMuted }]}>
-              No settled 1ZE yet.
-            </Text>
-          ) : (
-            <>
-              <SubBalanceRow label="Available" value={balance.available} formatBalance={formatBalance} colors={colors} emphasis />
-              {balance.reservedForOrders > 0 && (
-                <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
-              )}
-              {balance.redemptionInProgress > 0 && (
-                <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
-              )}
-              {balance.otherHolds > 0 && (
-                <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
-              )}
-              <View style={[styles.subBalanceTotalRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.subBalanceTotalLabel, { color: colors.textPrimary }]}>Settled claim</Text>
-                <Text style={[styles.subBalanceTotalValue, { color: colors.textPrimary }]}>
-                  {formatBalance(settledClaim)}
-                  <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* ── Pending section (not yet settled) ── */}
-        {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
-          <View style={styles.subBalanceSection}>
-            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Pending</Text>
-            <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
-            <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+        {/* ── Balance breakdown — flat hairline-separated rows (spec 17 viewport 2) ── */}
+        {(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0 || balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={[styles.breakdownSection, { borderTopColor: colors.border }]}>
+            {balance.reservedForOrders > 0 && (
+              <SubBalanceRow label={t('commerce.wallet.reservedForOrders')} value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.redemptionInProgress > 0 && (
+              <SubBalanceRow label={t('commerce.wallet.redemptionPending')} value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.otherHolds > 0 && (
+              <SubBalanceRow label={t('commerce.wallet.otherHolds')} value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.pendingDeposit > 0 && (
+              <SubBalanceRow label={t('commerce.wallet.pendingDeposit')} value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.unsettledSaleProceeds > 0 && (
+              <SubBalanceRow label={t('commerce.wallet.unsettledSaleProceeds')} value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+            )}
+            <SubBalanceRow label={t('commerce.wallet.withdrawable')} value={withdrawable} formatBalance={formatBalance} colors={colors} emphasize />
           </View>
         )}
 
-        {/* ── Withdrawable ── */}
-        <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
-          <View style={styles.withdrawableLeft}>
-            <Ionicons name="arrow-down-circle-outline" size={15} color={colors.textSecondary} />
-            <Text style={[styles.withdrawableLabel, { color: colors.textSecondary }]}>Withdrawable</Text>
+        {/* ── Withdrawable-only (no other sub-balances) ── */}
+        {!(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0 || balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+            <View style={styles.withdrawableLeft}>
+              <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
+              <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>{t('commerce.wallet.withdrawable')}</Text>
+            </View>
+            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
+              {formatBalance(withdrawable)}
+              <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
+            </Text>
           </View>
-          <Text style={[styles.withdrawableValue, { color: colors.textPrimary }]}>
-            {formatBalance(withdrawable)}
-            <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
-          </Text>
-        </View>
+        )}
 
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
           <View style={styles.txHistoryHeader}>
-            <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>Recent activity</Text>
+            <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>{t('commerce.wallet.recentActivity')}</Text>
             <Pressable
               onPress={handleViewActivity}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="View all activity"
+              accessibilityLabel={t('commerce.wallet.a11y.viewAllActivity')}
             >
-              <Text style={[styles.txHistorySeeAll, { color: colors.brand }]}>See all</Text>
+              <Text style={[styles.txHistorySeeAll, { color: colors.brand }]}>{t('commerce.wallet.seeAll')}</Text>
             </Pressable>
           </View>
           <WalletTransactionHistory limit={20} />
         </View>
 
-        {/* ── Safeguarding & 1ZE disclosure — lower down, not competing with balance (spec 17) ── */}
-        <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
-          <View style={styles.infoContent}>
-            <View style={styles.infoHeader}>
-              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
-            </View>
-            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+        {/* ── Safeguarding & 1ZE disclosure — flat canvas, hairline divider (spec 17) ── */}
+        <View style={styles.disclosureSection}>
+          <View style={styles.infoHeader}>
+            <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
+            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>
               {balance.safeguarded
-                ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
-                : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
-            </Text>
-            {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
-            {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
-              <View style={styles.safeguardingLinksRow}>
-                {balance.safeguardingEvidenceUrl ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
-                    accessibilityRole="link"
-                    accessibilityLabel="View safeguarding evidence"
-                    accessibilityHint="Opens in external browser"
-                  >
-                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
-                  </Pressable>
-                ) : null}
-                {balance.safeguardingTermsUrl ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
-                    accessibilityRole="link"
-                    accessibilityLabel="View safeguarding terms"
-                    accessibilityHint="Opens in external browser"
-                  >
-                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            <View style={[styles.infoDivider, { borderColor: colors.border }]} />
-
-            <View style={styles.infoHeader}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
-            </View>
-            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-              1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
+                ? balance.safeguardingPartner
+                  ? t('commerce.wallet.safeguardedAt', { partner: balance.safeguardingPartner })
+                  : t('commerce.wallet.safeguarded')
+                : t('commerce.wallet.safeguardingPending')}
             </Text>
           </View>
-        </FlagshipFormSection>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+            {balance.safeguarded
+              ? t('commerce.wallet.safeguardedBody', { currency: currencyCode })
+              : t('commerce.wallet.safeguardingPendingBody', { currency: currencyCode })}
+          </Text>
+          {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
+          {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
+            <View style={styles.safeguardingLinksRow}>
+              {balance.safeguardingEvidenceUrl ? (
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingEvidence')}
+                  accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
+                >
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.evidence')}</Text>
+                </Pressable>
+              ) : null}
+              {balance.safeguardingTermsUrl ? (
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingTerms')}
+                  accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
+                >
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.terms')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={[styles.infoDivider, { borderColor: colors.border }]} />
+
+          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+            {t('commerce.wallet.1zeDisclosure')}
+          </Text>
+        </View>
 
       </ScrollView>
 
@@ -669,45 +655,37 @@ export default function WalletScreen({ navigation }: Props) {
 
 // ── Helper sub-components ──
 
-/** Flat sub-balance row — label left, tabular-nums value right. */
+/** Flat sub-balance row — muted label left, tabular-nums value right. */
 function SubBalanceRow({
   label,
   value,
   formatBalance,
   colors,
-  emphasis,
+  emphasize = false,
 }: {
   label: string;
   value: number;
   formatBalance: (v: number) => string;
   colors: ReturnType<typeof useAppTheme>['colors'];
-  emphasis?: boolean;
+  emphasize?: boolean;
 }) {
   return (
     <View
-      style={styles.subBalanceRow}
+      style={[styles.subBalanceRow, { borderBottomColor: colors.border }]}
       accessibilityRole="text"
       accessibilityLabel={`${label}: ${formatBalance(value)} 1ZE`}
     >
       <Text
-        style={[
-          styles.subBalanceLabel,
-          { color: emphasis ? colors.textPrimary : colors.textSecondary },
-          emphasis && { fontFamily: Typography.family.semibold },
-        ]}
+        style={[styles.subBalanceLabel, { color: emphasize ? colors.textSecondary : colors.textMuted }]}
         numberOfLines={1}
       >
         {label}
       </Text>
       <Text
-        style={[
-          styles.subBalanceValue,
-          { color: colors.textPrimary },
-          emphasis && { fontFamily: Typography.family.semibold },
-        ]}
+        style={[styles.subBalanceValue, { color: emphasize ? colors.textPrimary : colors.textSecondary }]}
       >
         {formatBalance(value)}
-        <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+        <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
       </Text>
     </View>
   );
@@ -732,7 +710,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   // 44pt transparent hit area — visible eye glyph is 20pt
@@ -800,17 +778,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   actionBtnLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   // ── Pending attention row (now FlagshipNavigationRow) ──
 
   // ── Seller earnings summary row (now FlagshipNavigationRow) ──
 
-  // ── Sub-balance flat rows ──
+  // ── Sub-balance flat rows (restrained — muted, smaller) ──
   subBalanceSection: {
     marginTop: Space.lg,
   },
@@ -818,15 +796,14 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs + 2,
   },
-  subBalanceEmpty: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    paddingVertical: Space.sm,
+  breakdownSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
+    paddingTop: Space.sm,
   },
   subBalanceRow: {
     flexDirection: 'row',
@@ -842,40 +819,18 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   subBalanceValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   subBalanceUnit: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
-  subBalanceTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Space.sm + 2,
-    marginTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Space.md,
-  },
-  subBalanceTotalLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  subBalanceTotalValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceList.letterSpacing,
-  },
 
-  // ── Withdrawable ──
+  // ── Withdrawable (restrained — muted) ──
   withdrawableRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -895,15 +850,15 @@ const styles = StyleSheet.create({
   withdrawableLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
   },
   withdrawableValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
 
   // ── Transaction history ──
@@ -923,10 +878,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   txHistorySeeAll: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   // ── Skeleton ──
@@ -941,22 +896,27 @@ const styles = StyleSheet.create({
     padding: Space.md,
     gap: Space.xs,
   },
+  disclosureSection: {
+    paddingHorizontal: 0,
+    paddingVertical: Space.md,
+    gap: Space.xs,
+  },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
   infoTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   infoBody: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   safeguardingLinksRow: {
     flexDirection: 'row',

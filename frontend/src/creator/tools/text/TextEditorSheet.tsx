@@ -36,6 +36,7 @@ import {
   type PanResponderGestureState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CreatorGlyph, type CreatorGlyphName } from '../../controls/CreatorGlyph';
 import {
   Space,
   Radius,
@@ -45,10 +46,12 @@ import {
   Control,
   FontFamily,
 } from '../../../theme/designTokens';
+import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { Motion } from '../../../theme/motionTokens';
 import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
 import {
@@ -83,10 +86,10 @@ type ColorSection = 'fill' | 'stroke' | 'shadow' | 'background';
 
 // ── Static option sets ────────────────────────────────────────────────
 
-const ALIGNMENTS: Array<{ key: AlignmentKey; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
-  { key: 'left', icon: 'text-outline' },
-  { key: 'center', icon: 'text' },
-  { key: 'right', icon: 'list-outline' },
+const ALIGNMENTS: Array<{ key: AlignmentKey; glyph: CreatorGlyphName }> = [
+  { key: 'left', glyph: 'align-left' },
+  { key: 'center', glyph: 'align-center' },
+  { key: 'right', glyph: 'align-right' },
 ];
 
 const ANIMATIONS: Array<{ key: AnimationKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
@@ -199,14 +202,14 @@ export function TextEditorSheet({
         Animated.spring(leftVal, {
           toValue: layout.x,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
         Animated.spring(widthVal, {
           toValue: layout.width,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
       ]).start();
     },
@@ -375,7 +378,7 @@ export function TextEditorSheet({
 
   // ── Preview style ──
   const previewFontStyle = useMemo(
-    () => resolveFontPreviewStyle(fontId, Type.bodyEmphasis.size + 2),
+    () => resolveFontPreviewStyle(fontId, Type.bodyStrong.size + 2),
     [fontId],
   );
 
@@ -435,7 +438,7 @@ export function TextEditorSheet({
             accessibilityHint="Closes the text editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -547,7 +550,7 @@ export function TextEditorSheet({
                     }
                   }}
                 >
-                  <Ionicons name={a.icon} size={18} color={isActive ? colors.brand : colors.textSecondary} />
+                  <CreatorGlyph name={a.glyph} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} selected={isActive} />
                 </Pressable>
               );
             })}
@@ -572,7 +575,7 @@ export function TextEditorSheet({
             >
               <Ionicons
                 name={strokeEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
+                size={IconGrammar.hero}
                 color={strokeEnabled ? colors.brand : colors.textMuted}
               />
             </Pressable>
@@ -602,7 +605,7 @@ export function TextEditorSheet({
                 </Text>
                 <Ionicons
                   name={expandedColor === 'stroke' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={16}
+                  size={IconGrammar.metadata}
                   color={colors.textSecondary}
                 />
               </Pressable>
@@ -634,7 +637,7 @@ export function TextEditorSheet({
             >
               <Ionicons
                 name={shadowEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
+                size={IconGrammar.hero}
                 color={shadowEnabled ? colors.brand : colors.textMuted}
               />
             </Pressable>
@@ -684,7 +687,7 @@ export function TextEditorSheet({
                 </Text>
                 <Ionicons
                   name={expandedColor === 'shadow' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={16}
+                  size={IconGrammar.metadata}
                   color={colors.textSecondary}
                 />
               </Pressable>
@@ -716,7 +719,7 @@ export function TextEditorSheet({
             >
               <Ionicons
                 name={bgEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
+                size={IconGrammar.hero}
                 color={bgEnabled ? colors.brand : colors.textMuted}
               />
             </Pressable>
@@ -766,7 +769,7 @@ export function TextEditorSheet({
                 </Text>
                 <Ionicons
                   name={expandedColor === 'background' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={16}
+                  size={IconGrammar.metadata}
                   color={colors.textSecondary}
                 />
               </Pressable>
@@ -810,7 +813,7 @@ export function TextEditorSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                   >
-                    <Ionicons name={a.icon} size={18} color={isActive ? colors.brand : colors.textSecondary} />
+                    <Ionicons name={a.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} />
                     <Text
                       style={[
                         styles.animTabLabel,
@@ -843,7 +846,7 @@ export function TextEditorSheet({
             <Text style={[styles.confirmBtnText, !canConfirm && { color: colors.textMuted }]}>Done</Text>
             <Ionicons
               name="checkmark"
-              size={18}
+              size={IconGrammar.metadata}
               color={canConfirm ? colors.textInverse : colors.textMuted}
             />
           </Pressable>
@@ -1018,8 +1021,8 @@ function useEditorStyles(colors: ThemeColors) {
         },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           textTransform: 'uppercase',
           color: colors.textSecondary,
           marginTop: Space.xs,
@@ -1159,7 +1162,7 @@ function useEditorStyles(colors: ThemeColors) {
         },
         confirmBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           color: colors.textInverse,
         },
       }),

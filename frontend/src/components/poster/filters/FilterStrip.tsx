@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     marginLeft: -10,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: Stroke.standard,
     borderColor: 'rgba(0,0,0,0.1)',

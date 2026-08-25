@@ -37,6 +37,7 @@ import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
@@ -65,7 +66,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { createStableId } from '../utils/createStableId';
@@ -74,6 +75,9 @@ import {
   getStripeReturnUrl,
 } from '../platform/payments/stripeMobile';
 import { t } from '../i18n';
+import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { track, trackFunnelStep } from '../analytics';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -85,7 +89,8 @@ type CheckoutStage =
   | 'awaiting_payment'
   | 'payment_succeeded'
   | 'payment_pending'
-  | 'payment_failed';
+  | 'payment_failed'
+  | 'unknown_outcome';
 
 interface CheckoutPostageOption {
   quoteId: string | null;
@@ -232,9 +237,11 @@ const STAGE_LABELS: Record<CheckoutStage, string> = {
   payment_succeeded: 'Order confirmed',
   payment_pending: 'Payment is pending. We’ll update this order when your bank confirms it.',
   payment_failed: 'Payment didn’t go through',
+  unknown_outcome: 'We’re checking your payment. Please don’t retry yet.',
 };
 
 export default function CheckoutScreen() {
+  useScreenCaptureProtection();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
@@ -267,6 +274,8 @@ export default function CheckoutScreen() {
     footer: { borderTopColor: colors.border, backgroundColor: colors.background },
     payBtn: { backgroundColor: colors.brand },
     payBtnText: { color: colors.textInverse },
+    payBtnSecondary: { backgroundColor: colors.surfaceAlt, borderWidth: Stroke.standard, borderColor: colors.border },
+    payBtnSecondaryText: { color: colors.textPrimary },
     signedOutTitle: { color: colors.textPrimary },
     signedOutBody: { color: colors.textMuted },
     signedOutBtn: { backgroundColor: colors.brand },
@@ -277,8 +286,6 @@ export default function CheckoutScreen() {
     partialDataMessage: { color: colors.warning },
     partialDataAction: { borderColor: `${colors.warning}80`, backgroundColor: `${colors.surfaceAlt}99` },
     partialDataActionText: { color: colors.warning },
-    applePayBtn: { backgroundColor: colors.brand },
-    applePayBtnText: { color: colors.textInverse },
     compactSummaryRow: { color: colors.textSecondary },
     compactSummaryValue: { color: colors.textPrimary },
     compactSummaryTotalLabel: { color: colors.textPrimary },
@@ -641,6 +648,8 @@ export default function CheckoutScreen() {
 
     // Performance mark: checkout flow start (user confirmed payment).
     performance.mark('checkout:start');
+    track('checkout_started', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp });
+    trackFunnelStep('checkout', 'checkout_started', { listing_id: item.id });
 
     const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
     const POSTAGE_FEE = postageOption.priceFromGbp;
@@ -770,6 +779,7 @@ export default function CheckoutScreen() {
       // challenge during presentation. This stage makes the authentication
       // step visible to the user (audit 09: canonical payment state).
       setStage('authenticating');
+      trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId });
       const { error: sheetPresentationError } = await presentPaymentSheet();
       if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
         setStage('idle');
@@ -815,6 +825,8 @@ export default function CheckoutScreen() {
         isSubmittingRef.current = false;
         // Performance mark: checkout flow complete (payment settled).
         performance.mark('checkout:complete');
+        track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+        trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
         handleSettlementNavigation('succeeded', orderId, attemptId);
         return;
       }
@@ -839,14 +851,52 @@ export default function CheckoutScreen() {
         return;
       }
 
-      setStage('payment_failed');
       const errorCode = (error as { code?: string })?.code;
       const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
-      const message = isNetworkError
-        ? 'You appear to be offline. Check your connection and try again.'
-        : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
-      setOrderError(message);
-      showError('Payment failed', message);
+
+      if (isNetworkError && pendingIntentIdRef.current) {
+        // Lost response during payment — the server may have committed.
+        // Show unknown_outcome and poll for the authoritative status instead
+        // of telling the user the payment failed (which invites unsafe retry).
+        setStage('unknown_outcome');
+        setOrderError('We are checking your payment. Please do not retry yet.');
+        showInfo('Checking payment', 'We are confirming your payment status. Please do not place a new order.');
+        const intentId = pendingIntentIdRef.current;
+        const settlementStatus = await waitForPaymentIntentSettlement(
+          intentId,
+          () => isMountedRef.current && paymentAttemptRef.current === attemptId
+        );
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+        if (settlementStatus === 'succeeded') {
+          setStage('payment_succeeded');
+          pendingIntentIdRef.current = null;
+          track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+          handleSettlementNavigation('succeeded', createdOrderIdRef.current ?? '', attemptId);
+          return;
+        }
+        if (settlementStatus === 'pending') {
+          setStage('payment_pending');
+          handleSettlementNavigation('pending', createdOrderIdRef.current ?? '', attemptId);
+          return;
+        }
+        // Confirmed failed
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        setOrderError('Payment could not be completed. Try again.');
+        showError('Payment failed', 'Payment could not be completed. Try again.');
+      } else {
+        setStage('payment_failed');
+        const message = isNetworkError
+          ? 'You appear to be offline. Check your connection and try again.'
+          : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
+        setOrderError(message);
+        showError('Payment failed', message);
+      }
     } finally {
       isSubmittingRef.current = false;
     }
@@ -1151,9 +1201,9 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <EmptyState
@@ -1179,15 +1229,15 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Sign in to checkout</Text>
-          <Text style={[styles.signedOutBody, t.signedOutBody]}>
+          <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+          <Text style={[styles.signedOutTitle, t.signedOutTitle]} maxFontSizeMultiplier={2}>Sign in to checkout</Text>
+          <Text style={[styles.signedOutBody, t.signedOutBody]} maxFontSizeMultiplier={2}>
             You need to be signed in to complete your purchase.
           </Text>
           <Pressable
@@ -1196,7 +1246,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sign in"
           >
-            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]}>Sign in</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1}>Sign in</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1215,15 +1265,15 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="person-circle-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Cannot purchase your own listing</Text>
-          <Text style={[styles.signedOutBody, t.signedOutBody]}>
+          <Ionicons name="person-circle-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+          <Text style={[styles.signedOutTitle, t.signedOutTitle]} maxFontSizeMultiplier={2}>Cannot purchase your own listing</Text>
+          <Text style={[styles.signedOutBody, t.signedOutBody]} maxFontSizeMultiplier={2}>
             You cannot buy an item you listed for sale.
           </Text>
           <Pressable
@@ -1232,7 +1282,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]}>Go back</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1}>Go back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1272,13 +1322,26 @@ export default function CheckoutScreen() {
     ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}\n${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} · ${savedAddress.postalCode}\n${savedAddress.country}`
     : 'Required for delivery';
 
+  // Whether a digital wallet (Apple Pay / Google Pay) is available as a
+  // one-tap primary CTA. Per 2026 UX research: "Place Google Pay at the top
+  // of the list of payment options, above manual entry fields." When a
+  // wallet is available it becomes the primary CTA and the card button
+  // becomes secondary ("Pay with card"), creating a clear hierarchy that
+  // surfaces biometric one-tap payment before manual card entry.
+  const walletAvailable = !isSubmitting && (
+    (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay'))
+    || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay'))
+  );
+
   const payLabel = isSubmitting
     ? STAGE_LABELS[stage] || 'Processing'
     : stage === 'payment_failed'
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation'
-        : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
+        : walletAvailable
+          ? 'Pay with card'
+          : `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1300,9 +1363,9 @@ export default function CheckoutScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close checkout"
         >
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
         </Pressable>
-        <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
+        <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -1312,8 +1375,8 @@ export default function CheckoutScreen() {
           still usable. Distinct from full error states. */}
       {partialDataPrompt ? (
         <View style={[styles.partialDataBanner, t.partialDataBanner]}>
-          <Ionicons name={partialDataPrompt.icon} size={15} color={colors.warning} />
-          <Text style={[styles.partialDataMessage, t.partialDataMessage]} numberOfLines={3}>
+          <Ionicons name={partialDataPrompt.icon} size={16} color={colors.warning} aria-hidden={true} />
+          <Text style={[styles.partialDataMessage, t.partialDataMessage]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {partialDataPrompt.message}
           </Text>
           <Pressable
@@ -1324,14 +1387,14 @@ export default function CheckoutScreen() {
             accessibilityLabel={partialDataPrompt.action.label}
             accessibilityHint="Retry loading the missing checkout details"
           >
-            <Text style={[styles.partialDataActionText, t.partialDataActionText]}>{partialDataPrompt.action.label}</Text>
+            <Text style={[styles.partialDataActionText, t.partialDataActionText]} maxFontSizeMultiplier={1}>{partialDataPrompt.action.label}</Text>
           </Pressable>
         </View>
       ) : null}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 300 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         accessibilityElementsHidden={addCardSheetVisible || paymentSelectorVisible}
         importantForAccessibility={addCardSheetVisible || paymentSelectorVisible ? 'no-hide-descendants' : 'auto'}
@@ -1354,7 +1417,7 @@ export default function CheckoutScreen() {
             username: resolvedSeller.username,
             avatar: resolvedSeller.avatar,
           }}
-          priceLabel={formatFromFiat(item.price, 'GBP')}
+          priceLabel={formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}
           onPressSeller={
             resolvedSeller.id
               ? () => { haptics.tap(); openProfile(navigation, resolvedSeller.id, currentUser?.id); }
@@ -1387,7 +1450,7 @@ export default function CheckoutScreen() {
           label="Delivery"
           title={postageOption.label}
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' · Tracking' : ''}`}
-          actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
+          actionLabel={formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}
           onPress={canChangePostage ? handleDeliveryPress : undefined}
           icon="cube-outline"
           isFilled={!!postageOption.carrierId}
@@ -1398,7 +1461,7 @@ export default function CheckoutScreen() {
                 ? undefined
                 : shippingError ?? undefined
           }
-          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
+          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}`}
         />
 
         {/* 5. Payment method — unified with address/delivery row family */}
@@ -1423,6 +1486,17 @@ export default function CheckoutScreen() {
           }
           accessibilityHint="Add or change your payment method"
         />
+
+        {/* Secure payment trust signal — placed inline near the payment method
+            row where card-security anxiety peaks. Per 2026 UX research:
+            "A 'Secure checkout' message next to the card number field is more
+            effective than security badges in the footer." */}
+        <View style={styles.securePaymentRow}>
+          <Ionicons name="lock-closed" size={12} color={colors.success} aria-hidden={true} />
+          <Text style={[styles.securePaymentText, { color: colors.success }]} maxFontSizeMultiplier={1}>
+            Secure payment · card details encrypted
+          </Text>
+        </View>
         </View>
 
         {/* 5b. Buyer protection strip — the single authored trust moment,
@@ -1454,9 +1528,9 @@ export default function CheckoutScreen() {
                 <View style={[styles.balanceKnob, t.balanceKnob, useBalance && t.balanceKnobOn]} />
               </View>
               <View style={styles.balanceTextCol}>
-                <Text style={[styles.balanceLabel, t.balanceLabel]}>Use wallet balance</Text>
-                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1}>
-                  {formatFromFiat(walletBalance, 'GBP')} available
+                <Text style={[styles.balanceLabel, t.balanceLabel]} maxFontSizeMultiplier={1}>Use wallet balance</Text>
+                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1} accessibilityLabel={`${formatFromFiat(walletBalance, DEFAULT_CURRENCY_CODE)} available`}>
+                  {formatFromFiat(walletBalance, DEFAULT_CURRENCY_CODE)} available
                 </Text>
               </View>
             </Pressable>
@@ -1465,9 +1539,9 @@ export default function CheckoutScreen() {
 
         {useBalance && balanceApplied > 0 && (
           <View style={[styles.savingsBadge, t.savingsBadge]}>
-            <Ionicons name="wallet-outline" size={11} color={colors.success} />
-            <Text style={[styles.savingsText, t.savingsText]}>
-              Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
+            <Ionicons name="wallet-outline" size={12} color={colors.success} aria-hidden={true} />
+            <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1}>
+              Saving {formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)} with wallet balance
             </Text>
           </View>
         )}
@@ -1484,7 +1558,7 @@ export default function CheckoutScreen() {
 
         {orderError ? (
           <View style={styles.orderErrorContainer}>
-            <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
+            <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite" maxFontSizeMultiplier={2}>{orderError}</Text>
             {stage === 'payment_failed' && (
               <Pressable
                 style={({ pressed }) => [styles.retryBtn, t.capabilityRetryBtn, pressed && { opacity: 0.7 }]}
@@ -1492,7 +1566,7 @@ export default function CheckoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Retry payment"
               >
-                <Text style={[styles.retryBtnText, t.capabilityRetryText]}>Retry payment</Text>
+                <Text style={[styles.retryBtnText, t.capabilityRetryText]} maxFontSizeMultiplier={1}>Retry payment</Text>
               </Pressable>
             )}
           </View>
@@ -1500,7 +1574,7 @@ export default function CheckoutScreen() {
 
         {capabilityError ? (
           <View style={styles.capabilityErrorRow}>
-            <Text style={[styles.hintText, t.hintText, { flex: 1 }]}>
+            <Text style={[styles.hintText, t.hintText, { flex: 1 }]} maxFontSizeMultiplier={2}>
               {capabilityError}
             </Text>
             <Pressable
@@ -1511,12 +1585,12 @@ export default function CheckoutScreen() {
               accessibilityLabel="Try again"
               accessibilityHint="Retry loading checkout details"
             >
-              <Text style={[styles.capabilityRetryText, t.capabilityRetryText]}>Try again</Text>
+              <Text style={[styles.capabilityRetryText, t.capabilityRetryText]} maxFontSizeMultiplier={1}>Try again</Text>
             </Pressable>
           </View>
         ) : null}
 
-        <Text style={[styles.termsText, t.termsText]}>
+        <Text style={[styles.termsText, t.termsText]} maxFontSizeMultiplier={2}>
           By tapping "Pay", you agree to our Terms of Sale and Privacy Policy.
         </Text>
       </ScrollView>
@@ -1528,79 +1602,110 @@ export default function CheckoutScreen() {
           style={styles.compactSummary}
           onPress={() => { haptics.tap(); setBreakdownSheetVisible(true); }}
           accessibilityRole="button"
-          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, 'GBP')}, Delivery ${formatFromFiat(POSTAGE_FEE, 'GBP')}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, 'GBP')}. Total ${formatFromFiat(TOTAL, 'GBP')}. View full breakdown.`}
+          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}, Delivery ${formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)}. Total ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}. View full breakdown.`}
           accessibilityHint="Open the full cost breakdown and returns policy"
         >
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Item</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(item.price, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Item</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Delivery</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Delivery</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Buyer protection</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(PLATFORM_CHARGE, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Buyer protection</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <View style={styles.compactSummaryRow}>
-              <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Wallet applied</Text>
-              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>-{formatFromFiat(balanceApplied, 'GBP')}</Text>
+              <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Wallet applied</Text>
+              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)}</Text>
             </View>
           )}
           <View style={[styles.compactSummaryDivider, t.compactSummaryDivider]} />
           <View style={styles.compactSummaryTotalRow}>
             <View style={styles.compactSummaryTotalLeft}>
-              <Text style={[styles.compactSummaryTotalLabel, t.compactSummaryTotalLabel]}>Total</Text>
+              <Text style={[styles.compactSummaryTotalLabel, t.compactSummaryTotalLabel]} maxFontSizeMultiplier={1}>Total</Text>
               <Text
                 style={[styles.compactSummaryTotalValue, t.compactSummaryTotalValue]}
                 accessibilityLiveRegion="polite"
-                accessibilityLabel={`Total ${formatFromFiat(TOTAL, 'GBP')}`}
+                accessibilityLabel={`Total ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`}
+                maxFontSizeMultiplier={2}
               >
-                {formatFromFiat(TOTAL, 'GBP')}
+                {formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}
               </Text>
             </View>
             <View style={styles.breakdownChevron}>
-              <Text style={[styles.breakdownChevronText, t.breakdownChevronText]}>View full breakdown</Text>
-              <Ionicons name="chevron-up" size={14} color={colors.textMuted} />
+              <Text style={[styles.breakdownChevronText, t.breakdownChevronText]} maxFontSizeMultiplier={1}>View full breakdown</Text>
+              <Ionicons name="chevron-up" size={16} color={colors.textMuted} aria-hidden={true} />
             </View>
           </View>
         </Pressable>
 
-        {/* Pay button row */}
+        {/* Pay button column — digital wallet buttons stacked ABOVE the card
+            Pay button. Per 2026 UX research: "Reorder the payment list so
+            Apple Pay sits above 'Pay with card' — a 15-25% lift in mobile
+            checkout completion." The wallet button is the primary one-tap
+            biometric CTA; the card button is the secondary fallback.
+            The buyer-protection trust narrative is carried by the
+            BuyerProtectionStrip above — no duplicate trust line here. */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
           {Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting && (
             <Pressable
               onPress={() => { haptics.press(); handlePay(); }}
               style={({ pressed }) => [
-                styles.applePayBtn,
-                t.applePayBtn,
+                styles.walletBtn,
+                { backgroundColor: colors.textPrimary },
                 pressed && styles.payBtnPressed,
                 (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
               ]}
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
-              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with Apple Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
-              <Ionicons name="logo-apple" size={18} color={colors.textInverse} />
-              <Text style={[styles.applePayBtnText, t.applePayBtnText]}>Pay</Text>
+              <Ionicons name="logo-apple" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Apple Pay</Text>
+            </Pressable>
+          )}
+
+          {/* Google Pay as primary CTA on Android when enabled */}
+          {Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay') && !isSubmitting && (
+            <Pressable
+              onPress={() => { haptics.press(); handlePay(); }}
+              style={({ pressed }) => [
+                styles.walletBtn,
+                { backgroundColor: colors.textPrimary },
+                pressed && styles.payBtnPressed,
+                (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+              ]}
+              disabled={!checkoutEligible || isInteractionLocked}
+              accessibilityRole="button"
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with Google Pay`}
+              accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
+            >
+              <Ionicons name="logo-google" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Google Pay</Text>
             </Pressable>
           )}
 
           <Pressable
             style={({ pressed }) => [
               styles.payBtn,
-              t.payBtn,
+              walletAvailable ? t.payBtnSecondary : t.payBtn,
               (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
               pressed && !(!checkoutEligible || isInteractionLocked) && styles.payBtnPressed,
             ]}
             onPress={() => { haptics.press(); handlePay(); }}
             disabled={!checkoutEligible || isInteractionLocked}
             accessibilityRole="button"
-            accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')}`}
+            accessibilityLabel={
+              walletAvailable
+                ? `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with card`
+                : `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`
+            }
             accessibilityState={{
               disabled: !checkoutEligible || isInteractionLocked,
               busy: isSubmitting,
@@ -1609,9 +1714,22 @@ export default function CheckoutScreen() {
             {isSubmitting ? (
               <PulsingDot color={colors.textInverse} reducedMotion={reducedMotionEnabled} />
             ) : (
-              <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
+              <Ionicons
+                name="lock-closed"
+                size={16}
+                color={walletAvailable ? colors.textPrimary : colors.textInverse}
+                aria-hidden={true}
+              />
             )}
-            <Text style={[styles.payBtnText, t.payBtnText]}>{payLabel}</Text>
+            <Text
+              style={[
+                styles.payBtnText,
+                walletAvailable ? t.payBtnSecondaryText : t.payBtnText,
+              ]}
+              maxFontSizeMultiplier={1}
+            >
+              {payLabel}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -1649,26 +1767,26 @@ export default function CheckoutScreen() {
       >
         <View style={styles.breakdownSheetContent}>
           <Text style={[styles.breakdownSheetTitle, t.breakdownSheetTitle]}>Full breakdown</Text>
-          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
-          <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
+          <PriceRow label="Item" value={formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)} />
+          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)} />
           <PriceRow
             label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
-            value={formatFromFiat(POSTAGE_FEE, 'GBP')}
+            value={formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
-              Includes buyer protection — funds held in escrow until you confirm
+              Includes buyer protection — funds held until you receive your order
             </Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <>
               <PriceRow
                 label="Wallet balance applied"
-                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
+                value={`-${formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)}`}
               />
               <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
-              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
+              <PriceRow label="To pay" value={formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} bold />
             </>
           )}
           {!useBalance && (
@@ -1677,12 +1795,12 @@ export default function CheckoutScreen() {
           <View style={styles.breakdownSheetTotalRow}>
             <Text style={[styles.breakdownSheetTotalLabel, t.breakdownSheetTotalLabel]}>Total</Text>
             <Text style={[styles.breakdownSheetTotalValue, t.breakdownSheetTotalValue]}>
-              {formatFromFiat(TOTAL, 'GBP')}
+              {formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}
             </Text>
           </View>
           <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
           <View style={styles.breakdownSheetPolicyRow}>
-            <Ionicons name="return-down-back-outline" size={14} color={colors.textMuted} />
+            <Ionicons name="return-down-back-outline" size={16} color={colors.textMuted} aria-hidden={true} />
             <Text style={[styles.breakdownSheetPolicyText, t.breakdownSheetLabel]}>
               Returns accepted within 14 days. Refunds issued to your original payment method.
             </Text>
@@ -1712,8 +1830,8 @@ function PulsingDot({
     if (reducedMotion) return;
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.3, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
@@ -1761,8 +1879,8 @@ function PaymentStateBanner({
     if (stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment') {
       dotOpacity.value = withRepeat(
         withSequence(
-          withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
         false,
@@ -1791,19 +1909,19 @@ function PaymentStateBanner({
       case 'payment_succeeded':
         return {
           accentColor: colors.success,
-          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} />,
+          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_failed':
         return {
           accentColor: colors.danger,
-          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} />,
+          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_pending':
         return {
           accentColor: colors.textMuted,
-          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} />,
+          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} aria-hidden={true} />,
           showDot: false,
         };
       default:
@@ -1905,7 +2023,7 @@ function CheckoutProgressOverlay({
     if (reducedMotion) return;
     progressX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 }),
       ),
       -1,
@@ -1925,7 +2043,7 @@ function CheckoutProgressOverlay({
       pointerEvents="none"
       style={[
         progressOverlayStyles.overlay,
-        { backgroundColor: `${colors.background}F2`, borderColor: colors.border },
+        { backgroundColor: `${colors.background}F2`, borderColor: colors.border, shadowColor: colors.shadow },
       ]}
       accessibilityLabel={label}
       accessibilityRole="alert"
@@ -1961,7 +2079,7 @@ const progressOverlayStyles = StyleSheet.create({
     borderWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    shadowColor: '#000',
+    shadowColor: 'transparent',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -2103,7 +2221,7 @@ function CheckoutSkeleton({ colors }: { colors: ThemeColors }) {
     <View style={skeletonStyles.container}>
       <View style={skeletonStyles.header}>
         <View style={{ width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
         </View>
         <Text style={skeletonStyles.headerTitle}>Checkout</Text>
         <View style={skeletonStyles.headerSpacer} />
@@ -2244,6 +2362,18 @@ const styles = StyleSheet.create({
   protectionStripWrap: {
     marginTop: Space.sm,
   },
+  securePaymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.xs,
+  },
+  securePaymentText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
   protectionIncludedRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2265,7 +2395,7 @@ const styles = StyleSheet.create({
     gap: Space.sm + 2,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    borderRadius: 0,
+    borderRadius: Radius.none,
     borderWidth: 0,
   },
   balanceTogglePressed: {
@@ -2456,9 +2586,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   footerPayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     gap: Space.sm,
     paddingTop: Space.xs,
   },
@@ -2504,31 +2633,26 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
   },
   payBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    minWidth: 180,
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
     borderRadius: RadiusRoleValue.pillAvatar,
-    minHeight: 52,
+    minHeight: 56,
   },
-  applePayBtn: {
+  walletBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-    minWidth: 140,
-    height: 52,
+    gap: Space.xs + 2,
+    height: 56,
     borderRadius: RadiusRoleValue.pillAvatar,
-    marginBottom: Space.xs,
   },
-  applePayBtnText: {
+  walletBtnText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'],
   },
   payBtnDisabled: {
     opacity: 0.5,

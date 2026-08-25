@@ -135,7 +135,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 300,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   dismissLayer: {
     ...StyleSheet.absoluteFill,
@@ -168,7 +168,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   bidInfoValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   bidInfoMin: {
     color: colors.brand,

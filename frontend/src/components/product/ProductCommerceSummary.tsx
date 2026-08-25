@@ -176,7 +176,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
