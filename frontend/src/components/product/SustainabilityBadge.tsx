@@ -21,7 +21,7 @@ import type { SustainabilityScore } from '../../utils/sustainabilityScore';
 export type SustainabilityBadgeVariant = 'compact' | 'detailed';
 
 export interface SustainabilityBadgeProps {
-  score: SustainabilityScore;
+  score: SustainabilityScore | null;
   variant?: SustainabilityBadgeVariant;
   /**
    * Compact-only: render on top of media and use a legible solid fill +
@@ -88,6 +88,9 @@ export function SustainabilityBadge({
 }: SustainabilityBadgeProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  if (!score) return null;
+
   const meta = gradeMeta(score.grade, colors);
 
   if (variant === 'compact') {

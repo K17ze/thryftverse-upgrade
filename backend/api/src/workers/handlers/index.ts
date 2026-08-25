@@ -54,3 +54,12 @@ export type { CatalogImportRetentionJobData } from './catalogImportRetentionHand
 
 export { processCatalogImportReconcile } from './catalogImportReconcileHandler.js';
 export type { CatalogImportReconcileJobData } from './catalogImportReconcileHandler.js';
+
+export { processSupportAgentTurnJob } from './supportAgentTurnHandler.js';
+export type { SupportAgentTurnJobData } from './supportAgentTurnHandler.js';
+
+export { processVendorSyncJob } from './vendorSyncHandler.js';
+export type { VendorSyncJobData } from './vendorSyncHandler.js';
+
+export { processSlaEscalationJob } from './slaEscalationHandler.js';
+export type { SlaEscalationJobData } from './slaEscalationHandler.js';

@@ -28,6 +28,7 @@ import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSumma
 
 import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 import { synthesizeListingIdentity } from '../services/listingMapper';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -114,7 +115,7 @@ function ProductCardV2Base({
   );
 
   // Sustainability — only surface A/B grades on the card to avoid visual
-  // noise on lower-impact items. Computed client-side from listing data.
+  // noise on lower-impact items. Returns null in production (fail-closed).
   const sustainabilityScore = React.useMemo(
     () =>
       computeSustainabilityScore({
@@ -127,7 +128,9 @@ function ProductCardV2Base({
     [item.condition, item.category, item.subcategory, item.brand, item.seller?.location],
   );
   const showSustainabilityChip =
-    !item.isSold && (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
+    !item.isSold &&
+    sustainabilityScore !== null &&
+    (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
 
   const handleToggleFav = () => {
     if (!requireAuth('save_item')) return;
@@ -178,7 +181,7 @@ function ProductCardV2Base({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -307,7 +310,7 @@ function ProductCardV2Base({
           ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           </View>
           {sellerUsername ? (
             <View style={styles.sellerRow}>
@@ -760,7 +763,7 @@ function ProductDiscoveryTileBase({
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -805,7 +808,7 @@ function ProductDiscoveryTileBase({
       </View>
       <View style={tileStyles.info}>
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
   );

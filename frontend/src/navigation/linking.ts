@@ -96,6 +96,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
       Payments: 'payments',
       HelpSupport: 'help',
       Verification: 'verification',
+      AccountSecurity: 'account-security',
+      AccountSecurityRecovery: 'account-security/recovery/:caseId',
+
+      // Auth — password reset deep link (thryftverse://auth/reset-password?token=…)
+      ResetPassword: 'auth/reset-password',
 
       // Auctions
       AuctionHome: 'auctions',
@@ -137,6 +142,9 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
       // Support & help
       ResolutionCentre: 'resolution-centre',
+      SupportConversation: 'support/conversation/:conversationId',
+      SupportCaseDetail: 'support/case/:caseId',
+      OrderSupport: 'support/order/:orderId',
       InviteFriends: 'invite',
       Postage: 'postage',
 

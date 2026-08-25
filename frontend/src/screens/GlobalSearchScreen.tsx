@@ -59,6 +59,7 @@ import { FontFamily, Space, Control, Radius, Type, Stroke } from '../theme/desig
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { CATEGORIES } from '../constants/categories';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -1264,7 +1265,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1275,7 +1276,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1286,7 +1287,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1297,7 +1298,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1673,7 +1674,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1684,7 +1685,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1695,7 +1696,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1706,7 +1707,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}

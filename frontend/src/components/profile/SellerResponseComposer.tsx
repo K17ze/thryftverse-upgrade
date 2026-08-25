@@ -101,7 +101,7 @@ export function SellerResponseComposer({
           <View style={styles.guidanceBox}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.guidanceText}>
-              Keep it professional and thank the buyer. Your response is public.
+              Your response is public. Address the transaction factually.
             </Text>
           </View>
 
@@ -109,7 +109,7 @@ export function SellerResponseComposer({
           <View style={styles.inputCard}>
             <TextInput
               style={styles.input}
-              placeholder="Thank your buyer and address their feedback..."
+              placeholder="Address the buyer's feedback..."
               placeholderTextColor={colors.textMuted}
               multiline
               textAlignVertical="top"

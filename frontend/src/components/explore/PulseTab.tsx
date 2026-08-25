@@ -27,6 +27,7 @@ import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { openProductDetail } from '../../platform/product/openProductDetail';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -129,7 +130,7 @@ export default function PulseTab() {
   const { show } = useToast();
   const { listings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
-  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, 'GBP', { displayMode: 'fiat' }), [formatFromFiat]);
+  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }), [formatFromFiat]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
 

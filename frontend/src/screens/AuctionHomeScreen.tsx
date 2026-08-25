@@ -29,10 +29,15 @@ import {
   buildAuctionAccessibilityLabel,
   createSearchState,
   IDLE_SEARCH_STATE,
+  toViewModel,
+  EMPTY_HOME_DATA,
+  SORT_OPTIONS,
+  PRICE_PRESETS,
   type AuctionHomeItem,
   type AuctionSearchState,
   type AuctionBrowseState,
   type AuctionBrowseSort,
+  type HomeData,
   DEFAULT_BROWSE_STATE,
   hasActiveFilters,
   scopeToApiStatus,
@@ -66,46 +71,12 @@ import {
   listAuctions,
   getAuctionHome,
   getAuctionFacets,
-  type MarketAuction,
-  type AttentionReason,
   type CategoryWorld,
-  type AuctionHomeActivity,
-  type SellerSummary,
   type AuctionScope,
   type AuctionFacets,
 } from '../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-
-function toViewModel(api: MarketAuction): AuctionHomeItem {
-  return {
-    id: api.id,
-    listingId: api.listingId,
-    sellerId: api.seller.id,
-    sellerUsername: api.seller.username,
-    sellerDisplayName: api.seller.displayName,
-    sellerAvatarUrl: api.seller.avatarUrl,
-    title: api.title,
-    imageUrl: api.imageUrl ?? '',
-    brand: api.brand,
-    startsAt: api.startsAt,
-    endsAt: api.endsAt,
-    startingBidGbp: api.startingBidGbp,
-    currentBidGbp: api.currentBidGbp,
-    minimumNextBidGbp: api.minimumNextBidGbp,
-    bidCount: api.bidCount,
-    buyNowPriceGbp: api.buyNowPriceGbp,
-    reservePriceGbp: api.reservePriceGbp ?? null,
-    viewerState: api.viewerState,
-    isWatched: api.isWatched,
-    winnerBidderId: api.winnerBidderId ?? null,
-    cancelledAt: api.cancelledAt ?? null,
-    settledAt: api.settledAt ?? null,
-    lifecycle: api.lifecycle,
-    terminalReason: api.terminalReason,
-    category: api.category,
-  };
-}
 
 interface DualPriceResult {
   primaryText: string;
@@ -297,36 +268,6 @@ const ResultRow = memo(function ResultRow({
     </Pressable>
   );
 });
-
-// ── Home data shape from /auctions/home ──
-interface HomeData {
-  attentionItem: AuctionHomeItem | null;
-  attentionReason: AttentionReason;
-  activity: AuctionHomeActivity;
-  closingSoon: AuctionHomeItem[];
-  live: AuctionHomeItem[];
-  upcoming: AuctionHomeItem[];
-  categoryWorlds: CategoryWorld[];
-  recentlyClosed: AuctionHomeItem[];
-  sellerSummary?: SellerSummary;
-  sellerAuctions: AuctionHomeItem[];
-  watchlist: AuctionHomeItem[];
-  serverNow: string | null;
-}
-
-const EMPTY_HOME_DATA: HomeData = {
-  attentionItem: null,
-  attentionReason: null,
-  activity: { activeCount: 0, needsAttentionCount: 0, leadingCount: 0, outbidCount: 0, watchingCount: 0, unresolvedWonCount: 0 },
-  closingSoon: [],
-  live: [],
-  upcoming: [],
-  categoryWorlds: [],
-  recentlyClosed: [],
-  sellerAuctions: [],
-  watchlist: [],
-  serverNow: null,
-};
 
 // ── Main screen ──
 export default function AuctionHomeScreen() {
@@ -1934,22 +1875,6 @@ export default function AuctionHomeScreen() {
 // FILTER SHEET — redesigned with hierarchical categories, checkmarked
 // sort rows, price range/presets, and bottom CTA with count
 // ════════════════════════════════════════════════════════════════
-const SORT_OPTIONS: { key: AuctionBrowseSort; label: string }[] = [
-  { key: 'recommended', label: 'Recommended' },
-  { key: 'endingSoon', label: 'Ending soon' },
-  { key: 'newest', label: 'Newest' },
-  { key: 'mostBids', label: 'Most bids' },
-  { key: 'priceLow', label: 'Price: low to high' },
-  { key: 'priceHigh', label: 'Price: high to low' },
-];
-
-const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
-  { label: 'Under £50', max: 50 },
-  { label: '£50 – £200', min: 50, max: 200 },
-  { label: '£200 – £500', min: 200, max: 500 },
-  { label: 'Over £500', min: 500 },
-];
-
 const FilterSheet = memo(function FilterSheet({
   visible,
   onDismiss,

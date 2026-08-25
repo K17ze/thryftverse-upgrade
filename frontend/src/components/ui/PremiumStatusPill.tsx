@@ -12,6 +12,7 @@ export type StatusPillTone =
   | 'delivered'
   | 'refunded'
   | 'pending'
+  | 'warning'
   | 'error'
   | 'success'
   | 'neutral';
@@ -63,6 +64,13 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
         border: colors.border,
         text: colors.textSecondary,
         dot: colors.textMuted,
+      };
+    case 'warning':
+      return {
+        bg: colors.warningSubtle,
+        border: colors.warningBorder,
+        text: colors.warning,
+        dot: colors.warning,
       };
     case 'neutral':
     default:

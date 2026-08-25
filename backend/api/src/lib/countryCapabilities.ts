@@ -16,6 +16,7 @@ export type CapabilityPaymentGatewayId =
   | 'mollie_eu'
   | 'flutterwave_africa'
   | 'tap_gulf'
+  // Wise has no active payment/refund adapter branch. Do not expose until a certified adapter is implemented.
   | 'wise_global'
   | 'mock_fiat_gbp';
 
@@ -117,7 +118,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'INR',
     payoutSupportedCurrencies: ['INR', 'USD'],
-    payoutGatewayPriority: ['razorpay_in', 'stripe_americas', 'wise_global'],
+    payoutGatewayPriority: ['razorpay_in', 'stripe_americas'],
     postageCarriers: [
       { id: 'delhivery', label: 'Delhivery', priceFromGbp: 1.75, etaMinDays: 2, etaMaxDays: 4, tracking: true },
       { id: 'bluedart', label: 'Blue Dart', priceFromGbp: 2.2, etaMinDays: 1, etaMaxDays: 3, tracking: true },
@@ -137,7 +138,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
-    payoutGatewayPriority: ['stripe_americas', 'wise_global'],
+    payoutGatewayPriority: ['stripe_americas'],
     postageCarriers: [
       { id: 'usps', label: 'USPS', priceFromGbp: 2.15, etaMinDays: 2, etaMaxDays: 5, tracking: true },
       { id: 'ups', label: 'UPS', priceFromGbp: 3.1, etaMinDays: 1, etaMaxDays: 3, tracking: true },
@@ -157,7 +158,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'GBP',
     payoutSupportedCurrencies: ['GBP', 'EUR', 'USD'],
-    payoutGatewayPriority: ['stripe_americas', 'mollie_eu', 'wise_global'],
+    payoutGatewayPriority: ['stripe_americas', 'mollie_eu'],
     postageCarriers: [
       { id: 'evri', label: 'Evri', priceFromGbp: 2.89, etaMinDays: 2, etaMaxDays: 3, tracking: true },
       { id: 'royal_mail', label: 'Royal Mail', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 3, tracking: true },
@@ -177,7 +178,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'EUR',
     payoutSupportedCurrencies: ['EUR', 'GBP', 'USD'],
-    payoutGatewayPriority: ['mollie_eu', 'stripe_americas', 'wise_global'],
+    payoutGatewayPriority: ['mollie_eu', 'stripe_americas'],
     postageCarriers: [
       { id: 'dhl_eu', label: 'DHL Parcel', priceFromGbp: 3.1, etaMinDays: 2, etaMaxDays: 5, tracking: true },
       { id: 'gls', label: 'GLS', priceFromGbp: 2.95, etaMinDays: 2, etaMaxDays: 4, tracking: true },
@@ -197,7 +198,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'AED',
     payoutSupportedCurrencies: ['AED', 'USD'],
-    payoutGatewayPriority: ['tap_gulf', 'stripe_americas', 'wise_global'],
+    payoutGatewayPriority: ['tap_gulf', 'stripe_americas'],
     postageCarriers: [
       { id: 'aramex', label: 'Aramex', priceFromGbp: 2.75, etaMinDays: 1, etaMaxDays: 3, tracking: true },
       { id: 'dhl_express_me', label: 'DHL Express', priceFromGbp: 3.6, etaMinDays: 1, etaMaxDays: 2, tracking: true },
@@ -217,7 +218,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
-    payoutGatewayPriority: ['stripe_americas', 'wise_global'],
+    payoutGatewayPriority: ['stripe_americas'],
     postageCarriers: [
       { id: 'sf_express', label: 'SF Express', priceFromGbp: 2.45, etaMinDays: 1, etaMaxDays: 3, tracking: true },
       { id: 'cainiao', label: 'Cainiao', priceFromGbp: 1.95, etaMinDays: 2, etaMaxDays: 5, tracking: true },
@@ -237,7 +238,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD', 'GBP', 'EUR'],
-    payoutGatewayPriority: ['stripe_americas', 'mollie_eu', 'wise_global'],
+    payoutGatewayPriority: ['stripe_americas', 'mollie_eu'],
     // GLOBAL fallback intentionally has no default carriers.
     // Unsupported countries should show an explicit shipping-unavailable state.
     postageCarriers: [],
@@ -324,7 +325,12 @@ export function isGatewayConfigured(gatewayId: string): boolean {
     case 'tap_gulf':
       return hasEnvValue('TAP_SECRET_KEY');
     case 'wise_global':
-      return hasEnvValue('WISE_API_KEY');
+      // PAY-14: Wise has no active payment/refund adapter branch in the
+      // create/refund dispatch code. Even if the API key is configured,
+      // do not advertise Wise as a selectable gateway until a certified
+      // adapter is implemented. This prevents users from selecting a
+      // gateway that cannot process payments.
+      return false;
     case 'mock_fiat_gbp':
     case 'mock_tvusd':
       return !isProduction;

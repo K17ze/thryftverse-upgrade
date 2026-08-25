@@ -14,7 +14,23 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { useAppTheme, ThemeColors } from '../theme/ThemeContext';
+import { useAppTheme } from '../theme/ThemeContext';
+import {
+  normaliseOrderStatus,
+  isKnownStatus,
+  humaniseStatus,
+  getStatusExplanation,
+  getStatusTone,
+  resolveStatusColor,
+  formatTimelineDate,
+  isTerminalStatus,
+  getParcelEventDisplay,
+  getStatusSemanticKey,
+  parcelEventTimestamp,
+  buildTimelineEntries,
+  type StatusTone,
+  type TimelineExtras,
+} from '../utils/orderDetailLogic';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -29,7 +45,6 @@ import {
   getOrderParcelEvents,
   cancelOrder,
   deliverOrder,
-  refundOrder,
 } from '../services/commerceApi';
 import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { parseApiError } from '../lib/apiClient';
@@ -45,6 +60,7 @@ import { DispatchCountdown } from '../components/orders/DispatchCountdown';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   resolveCapabilities,
   type OrderCapability,
@@ -53,380 +69,6 @@ import {
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
 type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
-
-// --- Status normalisation ---
-
-function normaliseOrderStatus(status?: string): string {
-  return (status ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-const KNOWN_STATUSES = new Set([
-  'created',
-  'paid',
-  'processing',
-  'preparing',
-  'shipped',
-  'in transit',
-  'out for delivery',
-  'delivered',
-  'completed',
-  'cancelled',
-  'refunded',
-  'delivery failed',
-  'returned',
-]);
-
-function isKnownStatus(normalised: string): boolean {
-  return KNOWN_STATUSES.has(normalised);
-}
-
-function humaniseStatus(normalised: string): string {
-  if (!normalised) {
-    return 'Status unavailable';
-  }
-
-  const map: Record<string, string> = {
-    'created': 'Awaiting payment',
-    'paid': 'Paid',
-    'processing': 'Processing',
-    'preparing': 'Preparing',
-    'shipped': 'Shipped',
-    'in transit': 'In transit',
-    'out for delivery': 'Out for delivery',
-    'delivered': 'Delivered',
-    'completed': 'Completed',
-    'cancelled': 'Cancelled',
-    'refunded': 'Refunded',
-    'delivery failed': 'Delivery failed',
-    'returned': 'Returned',
-  };
-
-  if (map[normalised]) {
-    return map[normalised];
-  }
-
-  // Unknown: capitalise words, don't guess
-  return normalised
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
-function getStatusExplanation(normalised: string): string {
-  if (!normalised) {
-    return 'The current status of this order is unavailable.';
-  }
-
-  const map: Record<string, string> = {
-    'created': 'Payment has not been confirmed yet.',
-    'paid': 'Payment has been confirmed. The seller has been notified.',
-    'processing': 'The order is being processed.',
-    'preparing': 'The seller is preparing the item.',
-    'shipped': 'The parcel has been dispatched.',
-    'in transit': 'The carrier has your parcel.',
-    'out for delivery': 'The parcel is out for delivery today.',
-    'delivered': 'Delivery has been confirmed.',
-    'completed': 'This order is complete.',
-    'cancelled': 'This order was cancelled.',
-    'refunded': 'This order was refunded.',
-    'delivery failed': 'The carrier could not complete delivery.',
-    'returned': 'The parcel was returned to the sender.',
-  };
-
-  if (map[normalised]) {
-    return map[normalised];
-  }
-
-  return 'The current status of this order is not fully recognised.';
-}
-
-type StatusTone = 'pending' | 'active' | 'success' | 'danger' | 'muted';
-
-function getStatusTone(normalised: string): StatusTone {
-  if (normalised === 'created') return 'pending';
-  if (normalised === 'paid' || normalised === 'processing' || normalised === 'preparing') return 'active';
-  if (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery') return 'active';
-  if (normalised === 'delivered' || normalised === 'completed') return 'success';
-  if (normalised === 'cancelled' || normalised === 'refunded' || normalised === 'delivery failed' || normalised === 'returned') return 'danger';
-  return 'muted';
-}
-
-function resolveStatusColor(tone: StatusTone, colors: ThemeColors): string {
-  switch (tone) {
-    case 'success': return colors.success;
-    case 'active': return colors.brand;
-    case 'danger': return colors.danger;
-    case 'pending': return colors.warning;
-    default: return colors.textMuted;
-  }
-}
-
-// --- Date formatting ---
-
-function formatTimelineDate(value?: string | null): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return undefined;
-  }
-
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-// --- Terminal status check ---
-
-const TERMINAL_STATUSES = new Set([
-  'delivered',
-  'completed',
-  'cancelled',
-  'refunded',
-  'returned',
-]);
-
-function isTerminalStatus(normalised: string): boolean {
-  return TERMINAL_STATUSES.has(normalised);
-}
-
-// --- Parcel event display ---
-
-function getParcelEventDisplay(
-  eventType: OrderParcelEvent['eventType']
-): { label: string; subtitle: string } {
-  switch (eventType) {
-    case 'picked_up':
-      return { label: 'Picked up', subtitle: 'Carrier collected the parcel from the seller.' };
-    case 'in_transit':
-      return { label: 'In transit', subtitle: 'Parcel is moving through the carrier network.' };
-    case 'out_for_delivery':
-      return { label: 'Out for delivery', subtitle: 'Parcel is out for delivery today.' };
-    case 'delivered':
-      return { label: 'Delivered', subtitle: 'Delivery confirmed.' };
-    case 'collection_confirmed':
-      return { label: 'Collection confirmed', subtitle: 'Collection has been confirmed.' };
-    case 'delivery_failed':
-      return { label: 'Delivery failed', subtitle: 'Carrier attempted delivery but could not complete it.' };
-    case 'returned':
-      return { label: 'Returned', subtitle: 'Parcel is being returned to the sender.' };
-    default:
-      return { label: 'Carrier update', subtitle: 'Carrier event received.' };
-  }
-}
-
-// --- Timeline semantic keys ---
-
-type TimelineSemanticKey =
-  | 'created'
-  | 'paid'
-  | 'shipped'
-  | 'picked_up'
-  | 'in_transit'
-  | 'out_for_delivery'
-  | 'delivered'
-  | 'collection_confirmed'
-  | 'delivery_failed'
-  | 'returned'
-  | 'cancelled'
-  | 'refunded'
-  | 'completed'
-  | 'processing'
-  | 'preparing'
-  | 'issue_reported'
-  | 'review_submitted'
-  | 'unknown';
-
-const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
-  picked_up: 'picked_up',
-  in_transit: 'in_transit',
-  out_for_delivery: 'out_for_delivery',
-  delivered: 'delivered',
-  collection_confirmed: 'collection_confirmed',
-  delivery_failed: 'delivery_failed',
-  returned: 'returned',
-};
-
-function getStatusSemanticKey(normalisedStatus: string): TimelineSemanticKey {
-  const map: Record<string, TimelineSemanticKey> = {
-    'created': 'created',
-    'paid': 'paid',
-    'processing': 'processing',
-    'preparing': 'preparing',
-    'shipped': 'shipped',
-    'in transit': 'in_transit',
-    'out for delivery': 'out_for_delivery',
-    'delivered': 'delivered',
-    'completed': 'completed',
-    'cancelled': 'cancelled',
-    'refunded': 'refunded',
-    'delivery failed': 'delivery_failed',
-    'returned': 'returned',
-  };
-
-  return map[normalisedStatus] ?? 'unknown';
-}
-
-// --- Parcel event timestamp ---
-
-function parcelEventTimestamp(event: OrderParcelEvent): number {
-  const value = event.occurredAt ?? event.receivedAt;
-  const timestamp = Date.parse(value);
-
-  return Number.isFinite(timestamp)
-    ? timestamp
-    : Number.MAX_SAFE_INTEGER;
-}
-
-// --- Timeline builder ---
-
-interface TimelineExtras {
-  /** Whether the buyer has an open dispute/resolution on this order. */
-  hasOpenResolution?: boolean;
-  /** Whether a review has been submitted for this order. */
-  hasReview?: boolean;
-  /** ISO timestamp of delivery (used to place the review entry). */
-  deliveredAt?: string | null;
-}
-
-function buildTimelineEntries(
-  normalisedStatus: string,
-  order: CommerceOrder | null,
-  parcelEvents: OrderParcelEvent[],
-  extras?: TimelineExtras
-): TimelineEntry[] {
-  const entries: TimelineEntry[] = [];
-  const represented = new Set<TimelineSemanticKey>();
-
-  // 1. Order created — always
-  entries.push({
-    id: 'created',
-    label: 'Order created',
-    subtitle: 'The order was placed.',
-    date: formatTimelineDate(order?.createdAt),
-    state: 'completed',
-  });
-  represented.add('created');
-
-  // 2. Payment confirmed — when status proves payment occurred
-  const paymentProvenStatuses: TimelineSemanticKey[] = [
-    'paid', 'processing', 'preparing', 'shipped', 'in_transit',
-    'out_for_delivery', 'delivered', 'completed', 'refunded',
-    'returned', 'delivery_failed',
-  ];
-  const currentSemanticKey = getStatusSemanticKey(normalisedStatus);
-
-  if (paymentProvenStatuses.includes(currentSemanticKey)) {
-    entries.push({
-      id: 'paid',
-      label: 'Payment confirmed',
-      subtitle: 'Payment has been confirmed.',
-      state: 'completed',
-    });
-    represented.add('paid');
-  }
-
-  // 3. Shipped — when shippedAt exists and no equivalent carrier event
-  const hasShippedParcelEvent = parcelEvents.some(
-    (e) => e.eventType === 'picked_up' || e.eventType === 'in_transit'
-  );
-  if (order?.shippedAt && !hasShippedParcelEvent) {
-    entries.push({
-      id: 'shipped',
-      label: 'Shipped',
-      subtitle: 'The parcel has been dispatched.',
-      date: formatTimelineDate(order.shippedAt),
-      state: 'completed',
-    });
-    represented.add('shipped');
-  }
-
-  // 4. Parcel events — sorted chronologically
-  const sortedEvents = [...parcelEvents].sort(
-    (a, b) => parcelEventTimestamp(a) - parcelEventTimestamp(b)
-  );
-
-  for (const event of sortedEvents) {
-    const display = getParcelEventDisplay(event.eventType);
-    const isFailure = event.eventType === 'delivery_failed' || event.eventType === 'returned';
-    const semanticKey = PARCEL_EVENT_SEMANTIC_KEY[event.eventType];
-    entries.push({
-      id: `parcel_${event.id}`,
-      label: display.label,
-      subtitle: display.subtitle,
-      date: formatTimelineDate(event.occurredAt ?? event.receivedAt),
-      state: isFailure ? 'failure' : 'completed',
-    });
-    represented.add(semanticKey);
-  }
-
-  // 5. Delivered — when deliveredAt exists and no equivalent carrier event
-  const hasDeliveredParcelEvent = parcelEvents.some(
-    (e) => e.eventType === 'delivered' || e.eventType === 'collection_confirmed'
-  );
-  if (order?.deliveredAt && !hasDeliveredParcelEvent) {
-    entries.push({
-      id: 'delivered',
-      label: 'Delivered',
-      subtitle: 'Delivery has been confirmed.',
-      date: formatTimelineDate(order.deliveredAt),
-      state: 'completed',
-    });
-    represented.add('delivered');
-  }
-
-  // 6. Current status entry — only when not already represented
-  if (normalisedStatus !== 'created' && !represented.has(currentSemanticKey)) {
-    const isFailure =
-      currentSemanticKey === 'delivery_failed' ||
-      currentSemanticKey === 'returned' ||
-      currentSemanticKey === 'cancelled' ||
-      currentSemanticKey === 'refunded';
-    const isTerminal = isTerminalStatus(normalisedStatus);
-    entries.push({
-      id: 'current_status',
-      label: humaniseStatus(normalisedStatus),
-      subtitle: getStatusExplanation(normalisedStatus),
-      state: isFailure ? 'failure' : isTerminal ? 'completed' : 'active',
-    });
-    represented.add(currentSemanticKey);
-  }
-
-  // 7. Dispute / issue reported — appears on the same timeline as lifecycle
-  // events so the buyer sees "you reported an issue" in line with tracking.
-  if (extras?.hasOpenResolution && !represented.has('issue_reported')) {
-    entries.push({
-      id: 'issue_reported',
-      label: 'Issue reported',
-      subtitle: 'A support request is open for this order. Funds remain held in escrow.',
-      state: 'active',
-    });
-    represented.add('issue_reported');
-  }
-
-  // 8. Review submitted — appears after delivery on the unified timeline.
-  if (extras?.hasReview && !represented.has('review_submitted')) {
-    entries.push({
-      id: 'review_submitted',
-      label: 'Review submitted',
-      subtitle: 'You reviewed this order.',
-      date: formatTimelineDate(extras?.deliveredAt),
-      state: 'completed',
-    });
-    represented.add('review_submitted');
-  }
-
-  return entries;
-}
 
 // --- Component ---
 
@@ -595,9 +237,11 @@ const ISSUE_CATEGORIES: IssueCategory[] = [
 function IssueCategorySelector({
   onSelect,
   onClose,
+  contextualIssues,
 }: {
   onSelect: (category: IssueCategory) => void;
   onClose: () => void;
+  contextualIssues?: IssueCategory[];
 }) {
   const { colors } = useAppTheme();
   const themed = useMemo(() => ({
@@ -609,7 +253,10 @@ function IssueCategorySelector({
     rowLabel: { color: colors.textPrimary },
     rowDesc: { color: colors.textMuted },
     cancelBtn: { color: colors.textMuted },
+    contextHeader: { color: colors.textMuted },
   }), [colors]);
+
+  const hasContextual = contextualIssues && contextualIssues.length > 0;
 
   return (
     <View style={styles.issueSheetBackdrop} accessibilityRole="alert">
@@ -619,6 +266,30 @@ function IssueCategorySelector({
         <Text style={[styles.issueSheetSub, themed.sub]}>
           Select the type of problem so we can direct your case correctly.
         </Text>
+
+        {/* Contextual issues — specific to the current order state, shown first */}
+        {hasContextual ? (
+          <>
+            <Text style={[styles.issueContextHeader, themed.contextHeader]}>FOR THIS SITUATION</Text>
+            {contextualIssues!.map((category) => (
+              <Pressable
+                key={category.id}
+                style={({ pressed }) => [styles.issueRow, themed.row, pressed && styles.issueRowPressed]}
+                onPress={() => { haptics.tap(); onSelect(category); }}
+                accessibilityRole="button"
+                accessibilityLabel={category.label}
+              >
+                <View style={styles.issueRowText}>
+                  <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
+                  <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              </Pressable>
+            ))}
+            <Text style={[styles.issueContextHeader, themed.contextHeader]}>OTHER ISSUES</Text>
+          </>
+        ) : null}
+
         {ISSUE_CATEGORIES.map((category) => (
           <Pressable
             key={category.id}
@@ -1071,6 +742,38 @@ export default function OrderDetailScreen() {
     latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt
   );
 
+  // --- Latest parcel event summary ---
+  // Per report §11.3: a single muted text line above the timeline gives the
+  // buyer "where is my parcel now?" at a glance — carrier/source + freshness.
+  // Format: "Latest: Out for delivery · Royal Mail · 2h ago"
+  const latestEventSummary = useMemo(() => {
+    if (!latestParcelEvent) return null;
+    const display = getParcelEventDisplay(latestParcelEvent.eventType);
+    const parts: string[] = [`Latest: ${display.label}`];
+    // Carrier / source
+    const carrier = latestParcelEvent.provider || backendOrder?.shippingProvider;
+    if (carrier) parts.push(carrier);
+    // Freshness — relative time
+    const eventTime = latestParcelEvent.occurredAt ?? latestParcelEvent.receivedAt;
+    const eventMs = new Date(eventTime).getTime();
+    if (Number.isFinite(eventMs)) {
+      const diffMs = Date.now() - eventMs;
+      if (diffMs < 0) {
+        // future-dated event — just show absolute
+      } else if (diffMs < 60 * 1000) {
+        parts.push('just now');
+      } else if (diffMs < 60 * 60 * 1000) {
+        parts.push(`${Math.floor(diffMs / (60 * 1000))}m ago`);
+      } else if (diffMs < 24 * 60 * 60 * 1000) {
+        parts.push(`${Math.floor(diffMs / (60 * 60 * 1000))}h ago`);
+      } else {
+        const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+        parts.push(`${days}d ago`);
+      }
+    }
+    return parts.join(' · ');
+  }, [latestParcelEvent, backendOrder?.shippingProvider]);
+
   // --- ETA from fulfilment snapshot ---
   const snapshot = backendOrder?.fulfilmentSnapshot ?? null;
   const etaWindow = snapshot?.etaMinDays != null && snapshot?.etaMaxDays != null
@@ -1107,6 +810,73 @@ export default function OrderDetailScreen() {
     const hoursSince = (Date.now() - lastMs) / (60 * 60 * 1000);
     return hoursSince > 48;
   }, [latestParcelEvent, normalisedStatus]);
+
+  // --- Contextual issue categories ---
+  // Per report §11.3: problem entry is contextual — the buyer sees the
+  // issue type relevant to their situation, not a generic support list.
+  //   before first scan  → "Seller says it was dropped off, but the carrier hasn't scanned it"
+  //   in transit overdue → "Delivery is taking longer than expected"
+  //   delivered          → "I can't find the parcel" / "Something is wrong with the item"
+  //   return             → "Track my return"
+  const contextualIssues = useMemo((): IssueCategory[] => {
+    if (!isBuyer) return [];
+
+    // Before first scan: shipped but carrier has not scanned it yet
+    const isShippedState =
+      normalisedStatus === 'shipped' ||
+      normalisedStatus === 'in transit' ||
+      normalisedStatus === 'out for delivery';
+    const hasParcelEvents = parcelEvents.length > 0;
+    if (isShippedState && !hasParcelEvents) {
+      return [
+        {
+          id: 'carrier_not_scanned',
+          label: "Carrier hasn't scanned it",
+          description: 'Seller says it was dropped off, but the carrier has not scanned it.',
+        },
+      ];
+    }
+
+    // In transit overdue: stale tracking
+    if (isStaleTracking) {
+      return [
+        {
+          id: 'delivery_delayed',
+          label: 'Delivery is taking longer than expected',
+          description: 'Tracking has not updated in over 48 hours. Open a case if the parcel is overdue.',
+        },
+      ];
+    }
+
+    // Delivered: parcel or item problems
+    if (normalisedStatus === 'delivered') {
+      return [
+        {
+          id: 'parcel_not_found',
+          label: "I can't find the parcel",
+          description: 'The carrier says delivered but you have not received it.',
+        },
+        {
+          id: 'item_problem',
+          label: 'Something is wrong with the item',
+          description: 'The item is damaged, wrong, or not as described.',
+        },
+      ];
+    }
+
+    // Return flow
+    if (normalisedStatus === 'returned' || normalisedStatus === 'delivery failed') {
+      return [
+        {
+          id: 'track_return',
+          label: 'Track my return',
+          description: 'Follow the status of your return parcel.',
+        },
+      ];
+    }
+
+    return [];
+  }, [isBuyer, normalisedStatus, parcelEvents.length, isStaleTracking]);
 
   // --- Package summary from snapshot ---
   const packageSummary = useMemo(() => {
@@ -1161,20 +931,6 @@ export default function OrderDetailScreen() {
     try {
       await deliverOrder(orderId);
       show('Delivery confirmed', 'success');
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
-
-  const handleRefund = useCallback(async (reason: string) => {
-    if (orderMutation) return;
-    setOrderMutation('refund');
-    try {
-      await refundOrder(orderId, reason);
-      show('Refund requested. Funds will be returned from escrow.', 'success');
       await refreshOrder(false);
     } catch (error) {
       show(parseApiError(error).message, 'error');
@@ -1472,29 +1228,6 @@ export default function OrderDetailScreen() {
       });
     }
 
-    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
-      actions.push({
-        key: 'refund',
-        label: 'Request refund',
-        icon: 'return-down-back-outline',
-        onPress: () => {
-          haptics.heavyPress();
-          Alert.alert(
-            'Request a refund?',
-            'This will request a refund from the escrow-held funds. The seller will be notified and our team will review the request.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Request refund',
-                style: 'destructive',
-                onPress: () => handleRefund('buyer_requested_refund'),
-              },
-            ]
-          );
-        },
-        variant: 'destructive',
-      });
-    }
 
     if (openTicket) {
       actions.push({
@@ -1517,7 +1250,7 @@ export default function OrderDetailScreen() {
     }
 
     return actions;
-  }, [navigation, orderId, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus, handleRefund]);
+  }, [navigation, orderId, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus]);
 
   // --- Render ---
 
@@ -1700,7 +1433,7 @@ export default function OrderDetailScreen() {
           title={orderTitle}
           imageUrl={orderImage}
           subtitle={orderSubtitle}
-          priceLabel={formatFromFiat(orderSubtotal ?? 0, 'GBP', fiatOpts)}
+          priceLabel={formatFromFiat(orderSubtotal ?? 0, DEFAULT_CURRENCY_CODE, fiatOpts)}
           listingAvailable={listingExists}
           onPress={listingExists && listingId ? () => {
             haptics.tap();
@@ -1860,8 +1593,11 @@ export default function OrderDetailScreen() {
             />
           </View>
 
-          {/* ETA banner — shown when in transit with an ETA window */}
-          {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+          {/* ETA banner — shown when in transit with an ETA window.
+              Per report §11.3: ETA disappears when stale (past) so the
+              buyer is never shown a false delivery promise. The stale
+              tracking warning below covers the overdue case. */}
+          {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') && (!estimatedDeliveryDate || estimatedDeliveryDate.getTime() >= Date.now()) ? (
             <View style={[styles.etaBanner, t.etaBanner]}>
               <View style={[styles.etaIconWrap, t.etaIconWrap]}>
                 <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
@@ -1886,6 +1622,16 @@ export default function OrderDetailScreen() {
                 Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
               </Text>
             </View>
+          ) : null}
+
+          {/* Latest parcel event — single muted text line above the timeline.
+              Per report §11.3: gives the buyer "where is my parcel now?" at a
+              glance. One text line, not a card. Only when there are parcel
+              events and the order is not completed. */}
+          {latestEventSummary ? (
+            <Text style={[styles.latestEventLine, t.lastUpdated]} numberOfLines={1}>
+              {latestEventSummary}
+            </Text>
           ) : null}
 
           <OrderTrackingTimeline
@@ -1920,13 +1666,13 @@ export default function OrderDetailScreen() {
               ) : null}
               {carrierTrackingUrl ? (
                 <Pressable
-                  style={styles.shippingLabelBtn}
                   onPress={handleTrackOnCarrierSite}
-                  accessibilityRole="button"
+                  style={styles.textLinkRow}
+                  accessibilityRole="link"
                   accessibilityLabel="Track on carrier website"
                 >
-                  <Ionicons name="navigate-outline" size={16} color={colors.brand} aria-hidden={true} />
-                  <Text style={[styles.shippingLabelBtnText, t.shippingLabelBtnText]}>Track on carrier site</Text>
+                  <Text style={[styles.textLink, t.detailValueLink]}>Track on carrier site</Text>
+                  <Ionicons name="open-outline" size={14} color={colors.brand} aria-hidden={true} />
                 </Pressable>
               ) : null}
               {shipmentLastUpdated ? (
@@ -1958,17 +1704,17 @@ export default function OrderDetailScreen() {
         {/* 7. Transaction breakdown */}
         <View style={styles.transactionSection}>
           <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction</Text>
-          <TxRow label="Item" value={formatFromFiat(subtotal, 'GBP', fiatOpts)} />
-          <TxRow label="Platform charge" value={formatFromFiat(platformCharge, 'GBP', fiatOpts)} />
+          <TxRow label="Item" value={formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, fiatOpts)} />
+          <TxRow label="Platform charge" value={formatFromFiat(platformCharge, DEFAULT_CURRENCY_CODE, fiatOpts)} />
           {buyerProtectionFee != null && buyerProtectionFee !== 0 && buyerProtectionFee !== platformCharge ? (
-            <TxRow label="Buyer protection fee" value={formatFromFiat(buyerProtectionFee, 'GBP', fiatOpts)} />
+            <TxRow label="Buyer protection fee" value={formatFromFiat(buyerProtectionFee, DEFAULT_CURRENCY_CODE, fiatOpts)} />
           ) : null}
           <TxRow
             label="Delivery"
-            value={postageFee != null ? formatFromFiat(postageFee, 'GBP', fiatOpts) : 'Not recorded'}
+            value={postageFee != null ? formatFromFiat(postageFee, DEFAULT_CURRENCY_CODE, fiatOpts) : 'Not recorded'}
           />
           <View style={[styles.txDivider, t.txDivider]} />
-          <TxRow label="Total" value={formatFromFiat(totalPaid, 'GBP', fiatOpts)} bold />
+          <TxRow label="Total" value={formatFromFiat(totalPaid, DEFAULT_CURRENCY_CODE, fiatOpts)} bold />
         </View>
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
@@ -2047,6 +1793,7 @@ export default function OrderDetailScreen() {
         <IssueCategorySelector
           onSelect={handleIssueCategorySelect}
           onClose={() => setIssueSelectorVisible(false)}
+          contextualIssues={contextualIssues}
         />
       ) : null}
     </SafeAreaView>
@@ -2539,6 +2286,29 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.caption.letterSpacing,
   },
+  // ─── Text link (Track on carrier site) — text action, not a button ───
+  textLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    marginTop: Space.xs,
+    minHeight: Control.hit,
+  },
+  textLink: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  // ─── Latest event summary — one muted text line, not a card ───
+  latestEventLine: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
+    marginBottom: Space.sm,
+  },
   transactionSection: {
     paddingVertical: Space.sm,
   },
@@ -2636,6 +2406,15 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     marginBottom: Space.sm,
+  },
+  issueContextHeader: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.size + 4,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
+    textTransform: 'uppercase',
+    marginTop: Space.sm,
+    marginBottom: Space.xs,
   },
   issueRow: {
     flexDirection: 'row',

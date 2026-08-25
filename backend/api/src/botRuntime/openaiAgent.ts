@@ -72,14 +72,18 @@ function extractProviderUsage(payload: unknown): {
 // response object. We use it together with refusal/hedging detection to
 // derive a confidence score in [0, 1].
 //
-//   completed            → 1.0  (the model finished normally)
-//   incomplete            → 0.5  (hit max_output_tokens or content filter)
-//   incomplete_output     → 0.5  (truncated)
-//   anything else / absent → 0.7  (unknown — assume moderate)
+// Transport status is NOT evidence of correctness. A `completed` response
+// from the provider only means the HTTP request finished — it does not prove
+// the answer is policy-compliant, factually grounded, or safe to act on.
 //
-// Refusal or hedging language in the response text reduces the score
-// further so that the human-fallback path engages when the agent is
-// uncertain.
+// Confidence is therefore derived only from observable text signals:
+//   refusal language       → strong reduction (the agent itself flagged a limit)
+//   hedging language       → moderate reduction
+//   very short response    → moderate reduction
+//
+// The default confidence is 0.7 (neutral, unverified) and can only decrease
+// based on these signals. It never starts at 1.0 because transport completion
+// is not a correctness guarantee.
 
 const REFUSAL_PATTERNS: readonly RegExp[] = [
   /\bi\s+can(?:not|'t)\s+(?:help|assist|provide|do|complete|access)\b/i,
@@ -101,20 +105,18 @@ function assessConfidence(
   responseText: string,
 ): { confidence: number; signals: string[] } {
   const signals: string[] = [];
-  let confidence = 0.7; // default for unknown status
+  // Neutral default — transport completion is not evidence of correctness.
+  let confidence = 0.7;
 
   const record = payload && typeof payload === 'object'
     ? payload as Record<string, unknown>
     : {};
 
+  // Record transport status as an informational signal only — it does NOT
+  // adjust confidence. A `completed` status means the HTTP request finished,
+  // not that the answer is correct, grounded, or policy-compliant.
   const status = typeof record.status === 'string' ? record.status : '';
-  if (status === 'completed') {
-    confidence = 1.0;
-    signals.push('provider_status:completed');
-  } else if (status === 'incomplete' || status === 'incomplete_output') {
-    confidence = 0.5;
-    signals.push(`provider_status:${status}`);
-  } else if (status) {
+  if (status) {
     signals.push(`provider_status:${status}`);
   }
 
@@ -151,10 +153,9 @@ function buildExplanation(
   parts.push(
     `Agent ${ctx.botName} responded to a ${ctx.conversationType} conversation message.`,
   );
-  if (signals.includes('provider_status:completed')) {
-    parts.push('The AI provider completed the response normally.');
-  } else if (signals.some((s) => s.startsWith('provider_status:incomplete'))) {
-    parts.push('The AI provider response was truncated or incomplete.');
+  if (signals.some((s) => s.startsWith('provider_status:'))) {
+    const status = signals.find((s) => s.startsWith('provider_status:'))!.split(':')[1];
+    parts.push(`Provider transport status: ${status}.`);
   }
   if (signals.includes('refusal_detected')) {
     parts.push('The response contained refusal language, indicating the agent could not fulfil the request.');

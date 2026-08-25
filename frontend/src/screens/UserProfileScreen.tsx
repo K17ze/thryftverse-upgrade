@@ -61,6 +61,7 @@ import { openProfile } from '../navigation/openProfile';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
+import { respondToReview } from '../services/reviewApi';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ProfileSkeleton } from '../components/profile/ProfileSkeleton';
@@ -70,6 +71,8 @@ import { TabRail, SegmentedControl, type TabKey, type SegmentKey } from '../comp
 import { ProfileShopTile } from '../components/profile/ProfileShopTile';
 import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
+import { SellerResponseComposer } from '../components/profile/SellerResponseComposer';
+import { ReviewReportSheet } from '../components/profile/ReviewReportSheet';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
@@ -158,6 +161,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
   const [stickyRailVisible, setStickyRailVisible] = useState(false);
+  const [responseComposer, setResponseComposer] = useState<{
+    visible: boolean;
+    reviewId: string;
+    reviewerName?: string;
+    rating?: number;
+  }>({ visible: false, reviewId: '' });
+  const [reportSheet, setReportSheet] = useState<{ visible: boolean; reviewId: string }>({ visible: false, reviewId: '' });
 
   // UserProfile is a public-only projection. Self-navigation is normalised
   // to the MyProfile tab by the openProfile() resolver before this screen
@@ -394,6 +404,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
   const handleBlock = useCallback(() => { setMoreSheetVisible(false); setBlockConfirmVisible(true); }, []);
+
+  const handleRespondToReview = useCallback(async (reviewId: string, text: string) => {
+    await respondToReview(reviewId, text);
+    reviewsQuery.refetch();
+  }, [reviewsQuery]);
+
+  const handleCloseResponseComposer = useCallback(() => {
+    setResponseComposer((prev) => ({ ...prev, visible: false }));
+  }, []);
   const confirmBlock = useCallback(() => {
     setBlockConfirmVisible(false);
     blockMutation.mutate(true, { onSuccess: () => showToast('User blocked', 'success'), onError: () => showToast('Could not block user', 'error') });
@@ -465,10 +484,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         item={reviewItem}
         onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
         onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
-        onRespond={undefined}
+        onRespond={targetUserId === currentUserId
+          ? (reviewId, reviewerName, rating) => setResponseComposer({ visible: true, reviewId, reviewerName, rating })
+          : undefined}
+        onReport={targetUserId !== currentUserId
+          ? (reviewId) => setReportSheet({ visible: true, reviewId })
+          : undefined}
       />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, targetUserId, currentUserId]);
 
   // -----------------------------------------------------------------------
   // DERIVED RENDER STATE - after all hooks
@@ -898,6 +922,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         followerCount={stats?.followerCount ?? 0}
         followingCount={stats?.followingCount ?? 0}
         onOpenProfile={(id) => openProfile(navigation, id, currentUserId)}
+      />
+      <SellerResponseComposer
+        visible={responseComposer.visible}
+        reviewId={responseComposer.reviewId}
+        reviewerName={responseComposer.reviewerName}
+        rating={responseComposer.rating}
+        onClose={handleCloseResponseComposer}
+        onSubmit={handleRespondToReview}
+      />
+      <ReviewReportSheet
+        visible={reportSheet.visible}
+        reviewId={reportSheet.reviewId}
+        onDismiss={() => setReportSheet({ visible: false, reviewId: '' })}
+        onSubmitted={() => showToast('Report submitted', 'success')}
+        onError={(message) => showToast(message, 'error')}
       />
     </View>
   );

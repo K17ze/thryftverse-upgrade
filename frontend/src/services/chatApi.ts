@@ -39,7 +39,7 @@ interface ApiMessageReaction {
   userIds: string[];
 }
 
-interface ApiMessagePayload {
+export interface ApiMessagePayload {
   id: string;
   senderType: ApiSenderType;
   senderUserId: string | null;
@@ -113,7 +113,7 @@ function normalizeMemberRoles(
   return result;
 }
 
-function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
+export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
   const senderId = payload.senderType === 'bot'
     ? payload.senderBotId ?? 'system'
     : payload.senderType === 'user'
@@ -259,14 +259,32 @@ export async function fetchConversationsFromApi(): Promise<Conversation[]> {
 
 export async function fetchConversationMessagesFromApi(
   conversationId: string,
-  limit = 120
-): Promise<Message[]> {
+  options?: {
+    limit?: number;
+    before?: string;
+    after?: string;
+    aroundMessageId?: string;
+  }
+): Promise<{ messages: ApiMessagePayload[]; oldestCursor?: string; newestCursor?: string }> {
+  const limit = options?.limit ?? 120;
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (options?.before) params.set('before', options.before);
+  if (options?.after) params.set('after', options.after);
+  if (options?.aroundMessageId) params.set('aroundMessageId', options.aroundMessageId);
+
   const payload = await fetchJson<{
     ok: true;
     items: ApiMessagePayload[];
-  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`);
+    oldestCursor?: string | null;
+    newestCursor?: string | null;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`);
 
-  return payload.items.map((item) => mapApiMessageToConversationMessage(item));
+  return {
+    messages: payload.items,
+    oldestCursor: payload.oldestCursor ?? undefined,
+    newestCursor: payload.newestCursor ?? undefined,
+  };
 }
 
 export async function sendConversationMessageOnApi(
@@ -364,14 +382,21 @@ export async function reportConversationOnApi(
   conversationId: string,
   reason: string,
   details?: string,
-  messageId?: string
+  messageId?: string,
+  idempotencyKey?: string,
+  evidenceUris?: string[]
 ): Promise<{ ok: true; reportId: string; status: string }> {
+  const body: Record<string, unknown> = { reason };
+  if (details) body.details = details;
+  if (messageId) body.messageId = messageId;
+  if (idempotencyKey) body.idempotencyKey = idempotencyKey;
+  if (evidenceUris?.length) body.evidence_uris = evidenceUris;
   return fetchJson<{ ok: true; reportId: string; status: string }>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/report`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, details, messageId }),
+      body: JSON.stringify(body),
     }
   );
 }

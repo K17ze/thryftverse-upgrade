@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { performUserErasure } from '../lib/userErasure.js';
 
 type ComplianceRouteDependencies = {
   app: FastifyInstance;
@@ -288,29 +289,7 @@ export function registerComplianceRoutes({
         };
       }
 
-      await client.query(
-        `
-          UPDATE users
-          SET
-            ccpa_deletion_requested_at = NOW(),
-            username = 'deleted_user',
-            email = NULL,
-            is_erased = TRUE,
-            erased_at = NOW()
-          WHERE id = $1
-        `,
-        [userId],
-      );
-
-      await client.query(
-        `UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
-        [userId],
-      );
-
-      await client.query(
-        `UPDATE user_addresses SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL`,
-        [userId],
-      );
+      await performUserErasure(client, userId, 'ccpa');
 
       await client.query('COMMIT');
 

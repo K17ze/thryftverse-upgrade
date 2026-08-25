@@ -8,12 +8,25 @@ export interface StripeConnectPayoutInput {
 }
 
 export interface StripeConnectPayoutResult {
-  providerPayoutRef: string;
+  providerTransferRef: string;
   amountMinor: number;
   currency: 'gbp';
   destinationAccountId: string;
 }
 
+/**
+ * Create a Stripe Connect transfer to a connected account's balance.
+ *
+ * Per Stripe API version 2026-04-22 (Dahlia), transfer creation is distinct
+ * from bank payout. A transfer moves funds to the connected account's
+ * Stripe balance — it does NOT mean the funds have arrived at the seller's
+ * bank account. The payout lifecycle is:
+ *   pending → in_transit → paid → failed → canceled
+ *
+ * `paid` is reserved for Stripe's `payout.paid` webhook (bank terminal
+ * evidence). This function creates a transfer only; the caller must not
+ * label the payout request as `paid` based on this transfer alone.
+ */
 export async function createStripeConnectPayoutTransfer(
   stripe: Pick<Stripe, 'transfers'>,
   input: StripeConnectPayoutInput
@@ -43,7 +56,7 @@ export async function createStripeConnectPayoutTransfer(
   }
 
   return {
-    providerPayoutRef: transfer.id,
+    providerTransferRef: transfer.id,
     amountMinor,
     currency: 'gbp',
     destinationAccountId: input.destinationAccountId,

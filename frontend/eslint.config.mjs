@@ -1,6 +1,7 @@
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
+import rnA11y from 'eslint-plugin-react-native-a11y';
 
 /**
  * ESLint 9 flat configuration. Hook correctness remains blocking; legacy
@@ -33,6 +34,7 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       'react-hooks': reactHooks,
+      'react-native-a11y': rnA11y,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -47,6 +49,11 @@ export default [
       '@typescript-eslint/ban-types': 'off',
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off',
+      'react-native-a11y/has-accessibility-props': 'error',
+      'react-native-a11y/has-accessibility-hint': 'error',
+      'react-native-a11y/no-nested-touchables': 'error',
+      'react-native-a11y/has-valid-accessibility-role': 'error',
+      'react-native-a11y/has-valid-accessibility-state': 'error',
     },
   },
 ];

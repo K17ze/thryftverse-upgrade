@@ -25,6 +25,7 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
 
@@ -116,7 +117,7 @@ export default function OrderReceiptScreen() {
     if (!order) return;
     haptics.tap();
     const shortId = order.id.slice(0, 8).toUpperCase();
-    const total = formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' });
+    const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' });
     const status = humaniseStatus(order.status);
     const date = formatReceiptDate(order.createdAt);
     try {
@@ -225,10 +226,10 @@ export default function OrderReceiptScreen() {
   const isReceiptFinal = isTerminalStatus(normalisedStatus);
 
   const fiatOpts = { displayMode: 'fiat' as const };
-  const subtotal = formatFromFiat(order.subtotalGbp, 'GBP', fiatOpts);
-  const platformCharge = formatFromFiat(order.platformChargeGbp, 'GBP', fiatOpts);
-  const postage = formatFromFiat(order.postageFeeGbp, 'GBP', fiatOpts);
-  const total = formatFromFiat(order.totalGbp, 'GBP', fiatOpts);
+  const subtotal = formatFromFiat(order.subtotalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const platformCharge = formatFromFiat(order.platformChargeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const postage = formatFromFiat(order.postageFeeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
   const buyerProtectionFee = order.buyerProtectionFeeGbp;
   const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
 
@@ -337,7 +338,7 @@ export default function OrderReceiptScreen() {
             <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             {hasBuyerProtection && (
-              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, 'GBP', fiatOpts)} />
+              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, DEFAULT_CURRENCY_CODE, fiatOpts)} />
             )}
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />

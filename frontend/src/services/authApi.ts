@@ -47,6 +47,10 @@ interface OtpFailureResponse extends AuthFailureResponse {
   attemptsRemaining?: number;
 }
 
+interface MagicLinkFailureResponse extends AuthFailureResponse {
+  code?: string;
+}
+
 export interface MagicLinkRequestResult {
   message: string;
   developmentMagicLink?: string;
@@ -62,6 +66,10 @@ export interface OtpRequestResult {
 export interface OtpVerificationError extends Error {
   code?: string;
   attemptsRemaining?: number;
+}
+
+export interface MagicLinkConsumeError extends Error {
+  code?: string;
 }
 
 export interface LoginWithPasswordError extends Error {
@@ -179,6 +187,28 @@ function toOtpVerificationError(error: unknown, fallback: string): OtpVerificati
   return new Error(toFriendlyError(error, fallback)) as OtpVerificationError;
 }
 
+function toMagicLinkConsumeError(error: unknown, fallback: string): MagicLinkConsumeError {
+  if (error instanceof ApiRequestError) {
+    const details = error.details;
+
+    if (details && typeof details === 'object' && !Array.isArray(details)) {
+      const message =
+        typeof (details as { error?: unknown }).error === 'string'
+          ? (details as { error: string }).error
+          : fallback;
+      const magicLinkError = new Error(message) as MagicLinkConsumeError;
+      magicLinkError.code =
+        typeof (details as { code?: unknown }).code === 'string'
+          ? (details as { code: string }).code
+          : undefined;
+
+      return magicLinkError;
+    }
+  }
+
+  return new Error(toFriendlyError(error, fallback)) as MagicLinkConsumeError;
+}
+
 function toLoginError(error: unknown, fallback: string): LoginWithPasswordError {
   if (error instanceof ApiRequestError) {
     const details = error.details;
@@ -269,6 +299,25 @@ export async function requestPasswordReset(email: string) {
   }
 }
 
+export async function confirmPasswordReset(
+  token: string,
+  newPassword: string
+): Promise<{ passkeysEnrolled: boolean }> {
+  try {
+    const result = await fetchJson<{ ok: boolean; passkeysEnrolled?: boolean }>(
+      '/auth/password-reset/confirm',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword }),
+      }
+    );
+    return { passkeysEnrolled: result.passkeysEnrolled ?? false };
+  } catch (error) {
+    throw new Error(toFriendlyError(error, 'Unable to reset your password right now.'));
+  }
+}
+
 export async function loginWithGoogleIdToken(idToken: string) {
   try {
     const payload = await fetchJson<AuthSuccessResponse | AuthFailureResponse>('/auth/oauth/google', {
@@ -337,16 +386,23 @@ export async function requestMagicLink(email: string): Promise<MagicLinkRequestR
   }
 }
 
-export async function consumeMagicLink(input: { token: string; email?: string }) {
+export async function consumeMagicLink(input: {
+  token: string;
+  email?: string;
+  twoFactorCode?: string;
+  recoveryCode?: string;
+}) {
   try {
-    const payload = await fetchJson<AuthSuccessResponse | AuthFailureResponse>('/auth/magic-link/consume', {
+    const payload = await fetchJson<AuthSuccessResponse | MagicLinkFailureResponse>('/auth/magic-link/consume', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
 
     if (!isAuthSuccess(payload)) {
-      throw new Error('Magic-link sign-in failed');
+      const magicLinkError = new Error(payload.error) as MagicLinkConsumeError;
+      magicLinkError.code = payload.code;
+      throw magicLinkError;
     }
 
     await persistAuthSession(payload);
@@ -356,7 +412,7 @@ export async function consumeMagicLink(input: { token: string; email?: string })
       storeUser: toStoreUser(payload.user),
     };
   } catch (error) {
-    throw new Error(toFriendlyError(error, 'Unable to sign in with magic link right now.'));
+    throw toMagicLinkConsumeError(error, 'Unable to sign in with magic link right now.');
   }
 }
 
@@ -382,7 +438,12 @@ export async function requestEmailOtp(email: string): Promise<OtpRequestResult> 
   }
 }
 
-export async function verifyEmailOtp(input: { challengeId: string; code: string }) {
+export async function verifyEmailOtp(input: {
+  challengeId: string;
+  code: string;
+  twoFactorCode?: string;
+  recoveryCode?: string;
+}) {
   try {
     const payload = await fetchJson<AuthSuccessResponse | OtpFailureResponse>('/auth/otp/verify', {
       method: 'POST',

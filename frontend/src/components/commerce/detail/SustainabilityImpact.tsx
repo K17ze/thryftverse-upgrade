@@ -19,7 +19,7 @@ import { SustainabilityBadge } from '../../product/SustainabilityBadge';
 import type { SustainabilityScore } from '../../../utils/sustainabilityScore';
 
 export interface SustainabilityImpactProps {
-  score: SustainabilityScore;
+  score: SustainabilityScore | null;
 }
 
 interface ImpactStat {
@@ -31,6 +31,8 @@ interface ImpactStat {
 export function SustainabilityImpact({ score }: SustainabilityImpactProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  if (!score) return null;
 
   // ── Stat cells — truthful, derived from the heuristic score ──
   const stats: ImpactStat[] = [

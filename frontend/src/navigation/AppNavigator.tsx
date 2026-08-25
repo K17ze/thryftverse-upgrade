@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainerRefContext } from '@react-navigation/native';
 import type { NavigationState } from '@react-navigation/routers';
-import { RootStackParamList } from './types';
+import { RootStackParamList, ROOT_STACK_ROUTES } from './types';
 import { Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -158,6 +158,22 @@ export default function AppNavigator() {
     }
   }, [isAuthenticated]);
 
+  React.useEffect(() => {
+    if (!__DEV__) return;
+    if (!navigationContainerRef?.isReady()) return;
+    const state = navigationContainerRef.getRootState();
+    const registeredNames = new Set<string>(state.routeNames);
+    const missing = ROOT_STACK_ROUTES.filter(
+      (route) => !registeredNames.has(route),
+    );
+    if (missing.length > 0) {
+      console.warn(
+        '[Navigation] RootStack routes declared in RootStackParamList but not registered as <Stack.Screen> in AppNavigator:',
+        missing,
+      );
+    }
+  }, [navigationContainerRef]);
+
   return (
     <View style={{ flex: 1 }}>
     <Stack.Navigator
@@ -196,6 +212,7 @@ export default function AppNavigator() {
       <Stack.Screen name="SignUp" getComponent={() => require('../screens/SignUpScreen').default} />
       <Stack.Screen name="BiometricLogin" getComponent={() => require('../screens/BiometricLoginScreen').default} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="ForgotPassword" getComponent={() => require('../screens/ForgotPasswordScreen').default} />
+      <Stack.Screen name="ResetPassword" getComponent={() => require('../screens/ResetPasswordScreen').default} />
       <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} options={{ headerShown: false }} />
 
       {/* ── Main Tabs ── */}
@@ -203,10 +220,18 @@ export default function AppNavigator() {
 
       {/* ── Commerce ── */}
       <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
+      <Stack.Screen name="CategoryDetail" getComponent={() => require('../screens/CategoryDetailScreen').default} />
+      <Stack.Screen name="Browse" getComponent={() => require('../screens/BrowseScreen').default} />
+      <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
+      <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
+      <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
+      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={formSheetScreenOptions} />
+      <Stack.Screen name="GlobalSearch" getComponent={() => require('../screens/GlobalSearchScreen').default} />
+      <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} />
+      <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* ── Creator Studio ── */}
       <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={{ ...modalScreenOptions, headerShown: false }} />
-      <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="PosterArchive" getComponent={() => require('../screens/PosterArchiveScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="PosterHighlightViewer" getComponent={() => require('../screens/PosterHighlightViewerScreen').default} options={modalScreenOptions} />
@@ -269,7 +294,47 @@ export default function AppNavigator() {
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
       <Stack.Screen name="Followers" getComponent={() => require('../screens/FollowersScreen').default} />
       <Stack.Screen name="Following" getComponent={() => require('../screens/FollowingScreen').default} />
+      <Stack.Screen name="ConnectionList" getComponent={() => require('../screens/ConnectionListScreen').default} />
       <Stack.Screen name="LookDetail" getComponent={() => require('../screens/LookDetailScreen').default} />
+
+      {/* ── Settings & Account ── (security) */}
+      <Stack.Screen name="AccountSecurity" getComponent={() => require('../screens/AccountSecurityScreen').default} options={pushScreenOptions} />
+      <Stack.Screen name="AccountSecurityRecovery" getComponent={() => require('../screens/AccountSecurityRecoveryScreen').default} options={pushScreenOptions} />
+
+      {/* ── Settings & Account ── (profile, preferences, privacy, verification) */}
+      <Stack.Screen name="Settings" getComponent={() => require('../screens/SettingsScreen').default} />
+      <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="AccountSettings" getComponent={() => require('../screens/AccountSettingsScreen').default} />
+      <Stack.Screen name="AccountControl" getComponent={() => require('../screens/AccountControlScreen').default} />
+      <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
+      <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />
+      <Stack.Screen name="PushNotifications" getComponent={() => require('../screens/PushNotificationsScreen').default} />
+      <Stack.Screen name="HelpSupport" getComponent={() => require('../screens/HelpSupportScreen').default} />
+      <Stack.Screen name="ChangePassword" getComponent={() => require('../screens/ChangePasswordScreen').default} />
+      <Stack.Screen name="TwoFactorSetup" getComponent={() => require('../screens/TwoFactorSetupScreen').default} />
+      <Stack.Screen name="ChatSettings" getComponent={() => require('../screens/ChatSettingsScreen').default} />
+      <Stack.Screen name="ActiveSessions" getComponent={() => require('../screens/ActiveSessionsScreen').default} />
+      <Stack.Screen name="BlockedUsers" getComponent={() => require('../screens/BlockedUsersScreen').default} />
+      <Stack.Screen name="PrivacySettings" getComponent={() => require('../screens/PrivacySettingsScreen').default} />
+      <Stack.Screen name="About" getComponent={() => require('../screens/AboutScreen').default} />
+      <Stack.Screen name="MutedConversations" getComponent={() => require('../screens/MutedConversationsScreen').default} />
+      <Stack.Screen name="ArchivedConversations" getComponent={() => require('../screens/ArchivedConversationsScreen').default} />
+      <Stack.Screen name="ManageQuickReplies" getComponent={() => require('../screens/ManageQuickRepliesScreen').default} />
+      <Stack.Screen name="ConnectedAccounts" getComponent={() => require('../screens/ConnectedAccountsScreen').default} />
+      <Stack.Screen name="EmailNotifications" getComponent={() => require('../screens/EmailNotificationsScreen').default} />
+      <Stack.Screen name="AccessibilitySettings" getComponent={() => require('../screens/AccessibilitySettingsScreen').default} />
+      <Stack.Screen name="DeleteAccount" getComponent={() => require('../screens/DeleteAccountScreen').default} />
+      <Stack.Screen name="DataExport" getComponent={() => require('../screens/DataExportScreen').default} />
+      <Stack.Screen name="Verification" getComponent={() => require('../screens/VerificationScreen').default} />
+      <Stack.Screen name="VerificationStatus" getComponent={() => require('../screens/VerificationStatusScreen').default} />
+      <Stack.Screen name="SellerVerification" getComponent={() => require('../screens/SellerVerificationScreen').default} />
+      <Stack.Screen name="KYCVerification" getComponent={() => require('../screens/KYCVerificationScreen').default} />
+      <Stack.Screen name="AIPreferences" getComponent={() => require('../screens/AIPreferencesScreen').default} />
+      <Stack.Screen name="SustainabilityPreferences" getComponent={() => require('../screens/SustainabilityPreferencesScreen').default} />
+      <Stack.Screen name="DataPrivacy" getComponent={() => require('../screens/DataPrivacyScreen').default} />
+      <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
+      <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
+      <Stack.Screen name="AgentActivity" getComponent={() => require('../screens/AgentActivityScreen').default} />
 
       {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
@@ -315,11 +380,7 @@ export default function AppNavigator() {
       {/* Visual Search — full-screen camera viewfinder with its own header on results */}
       <Stack.Screen name="VisualSearch" getComponent={() => require('../screens/VisualSearchScreen').default} options={{ headerShown: false }} />
 
-      {/* Unified camera-first create screen — replaces the Create tab action sheet */}
-      <Stack.Screen name="CreateCamera" getComponent={() => require('../screens/CreateCameraScreen').default} options={modalScreenOptions} />
-
       {/* Explore / Creator screens */}
-      <Stack.Screen name="CreateLook" getComponent={() => require('../screens/CreateLookRedirect').CreateLookRedirect} options={modalScreenOptions} />
       <Stack.Screen name="CreatorStudio" getComponent={() => require('../creator').CreatorStudioScreen} options={modalScreenOptions} />
       <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" getComponent={() => require('../screens/OutfitBuilderScreen').default} options={modalScreenOptions} />
@@ -352,9 +413,11 @@ export default function AppNavigator() {
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" getComponent={() => require('../screens/EditCollectionScreen').default} options={modalScreenOptions} />
 
-      {/* ── Support & Help ── (tickets, resolution centre) */}
+      {/* ── Support & Help ── (tickets, resolution centre, conversations) */}
       <Stack.Screen name="SupportTicketDetail" getComponent={() => require('../screens/SupportTicketDetailScreen').default} />
       <Stack.Screen name="ResolutionCentre" getComponent={() => require('../screens/ResolutionCentreScreen').default} />
+      <Stack.Screen name="SupportConversation" getComponent={() => require('../screens/SupportConversationScreen').default} />
+      <Stack.Screen name="SupportCaseDetail" getComponent={() => require('../screens/SupportCaseDetailScreen').default} />
 
       {/* ── Seller Tools ── (listing preview) */}
       {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
@@ -384,6 +447,16 @@ export default function AppNavigator() {
 
       {/* Galleria collection detail — accessible from UnifiedDiscovery (root) and HomeStack */}
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
+
+      {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}
+      <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
+      <Stack.Screen name="YourAlgorithm" getComponent={() => require('../screens/YourAlgorithmScreen').default} />
+      <Stack.Screen name="ConversationalSearch" getComponent={() => require('../screens/ConversationalSearchScreen').default} />
+      <Stack.Screen name="MoodboardHome" getComponent={() => require('../screens/MoodboardHomeScreen').default} />
+      <Stack.Screen name="PulseFeed" getComponent={() => require('../screens/PulseFeedScreen').default} />
+      <Stack.Screen name="ExploreCollection" getComponent={() => require('../screens/ExploreCollectionScreen').default} />
+      <Stack.Screen name="StyleQuiz" getComponent={() => require('../screens/StyleQuizScreen').default} />
+      <Stack.Screen name="SavedSearches" getComponent={() => require('../screens/SavedSearchesScreen').default} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (

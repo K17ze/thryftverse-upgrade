@@ -409,7 +409,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       category: 'action',
       icon: 'shirt-outline',
       keywords: ['look', 'outfit', 'style', 'creator', 'poster'],
-      action: nav('CreateLook'),
+      action: nav('CreatorStudio', { type: 'look' }),
     },
     {
       id: 'action-create-collection',

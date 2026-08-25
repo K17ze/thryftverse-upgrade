@@ -20,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
@@ -33,7 +34,7 @@ import {
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
-import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow, FlagshipFormSection } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -199,7 +200,7 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
+    ? `≈ ${formatFromFiat(balance.available, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
     : undefined;
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
@@ -443,7 +444,7 @@ export default function WalletScreen({ navigation }: Props) {
           {localFiatLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
               <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${currencyCode ? ` · ${currencyCode}` : ''}`}>
                 {localFiatLabel}
                 {currencyCode ? ` · ${currencyCode}` : ''}
               </Text>
@@ -532,10 +533,9 @@ export default function WalletScreen({ navigation }: Props) {
           />
         )}
 
-        {/* ── Sub-balances — restrained, below the fold (spec 17 viewport 2) ── */}
-        {(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0) && (
-          <View style={styles.subBalanceSection}>
-            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>My 1ZE</Text>
+        {/* ── Balance breakdown — flat hairline-separated rows (spec 17 viewport 2) ── */}
+        {(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0 || balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={[styles.breakdownSection, { borderTopColor: colors.border }]}>
             {balance.reservedForOrders > 0 && (
               <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
             )}
@@ -545,33 +545,29 @@ export default function WalletScreen({ navigation }: Props) {
             {balance.otherHolds > 0 && (
               <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
             )}
-          </View>
-        )}
-
-        {/* ── Pending section (not yet settled) ── */}
-        {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
-          <View style={styles.subBalanceSection}>
-            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Pending</Text>
             {balance.pendingDeposit > 0 && (
               <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
             )}
             {balance.unsettledSaleProceeds > 0 && (
               <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
             )}
+            <SubBalanceRow label="Withdrawable" value={withdrawable} formatBalance={formatBalance} colors={colors} emphasize />
           </View>
         )}
 
-        {/* ── Withdrawable ── */}
-        <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
-          <View style={styles.withdrawableLeft}>
-            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
-            <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>Withdrawable</Text>
+        {/* ── Withdrawable-only (no other sub-balances) ── */}
+        {!(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0 || balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+            <View style={styles.withdrawableLeft}>
+              <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
+              <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>Withdrawable</Text>
+            </View>
+            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
+              {formatBalance(withdrawable)}
+              <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
+            </Text>
           </View>
-          <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
-            {formatBalance(withdrawable)}
-            <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
-          </Text>
-        </View>
+        )}
 
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
@@ -589,57 +585,55 @@ export default function WalletScreen({ navigation }: Props) {
           <WalletTransactionHistory limit={20} />
         </View>
 
-        {/* ── Safeguarding & 1ZE disclosure — lower down, not competing with balance (spec 17) ── */}
-        <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
-          <View style={styles.infoContent}>
-            <View style={styles.infoHeader}>
-              <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
-            </View>
-            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+        {/* ── Safeguarding & 1ZE disclosure — flat canvas, hairline divider (spec 17) ── */}
+        <View style={styles.disclosureSection}>
+          <View style={styles.infoHeader}>
+            <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
+            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>
               {balance.safeguarded
-                ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
-                : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
-            </Text>
-            {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
-            {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
-              <View style={styles.safeguardingLinksRow}>
-                {balance.safeguardingEvidenceUrl ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
-                    accessibilityRole="link"
-                    accessibilityLabel="View safeguarding evidence"
-                    accessibilityHint="Opens in external browser"
-                  >
-                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
-                  </Pressable>
-                ) : null}
-                {balance.safeguardingTermsUrl ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
-                    accessibilityRole="link"
-                    accessibilityLabel="View safeguarding terms"
-                    accessibilityHint="Opens in external browser"
-                  >
-                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            <View style={[styles.infoDivider, { borderColor: colors.border }]} />
-
-            <View style={styles.infoHeader}>
-              <Ionicons name="information-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
-            </View>
-            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-              1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
+                ? `Safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}`
+                : 'Safeguarding pending'}
             </Text>
           </View>
-        </FlagshipFormSection>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+            {balance.safeguarded
+              ? `Customer 1ZE is held under safeguarding. Redemption to ${currencyCode} is confirmed at each request.`
+              : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once confirmed.`}
+          </Text>
+          {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
+          {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
+            <View style={styles.safeguardingLinksRow}>
+              {balance.safeguardingEvidenceUrl ? (
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel="View safeguarding evidence"
+                  accessibilityHint="Opens in external browser"
+                >
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
+                </Pressable>
+              ) : null}
+              {balance.safeguardingTermsUrl ? (
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel="View safeguarding terms"
+                  accessibilityHint="Opens in external browser"
+                >
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={[styles.infoDivider, { borderColor: colors.border }]} />
+
+          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+            1ZE is the platform's settlement unit for Co-Own, maintained at a £1.00 reference par before disclosed fees.
+          </Text>
+        </View>
 
       </ScrollView>
 
@@ -664,26 +658,28 @@ function SubBalanceRow({
   value,
   formatBalance,
   colors,
+  emphasize = false,
 }: {
   label: string;
   value: number;
   formatBalance: (v: number) => string;
   colors: ReturnType<typeof useAppTheme>['colors'];
+  emphasize?: boolean;
 }) {
   return (
     <View
-      style={styles.subBalanceRow}
+      style={[styles.subBalanceRow, { borderBottomColor: colors.border }]}
       accessibilityRole="text"
       accessibilityLabel={`${label}: ${formatBalance(value)} 1ZE`}
     >
       <Text
-        style={[styles.subBalanceLabel, { color: colors.textMuted }]}
+        style={[styles.subBalanceLabel, { color: emphasize ? colors.textSecondary : colors.textMuted }]}
         numberOfLines={1}
       >
         {label}
       </Text>
       <Text
-        style={[styles.subBalanceValue, { color: colors.textSecondary }]}
+        style={[styles.subBalanceValue, { color: emphasize ? colors.textPrimary : colors.textSecondary }]}
       >
         {formatBalance(value)}
         <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
@@ -801,6 +797,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: Space.xs + 2,
   },
+  breakdownSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 0,
+    paddingTop: Space.sm,
+  },
   subBalanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -890,6 +891,11 @@ const styles = StyleSheet.create({
   // ── Safeguarding info (flat canvas, hairline divider — no card) ──
   infoContent: {
     padding: Space.md,
+    gap: Space.xs,
+  },
+  disclosureSection: {
+    paddingHorizontal: 0,
+    paddingVertical: Space.md,
     gap: Space.xs,
   },
   infoHeader: {

@@ -2,28 +2,31 @@
  * Performance-based seller program for the ThryftVerse marketplace.
  *
  * Tracks seller metrics on a rolling 90-day basis and qualifies sellers
- * for a performance program that provides visibility boosts and trust
- * signals — equivalent to Poshmark's October 2026 program.
+ * for a performance programme.
  *
- * 2026 research (August 2026 latest):
- * - Poshmark's new Performance-Based Seller Program (October 2026):
- *   - One-time threshold: Shipped 20 lifetime orders
- *   - Rolling 90-day: 5+ orders OR $500+ in sales
- *   - Rolling 90-day: 2-day or less average ship time
- *   - Rolling 90-day: cancellation rate <= 2%
- *   - Rolling 90-day: approved return case rate <= 2%
- *   - Benefits: greater visibility, search filter, trust signal
- * - Facebook Marketplace launched a dedicated Seller app
- * - eBay acquired Depop ($1.4B, July 30 2026)
- * - Seller performance programs are table stakes for 2026 marketplaces
+ * STATUS: The visibility multipliers and public badge outputs of this module
+ * are DISABLED for production use (Phase 0 contract-truth repair). Metrics are
+ * now recomputed from authoritative order/carrier facts via
+ * `recomputeSellerMetrics` / `persistSellerMetrics`. The legacy
+ * `trackSellerMetrics` function that accepted caller-supplied values is
+ * DEPRECATED and must not be called in production.
  *
  * Design principles (AGENTS.md §11 — Truthful):
- * - Metrics are derived from real order data — never fabricated
- * - Tier changes are auditable with full context
- * - Visibility boosts are applied transparently in search ranking
+ * - Metrics must be derived from real order data — never fabricated
+ * - Tier changes must be auditable with full context
+ * - Visibility boosts must be applied transparently in search ranking
+ * - No public badge without a persisted, current programme decision (fail-closed)
  */
 
 import type { Redis } from 'ioredis';
+import type { Pool, PoolClient } from 'pg';
+
+/**
+ * A database connection that supports parameterised queries — either a full
+ * `Pool` or a checked-out `PoolClient` (transaction connection). Mirrors the
+ * pattern used by `sellerRiskTiering.ts`.
+ */
+type Queryable = Pick<Pool, 'query'> | Pick<PoolClient, 'query'>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,11 +119,21 @@ export const PROGRAM_CRITERIA = {
   topPerformerMaxCancellationRate: 0.01,
 } as const;
 
-/** Visibility boost multipliers by tier. */
+/**
+ * Visibility boost multipliers by tier.
+ *
+ * DISABLED — all tiers return 1.0 (no boost). The previous 1.3×/1.5×
+ * multipliers were unvalidated product policy that could distort ranking
+ * without a versioned experiment. They must not be re-enabled until:
+ *   1. Metrics are recomputed from authoritative order/carrier/case facts
+ *      (not caller-supplied values).
+ *   2. A versioned experiment passes with fairness and gaming guardrails.
+ *   3. New-seller exposure guardrails and automatic rollback are in place.
+ */
 export const VISIBILITY_BOOST: Record<SellerTier, number> = {
   STANDARD: 1.0,
-  PERFORMER: 1.3,
-  TOP_PERFORMER: 1.5,
+  PERFORMER: 1.0,
+  TOP_PERFORMER: 1.0,
 };
 
 const REDIS_KEY_PREFIX = 'seller_perf';
@@ -130,14 +143,235 @@ function redisKey(...parts: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Metrics tracking
+// Metrics recomputation from authoritative facts
 // ---------------------------------------------------------------------------
 
 /**
- * Calculates and stores rolling 90-day seller metrics.
+ * Recomputes rolling 90-day seller metrics directly from the orders database
+ * and carrier parcel events — the authoritative source of truth.
  *
- * In production, this would query the orders database for real data.
- * For now, it accepts pre-calculated metrics and stores them in Redis.
+ * Denominators:
+ * - Only orders **placed** (created_at) within the rolling 90-day window are
+ *   counted.
+ * - Orders still pending payment (status = 'created') are excluded — they are
+ *   not yet committed commercial events.
+ *
+ * Ship time is derived from the first carrier 'picked_up' event when
+ * available (order_parcel_events), falling back to the order's `shipped_at`
+ * timestamp. Both are measured from `paid_at` so the metric reflects
+ * post-payment dispatch latency.
+ *
+ * Returns `null` when the seller has no committed orders in the window (new
+ * seller) — we never fabricate zero-valued metrics that could falsely pass
+ * qualification thresholds.
+ *
+ * @param db    A pg Pool or PoolClient (primary or read-replica).
+ * @param sellerId The seller (user) id to recompute for.
+ */
+export async function recomputeSellerMetrics(
+  db: Queryable,
+  sellerId: string
+): Promise<SellerMetrics | null> {
+  try {
+    // ── 90-day window aggregates ──────────────────────────────────────────
+    // Denominator = committed orders placed in the window (excludes 'created').
+    const windowResult = await db.query<{
+      total_orders: string;
+      shipped_orders: string;
+      cancelled_orders: string;
+      sales_volume: string | null;
+      lifetime_shipped: string;
+    }>(
+      `SELECT
+         COUNT(*)::text AS total_orders,
+         COUNT(*) FILTER (WHERE o.status IN ('shipped', 'delivered'))::text AS shipped_orders,
+         COUNT(*) FILTER (WHERE o.status = 'cancelled')::text AS cancelled_orders,
+         COALESCE(
+           SUM(o.total_gbp) FILTER (WHERE o.status IN ('paid', 'shipped', 'delivered')),
+           0
+         )::text AS sales_volume,
+         (SELECT COUNT(*)::text
+            FROM orders
+           WHERE seller_id = $1
+             AND status IN ('shipped', 'delivered')) AS lifetime_shipped
+       FROM orders o
+       WHERE o.seller_id = $1
+         AND o.created_at >= NOW() - INTERVAL '90 days'
+         AND o.status <> 'created'`,
+      [sellerId]
+    );
+
+    const row = windowResult.rows[0];
+    const totalOrders = Number(row?.total_orders ?? 0);
+    const shippedOrders = Number(row?.shipped_orders ?? 0);
+    const cancelledOrders = Number(row?.cancelled_orders ?? 0);
+    const salesVolume = Number(row?.sales_volume ?? 0);
+    const lifetimeShipped = Number(row?.lifetime_shipped ?? 0);
+
+    // New seller — no committed orders in the window. Return null rather than
+    // fabricating zeros that could falsely satisfy <= thresholds.
+    if (totalOrders === 0) {
+      console.warn(
+        `[sellerPerformance] recomputeSellerMetrics: seller ${sellerId} has ` +
+          `0 committed orders in the 90-day window — returning null (new seller)`
+      );
+      return null;
+    }
+
+    // ── Average ship time (carrier data first, order timestamps fallback) ─
+    let averageShipTimeHours = 0;
+    if (shippedOrders > 0) {
+      const shipTimeResult = await db.query<{ avg_ship_hours: string | null }>(
+        `SELECT AVG(ship_hours)::float AS avg_ship_hours
+         FROM (
+           SELECT
+             EXTRACT(EPOCH FROM (
+               COALESCE(pickup.occurred_at, o.shipped_at) - o.paid_at
+             )) / 3600 AS ship_hours
+           FROM orders o
+           LEFT JOIN LATERAL (
+             SELECT MIN(e.occurred_at) AS occurred_at
+               FROM order_parcel_events e
+              WHERE e.order_id = o.id
+                AND e.event_type = 'picked_up'
+           ) pickup ON TRUE
+           WHERE o.seller_id = $1
+             AND o.created_at >= NOW() - INTERVAL '90 days'
+             AND o.status IN ('shipped', 'delivered')
+             AND o.paid_at IS NOT NULL
+             AND (pickup.occurred_at IS NOT NULL OR o.shipped_at IS NOT NULL)
+         ) t`,
+        [sellerId]
+      );
+      averageShipTimeHours = Number(shipTimeResult.rows[0]?.avg_ship_hours ?? 0);
+    } else {
+      console.warn(
+        `[sellerPerformance] recomputeSellerMetrics: seller ${sellerId} has ` +
+          `${totalOrders} committed orders but 0 shipped — avg ship time set to 0`
+      );
+    }
+
+    // ── Return case rate (carrier 'returned' events) ──────────────────────
+    const returnResult = await db.query<{ returned_orders: string }>(
+      `SELECT COUNT(DISTINCT e.order_id)::text AS returned_orders
+         FROM order_parcel_events e
+         JOIN orders o ON o.id = e.order_id
+        WHERE o.seller_id = $1
+          AND o.created_at >= NOW() - INTERVAL '90 days'
+          AND o.status <> 'created'
+          AND e.event_type = 'returned'`,
+      [sellerId]
+    );
+    const returnedOrders = Number(returnResult.rows[0]?.returned_orders ?? 0);
+
+    const cancellationRate = cancelledOrders / totalOrders;
+    const returnCaseRate = returnedOrders / totalOrders;
+
+    return {
+      userId: sellerId,
+      ordersShipped90d: shippedOrders,
+      salesVolume90d: salesVolume,
+      averageShipTimeHours90d: averageShipTimeHours,
+      cancellationRate90d: cancellationRate,
+      approvedReturnCaseRate90d: returnCaseRate,
+      lifetimeOrdersShipped: lifetimeShipped,
+      calculatedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error(
+      `[sellerPerformance] recomputeSellerMetrics: query failed for seller ` +
+        `${sellerId}:`,
+      err
+    );
+    return null;
+  }
+}
+
+/**
+ * Recomputes authoritative seller metrics, persists them to Redis (with TTL)
+ * and upserts a projection into the `seller_trust` table (migration 166).
+ *
+ * The optional `metrics` parameter is **ignored** — metrics are always
+ * recomputed from the orders database. The parameter is retained only for
+ * signature stability during the migration period.
+ *
+ * @returns The persisted metrics, or `null` if the seller has no committed
+ *          orders in the 90-day window or a query failed.
+ */
+export async function persistSellerMetrics(
+  db: Queryable,
+  redis: Redis,
+  sellerId: string,
+  _metrics?: SellerMetrics
+): Promise<SellerMetrics | null> {
+  const metrics = await recomputeSellerMetrics(db, sellerId);
+  if (!metrics) {
+    return null;
+  }
+
+  // ── Redis cache (24-hour TTL) ───────────────────────────────────────────
+  await redis.setex(
+    redisKey('metrics', sellerId),
+    86400,
+    JSON.stringify(metrics)
+  );
+
+  // Time-series snapshot for trend analysis (90-day retention).
+  const dayKey = new Date().toISOString().split('T')[0];
+  await redis.setex(
+    redisKey('metrics_history', sellerId, dayKey),
+    86400 * 90,
+    JSON.stringify(metrics)
+  );
+
+  // ── seller_trust upsert (migration 166) ─────────────────────────────────
+  // We only overwrite fields derivable from order/carrier data, preserving
+  // response_rate and positive_rating_pct if they were set by another process.
+  try {
+    const shipWithinDays = metrics.averageShipTimeHours90d > 0
+      ? Math.max(1, Math.round(metrics.averageShipTimeHours90d / 24))
+      : null;
+
+    await db.query(
+      `INSERT INTO seller_trust
+         (user_id, ship_within_days, total_sales, calculated_at, source_watermark)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         ship_within_days = EXCLUDED.ship_within_days,
+         total_sales      = EXCLUDED.total_sales,
+         calculated_at    = NOW(),
+         source_watermark = NOW()`,
+      [sellerId, shipWithinDays, metrics.lifetimeOrdersShipped]
+    );
+  } catch (err) {
+    // The seller_trust upsert is a read-optimised projection — a failure here
+    // must not invalidate the authoritative Redis cache we just wrote.
+    console.error(
+      `[sellerPerformance] persistSellerMetrics: seller_trust upsert failed ` +
+        `for seller ${sellerId}:`,
+      err
+    );
+  }
+
+  return metrics;
+}
+
+// ---------------------------------------------------------------------------
+// Metrics tracking (LEGACY)
+// ---------------------------------------------------------------------------
+
+/**
+ * @deprecated DO NOT call this function in production. It accepts
+ * pre-calculated metrics from the caller and stores them in Redis without
+ * recomputing from authoritative order/carrier/case facts — a P0 trust defect.
+ *
+ * All callers must migrate to {@link persistSellerMetrics}, which recomputes
+ * from the orders database. This function will be removed once all callers
+ * have migrated.
+ *
+ * @param redis   Redis client.
+ * @param userId  Seller user id.
+ * @param metrics Caller-supplied (untrusted) metrics — DO NOT USE.
  */
 export async function trackSellerMetrics(
   redis: Redis,

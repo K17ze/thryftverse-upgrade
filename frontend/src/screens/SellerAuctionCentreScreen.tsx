@@ -35,6 +35,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { RetryState } from '../components/RetryState';
 import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   listAuctions,
   type MarketAuction,
@@ -350,7 +351,7 @@ function SellerSummary({
     ? formatAuctionIze(toIze(stats.highestBid, 'GBP', goldRates))
     : null;
   const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, 'GBP')
+    ? formatFromFiat(stats.highestBid, DEFAULT_CURRENCY_CODE)
     : null;
 
   return (

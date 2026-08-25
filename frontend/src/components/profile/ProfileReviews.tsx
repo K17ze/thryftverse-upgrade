@@ -30,6 +30,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
   const total = summary.reviewCount;
   const distMap = new Map<number, number>();
   for (const d of summary.distribution) distMap.set(d.rating, d.count);
+  const asOfText = summary.asOf ? formatShortDate(summary.asOf) : '';
 
   return (
     <View style={styles.reviewSummary}>
@@ -41,7 +42,9 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
               <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={13} color={colors.brand} />
             ))}
           </View>
-          <Text style={styles.reviewSummaryCount}>{total} review{total !== 1 ? 's' : ''}</Text>
+          <Text style={styles.reviewSummaryCount}>
+            {total} verified review{total !== 1 ? 's' : ''}
+          </Text>
         </View>
         <View style={styles.reviewSummaryDist}>
           {[5, 4, 3, 2, 1].map((star) => {
@@ -60,7 +63,9 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
           })}
         </View>
       </View>
-      <Text style={styles.reviewSummaryContext}>Reputation from completed orders</Text>
+      {asOfText ? (
+        <Text style={styles.reviewSummaryAsOf}>Updated {asOfText}</Text>
+      ) : null}
     </View>
   );
 }
@@ -73,6 +78,8 @@ interface ProfileReviewRowProps {
   onOpenPhoto?: (photoUrls: string[], index: number) => void;
   /** Called when the seller wants to respond to this review (only for own profile) */
   onRespond?: (reviewId: string, reviewerName: string, rating: number) => void;
+  /** Called when a non-seller viewer wants to report this review */
+  onReport?: (reviewId: string) => void;
 }
 
 /**
@@ -90,6 +97,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   onOpenListing,
   onOpenPhoto,
   onRespond,
+  onReport,
 }: ProfileReviewRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -181,11 +189,11 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         </View>
       )}
 
-      {/* Seller response */}
+      {/* Seller response — indented typography with a hairline left rule,
+          not a card container. The response is subordinate to the review. */}
       {sellerResponse && (
         <View style={styles.sellerResponseBox}>
           <View style={styles.sellerResponseHeader}>
-            <Ionicons name="storefront-outline" size={12} color={colors.textSecondary} />
             <Text style={styles.sellerResponseLabel}>Seller's response</Text>
             {responseDate ? <Text style={styles.sellerResponseDate}>{responseDate}</Text> : null}
           </View>
@@ -226,6 +234,20 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <Text style={styles.reviewListingTitle} numberOfLines={1}>{item.listing.title}</Text>
         </Pressable>
       ) : null}
+
+      {/* Report link — muted text, subordinate to content. Only for non-seller viewers. */}
+      {onReport ? (
+        <View style={styles.reportRow}>
+          <Pressable
+            style={({ pressed }) => [styles.reportLink, pressed && { opacity: 0.6 }]}
+            onPress={() => onReport(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Report this review"
+          >
+            <Text style={styles.reportLinkText}>Report</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -245,12 +267,12 @@ function createStyles(colors: ThemeColors) {
   reviewSummaryStars: { flexDirection: 'row', gap: Space.xs / 4, marginTop: Space.xs / 2 },
   reviewSummaryCount: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs / 2 },
   reviewSummaryDist: { flex: 1, gap: Space.xs },
+  reviewSummaryAsOf: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
   distStar: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.textSecondary, width: Space.sm },
   distTrack: { flex: 1, height: 3, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   distFill: { height: '100%', backgroundColor: colors.brand, borderRadius: Radius.full },
   distCount: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, width: Space.xl, textAlign: 'right', fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  reviewSummaryContext: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   reviewRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md + 2,
@@ -282,14 +304,14 @@ function createStyles(colors: ThemeColors) {
   },
   photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.scrimTextPrimary },
   sellerResponseBox: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md - 2,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
+    paddingLeft: Space.sm + 2,
     marginTop: Space.sm,
-    gap: Space.xs + 1,
+    gap: Space.xs,
   },
-  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
-  sellerResponseLabel: { fontSize: Type.label.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1, letterSpacing: Type.label.letterSpacing },
+  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  sellerResponseLabel: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1 },
   sellerResponseDate: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
   sellerResponseText: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight },
   respondBtn: {
@@ -308,5 +330,8 @@ function createStyles(colors: ThemeColors) {
   reviewListingPressed: { opacity: 0.6 },
   reviewListingThumb: { width: 28, height: 28, borderRadius: Radius.sm },
   reviewListingTitle: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  reportRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: Space.xs },
+  reportLink: { paddingVertical: Space.xs / 2, paddingHorizontal: Space.xs },
+  reportLinkText: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
   });
 }

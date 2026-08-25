@@ -6,6 +6,7 @@ import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 export interface BundleUpsellRowProps {
   /** Items from the same seller (typically more_from_seller recommendations) */
@@ -54,7 +55,7 @@ function BundleUpsellRowComponent({
 
   const showShippingMessage = shippingPayer === 'buyer';
   const bundleTotal = bundleItems.reduce((sum, i) => sum + i.price, 0);
-  const formattedBundleTotal = formatFromFiat(bundleTotal, 'GBP', { displayMode });
+  const formattedBundleTotal = formatFromFiat(bundleTotal, DEFAULT_CURRENCY_CODE, { displayMode });
 
   return (
     <View style={styles.container}>
@@ -78,7 +79,7 @@ function BundleUpsellRowComponent({
 
       <View style={styles.thumbRow}>
         {bundleItems.map((bundleItem) => {
-          const formattedPrice = formatFromFiat(bundleItem.price, 'GBP', { displayMode });
+          const formattedPrice = formatFromFiat(bundleItem.price, DEFAULT_CURRENCY_CODE, { displayMode });
           return (
             <Pressable
               key={bundleItem.id}

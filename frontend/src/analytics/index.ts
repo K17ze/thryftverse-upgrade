@@ -48,3 +48,6 @@ export type {
   ScreenViewProperties,
   UserIdentity,
 } from './types';
+
+// Guardrails — experiment auto-kill thresholds.
+export { GUARDRAIL_METRICS } from './guardrails';

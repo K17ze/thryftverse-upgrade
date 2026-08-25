@@ -4,14 +4,15 @@ import {
   Text,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, type Ionicons as IoniconsType } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -23,6 +24,12 @@ import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { getSupportCase } from '../services/supportConversationApi';
+import type {
+  SupportCase,
+  SupportCaseEvent,
+  CaseResolutionDisposition,
+} from '../contracts/support';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
@@ -31,6 +38,77 @@ const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success'
   resolved: { label: 'Resolved', tone: 'success' },
   closed: { label: 'Closed', tone: 'error' },
 };
+
+const DISPOSITION_LABELS: Record<CaseResolutionDisposition, string> = {
+  information_provided: 'Information provided',
+  customer_withdrew: 'Customer withdrew',
+  seller_resolved: 'Seller resolved',
+  refund_approved: 'Refund approved',
+  refund_denied: 'Refund denied',
+  return_approved: 'Return approved',
+  not_eligible: 'Not eligible',
+  no_violation: 'No violation found',
+  violation_actioned: 'Violation actioned',
+  duplicate: 'Duplicate case',
+  merged: 'Merged case',
+  external_dispute: 'External dispute',
+  unable_to_resolve: 'Unable to resolve',
+};
+
+interface EventDescriptor {
+  label: string;
+  icon: keyof typeof IoniconsType.glyphMap;
+}
+
+const EVENT_DESCRIPTORS: Record<string, EventDescriptor> = {
+  case_created: { label: 'Case opened', icon: 'flag-outline' },
+  case_reopened: { label: 'Case reopened', icon: 'refresh-outline' },
+  message_sent: { label: 'Message sent', icon: 'chatbubble-outline' },
+  customer_message: { label: 'Your message', icon: 'chatbubble-outline' },
+  agent_message: { label: 'Agent reply', icon: 'chatbubble-ellipses-outline' },
+  agent_ai_message: { label: 'Assistant reply', icon: 'sparkles-outline' },
+  agent_human_message: { label: 'Support reply', icon: 'chatbubble-ellipses-outline' },
+  system_message: { label: 'System notice', icon: 'information-circle-outline' },
+  handoff_requested: { label: 'Escalated to human agent', icon: 'person-add-outline' },
+  triaged: { label: 'Triaged', icon: 'list-outline' },
+  assigned: { label: 'Assigned to operator', icon: 'person-outline' },
+  queued: { label: 'Placed in queue', icon: 'hourglass-outline' },
+  in_review: { label: 'In review', icon: 'search-outline' },
+  evidence_reviewed: { label: 'Evidence reviewed', icon: 'eye-outline' },
+  awaiting_customer: { label: 'Awaiting your response', icon: 'mail-outline' },
+  awaiting_external: { label: 'Awaiting third party', icon: 'time-outline' },
+  resolved: { label: 'Resolved', icon: 'checkmark-circle-outline' },
+  closed: { label: 'Closed', icon: 'close-circle-outline' },
+  customer_withdrew: { label: 'Request withdrawn', icon: 'remove-circle-outline' },
+  appealed: { label: 'Appealed', icon: 'arrow-up-circle-outline' },
+  action_proposed: { label: 'Action proposed', icon: 'bulb-outline' },
+  action_confirmed: { label: 'Action confirmed', icon: 'checkmark-outline' },
+  action_executed: { label: 'Action completed', icon: 'checkmark-done-outline' },
+};
+
+function describeEvent(eventType: string): EventDescriptor {
+  const known = EVENT_DESCRIPTORS[eventType];
+  if (known) return known;
+  const pretty = eventType
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return { label: pretty, icon: 'ellipse-outline' };
+}
+
+function formatDate(ts: string | number): string {
+  return new Date(ts).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatTime(ts: string | number): string {
+  return new Date(ts).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export default function SupportTicketDetailScreen({ navigation, route }: Props) {
   const { ticketId } = route.params;
@@ -44,10 +122,20 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const updateSupportTicketStatus = useStore((state) => state.updateSupportTicketStatus);
   const [order, setOrder] = useState<CommerceOrder | null>(null);
 
+  // Case projection state — backfilled tickets expose a support_case via
+  // the `case_{ticketId}` id pattern (migration 150). When the lookup
+  // succeeds we render the real event-sourced timeline; on any failure we
+  // silently fall back to the legacy static two-step timeline.
+  const [caseData, setCaseData] = useState<SupportCase | null>(null);
+  const [caseEvents, setCaseEvents] = useState<SupportCaseEvent[]>([]);
+  const [caseLoading, setCaseLoading] = useState(true);
+
   const ticket = useMemo(
     () => supportTickets.find((t) => t.id === ticketId),
     [supportTickets, ticketId]
   );
+
+  const caseId = useMemo(() => `case_${ticketId}`, [ticketId]);
 
   useEffect(() => {
     if (!ticket?.orderId) return;
@@ -64,14 +152,60 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
     return () => { cancelled = true; };
   }, [ticket?.orderId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCase = async () => {
+      setCaseLoading(true);
+      try {
+        const result = await getSupportCase(caseId);
+        if (cancelled) return;
+        setCaseData(result.case);
+        setCaseEvents(result.events);
+      } catch {
+        // Case not backfilled yet — fall back to static timeline.
+        if (cancelled) return;
+        setCaseData(null);
+        setCaseEvents([]);
+      } finally {
+        if (!cancelled) setCaseLoading(false);
+      }
+    };
+    void fetchCase();
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  const refreshCase = useCallback(async () => {
+    try {
+      const result = await getSupportCase(caseId);
+      setCaseData(result.case);
+      setCaseEvents(result.events);
+    } catch {
+      // Case may have been removed; keep existing state.
+    }
+  }, [caseId]);
+
   const config = ticket ? STATUS_CONFIG[ticket.status] : null;
+
+  const publicEvents = useMemo(
+    () => caseEvents.filter((e) => e.isPublic).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    ),
+    [caseEvents]
+  );
+
+  const dispositionLabel = useMemo(() => {
+    if (!caseData?.resolutionDisposition) return null;
+    return DISPOSITION_LABELS[caseData.resolutionDisposition] ?? null;
+  }, [caseData?.resolutionDisposition]);
+
+  const hasConversation = Boolean(caseData?.conversationId);
 
   const handleClose = useCallback(() => {
     if (!ticket) return;
     haptic.heavy();
     Alert.alert(
       'Close this request?',
-      'Reopen it later if the issue is not resolved.',
+      'This withdraws your request. You can reopen it later if the issue is not resolved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -80,6 +214,13 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
           onPress: async () => {
             try {
               await updateSupportTicketStatus(ticket.id, 'closed');
+              // If a case projection exists, refresh it so any server-side
+              // `customer_withdrew` event appears in the timeline. The
+              // backend projects the ticket status change into case events;
+              // the client does not fabricate events.
+              if (caseData) {
+                void refreshCase();
+              }
               show('Request closed', 'info');
             } catch {
               show('Could not close the request. Check your connection and try again.', 'error');
@@ -88,18 +229,31 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         },
       ]
     );
-  }, [ticket, haptic, updateSupportTicketStatus, show]);
+  }, [ticket, haptic, updateSupportTicketStatus, caseData, refreshCase, show]);
 
   const handleReopen = useCallback(async () => {
     if (!ticket) return;
     haptic.medium();
     try {
       await updateSupportTicketStatus(ticket.id, 'open');
+      if (caseData) {
+        void refreshCase();
+      }
       show('Request reopened', 'success');
     } catch {
       show('Could not reopen the request. Check your connection and try again.', 'error');
     }
-  }, [ticket, haptic, updateSupportTicketStatus, show]);
+  }, [ticket, haptic, updateSupportTicketStatus, caseData, refreshCase, show]);
+
+  const handleViewConversation = useCallback(() => {
+    if (!caseData?.conversationId) return;
+    haptic.light();
+    navigation.navigate('SupportConversation', {
+      conversationId: caseData.conversationId,
+      contextKind: 'order',
+      contextId: ticket?.orderId,
+    });
+  }, [caseData?.conversationId, haptic, navigation, ticket?.orderId]);
 
   if (!ticket) {
     return (
@@ -116,17 +270,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
     );
   }
 
-  const createdDate = new Date(ticket.createdAt).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
-  const updatedDate = new Date(ticket.updatedAt).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const createdDate = formatDate(ticket.createdAt);
+  const updatedDate = formatDate(ticket.updatedAt);
 
   const evidenceUrls = ticket.evidenceMediaUrls ?? [];
 
@@ -135,7 +280,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
       header={<FlagshipHeader title="Support Request" onBack={() => navigation.goBack()} />}
       contentStyle={{ gap: Space.lg }}
     >
-        {/* Order context card */}
+        {/* Order context */}
         {order && (
           <View>
             <ElevatedSurface variant="surface" style={styles.orderContextCard}>
@@ -192,6 +337,15 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
               <Text style={styles.metaValue}>{createdDate}</Text>
             </View>
           </View>
+
+          {/* Resolution disposition — flat row, only when set */}
+          {dispositionLabel && (
+            <View style={styles.dispositionRow}>
+              <Ionicons name="checkmark-done-circle-outline" size={18} color={colors.brand} />
+              <Text style={styles.dispositionLabel}>Resolution</Text>
+              <Text style={styles.dispositionValue}>{dispositionLabel}</Text>
+            </View>
+          )}
         </View>
 
         {/* Details */}
@@ -216,30 +370,82 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
           </View>
         )}
 
-        {/* Timeline */}
+        {/* Timeline — real event projection when a case exists, otherwise
+            the legacy static two-step timeline. Rendered as a flat vertical
+            line with dots, never a card-on-card composition. */}
         <View>
           <Meta color={colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
-          <View style={styles.timelineListCard}>
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, styles.timelineDotActive]} />
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineItemTitle}>Request submitted</Text>
-                <Text style={styles.timelineItemDate}>{createdDate}</Text>
+          {caseLoading ? (
+            <View style={styles.timelineLoading}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          ) : publicEvents.length > 0 ? (
+            <View style={styles.timeline}>
+              {publicEvents.map((event, index) => {
+                const desc = describeEvent(event.eventType);
+                const isLast = index === publicEvents.length - 1;
+                const payloadNote = typeof event.payload?.['note'] === 'string'
+                  ? (event.payload['note'] as string)
+                  : null;
+                return (
+                  <View key={event.id} style={styles.timelineEntry}>
+                    <View style={styles.timelineRail}>
+                      <View style={styles.timelineDot} />
+                      {!isLast && <View style={styles.timelineConnector} />}
+                    </View>
+                    <View style={styles.timelineBody}>
+                      <View style={styles.timelineTitleRow}>
+                        <Ionicons name={desc.icon} size={14} color={colors.textSecondary} />
+                        <Text style={styles.timelineItemTitle}>{desc.label}</Text>
+                      </View>
+                      <Text style={styles.timelineItemDate}>
+                        {formatDate(event.createdAt)} · {formatTime(event.createdAt)}
+                      </Text>
+                      {payloadNote && (
+                        <Text style={styles.timelineItemNote} numberOfLines={3}>{payloadNote}</Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.timeline}>
+              <View style={styles.timelineEntry}>
+                <View style={styles.timelineRail}>
+                  <View style={styles.timelineDot} />
+                  <View style={styles.timelineConnector} />
+                </View>
+                <View style={styles.timelineBody}>
+                  <View style={styles.timelineTitleRow}>
+                    <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
+                    <Text style={styles.timelineItemTitle}>Request submitted</Text>
+                  </View>
+                  <Text style={styles.timelineItemDate}>{createdDate}</Text>
+                </View>
+              </View>
+              <View style={styles.timelineEntry}>
+                <View style={styles.timelineRail}>
+                  <View style={styles.timelineDot} />
+                </View>
+                <View style={styles.timelineBody}>
+                  <View style={styles.timelineTitleRow}>
+                    <Ionicons
+                      name={ticket.status === 'open' ? 'time-outline' : ticket.status === 'resolved' ? 'checkmark-circle-outline' : 'close-circle-outline'}
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.timelineItemTitle}>
+                      {ticket.status === 'open' ? 'Awaiting review' : ticket.status === 'resolved' ? 'Resolved' : 'Closed'}
+                    </Text>
+                  </View>
+                  <Text style={styles.timelineItemDate}>
+                    {ticket.status === 'open' ? 'In progress' : updatedDate}
+                  </Text>
+                </View>
               </View>
             </View>
-            <View style={styles.timelineLine} />
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, ticket.status !== 'open' ? styles.timelineDotActive : styles.timelineDotPending]} />
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineItemTitle}>
-                  {ticket.status === 'open' ? 'Awaiting review' : ticket.status === 'resolved' ? 'Resolved' : 'Closed'}
-                </Text>
-                <Text style={styles.timelineItemDate}>
-                  {ticket.status === 'open' ? 'In progress' : updatedDate}
-                </Text>
-              </View>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* Actions */}
@@ -268,12 +474,31 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
               accessibilityLabel="Reopen support request"
             />
           )}
+
+          {hasConversation && (
+            <AnimatedPressable
+              style={styles.conversationLink}
+              onPress={handleViewConversation}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="View conversation"
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color={colors.textSecondary} />
+              <Text style={styles.conversationLinkText}>View conversation</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </AnimatedPressable>
+          )}
+
           <AnimatedPressable
             style={styles.orderLink}
             onPress={() => navigation.navigate('OrderDetail', { orderId: ticket.orderId })}
             activeOpacity={0.7}
             scaleValue={0.98}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="View order"
           >
             <Ionicons name="cube-outline" size={18} color={colors.textSecondary} />
             <Text style={styles.orderLinkText}>View order</Text>
@@ -334,6 +559,28 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
+  dispositionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: Space.md,
+    marginTop: Space.md,
+  },
+  dispositionLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  dispositionValue: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.brand,
+  },
   sectionLabel: {
     marginLeft: Space.sm,
     letterSpacing: 1.2,
@@ -350,15 +597,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: Type.body.lineHeight + 4,
-  },
-  timelineCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   actionsCard: {
     gap: Space.md,
@@ -377,6 +615,22 @@ function createStyles(colors: ThemeColors) {
     ...Elevation.subtle,
   },
   orderLinkText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  conversationLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    ...Elevation.subtle,
+  },
+  conversationLinkText: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
@@ -434,38 +688,46 @@ function createStyles(colors: ThemeColors) {
     height: Space.xxl + Space.xl,
     borderRadius: Radius.md,
   },
-  timelineListCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    ...Elevation.subtle,
+  // ── Timeline — flat vertical line with dots, no card wrapper ──
+  timeline: {
+    paddingVertical: Space.xs,
   },
-  timelineItem: {
-    flexDirection: 'row',
+  timelineLoading: {
+    paddingVertical: Space.lg,
     alignItems: 'center',
-    gap: Space.md,
+  },
+  timelineEntry: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minHeight: 44,
+  },
+  timelineRail: {
+    width: Space.md,
+    alignItems: 'center',
+    paddingTop: Space.xs,
   },
   timelineDot: {
-    width: Space.sm + Space.xs,
-    height: Space.sm + Space.xs,
+    width: Space.sm,
+    height: Space.sm,
     borderRadius: Radius.full,
-  },
-  timelineDotActive: {
     backgroundColor: colors.brand,
   },
-  timelineDotPending: {
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.border,
-  },
-  timelineLine: {
-    width: Stroke.emphasis,
-    height: Space.lg,
-    backgroundColor: colors.border,
-    marginLeft: 5,
-  },
-  timelineContent: {
+  timelineConnector: {
+    width: Stroke.hairline,
     flex: 1,
+    minHeight: Space.lg,
+    backgroundColor: colors.border,
+    marginTop: Space.xs / 2,
+  },
+  timelineBody: {
+    flex: 1,
+    paddingBottom: Space.lg,
+    marginLeft: Space.sm,
+  },
+  timelineTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
   timelineItemTitle: {
     fontSize: Type.body.size,
@@ -477,6 +739,13 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
+  },
+  timelineItemNote: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    marginTop: Space.xs / 2,
+    lineHeight: Type.caption.lineHeight + 2,
   },
   });
 }

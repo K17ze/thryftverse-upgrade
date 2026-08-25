@@ -137,6 +137,7 @@ import {
   DEFAULT_BUYER_QUICK_REPLIES,
 } from "../hooks/chat";
 import { useTypingIndicator } from "../services/realtimeClient";
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 // ─── Composer-stack contextual resolver ───────────────────────────────
@@ -1306,12 +1307,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             offer={msg.offer}
-            formattedPrice={formatFromFiat(msg.offer!.price, "GBP", {
+            formattedPrice={formatFromFiat(msg.offer!.price, DEFAULT_CURRENCY_CODE, {
               displayMode: "fiat",
             })}
             formattedOriginalPrice={formatFromFiat(
-              msg.offer!.originalPrice,
-              "GBP",
+              msg.offer!.originalPrice, DEFAULT_CURRENCY_CODE,
               { displayMode: "fiat" },
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
@@ -1757,7 +1757,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <ChatListingContextBar
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
             title={linkedListing.title}
-            price={formatFromFiat(linkedListing.price, "GBP", {
+            price={formatFromFiat(linkedListing.price, DEFAULT_CURRENCY_CODE, {
               displayMode: "fiat",
             })}
             availability={linkedListing.isSold ? "Sold" : "Available"}
@@ -1915,6 +1915,12 @@ export default function ChatScreen({ navigation, route }: Props) {
               //     first render batch.
               drawDistance={1200}
               overrideProps={{ initialDrawBatchSize: 6 }}
+              // P0.6: Preserve scroll anchor when older messages are
+              // prepended via cursor pagination. This keeps the user's
+              // current viewing position stable instead of jumping to top.
+              maintainVisibleContentPosition={{
+                autoscrollToTopThreshold: 0,
+              }}
             />
           ) : (
             <View style={styles.emptyStateWrap}>
@@ -2206,7 +2212,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 break;
               case "report": {
                 const reportMessageId = selectedMessage.id;
-                reportConversationOnApi(conversationId, 'other', undefined, reportMessageId)
+                const reportKey = `rpt_${conversationId}_${reportMessageId}`;
+                reportConversationOnApi(conversationId, 'other', undefined, reportMessageId, reportKey)
                   .then(() => {
                     show("Report submitted. Thank you.", "success");
                   })

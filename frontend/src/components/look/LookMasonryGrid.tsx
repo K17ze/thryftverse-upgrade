@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
@@ -26,86 +26,61 @@ export function LookMasonryGrid({
   gap = Space.sm,
   testIDPrefix,
 }: LookMasonryGridProps) {
-  const { width: windowWidth } = useWindowDimensions();
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, horizontalPadding, gap), [colors, horizontalPadding, gap]);
-
-  // Column width for the masonry
-  const colWidth = Math.max(1, Math.floor((windowWidth - horizontalPadding * 2 - gap) / 2));
-
-  // Distribute items into 2 columns by assigning each to the shorter column.
-  // Since we use a fixed aspect ratio, we can compute cumulative height precisely.
-  const { leftColumn, rightColumn } = useMemo(() => {
-    const left: { item: LookApiItem; index: number }[] = [];
-    const right: { item: LookApiItem; index: number }[] = [];
-    let leftHeight = 0;
-    let rightHeight = 0;
-    const tileHeight = colWidth / aspectRatio;
-
-    looks.forEach((item, index) => {
-      if (leftHeight <= rightHeight) {
-        left.push({ item, index });
-        leftHeight += tileHeight + gap;
-      } else {
-        right.push({ item, index });
-        rightHeight += tileHeight + gap;
-      }
-    });
-
-    return { leftColumn: left, rightColumn: right };
-  }, [looks, colWidth, aspectRatio, gap]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handlePress = useCallback(
     (lookId: string) => onPress(lookId),
     [onPress]
   );
 
-  if (looks.length === 0) return null;
+  const keyExtractor = useCallback(
+    (item: LookApiItem) => item.id,
+    [],
+  );
 
-  return (
-    <View>
-      <View style={styles.container}>
-        <View style={styles.column}>
-          {leftColumn.map(({ item, index }) => (
-            <LookMasonryTile
-              key={item.id}
-              look={item}
-              onPress={handlePress}
-              aspectRatio={aspectRatio}
-              testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
-            />
-          ))}
-        </View>
-        <View style={styles.column}>
-          {rightColumn.map(({ item }) => (
-            <LookMasonryTile
-              key={item.id}
-              look={item}
-              onPress={handlePress}
-              aspectRatio={aspectRatio}
-            />
-          ))}
-        </View>
+  const renderItem = useCallback(
+    ({ item, index }: { item: LookApiItem; index: number }) => (
+      <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
+        <LookMasonryTile
+          look={item}
+          onPress={handlePress}
+          aspectRatio={aspectRatio}
+          testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+        />
       </View>
-      {isLoadingMore && (
+    ),
+    [handlePress, aspectRatio, gap, testIDPrefix],
+  );
+
+  const ListFooterComponent = useMemo(
+    () =>
+      isLoadingMore ? (
         <View style={styles.loadingMore}>
           <ActivityIndicator size="small" color={colors.textMuted} />
         </View>
-      )}
-    </View>
+      ) : null,
+    [isLoadingMore, styles, colors.textMuted],
+  );
+
+  if (looks.length === 0) return null;
+
+  return (
+    <FlashList
+      data={looks}
+      masonry
+      numColumns={2}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      ListFooterComponent={ListFooterComponent}
+      scrollEnabled={false}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: Math.max(horizontalPadding - gap / 2, 0) }}
+    />
   );
 }
 
-const createStyles = (colors: ThemeColors, horizontalPadding: number, gap: number) => StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    paddingHorizontal: horizontalPadding,
-    gap,
-  },
-  column: {
-    flex: 1,
-    gap,
-  },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   loadingMore: {
     alignItems: 'center',
     paddingVertical: Space.md,

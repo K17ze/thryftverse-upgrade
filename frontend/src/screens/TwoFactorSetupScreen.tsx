@@ -310,7 +310,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           style={[styles.textInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface }]}
           value={disableRecoveryCode}
           onChangeText={setDisableRecoveryCode}
-          placeholder="XXXX-XXXX"
+          placeholder="XXXX-XXXX-XXXX-XXXX"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="characters"
           editable={!isDisabling}

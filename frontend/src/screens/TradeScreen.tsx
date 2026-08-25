@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +58,7 @@ import {
   type CoOwnTicketDuration,
 } from '../components/coown';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
+import { createStableId } from '../utils/createStableId';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
@@ -97,6 +98,7 @@ export default function TradeScreen() {
     route.params?.limitPrice ? String(route.params.limitPrice) : ''
   );
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
   // Phase 2.5: exchange-grade order type + duration
   const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>('protected_instant');
   const [ticketDuration, setTicketDuration] = React.useState<CoOwnTicketDuration>('GFD');
@@ -277,6 +279,10 @@ export default function TradeScreen() {
     }
 
     setIsSubmittingOrder(true);
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createStableId('reserve');
+    }
+    const idempotencyKey = idempotencyKeyRef.current;
     try {
       const command = {
         userId: currentUser.id,
@@ -293,7 +299,7 @@ export default function TradeScreen() {
       }
       const reservationResponse = await reserveCoOwnOrder(asset.id, {
         ...command,
-        idempotencyKey: `reserve_${currentUser.id}_${asset.id}_${Date.now()}`,
+        idempotencyKey,
       });
       const reserved = reservationResponse.reservation;
       haptic.medium();
@@ -319,6 +325,7 @@ export default function TradeScreen() {
         maxReserved1ze: reserved.reserved1zeMg / 1000,
         marketDataTimestamp: orderBook.serverTimestamp,
       });
+      idempotencyKeyRef.current = null;
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to prepare this order');
       show(parsed.message, 'error');

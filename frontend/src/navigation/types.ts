@@ -124,7 +124,6 @@ export type RootStackParamList = {
 
   // ── Creator Studio ──
   PosterViewer: { storyId: string; startFrameIndex?: number };
-  CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   PosterHighlightViewer: { highlightId: string };
@@ -228,6 +227,8 @@ export type RootStackParamList = {
   EditProfile: { focus?: 'avatar' | 'cover' };
   AccountSettings: undefined;
   AccountControl: undefined;
+  AccountSecurity: undefined;
+  AccountSecurityRecovery: { caseId: string } | undefined;
   SavedAddresses: undefined;
   Payments: undefined;
 
@@ -290,6 +291,7 @@ export type RootStackParamList = {
   NotificationsList: undefined;
   // Phase 28
   ForgotPassword: undefined;
+  ResetPassword: { token: string };
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string; initialRating?: number };
@@ -306,8 +308,6 @@ export type RootStackParamList = {
 
   // ── Creator Studio ── (looks, camera, studio, outfits, explore)
   // Explore / Creator screens
-  CreateLook: undefined;
-  CreateCamera: { mode?: 'visual-search' | 'look' | 'poster' } | undefined;
   CreatorStudio: {
     type: 'look' | 'poster';
     draftId?: string;
@@ -400,9 +400,15 @@ export type RootStackParamList = {
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
 
-  // ── Support & Help ── (tickets, resolution centre)
+  // ── Support & Help ── (tickets, resolution centre, conversations)
   SupportTicketDetail: { ticketId: string };
   ResolutionCentre: undefined;
+  SupportConversation: {
+    conversationId: string;
+    contextKind?: 'general' | 'order' | 'listing' | 'payout' | 'report' | 'auction' | 'coown_asset' | 'catalog_import' | 'media_job';
+    contextId?: string;
+  };
+  SupportCaseDetail: { caseId: string };
 
   // ── Seller Tools ── (listing preview)
   // UI-19 — Sell / Co-own / Chat marketplace UX
@@ -519,6 +525,185 @@ export type RootStackParamList = {
   // Agent activity ledger — transparent record of agent actions and approvals
   AgentActivity: undefined;
 };
+
+export const ROOT_STACK_ROUTES = [
+  'AgeVerification',
+  'Onboarding',
+  'AuthLanding',
+  'Login',
+  'SignUp',
+  'BiometricLogin',
+  'MainTabs',
+  'CategoryDetail',
+  'Browse',
+  'ItemDetail',
+  'Closet',
+  'PosterViewer',
+  'PosterStoryActivity',
+  'PosterArchive',
+  'PosterHighlightViewer',
+  'CreatePosterHighlight',
+  'AuctionHome',
+  'Auctions',
+  'SellerAuctionCentre',
+  'CreateAuction',
+  'AuctionDetail',
+  'CreateCoOwn',
+  'MarketLedger',
+  'CoOwnHub',
+  'AssetDetail',
+  'AssetDueDiligence',
+  'Trade',
+  'Portfolio',
+  'CoOwnOrderHistory',
+  'AssetLeaderboard',
+  'Buyout',
+  'CoOwnOnboarding',
+  'CorporateActionDetail',
+  'DistributionHistory',
+  'Inbox',
+  'Chat',
+  'CreateGroupChat',
+  'GroupChat',
+  'GroupChatInfo',
+  'GroupMembers',
+  'GroupBotManagement',
+  'BotDirectory',
+  'BotDetail',
+  'CustomBots',
+  'BotBuilder',
+  'EditGroup',
+  'UserProfile',
+  'Followers',
+  'Following',
+  'ConnectionList',
+  'Wallet',
+  'SellerEarnings',
+  'WalletConvert',
+  'WalletActivity',
+  'MyOrders',
+  'Personalisation',
+  'Settings',
+  'EditProfile',
+  'AccountSettings',
+  'AccountControl',
+  'AccountSecurity',
+  'AccountSecurityRecovery',
+  'SavedAddresses',
+  'Payments',
+  'MakeOffer',
+  'PushNotifications',
+  'Postage',
+  'InviteFriends',
+  'BalanceHistory',
+  'AddBankAccount',
+  'HelpSupport',
+  'OrderDetail',
+  'SellerFulfilment',
+  'OrderReceipt',
+  'Checkout',
+  'AddressForm',
+  'Success',
+  'ManageListing',
+  'EditListing',
+  'Withdraw',
+  'CategoryTree',
+  'GlobalSearch',
+  'UnifiedDiscovery',
+  'CollectionDetail',
+  'Filter',
+  'ListingSuccess',
+  'NotificationsList',
+  'ForgotPassword',
+  'ResetPassword',
+  'ChangePassword',
+  'TwoFactorSetup',
+  'WriteReview',
+  'Report',
+  'MyBids',
+  'MyListings',
+  'SavedSearches',
+  'CreatorStudio',
+  'VisualSearch',
+  'CreatorDraftList',
+  'CoOwnIssue',
+  'OutfitBuilder',
+  'LookDetail',
+  'PulseFeed',
+  'ExploreCollection',
+  'StyleQuiz',
+  'ChatSettings',
+  'ActiveSessions',
+  'BlockedUsers',
+  'PrivacySettings',
+  'About',
+  'MutedConversations',
+  'ArchivedConversations',
+  'ManageQuickReplies',
+  'ConversationInfo',
+  'MessageRequests',
+  'NewMessage',
+  'SharedConversationMedia',
+  'ManageCollectionItems',
+  'CreateCollection',
+  'OrderSupport',
+  'BuyerProtection',
+  'ConnectedAccounts',
+  'EmailNotifications',
+  'AccessibilitySettings',
+  'CoOwnPriceAlerts',
+  'CoOwnTaxDocuments',
+  'CoOwnRecurringOrders',
+  'ChatMediaPreview',
+  'EditCollection',
+  'SupportTicketDetail',
+  'ResolutionCentre',
+  'SupportConversation',
+  'SupportCaseDetail',
+  'ListingPreview',
+  'TradeConfirm',
+  'RuntimeSmokeTest',
+  'Sell',
+  'CatalogImportStart',
+  'CatalogImportConsent',
+  'CatalogImportProgress',
+  'CatalogImportReview',
+  'CatalogImportItem',
+  'CatalogImportSummary',
+  'TradeHub',
+  'DeleteAccount',
+  'DataExport',
+  'Verification',
+  'VerificationStatus',
+  'SellerAnalytics',
+  'SellerHub',
+  'CreatorAnalyticsDashboard',
+  'BundleBag',
+  'SellerVerification',
+  'VerificationResponse',
+  'LiveShopping',
+  'LiveStreamViewer',
+  'LiveStreamSeller',
+  'AIPoweredListing',
+  'BulkListing',
+  'InventoryManagement',
+  'KYCVerification',
+  'Galleria',
+  'GalleriaCollectionDetail',
+  'YourAlgorithm',
+  'AIPhotoEnhancement',
+  'ConversationalSearch',
+  'MoodboardHome',
+  'MoodboardEditor',
+  'AIPreferences',
+  'SustainabilityPreferences',
+  'DataPrivacy',
+  'NotificationPreferences',
+  'AIAgentIntegration',
+  'AgentActivity',
+] as const;
+
+export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
 
 // ── Per-tab stack param lists ──
 // Each tab wraps a native-stack navigator so tab switches preserve per-tab

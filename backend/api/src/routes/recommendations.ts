@@ -647,9 +647,14 @@ export function registerRecommendationRoutes({
          GROUP BY listing_id
        ),
        seller_ratings AS (
-         SELECT seller_id, AVG(rating)::text AS seller_rating
-         FROM order_reviews
-         GROUP BY seller_id
+         -- Reputation feature is in shadow mode (Phase 0 contract-truth repair).
+         -- Raw AVG/5 was an unsafe trust signal: one 5-star review produced a
+         -- perfect 1.0 trust score while a new seller got 0.5, creating
+         -- incumbent bias and a gaming surface. Until a calibrated Bayesian
+         -- feature with fairness guardrails is shadow-tested, all sellers
+         -- receive a neutral 0.5 so ranking is driven by other features only.
+         SELECT seller_id, NULL::text AS seller_rating
+         FROM (SELECT DISTINCT seller_id FROM listings WHERE seller_id IS NOT NULL) s
        )
        SELECT
          l.id, l.seller_id, l.title, l.description, l.category, l.brand,

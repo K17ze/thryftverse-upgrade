@@ -326,7 +326,9 @@ export default function FilterScreen() {
       if (minVal != null && !Number.isNaN(minVal) && listing.price < minVal) return false;
       if (maxVal != null && !Number.isNaN(maxVal) && listing.price > maxVal) return false;
 
-      // Sustainable — client-side heuristic: only A/B graded items.
+      // Sustainable — filters by seller-applied tags / heuristic grade.
+      // Returns false in production (no real data), so the filter yields no
+      // results until a backend impact service or seller tags exist.
       if (
         sustainableOnly &&
         !isSustainableGrade({
@@ -828,7 +830,7 @@ export default function FilterScreen() {
                           Sustainable only
                         </Text>
                         <Text style={[styles.sustainableCaption, { color: colors.textMuted }]}>
-                          Estimated grade A or B items
+                          Items tagged sustainable by sellers
                         </Text>
                       </View>
                     </View>

@@ -333,3 +333,92 @@ export function useChatReadReceiptEvent(
     };
   }, [client, topic]);
 }
+
+// ── Message deleted event hook ──────────────────────────────────────
+
+/**
+ * useChatMessageDeletedEvent — subscribe to message-deleted events for a
+ * single conversation. The handler is invoked for each
+ * `chat.message.deleted` event on the conversation's topic, signalling that
+ * a message was deleted for the caller (`scope: 'me'`) or for everyone.
+ *
+ * The backend payload uses `actorUserId`; this hook surfaces it as
+ * `deletedBy` for caller ergonomics.
+ */
+export function useChatMessageDeletedEvent(
+  conversationId: string | undefined,
+  onDeleted: (event: { messageId: string; conversationId: string; scope: 'me' | 'everyone'; deletedBy: string }) => void,
+): void {
+  const handlerRef = useRef(onDeleted);
+  handlerRef.current = onDeleted;
+  const { client } = useRealtime();
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatMessageDeletedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_MESSAGE_DELETED_EVENT) return;
+      const payload = envelope.payload;
+      handlerRef.current({
+        messageId: payload.messageId,
+        conversationId: payload.conversationId,
+        scope: payload.scope,
+        deletedBy: payload.actorUserId,
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Reaction event hook ─────────────────────────────────────────────
+
+/**
+ * useChatReactionEvent — subscribe to reaction added/removed events for a
+ * single conversation. The handler is invoked for each
+ * `chat.reaction.added` / `chat.reaction.removed` event on the
+ * conversation's topic, with an `action` field distinguishing the two.
+ */
+export function useChatReactionEvent(
+  conversationId: string | undefined,
+  onReaction: (event: { messageId: string; conversationId: string; emoji: string; userId: string; action: 'added' | 'removed' }) => void,
+): void {
+  const handlerRef = useRef(onReaction);
+  handlerRef.current = onReaction;
+  const { client } = useRealtime();
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatReactionPayload>(topic, (envelope) => {
+      if (
+        envelope.type !== CHAT_REACTION_ADDED_EVENT &&
+        envelope.type !== CHAT_REACTION_REMOVED_EVENT
+      ) {
+        return;
+      }
+      const payload = envelope.payload;
+      handlerRef.current({
+        messageId: payload.messageId,
+        conversationId: payload.conversationId,
+        emoji: payload.emoji,
+        userId: payload.userId,
+        action: envelope.type === CHAT_REACTION_ADDED_EVENT ? 'added' : 'removed',
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}

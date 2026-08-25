@@ -90,6 +90,7 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { useFeatureFlag } from '../analytics';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -1093,7 +1094,7 @@ export default function AssetDetailScreen() {
             label={fundamentalsExpanded ? 'Hide valuation' : 'Valuation'}
             summary={
               navPerUnitGbp != null
-                ? `${formatFromFiat(navPerUnitGbp, 'GBP')} NAV / unit`
+                ? `${formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)} NAV / unit`
                 : 'Reporting'
             }
             onPress={() => setFundamentalsExpanded((prev) => !prev)}
@@ -1113,7 +1114,7 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>NAV / unit</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                   {navPerUnitGbp != null
-                    ? formatFromFiat(navPerUnitGbp, 'GBP')
+                    ? formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)
                     : 'Not available'}
                 </Text>
               </View>
@@ -1341,7 +1342,7 @@ export default function AssetDetailScreen() {
           </View>
           <CommerceDetailMetricRow
             label="NAV / unit"
-            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, 'GBP') : 'Not available'}
+            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE) : 'Not available'}
             muted={navPerUnitGbp == null}
           />
           <CommerceDetailMetricRow
@@ -1353,7 +1354,7 @@ export default function AssetDetailScreen() {
           />
           <CommerceDetailMetricRow
             label="Appraisal"
-            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, 'GBP') : 'Not available'}
+            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, DEFAULT_CURRENCY_CODE) : 'Not available'}
             muted={asset.appraisalValueGbp == null}
           />
           <CommerceDetailMetricRow

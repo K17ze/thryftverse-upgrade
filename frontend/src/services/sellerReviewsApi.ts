@@ -3,7 +3,15 @@ import { fetchJson } from '../lib/apiClient';
 export interface SellerReviewSummary {
   ratingAverage: number | null;
   reviewCount: number;
+  /** Count of reviews that satisfy eligibility rules (API contract only — not rendered). */
+  eligibleCount?: number;
   distribution: { rating: number; count: number }[];
+  /** ISO timestamp of when this summary was computed (rendered as "Updated 25 Aug"). */
+  asOf?: string | null;
+  /** Snapshot version for cache invalidation (API contract only — not rendered). */
+  snapshotVersion?: number;
+  /** How the summary was produced, e.g. "live_aggregate" (API contract only — not rendered). */
+  computationNote?: string;
 }
 
 export interface SellerReviewItem {
@@ -11,14 +19,15 @@ export interface SellerReviewItem {
   rating: number;
   comment: string | null;
   createdAt: string;
-  /** Photo URLs attached by the buyer */
+  /** Photo URLs persisted in review_media table (migration 165) */
   photoUrls?: string[];
-  /** Seller response if present */
+  /** Seller response persisted in review_responses table (migration 165) */
   sellerResponse?: {
     text: string;
     createdAt: string;
   } | null;
   reviewer: {
+    /** Real reviewer ID from backend — enables public profile navigation */
     id: string | null;
     username: string | null;
     displayName: string | null;

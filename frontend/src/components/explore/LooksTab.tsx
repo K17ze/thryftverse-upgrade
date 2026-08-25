@@ -411,59 +411,73 @@ export default function LooksTab() {
   }
 
   // ── FlashList v2 masonry canvas ───────────────────────────────────────────
-  const keyExtractor = (item: LookApiItem) => `look-${item.id}`;
+  const keyExtractor = useCallback(
+    (item: LookApiItem) => `look-${item.id}`,
+    [],
+  );
 
-  const renderItem = ({ item, index }: { item: LookApiItem; index: number }) => {
-    const template = resolveLookTemplate(item, index);
-    return (
-      <View
-        style={[
-          styles.tileCell,
-          { paddingHorizontal: styles.tileCell.paddingHorizontal / 2 },
-        ]}
-      >
-        <LookTile
-          look={item}
-          template={template}
-          onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
-          colors={colors}
-          styles={styles}
-        />
-      </View>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item, index }: { item: LookApiItem; index: number }) => {
+      const template = resolveLookTemplate(item, index);
+      return (
+        <View
+          style={[
+            styles.tileCell,
+            { paddingHorizontal: styles.tileCell.paddingHorizontal / 2 },
+          ]}
+        >
+          <LookTile
+            look={item}
+            template={template}
+            onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
+            colors={colors}
+            styles={styles}
+          />
+        </View>
+      );
+    },
+    [styles, colors, navigation],
+  );
 
   // Deterministic span: editorial anchors + cinematic (video / multi-layer)
   // looks span both columns. Everything else is a single-column tile.
-  const overrideItemLayout = (
-    layout: { span?: number },
-    item: LookApiItem,
-    index: number,
-  ) => {
-    const template = resolveLookTemplate(item, index);
-    layout.span = template.span;
-  };
-
-  const ListHeaderComponent = (
-    <>
-      {loadError && looks.length > 0 && (
-        <View style={styles.refreshErrorBanner}>
-          <Text style={styles.refreshErrorText}>
-            Looks could not be refreshed. Showing the last loaded posts.
-          </Text>
-          <Pressable
-            onPress={() => loadLooks(true, feedMode)}
-            accessibilityRole="button"
-            accessibilityLabel="Retry refresh"
-          >
-            <Text style={styles.retryLink}>Retry</Text>
-          </Pressable>
-        </View>
-      )}
-    </>
+  const overrideItemLayout = useCallback(
+    (
+      layout: { span?: number },
+      item: LookApiItem,
+      index: number,
+    ) => {
+      const template = resolveLookTemplate(item, index);
+      layout.span = template.span;
+    },
+    [],
   );
 
-  const ListFooterComponent = isLoadingMore ? (
+  const ListHeaderComponent = useMemo(
+    () => (
+      <>
+        {loadError && looks.length > 0 && (
+          <View style={styles.refreshErrorBanner}>
+            <Text style={styles.refreshErrorText}>
+              Looks could not be refreshed. Showing the last loaded posts.
+            </Text>
+            <Pressable
+              onPress={() => loadLooks(true, feedMode)}
+              accessibilityRole="button"
+              accessibilityLabel="Retry refresh"
+            >
+              <Text style={styles.retryLink}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+      </>
+    ),
+    [loadError, looks.length, styles, loadLooks, feedMode],
+  );
+
+  const ListFooterComponent = useMemo(
+    () =>
+      isLoadingMore ? (
         <View style={styles.footer}>
           <View style={styles.masonrySkeletonGrid}>
             <View style={styles.masonrySkeletonCol}>
@@ -489,7 +503,9 @@ export default function LooksTab() {
           <View style={styles.endOfListHairline} />
           <Text style={styles.endOfListText}>You've reached the end</Text>
         </View>
-      ) : null;
+      ) : null,
+    [isLoadingMore, cursor, looks.length, windowWidth, styles],
+  );
 
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.

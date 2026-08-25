@@ -16,6 +16,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'BundleBag'>;
@@ -122,7 +123,7 @@ export default function BundleBagScreen() {
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+          <Text style={styles.itemPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           {item.size && <Text style={styles.itemMeta}>Size: {item.size}</Text>}
         </View>
       </AnimatedPressable>
@@ -214,24 +215,24 @@ export default function BundleBagScreen() {
             <View style={styles.footer}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal ({selectedItems.length} items)</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
               </View>
               {discountAmount > 0 && (
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
-                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, 'GBP', { displayMode: 'fiat' })}</Text>
+                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
                 </View>
               )}
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Combined shipping</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, 'GBP', { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatFromFiat(total, 'GBP', { displayMode: 'fiat' })}</Text>
+                <Text style={styles.totalValue}>{formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
-                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, 'GBP', { displayMode: 'fiat' })}`}
+                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
                 variant="primary"
                 size="lg"
                 style={styles.checkoutBtn}

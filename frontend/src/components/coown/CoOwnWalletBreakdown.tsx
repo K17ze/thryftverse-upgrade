@@ -125,7 +125,7 @@ export function CoOwnWalletBreakdown({
         {localFiatLabel && !balanceHidden && (
           <View style={styles.localFiatRow}>
             <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${localFiatSource ? ` · ${localFiatSource}` : ''}`}>
               {localFiatLabel}
               {localFiatSource ? ` · ${localFiatSource}` : ''}
             </Text>

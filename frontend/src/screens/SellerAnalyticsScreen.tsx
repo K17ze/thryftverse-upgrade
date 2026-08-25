@@ -136,7 +136,7 @@ function computeActivityBuckets(listings: ListingApiItem[], period: Period): Cha
 // ── Activity chart component ──
 // Simple View-based bar chart. No external library. Uses theme colors.
 // Per AGENTS.md §4: flat, no card chrome. Hierarchy from typography.
-function ActivityChart({ buckets, colors }: { buckets: ChartBucket[]; colors: ThemeColors }) {
+function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: ChartBucket[]; colors: ThemeColors; accessibilitySummary: string }) {
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
   const hasData = buckets.some((b) => b.count > 0);
   const isCompact = buckets.length > 10;
@@ -154,6 +154,11 @@ function ActivityChart({ buckets, colors }: { buckets: ChartBucket[]; colors: Th
 
   return (
     <View style={chartStyles.container}>
+      <Text
+        accessibilityLabel={accessibilitySummary}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       {/* Bars row */}
       <View style={chartStyles.barsRow}>
         {buckets.map((bucket, i) => {
@@ -399,6 +404,15 @@ export default function SellerAnalyticsScreen() {
   // per day (7d/30d), per week (90d), or per month (1y).
   const activityBuckets = useMemo(() => computeActivityBuckets(listings, period), [listings, period]);
 
+  const activityChartSummary = useMemo(() => {
+    const counts = activityBuckets.map((b) => b.count);
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
+    const total = counts.reduce((sum, c) => sum + c, 0);
+    const periodDesc = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
+    return `Listing activity chart over ${periodDesc}. ${total} listings created. Highest: ${max}, lowest: ${min}.`;
+  }, [activityBuckets, period]);
+
   // ── Needs attention: active listings with low views and no sales ──
   const needsAttention = useMemo(() => {
     return listings
@@ -571,7 +585,7 @@ export default function SellerAnalyticsScreen() {
               {activityBuckets.reduce((sum, b) => sum + b.count, 0)} created
             </Text>
           </View>
-          <ActivityChart buckets={activityBuckets} colors={colors} />
+          <ActivityChart buckets={activityBuckets} colors={colors} accessibilitySummary={activityChartSummary} />
         </View>
 
         {/* ── Supporting KPIs as flat rows ── */}

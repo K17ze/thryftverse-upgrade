@@ -975,10 +975,10 @@ export default function HomeScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => rootNavigation?.navigate('UnifiedDiscovery')}
+              onPress={() => rootNavigation?.navigate('MainTabs', { screen: 'Explore' })}
               accessibilityLabel="Search and discover"
               accessibilityRole="button"
-              accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
+              accessibilityHint="Opens search and discovery"
             >
               <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>

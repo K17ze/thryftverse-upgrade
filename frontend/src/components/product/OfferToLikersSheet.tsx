@@ -8,7 +8,7 @@ import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../../context/CurrencyContext';
-import { CURRENCIES } from '../../constants/currencies';
+import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
 import { haptics } from '../../utils/haptics';
 
@@ -94,10 +94,10 @@ export function OfferToLikersSheet({
     return askingPrice * (1 - selectedDiscount / 100);
   }, [useCustomPrice, customPrice, askingPrice, selectedDiscount]);
 
-  const formattedOfferPrice = formatFromFiat(computedOfferPrice, 'GBP');
-  const formattedAskingPrice = formatFromFiat(askingPrice, 'GBP');
+  const formattedOfferPrice = formatFromFiat(computedOfferPrice, DEFAULT_CURRENCY_CODE);
+  const formattedAskingPrice = formatFromFiat(askingPrice, DEFAULT_CURRENCY_CODE);
   const savingsAmount = askingPrice - computedOfferPrice;
-  const formattedSavings = formatFromFiat(savingsAmount, 'GBP');
+  const formattedSavings = formatFromFiat(savingsAmount, DEFAULT_CURRENCY_CODE);
 
   const likerCount = listing?.likes ?? 0;
 

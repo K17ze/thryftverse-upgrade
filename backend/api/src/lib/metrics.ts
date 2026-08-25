@@ -95,6 +95,31 @@ const redisConnectionState = new Gauge({
   registers: [registry],
 });
 
+const gmvTotal = new Counter({
+  name: 'thryftverse_gmv_total',
+  help: 'Gross merchandise value total in GBP (incremented on order completion)',
+  registers: [registry],
+});
+
+const listingsCreatedTotal = new Counter({
+  name: 'thryftverse_listings_created_total',
+  help: 'Total listings created',
+  registers: [registry],
+});
+
+const ordersCompletedTotal = new Counter({
+  name: 'thryftverse_orders_completed_total',
+  help: 'Total orders completed (delivered)',
+  registers: [registry],
+});
+
+const userSignupsTotal = new Counter({
+  name: 'thryftverse_user_signups_total',
+  help: 'Total user signups',
+  labelNames: ['method'] as const,
+  registers: [registry],
+});
+
 function normalizeRouteLabel(route: string): string {
   const trimmed = route.trim();
   if (!trimmed) {
@@ -222,6 +247,22 @@ export function observeDatabasePool(input: {
 export function observeRedisConnection(connected: boolean): void {
   redisConnectionState.set({ state: 'connected' }, connected ? 1 : 0);
   redisConnectionState.set({ state: 'disconnected' }, connected ? 0 : 1);
+}
+
+export function recordGmv(amountGbp: number): void {
+  gmvTotal.inc(Math.max(0, amountGbp));
+}
+
+export function recordListingCreated(): void {
+  listingsCreatedTotal.inc(1);
+}
+
+export function recordOrderCompleted(): void {
+  ordersCompletedTotal.inc(1);
+}
+
+export function recordUserSignup(method: string): void {
+  userSignupsTotal.inc({ method }, 1);
 }
 
 export async function renderMetrics(): Promise<string> {

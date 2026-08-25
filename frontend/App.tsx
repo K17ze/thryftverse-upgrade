@@ -25,7 +25,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
 import * as Notifications from 'expo-notifications';
-import { View, ActivityIndicator, Text, TextInput, Alert } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput, Alert, AppState } from 'react-native';
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ActiveTheme, Colors } from './src/constants/colors';
 import { ToastProvider } from './src/context/ToastContext';
@@ -34,6 +34,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
+import { TaxonomyProvider } from './src/context/TaxonomyContext';
 import { ToastContainer, PushSoftAskOverlay } from './src/components/Toast';
 import { UpdateManager } from './src/platform/updates';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
@@ -54,6 +55,7 @@ import {
 import { restoreAuthSession } from './src/services/authApi';
 import { useStore } from './src/store/useStore';
 import { joinGroupByInviteOnApi } from './src/services/chatApi';
+import { initChatOutboxDrain, drainChatOutbox } from './src/services/chatOutbox';
 import { parseApiError } from './src/lib/apiClient';
 import { useOfflineQueue } from './src/lib/offlineQueue';
 import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences';
@@ -271,6 +273,19 @@ export default function App() {
     });
 
     markInteractive({ surface: 'app_mounted' });
+  }, []);
+
+  // P0.14: Mount the application-owned chat outbox drain. NetInfo reconnects
+  // flush pending messages; an AppState listener re-drains on foreground.
+  React.useEffect(() => {
+    initChatOutboxDrain();
+    drainChatOutbox().catch(() => undefined);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        drainChatOutbox().catch(() => undefined);
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   React.useEffect(() => {
@@ -636,6 +651,7 @@ export default function App() {
             <RealtimeProvider>
             <ToastProvider>
               <BackendDataProvider>
+                <TaxonomyProvider>
                 <CurrencyProvider>
                   <SettingsPreferencesProvider>
                     <TabScrollProvider>
@@ -680,6 +696,7 @@ export default function App() {
                     </TabScrollProvider>
                   </SettingsPreferencesProvider>
                 </CurrencyProvider>
+                </TaxonomyProvider>
               </BackendDataProvider>
               <ToastContainer />
               <PushSoftAskOverlay />

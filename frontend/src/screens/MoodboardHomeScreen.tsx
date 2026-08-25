@@ -6,9 +6,9 @@ import {
   Dimensions,
   RefreshControl,
   ImageStyle,
-  ScrollView,
   Pressable,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -294,37 +294,6 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Masonry layout — true Pinterest-style column assignment by shortest height
-// ---------------------------------------------------------------------------
-function buildMasonryColumns(items: Moodboard[]): { item: Moodboard; height: number }[][] {
-  const cols: { item: Moodboard; height: number }[][] = Array.from(
-    { length: MASONRY_COLUMN_COUNT },
-    () => [],
-  );
-  const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
-
-  items.forEach((mb, idx) => {
-    const ratio = MASONRY_ASPECT_RATIOS[idx % MASONRY_ASPECT_RATIOS.length];
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * ratio);
-    const metaHeight = 64;
-    const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
-
-    let shortestCol = 0;
-    let shortestHeight = heights[0];
-    for (let c = 1; c < MASONRY_COLUMN_COUNT; c++) {
-      if (heights[c] < shortestHeight) {
-        shortestCol = c;
-        shortestHeight = heights[c];
-      }
-    }
-    cols[shortestCol].push({ item: mb, height: imgHeight });
-    heights[shortestCol] += itemHeight;
-  });
-
-  return cols;
-}
-
-// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 export default function MoodboardHomeScreen() {
@@ -428,85 +397,36 @@ export default function MoodboardHomeScreen() {
     });
   }, [publicMoodboards, searchQuery]);
 
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(filteredPublicMoodboards),
-    [filteredPublicMoodboards],
+  // ── FlashList masonry callbacks ──
+  const keyExtractor = useCallback((item: Moodboard) => item.id, []);
+
+  const renderMasonryItem = useCallback(
+    ({ item, index }: { item: Moodboard; index: number }) => {
+      const ratio = MASONRY_ASPECT_RATIOS[index % MASONRY_ASPECT_RATIOS.length];
+      const imgHeight = Math.round(MASONRY_COL_WIDTH * ratio);
+      return (
+        <View style={{ paddingHorizontal: MASONRY_GAP / 2, width: '100%' }}>
+          <PublicMoodboardCard
+            moodboard={item}
+            cardHeight={imgHeight}
+            onPress={() => handleMoodboardPress(item)}
+          />
+        </View>
+      );
+    },
+    [handleMoodboardPress],
   );
 
-  // ── Error state ──
-  if (error && !loading && userMoodboards.length === 0 && publicMoodboards.length === 0) {
-    return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Moodboards unavailable"
-          subtitle={error}
-          ctaLabel="Retry"
-          onCtaPress={() => void loadAll(false)}
-        />
-      </View>
-    );
-  }
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }) => {
+      layout.span = 1;
+    },
+    [],
+  );
 
-  // ── Empty state (no moodboards at all) ──
-  if (
-    !loading &&
-    userMoodboards.length === 0 &&
-    publicMoodboards.length === 0
-  ) {
-    return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="images-outline"
-          title="No moodboards yet"
-          subtitle="Create your first collage — arrange listings into a composition that tells your story."
-          ctaLabel="Create a moodboard"
-          onCtaPress={handleCreatePress}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-
-      {/* Offline banner */}
-      {isOffline && (
-        <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
-          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing. Reconnect to load latest.</Text>
-        </View>
-      )}
-
-      {/* Demo mode banner — truthful per AGENTS.md §11 */}
-      {MOODBOARD_DEMO_MODE && (
-        <View style={styles.demoBanner}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
-          </Text>
-        </View>
-      )}
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + Space.sm },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="transparent"
-            colors={['transparent']}
-            progressBackgroundColor="transparent"
-          />
-        }
-      >
+  const listHeader = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Header ── */}
         <View style={styles.headerRow}>
           <AnimatedPressable
@@ -610,47 +530,50 @@ export default function MoodboardHomeScreen() {
           </Reanimated.View>
         ) : null}
 
-        {/* ── Section 2: Discover Moodboards masonry ── */}
+        {/* ── Section 2: Discover Moodboards — header + loading/empty states ── */}
         {loading ? (
           <View style={styles.sectionWrap}>
             <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
             <DiscoverMasonrySkeleton />
           </View>
         ) : searchQuery.trim().length > 0 && filteredPublicMoodboards.length === 0 ? (
-          <View style={styles.searchEmptyWrap}>
-            <Ionicons name="search-outline" size={32} color={colors.textMuted} />
-            <Text style={styles.searchEmptyTitle}>
-              No moodboards match '{searchQuery.trim()}'
-            </Text>
-            <Text style={styles.searchEmptySubtitle}>
-              Try a different title, curator, or keyword.
-            </Text>
+          <View style={styles.sectionWrap}>
+            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+            <View style={styles.searchEmptyWrap}>
+              <Ionicons name="search-outline" size={32} color={colors.textMuted} />
+              <Text style={styles.searchEmptyTitle}>
+                No moodboards match '{searchQuery.trim()}'
+              </Text>
+              <Text style={styles.searchEmptySubtitle}>
+                Try a different title, curator, or keyword.
+              </Text>
+            </View>
           </View>
         ) : filteredPublicMoodboards.length > 0 ? (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
-            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
-            <View style={styles.masonryGrid}>
-              {masonryColumns.map((col, colIdx) => (
-                <View
-                  key={colIdx}
-                  style={[styles.masonryColumn, { width: MASONRY_COL_WIDTH }]}
-                >
-                  {col.map(({ item, height }) => (
-                    <PublicMoodboardCard
-                      key={item.id}
-                      moodboard={item}
-                      cardHeight={height}
-                      onPress={() => handleMoodboardPress(item)}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          </Reanimated.View>
+          <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
         ) : null}
+      </View>
+    ),
+    [
+      loading,
+      userMoodboards,
+      searchQuery,
+      filteredPublicMoodboards.length,
+      reducedMotion,
+      styles,
+      colors,
+      handleMoodboardPress,
+      handleGoBack,
+      handleCreatePress,
+      handleCreateWithPosterStudio,
+      moodboardBetaEnabled,
+    ],
+  );
 
-        {/* ── Empty user moodboards inline prompt ── */}
-        {!loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
+  const listFooter = useMemo(
+    () =>
+      !loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
+        <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2), marginTop: Space.lg }}>
           <View style={styles.inlineEmptyWrap}>
             <View style={styles.inlineEmptyCard}>
               <Ionicons name="grid-outline" size={28} color={colors.brand} />
@@ -671,8 +594,94 @@ export default function MoodboardHomeScreen() {
               </AnimatedPressable>
             </View>
           </View>
-        ) : null}
-      </ScrollView>
+        </View>
+      ) : null,
+    [loading, userMoodboards.length, publicMoodboards.length, styles, colors, handleCreatePress],
+  );
+
+  // ── Error state ──
+  if (error && !loading && userMoodboards.length === 0 && publicMoodboards.length === 0) {
+    return (
+      <View style={styles.stateContainer}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Moodboards unavailable"
+          subtitle={error}
+          ctaLabel="Retry"
+          onCtaPress={() => void loadAll(false)}
+        />
+      </View>
+    );
+  }
+
+  // ── Empty state (no moodboards at all) ──
+  if (
+    !loading &&
+    userMoodboards.length === 0 &&
+    publicMoodboards.length === 0
+  ) {
+    return (
+      <View style={styles.stateContainer}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <EmptyState
+          icon="images-outline"
+          title="No moodboards yet"
+          subtitle="Create your first collage — arrange listings into a composition that tells your story."
+          ctaLabel="Create a moodboard"
+          onCtaPress={handleCreatePress}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Offline banner */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
+          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing. Reconnect to load latest.</Text>
+        </View>
+      )}
+
+      {/* Demo mode banner — truthful per AGENTS.md §11 */}
+      {MOODBOARD_DEMO_MODE && (
+        <View style={styles.demoBanner}>
+          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.demoBannerText}>
+            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
+          </Text>
+        </View>
+      )}
+
+      <FlashList
+        data={loading ? [] : filteredPublicMoodboards}
+        masonry
+        numColumns={MASONRY_COLUMN_COUNT}
+        renderItem={renderMasonryItem}
+        keyExtractor={keyExtractor}
+        overrideItemLayout={overrideItemLayout}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        contentContainerStyle={{
+          paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
+          paddingTop: insets.top + Space.sm,
+          paddingBottom: Space.xxl,
+        }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="transparent"
+            colors={['transparent']}
+            progressBackgroundColor="transparent"
+          />
+        }
+      />
     </View>
   );
 }

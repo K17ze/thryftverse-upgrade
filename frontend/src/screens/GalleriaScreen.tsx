@@ -6,8 +6,8 @@ import {
   Dimensions,
   RefreshControl,
   ImageStyle,
-  ScrollView,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -524,76 +524,35 @@ export default function GalleriaScreen() {
   const remainingEditorials = editorials.slice(1);
   const featuredCollection = collections[0] ?? null;
   const railCollections = collections.slice(1);
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(featuredAssets),
-    [featuredAssets],
+  // ── FlashList masonry callbacks ──
+  const keyExtractor = useCallback(
+    (item: GalleriaFeaturedAsset) => item.id,
+    [],
   );
 
-  // ── Error state ──
-  if (error && !loading && collections.length === 0) {
-    return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Galleria unavailable"
-          subtitle={error}
-          ctaLabel="Retry"
-          onCtaPress={() => void loadAll(false)}
+  const renderMasonryItem = useCallback(
+    ({ item, index }: { item: GalleriaFeaturedAsset; index: number }) => (
+      <View style={{ paddingHorizontal: MASONRY_GAP / 2, paddingBottom: MASONRY_GAP, width: '100%' }}>
+        <FeaturedAssetCard
+          asset={item}
+          onPress={() => handleAssetPress(item)}
+          testID={index === 0 ? 'golden-coown-first-asset' : undefined}
         />
       </View>
-    );
-  }
+    ),
+    [handleAssetPress],
+  );
 
-  // ── Empty state ──
-  if (
-    !loading &&
-    collections.length === 0 &&
-    editorials.length === 0 &&
-    featuredAssets.length === 0
-  ) {
-    return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="images-outline"
-          title="The Galleria is being curated"
-          subtitle="Our curators are preparing new collections and editorial pieces. Check back soon."
-          ctaLabel="Refresh"
-          onCtaPress={() => void loadAll(false)}
-        />
-      </View>
-    );
-  }
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }) => {
+      layout.span = 1;
+    },
+    [],
+  );
 
-  return (
-    <View style={styles.container}>
-      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-
-      {/* Offline banner */}
-      {isOffline && (
-        <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
-          <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
-        </View>
-      )}
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + Space.sm },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="transparent"
-            colors={['transparent']}
-            progressBackgroundColor="transparent"
-          />
-        }
-      >
+  const listHeader = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Honest demo indicator (AGENTS.md §11) ── */}
         {GALLERIA_DEMO_MODE && (
           <View style={styles.demoBadgeRow}>
@@ -641,35 +600,33 @@ export default function GalleriaScreen() {
           </Reanimated.View>
         ) : null}
 
-        {/* ── Section 3: Featured Assets masonry ── */}
+        {/* ── Section 3: Featured Assets — header + loading skeleton ── */}
         {loading ? (
           <>
             <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
             <FeaturedMasonrySkeleton />
           </>
         ) : featuredAssets.length > 0 ? (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)}>
-            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
-            <View style={styles.masonryGrid}>
-              {masonryColumns.map((columnItems, colIdx) => (
-                <View
-                  key={colIdx}
-                  style={[styles.masonryColumn, { width: MASONRY_COL_WIDTH }]}
-                >
-                  {columnItems.map((asset, assetIdx) => (
-                    <FeaturedAssetCard
-                      key={asset.id}
-                      asset={asset}
-                      onPress={() => handleAssetPress(asset)}
-                      testID={colIdx === 0 && assetIdx === 0 ? 'golden-coown-first-asset' : undefined}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          </Reanimated.View>
+          <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
         ) : null}
+      </View>
+    ),
+    [
+      loading,
+      heroEditorial,
+      collections,
+      featuredCollection,
+      railCollections,
+      featuredAssets.length,
+      reducedMotion,
+      styles,
+      handleCollectionPress,
+    ],
+  );
 
+  const listFooter = useMemo(
+    () => (
+      <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Section 4: Editorial list ── */}
         {loading ? (
           <>
@@ -727,7 +684,93 @@ export default function GalleriaScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         </View>
-      </ScrollView>
+      </View>
+    ),
+    [
+      loading,
+      remainingEditorials,
+      heroEditorial,
+      styles,
+      colors,
+      haptic,
+      navigation,
+    ],
+  );
+
+  // ── Error state ──
+  if (error && !loading && collections.length === 0) {
+    return (
+      <View style={styles.stateContainer}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Galleria unavailable"
+          subtitle={error}
+          ctaLabel="Retry"
+          onCtaPress={() => void loadAll(false)}
+        />
+      </View>
+    );
+  }
+
+  // ── Empty state ──
+  if (
+    !loading &&
+    collections.length === 0 &&
+    editorials.length === 0 &&
+    featuredAssets.length === 0
+  ) {
+    return (
+      <View style={styles.stateContainer}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <EmptyState
+          icon="images-outline"
+          title="The Galleria is being curated"
+          subtitle="Our curators are preparing new collections and editorial pieces. Check back soon."
+          ctaLabel="Refresh"
+          onCtaPress={() => void loadAll(false)}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Offline banner */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
+          <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
+        </View>
+      )}
+
+      <FlashList
+        data={loading ? [] : featuredAssets}
+        masonry
+        numColumns={MASONRY_COLUMN_COUNT}
+        renderItem={renderMasonryItem}
+        keyExtractor={keyExtractor}
+        overrideItemLayout={overrideItemLayout}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        contentContainerStyle={{
+          paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
+          paddingTop: insets.top + Space.sm,
+          paddingBottom: Space.xxl,
+        }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="transparent"
+            colors={['transparent']}
+            progressBackgroundColor="transparent"
+          />
+        }
+      />
     </View>
   );
 }

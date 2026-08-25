@@ -71,8 +71,6 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'AuctionDetailScreen', role: 'liveMarket', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: true, tabularFigures: true },
 
   // ── Creator canvas ──
-  { screen: 'CreateCameraScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
-  { screen: 'CreateLookScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'CreatePosterHighlightScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'PosterViewerScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
 

@@ -59,8 +59,17 @@ export const VERIFICATION_TIERS: Record<VerificationTier, VerificationTierInfo> 
 };
 
 // ── Seller Standards Badge Programme ──
-// Badges are derived from existing SellerTrustSummary metrics.
-// Each badge has a clear criterion so the UI can truthfully show earned badges.
+// Badges are fail-closed: they are ONLY rendered when the backend provides
+// an explicit, persisted programme decision via the `badges` field on
+// SellerTrustSummary. The previous client-side derivation (regex over
+// human-readable time labels, threshold checks on mutable summary values)
+// was a P0 trust defect — a badge is a backend decision, not a client
+// calculation. Text parsing is not evidence and cannot encode exclusions,
+// expiry, or appeals.
+//
+// Until a persisted seller_standards_evaluations table feeds the API,
+// `trust.badges` will be undefined/null and NO badges render. This is the
+// correct fail-closed behaviour per AGENTS.md §11.
 
 export type SellerBadgeType = 'topSeller' | 'fastShipper' | 'responsive' | 'superSeller';
 
@@ -99,42 +108,17 @@ export const SELLER_BADGES: Record<SellerBadgeType, SellerBadgeInfo> = {
 };
 
 /**
- * Derives seller standards badges from the SellerTrustSummary metrics.
- * Only returns badges that are truthfully earned based on the criteria.
+ * Returns seller standards badges from the backend-provided `badges` field.
+ *
+ * FAIL-CLOSED: if `trust.badges` is null/undefined/empty, returns [].
+ * No client-side derivation, no regex, no threshold checks. A badge is a
+ * persisted backend programme decision, not a client calculation.
  */
 export function deriveSellerBadges(trust: SellerTrustSummary | null): SellerBadgeType[] {
-  if (!trust) return [];
-  const earned: SellerBadgeType[] = [];
-
-  const completedSales = trust.completedSales ?? 0;
-  const rating = trust.rating ?? 0;
-  const responseRate = trust.responseRate ?? 0;
-  const responseTimeLabel = trust.responseTimeLabel ?? '';
-  const dispatchTimeLabel = trust.dispatchTimeLabel ?? '';
-
-  // Top Seller: 50+ sales, 4.5+ rating
-  if (completedSales >= 50 && rating >= 4.5) {
-    earned.push('topSeller');
-  }
-
-  // Super Seller: 200+ sales, 4.8+ rating
-  if (completedSales >= 200 && rating >= 4.8) {
-    earned.push('superSeller');
-  }
-
-  // Fast Shipper: dispatches same day or within 1 day
-  const fastDispatch = /same day|within 1 day|1 day|24h/i.test(dispatchTimeLabel);
-  if (fastDispatch) {
-    earned.push('fastShipper');
-  }
-
-  // Responsive: 90%+ response rate AND replies within 2 hours
-  const fastResponse = /within 1h|within 2h|1 hour|2 hour|1h|2h/i.test(responseTimeLabel);
-  if (responseRate >= 90 && fastResponse) {
-    earned.push('responsive');
-  }
-
-  return earned;
+  if (!trust?.badges) return [];
+  return trust.badges.filter((b): b is SellerBadgeType =>
+    Object.keys(SELLER_BADGES).includes(b),
+  ) as SellerBadgeType[];
 }
 
 export interface ListingCommerceContext {
@@ -148,9 +132,9 @@ export interface ListingCommerceContext {
   estimatedDeliveryStart?: string | null;
   estimatedDeliveryEnd?: string | null;
   returnPolicy?: {
-    accepted: boolean;
-    windowDays?: number;
-    conditions?: string;
+    accepted: boolean | null;
+    windowDays?: number | null;
+    conditions?: string | null;
   } | null;
   protectionPolicy?: {
     available: boolean;

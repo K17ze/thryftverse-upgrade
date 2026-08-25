@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, StatusBar, Keyboard, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Keyboard, ActivityIndicator, Pressable } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ import {
   requestMagicLink,
   verifyEmailOtp,
   type LoginWithPasswordError,
+  type OtpVerificationError,
 } from '../services/authApi';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -44,6 +45,14 @@ export default function LoginScreen() {
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
+  // Inline 2FA challenge for the OTP flow. The backend does NOT consume the
+  // OTP challenge when TWO_FACTOR_REQUIRED is returned (the transaction rolls
+  // back), so the same challengeId + OTP code can be retried with a 2FA code.
+  const [otpTwoFactorRequired, setOtpTwoFactorRequired] = useState(false);
+  const [otpTwoFactorCode, setOtpTwoFactorCode] = useState('');
+  const [otpRecoveryCode, setOtpRecoveryCode] = useState('');
+  const [otpUseRecovery, setOtpUseRecovery] = useState(false);
+  const [isOtpTwoFactorVerifying, setIsOtpTwoFactorVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -149,7 +158,7 @@ export default function LoginScreen() {
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting;
   const canRequestMagicLink = email.trim().length > 0 && !isSubmitting && !isMagicSending;
   const canRequestOtp = email.trim().length > 0 && !isSubmitting && !isOtpSending;
-  const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting;
+  const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting && !otpTwoFactorRequired;
 
   const errorPulse = useSharedValue(1);
 
@@ -360,17 +369,91 @@ export default function LoginScreen() {
       // the TTI metric.
       markInteractive({ surface: 'login_complete_otp' });
     } catch (error) {
-      const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
-      const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';
-      if (typeof maybeAttempts === 'number') {
-        setErrorMsg(`${baseMessage} Attempts left: ${maybeAttempts}.`);
+      // The backend does NOT consume the OTP challenge when
+      // TWO_FACTOR_REQUIRED is returned (the transaction rolls back), so
+      // the same challengeId + OTP code can be retried with a 2FA code.
+      // Show an inline 2FA challenge instead of redirecting to password
+      // login. The challengeId and otpCode are retained for retry.
+      const otpError = error as OtpVerificationError;
+      if (otpError.code === 'TWO_FACTOR_REQUIRED') {
+        setOtpTwoFactorRequired(true);
+        setOtpTwoFactorCode('');
+        setOtpRecoveryCode('');
+        setOtpUseRecovery(false);
+        setInfoMsg('Two-factor authentication is required. Enter the code from your authenticator app to continue.');
+        setErrorMsg('');
       } else {
-        setErrorMsg(baseMessage);
+        const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
+        const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';
+        if (typeof maybeAttempts === 'number') {
+          setErrorMsg(`${baseMessage} Attempts left: ${maybeAttempts}.`);
+        } else {
+          setErrorMsg(baseMessage);
+        }
+        triggerErrorFeedback();
       }
-      triggerErrorFeedback();
     } finally {
       setIsOtpVerifying(false);
     }
+  };
+
+  const handleVerifyOtpTwoFactor = async () => {
+    if (!otpChallengeId || isOtpTwoFactorVerifying || isSubmitting) {
+      return;
+    }
+
+    const twoFactorCode = otpTwoFactorCode.trim();
+    const recoveryCode = otpRecoveryCode.trim();
+
+    if (otpUseRecovery) {
+      if (!recoveryCode) {
+        setErrorMsg('Enter your recovery code.');
+        setInfoMsg('');
+        triggerErrorFeedback();
+        return;
+      }
+    } else {
+      if (twoFactorCode.length < 6) {
+        setErrorMsg('Enter the 6-digit code from your authenticator app.');
+        setInfoMsg('');
+        triggerErrorFeedback();
+        return;
+      }
+    }
+
+    setErrorMsg('');
+    setInfoMsg('');
+    setIsOtpTwoFactorVerifying(true);
+
+    try {
+      const result = await verifyEmailOtp({
+        challengeId: otpChallengeId,
+        code: otpCode.trim(),
+        twoFactorCode: otpUseRecovery ? undefined : twoFactorCode,
+        recoveryCode: otpUseRecovery ? recoveryCode : undefined,
+      });
+
+      login(result.storeUser);
+      setTwoFactorEnabled(result.user.twoFactorEnabled);
+      navigation.replace('MainTabs');
+      markInteractive({ surface: 'login_complete_otp' });
+    } catch (error) {
+      // The challenge is not consumed on TWO_FACTOR_REQUIRED — keep it so
+      // the user can retry with a corrected code.
+      setErrorMsg((error as Error).message || 'Unable to verify two-factor code.');
+      triggerErrorFeedback();
+    } finally {
+      setIsOtpTwoFactorVerifying(false);
+    }
+  };
+
+  const cancelOtpTwoFactor = () => {
+    setOtpTwoFactorRequired(false);
+    setOtpTwoFactorCode('');
+    setOtpRecoveryCode('');
+    setOtpUseRecovery(false);
+    setInfoMsg('Enter the OTP code from your email.');
+    setErrorMsg('');
   };
 
   return (
@@ -423,6 +506,10 @@ export default function LoginScreen() {
                     setOtpChallengeId(null);
                     setOtpCode('');
                   }
+                  setOtpTwoFactorRequired(false);
+                  setOtpTwoFactorCode('');
+                  setOtpRecoveryCode('');
+                  setOtpUseRecovery(false);
                   if (errorMsg) {
                     setErrorMsg('');
                   }
@@ -643,6 +730,96 @@ export default function LoginScreen() {
                     accessibilityLabel="Verify OTP and log in"
                     hapticFeedback="medium"
                   />
+
+                  {otpTwoFactorRequired ? (
+                    <View style={styles.otpTwoFactorGroup}>
+                      <View style={styles.twoFactorHeader}>
+                        <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
+                          <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                        </View>
+                        <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
+                      </View>
+                      <Text style={styles.otpTwoFactorBody} maxFontSizeMultiplier={1.3}>
+                        Enter the code from your authenticator app to continue signing in.
+                      </Text>
+
+                      {otpUseRecovery ? (
+                        <AppInput
+                          label="Recovery code"
+                          placeholder="XXXX-XXXX-XXXX-XXXX"
+                          autoCapitalize="characters"
+                          autoCorrect={false}
+                          value={otpRecoveryCode}
+                          onChangeText={(value) => {
+                            setOtpRecoveryCode(value.toUpperCase());
+                            if (errorMsg) {
+                              setErrorMsg('');
+                            }
+                          }}
+                        />
+                      ) : (
+                        <AppInput
+                          label="Authenticator code"
+                          placeholder="000000"
+                          keyboardType="number-pad"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          maxLength={6}
+                          autoFocus
+                          value={otpTwoFactorCode}
+                          onChangeText={(value) => {
+                            setOtpTwoFactorCode(value.replace(/\D/g, '').slice(0, 6));
+                            if (errorMsg) {
+                              setErrorMsg('');
+                            }
+                          }}
+                        />
+                      )}
+
+                      <Pressable
+                        onPress={() => {
+                          setOtpUseRecovery((prev) => !prev);
+                          if (errorMsg) {
+                            setErrorMsg('');
+                          }
+                        }}
+                        hitSlop={Control.hit / 2}
+                        accessibilityRole="button"
+                        accessibilityLabel={otpUseRecovery ? 'Use authenticator code instead' : 'Use recovery code instead'}
+                        style={styles.otpTwoFactorToggle}
+                      >
+                        <Text style={styles.otpTwoFactorToggleText} maxFontSizeMultiplier={1.3}>
+                          {otpUseRecovery ? 'Use authenticator code' : 'Use recovery code'}
+                        </Text>
+                      </Pressable>
+
+                      <AppButton
+                        title={isOtpTwoFactorVerifying ? 'Verifying...' : 'Verify'}
+                        style={styles.otpVerifyBtn}
+                        titleStyle={styles.otpVerifyText}
+                        variant="primary"
+                        size="md"
+                        onPress={handleVerifyOtpTwoFactor}
+                        disabled={isOtpTwoFactorVerifying}
+                        loading={isOtpTwoFactorVerifying}
+                        accessibilityLabel="Verify two-factor code"
+                        hapticFeedback="medium"
+                      />
+
+                      <Pressable
+                        onPress={cancelOtpTwoFactor}
+                        hitSlop={Control.hit / 2}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel two-factor"
+                        accessibilityHint="Returns to the OTP input"
+                        style={styles.otpTwoFactorCancel}
+                      >
+                        <Text style={styles.otpTwoFactorCancelText} maxFontSizeMultiplier={1.3}>
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </View>
@@ -846,6 +1023,40 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+  },
+  otpTwoFactorGroup: {
+    marginTop: Space.sm,
+    gap: Space.sm,
+  },
+  otpTwoFactorBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 4,
+  },
+  otpTwoFactorToggle: {
+    alignSelf: 'flex-start',
+    paddingVertical: Space.xs,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  otpTwoFactorToggleText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    textDecorationLine: 'underline',
+  },
+  otpTwoFactorCancel: {
+    alignSelf: 'center',
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  otpTwoFactorCancelText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },

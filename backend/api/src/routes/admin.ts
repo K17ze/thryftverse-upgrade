@@ -892,7 +892,7 @@ export const registerAdminRoutes = ({
             destinationAccountId: payoutRow.provider_account_ref,
             netAmountGbp: payoutBreakdown.netPayoutGbp,
           });
-          providerPayoutRef = providerTransfer.providerPayoutRef;
+          providerPayoutRef = providerTransfer.providerTransferRef;
           providerExecutionMetadata = {
             provider: 'stripe_connect',
             providerPayoutRef,

@@ -1,11 +1,4 @@
 export {
-  AgeGate,
-  useAgeGate,
-  type AgeGateProps,
-  type AgeGateMode,
-} from './AgeGate';
-
-export {
   AITransparencyDisclosure,
   hasDismissedAIDisclosure,
   markAIDisclosureDismissed,

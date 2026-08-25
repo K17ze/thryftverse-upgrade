@@ -64,6 +64,7 @@ const REQUIRED_PRODUCTION_VALUES = [
   "KYC_DEFAULT_VENDOR",
   "KYC_RETURN_URL",
   "KYC_WEBHOOK_SECRET",
+  "MODERATION_PROVIDER",
 ] as const;
 
 const MINIMUM_SECRET_LENGTHS: Readonly<Record<string, number>> = {
@@ -121,6 +122,10 @@ export function collectProductionReadinessErrors(
     if (!valueOf(environment, key)) {
       errors.push(`${key} is required in production`);
     }
+  }
+
+  if (valueOf(environment, "MODERATION_PROVIDER").toLowerCase() === "mock") {
+    errors.push("MODERATION_PROVIDER must not be 'mock' in production");
   }
 
   for (const [key, defaults] of Object.entries(DEVELOPMENT_DEFAULTS)) {

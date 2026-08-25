@@ -42,6 +42,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
 
@@ -467,7 +468,7 @@ function MoreLikeThisRow({
                 contentFit="cover"
               />
             </SharedTransitionView>
-            <Text style={styles.morePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>

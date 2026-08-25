@@ -30,7 +30,20 @@ import { useSellerTrust } from '../platform/product';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
-import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
+import { sanitizeDecimalInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
+import {
+  resolvePublishedMedia,
+  getPickerOptionsForMode,
+  computeCoOwnPricing,
+  evaluatePriceVsMarket,
+  computeDiscount,
+  buildPublishErrors,
+  buildContextualPhotoPrompts,
+  formatShippingSummary,
+  formatReviewSummary,
+  sanitizeShareCountInput,
+  type PickerMode,
+} from '../utils/sellScreenLogic';
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
@@ -41,7 +54,7 @@ import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EmptyState } from '../components/EmptyState';
-import { ListingModeSelector, ListingMode, getListingModeOptions, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
+import { ListingModeSelector, ListingMode, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
@@ -62,38 +75,7 @@ import {
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
 const AUCTION_DURATIONS = [24, 48, 72, 168];
-
-type PublishedMedia = {
-  url: string;
-  width?: number;
-  height?: number;
-};
-
-function resolvePublishedMedia(
-  draftItems: ListingMediaDraftItem[],
-  queue: MediaUploadQueue,
-): PublishedMedia[] {
-  const queuedById = new Map(queue.getItems().map((item) => [item.id, item]));
-
-  return draftItems.flatMap((item) => {
-    const queued = queuedById.get(item.id);
-    const url = queued?.publicUrl
-      ?? item.publicUrl
-      ?? (item.source === 'remote' ? item.uri : null);
-
-    if (!url) {
-      return [];
-    }
-
-    return [{
-      url,
-      width: queued?.asset.width ?? item.width,
-      height: queued?.asset.height ?? item.height,
-    }];
-  });
-}
 
 export default function SellScreen() {
   const insets = useSafeAreaInsets();
@@ -212,7 +194,7 @@ export default function SellScreen() {
   const [reservePrice, setReservePrice] = useState('');
   const [auctionDurationHours, setAuctionDurationHours] = useState(48);
 
-  const [pickerMode, setPickerMode] = useState<'Brand' | 'Size' | 'Condition' | 'Category' | 'Format' | null>(null);
+  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
@@ -370,18 +352,13 @@ export default function SellScreen() {
   /* -- co-own bidirectional math -- */
   useEffect(() => {
     if (listingMode !== 'co_own') return;
-    const listingPrice = Number(sanitizeDecimalInput(price));
-    const shareCount = Math.min(20, Math.max(1, Math.floor(Number(shareCountInput))));
-    const sharePrice = Number(sanitizeDecimalInput(sharePriceInput));
-    if (!Number.isFinite(shareCount) || shareCount <= 0) return;
-    if (Number.isFinite(sharePrice) && sharePrice > 0 && (!Number.isFinite(listingPrice) || listingPrice <= 0)) {
-      const calculatedPrice = (sharePrice * shareCount).toFixed(2);
-      if (calculatedPrice !== price) setPrice(calculatedPrice);
+    const { calculatedPrice, calculatedSharePrice } = computeCoOwnPricing(price, shareCountInput, sharePriceInput);
+    if (calculatedPrice !== null && calculatedPrice !== price) {
+      setPrice(calculatedPrice);
       return;
     }
-    if (Number.isFinite(listingPrice) && listingPrice > 0) {
-      const calculatedSharePrice = (listingPrice / shareCount).toFixed(2);
-      if (calculatedSharePrice !== sharePriceInput) setSharePriceInput(calculatedSharePrice);
+    if (calculatedSharePrice !== null && calculatedSharePrice !== sharePriceInput) {
+      setSharePriceInput(calculatedSharePrice);
     }
   }, [price, shareCountInput, sharePriceInput, listingMode]);
 
@@ -405,10 +382,7 @@ export default function SellScreen() {
   const coOwnAuthReady = listingMode !== 'co_own' || authPhotos.length > 0;
 
   const priceVsMarket = useMemo(() => {
-    if (!soldComps.hasComps || !hasValidPrice) return null;
-    if (soldComps.minPrice != null && numericPrice < soldComps.minPrice * 0.8) return 'below' as const;
-    if (soldComps.maxPrice != null && numericPrice > soldComps.maxPrice * 1.2) return 'above' as const;
-    return 'in_range' as const;
+    return evaluatePriceVsMarket(soldComps.hasComps, hasValidPrice, numericPrice, soldComps.minPrice, soldComps.maxPrice);
   }, [soldComps, hasValidPrice, numericPrice]);
 
   // ── Category-aware completeness (Phase 5 WP7) ──
@@ -702,11 +676,7 @@ export default function SellScreen() {
   }, []);
 
   const handleShareCountChange = useCallback((value: string) => {
-    const sanitized = sanitizeIntegerInput(value);
-    if (!sanitized) { setShareCountInput(''); return; }
-    const parsed = Math.floor(Number(sanitized));
-    if (!Number.isFinite(parsed) || parsed <= 0) { setShareCountInput('1'); return; }
-    setShareCountInput(String(Math.min(20, parsed)));
+    setShareCountInput(sanitizeShareCountInput(value));
   }, []);
 
   /* -- publish -- */
@@ -714,43 +684,17 @@ export default function SellScreen() {
     const trimmedTitle = title.trim();
     const trimmedDescription = desc.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
-    const nextErrors: Record<string, string> = {};
 
-    // Category-aware validation: use the completeness result's missing
-    // required fields instead of universal brand/size assumptions.
-    // Brandless vintage and sizeless home goods are valid when the policy
-    // says so.
-    for (const field of completeness.missingRequired) {
-      switch (field) {
-        case 'title': nextErrors.title = 'Add a title.'; break;
-        case 'category': nextErrors.category = 'Select a category.'; break;
-        case 'size': nextErrors.size = 'Choose a size.'; break;
-        case 'condition': nextErrors.condition = 'Choose a condition.'; break;
-        case 'images': nextErrors.photos = 'Add at least one photo before publishing.'; break;
-        case 'description':
-          if (!trimmedDescription || trimmedDescription.length < 10)
-            nextErrors.description = 'Add a description with at least 10 characters.';
-          break;
-        case 'price':
-          if (!Number.isFinite(numericPrice) || numericPrice <= 0)
-            nextErrors.price = 'Enter a valid price greater than 0.';
-          break;
-        default: break;
-      }
-    }
-
-    if (listingMode === 'co_own') {
-      const shareCount = Math.floor(Number(shareCountInput));
-      const sharePrice = Number(sanitizeDecimalInput(sharePriceInput));
-      if (!Number.isFinite(shareCount) || shareCount <= 0) nextErrors.shareCount = 'Enter a valid share count.';
-      if (!Number.isFinite(sharePrice) || sharePrice <= 0) nextErrors.sharePrice = 'Enter a valid share price.';
-      if (authPhotos.length === 0) nextErrors.authPhotos = 'Attach authentication photos before issuing co-own units.';
-    }
-
-    if (listingMode === 'auction') {
-      const bid = Number(sanitizeDecimalInput(startingBid));
-      if (!Number.isFinite(bid) || bid <= 0) nextErrors.startingBid = 'Enter a valid starting bid greater than 0.';
-    }
+    const nextErrors = buildPublishErrors({
+      missingRequired: completeness.missingRequired,
+      listingMode,
+      trimmedDescription,
+      numericPrice,
+      shareCountInput,
+      sharePriceInput,
+      authPhotosLength: authPhotos.length,
+      startingBid,
+    });
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -1016,20 +960,7 @@ export default function SellScreen() {
 
   /* -- picker helpers -- */
   const getPickerOptions = useCallback(() => {
-    switch (pickerMode) {
-      case 'Category':
-        return ['Women', 'Men', 'Kids', 'Home', 'Vintage', 'Accessories', 'Beauty', 'Sportswear', 'Luxury'];
-      case 'Brand':
-        return ['Nike', 'Adidas', 'Zara', 'H&M', 'Gucci', 'Prada', 'Uniqlo', 'Levi\'s', 'ASOS', 'Other'];
-      case 'Size':
-        return ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'UK 6', 'UK 8', 'UK 10', 'UK 12', 'One Size'];
-      case 'Condition':
-        return CONDITION_OPTIONS;
-      case 'Format':
-        return getListingModeOptions();
-      default:
-        return [];
-    }
+    return getPickerOptionsForMode(pickerMode);
   }, [pickerMode]);
 
   const getPickerSelected = useCallback(() => {
@@ -1061,18 +992,10 @@ export default function SellScreen() {
   }, [pickerMode, updateSellDraft]);
 
   /* -- computed values -- */
-  const hasDiscount = useMemo(() => {
-    const orig = Number(originalPrice);
-    const curr = Number(price);
-    return orig > 0 && curr > 0 && curr < orig;
-  }, [originalPrice, price]);
-
-  const discountPercent = useMemo(() => {
-    const orig = Number(originalPrice);
-    const curr = Number(price);
-    if (!hasDiscount) return 0;
-    return Math.round(((orig - curr) / orig) * 100);
-  }, [hasDiscount, originalPrice, price]);
+  const { hasDiscount, discountPercent } = useMemo(
+    () => computeDiscount(originalPrice, price),
+    [originalPrice, price],
+  );
 
   const publishDisabled = isPublishing || (!publishReady && !isPublishing);
 
@@ -1338,44 +1261,15 @@ export default function SellScreen() {
               - If condition has flaws: "Add a close-up of the flaw"
               Only shows when relevant and dismissible. */}
           {(() => {
-            const LUXURY_BRANDS = ['Gucci', 'Prada', 'Louis Vuitton', 'Chanel', 'Hermès', 'Dior', 'Balenciaga', 'Bottega Veneta', 'Saint Laurent', 'Burberry', 'Versace'];
-            const isLuxury = LUXURY_BRANDS.some((b) => brand.toLowerCase() === b.toLowerCase());
-            const hasFlaws = condition === 'Good' || condition === 'Satisfactory';
-            const photoCount = mediaDraftItems.length;
+            const visible = buildContextualPhotoPrompts(brand, condition, mediaDraftItems.length, category);
 
-            const prompts: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string }[] = [];
-
-            // After first image: suggest adding the back
-            if (photoCount === 1) {
-              prompts.push({ icon: 'camera-outline', text: 'Add a photo of the back' });
-            }
-            // After 2 photos: suggest the side/detail
-            if (photoCount === 2) {
-              prompts.push({ icon: 'camera-outline', text: 'Add a side or detail shot' });
-            }
-            // After category known: show the size label
-            if (category && photoCount > 0 && photoCount < 5) {
-              prompts.push({ icon: 'pricetag-outline', text: 'Show the size label' });
-            }
-            // Luxury brand: add authentication evidence
-            if (isLuxury && photoCount > 0) {
-              prompts.push({ icon: 'shield-checkmark-outline', text: 'Add serial, stitching, or receipt evidence' });
-            }
-            // Condition with flaws: add close-up
-            if (hasFlaws && photoCount > 0) {
-              prompts.push({ icon: 'warning-outline', text: 'Add a close-up of any flaws' });
-            }
-
-            if (prompts.length === 0) return null;
-
-            // Show at most 2 prompts — contextual, not overwhelming
-            const visible = prompts.slice(0, 2);
+            if (visible.length === 0) return null;
 
             return (
               <View style={styles.contextualPrompts}>
                 {visible.map((prompt, i) => (
                   <View key={i} style={styles.contextualPromptRow}>
-                    <Ionicons name={prompt.icon} size={16} color={colors.brand} aria-hidden={true} />
+                    <Ionicons name={prompt.icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={colors.brand} aria-hidden={true} />
                     <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
                       {prompt.text}
                     </Text>
@@ -2018,9 +1912,7 @@ export default function SellScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shippingSummaryLabel, { color: colors.textPrimary }]}>Delivery</Text>
                 <Text style={[styles.shippingSummaryValue, { color: shippingMethod ? colors.textSecondary : colors.textMuted }]}>
-                  {shippingMethod && shippingPayer
-                    ? `${shippingMethod === 'standard' ? 'Standard' : 'Express'} · ${shippingPayer === 'buyer' ? 'Buyer pays' : 'Free shipping'}`
-                    : 'Choose shipping & payment'}
+                  {formatShippingSummary(shippingMethod, shippingPayer)}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -2194,10 +2086,16 @@ export default function SellScreen() {
                 color={colors.textSecondary}
               />
               <Text style={[styles.reviewSummaryText, { color: colors.textSecondary }]} numberOfLines={2}>
-                {listingMode === 'auction'
-                  ? `Auction · ${auctionDurationHours < 72 ? `${auctionDurationHours}h` : `${auctionDurationHours / 24}d`} · starts ${currencySymbol}${numericStartingBid.toFixed(0)}${reservePrice ? ` · reserve ${currencySymbol}${Number(sanitizeDecimalInput(reservePrice)).toFixed(0)}` : ''}`
-                  : `Co-Own · ${parsedShareCount || 0} shares · ${currencySymbol}${parsedSharePrice.toFixed(2)}/share${authPhotos.length > 0 ? ' · auth verified' : ''}`
-                }
+                {formatReviewSummary(
+                  listingMode,
+                  auctionDurationHours,
+                  numericStartingBid,
+                  reservePrice,
+                  currencySymbol,
+                  parsedShareCount,
+                  parsedSharePrice,
+                  authPhotos.length,
+                )}
               </Text>
             </View>
           )}

@@ -18,6 +18,7 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { OfflineBanner } from '../OfflineBanner';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface WalletTransactionHistoryProps {
   /** Optional filter — 'ALL' shows everything, '1ZE' or 'FIAT' filters by asset */
@@ -118,7 +119,7 @@ export function WalletTransactionHistory({
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), 'GBP', { displayMode: 'fiat' })}`;
+      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.

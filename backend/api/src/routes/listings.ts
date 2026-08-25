@@ -28,7 +28,13 @@ import { appendDomainEvent, completeDomainOutboxEvent } from '../lib/domainOutbo
 import { enqueueOutboxDrainJob } from '../lib/queues.js';
 import { publishRealtimeEvent } from '../lib/realtime.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
+import {
+  evaluateRisk,
+  recordExecution,
+  type RiskDecision,
+} from '../lib/riskDecision.js';
 import { evaluatePriceAlertsForListing } from './priceAlerts.js';
+import { recordListingCreated } from '../lib/metrics.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
 
 // â”€â”€ Local helpers (mirrored from index.ts) â”€â”€
@@ -108,6 +114,7 @@ type ListingRouteDependencies = {
       input: unknown,
     ): Promise<void>;
   } | null;
+  ipReputationProvider?: import('../lib/riskDecision.js').IpReputationProvider;
 };
 
 export const registerListingRoutes = ({
@@ -125,6 +132,7 @@ export const registerListingRoutes = ({
   optionalAuthenticate,
   queueUserNotification,
   fraudShadowService,
+  ipReputationProvider,
 }: ListingRouteDependencies) => {
 app.get('/listings', async (request) => {
   const querySchema = z.object({
@@ -2614,6 +2622,110 @@ app.post('/listings', {
         ],
       );
     }
+
+    // ── FR-03: Authoritative risk decision BEFORE commit ───────────────
+    //
+    // The fraud/risk check must run before the listing becomes public and
+    // indexable. evaluateRisk() produces an authoritative ownerDecision
+    // that we enforce inside this transaction boundary:
+    //   allow / allow_with_limits → commit as the requested (public) status.
+    //   step_up / manual_review / delay → commit but force a non-public
+    //     status so the listing is never searchable until risk is cleared;
+    //     only the listing owner may later transition it to 'active'.
+    //   deny / quarantine → roll back and return 403.
+    //
+    // The legacy checkFraudNonBlocking call below is retained as a
+    // shadow/best-effort log AFTER the commit — evaluateRisk is now the
+    // primary decision. Execution is recorded via recordExecution() after
+    // the commit succeeds (FR-13 recommendation/decision/execution split).
+    const amountMinor = payload.priceGbp != null
+      ? Math.round(payload.priceGbp * 100)
+      : undefined;
+
+    let riskDecision: RiskDecision | null = null;
+    try {
+      riskDecision = await evaluateRisk(
+        {
+          db,
+          redis,
+          logger: {
+            warn: (obj: unknown, msg: string): void => {
+              request.log.warn(obj as Record<string, unknown>, msg);
+            },
+            info: (obj: unknown, msg: string): void => {
+              request.log.info(obj as Record<string, unknown>, msg);
+            },
+          },
+          shadowService: fraudShadowService ?? null,
+          ipReputationProvider,
+        },
+        {
+          eventType: 'listing.publish.requested',
+          subjectRef: payload.id,
+          userId: actorUserId,
+          headers: request.headers as Record<string, string | string[] | undefined>,
+          ip: request.ip,
+          amountMinor,
+          currency: 'GBP',
+          context: {
+            listingId: payload.id,
+            requestedStatus: payload.status ?? 'active',
+          },
+        },
+      );
+    } catch (riskError) {
+      // Risk evaluation must never silently collapse to allow. Fail safe
+      // to a non-public status so the listing is held for review.
+      request.log.error(
+        { err: riskError, listingId: payload.id, userId: actorUserId },
+        'Risk evaluation failed before listing commit — holding listing non-public',
+      );
+    }
+
+    const ownerDecision = riskDecision?.ownerDecision ?? 'manual_review';
+    if (ownerDecision === 'deny' || ownerDecision === 'quarantine') {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return {
+        ok: false,
+        error:
+          'This listing could not be published for security reasons. Please contact support if you believe this is an error.',
+        code: 'RISK_DENIED',
+      };
+    }
+
+    // Determine the final published status. The upsert above already wrote
+    // the requested status; override it when risk holds the listing.
+    let publishedStatus: string;
+    if (ownerDecision === 'allow' || ownerDecision === 'allow_with_limits') {
+      publishedStatus = payload.status ?? 'active';
+    } else {
+      // step_up | manual_review | delay — commit but keep non-public.
+      // Prefer 'risk_pending'; fall back to 'draft' if the status CHECK
+      // constraint (migration 031) does not yet admit 'risk_pending'. A
+      // SAVEPOINT isolates the constraint failure so the surrounding
+      // transaction stays usable.
+      publishedStatus = 'risk_pending';
+      await client.query('SAVEPOINT risk_status');
+      try {
+        await client.query(
+          `UPDATE listings SET status = 'risk_pending', updated_at = NOW() WHERE id = $1`,
+          [payload.id],
+        );
+      } catch (statusError) {
+        await client.query('ROLLBACK TO SAVEPOINT risk_status');
+        request.log.warn(
+          { err: statusError, listingId: payload.id },
+          "Could not set listing status to 'risk_pending' (CHECK constraint?) — falling back to 'draft'",
+        );
+        publishedStatus = 'draft';
+        await client.query(
+          `UPDATE listings SET status = 'draft', updated_at = NOW() WHERE id = $1`,
+          [payload.id],
+        );
+      }
+    }
+
     await client.query('COMMIT');
 
     if (upsertPriceEvent) {
@@ -2642,9 +2754,30 @@ app.post('/listings', {
       }
     }
 
-    // Fraud check — non-blocking: score and log, don't reject unless high risk.
-    // Catches bulk listing creation (counterfeit/non-existent goods) and
-    // new-account listing velocity (AGENTS.md §11 — truthful signals).
+    // Record execution of the authoritative risk decision (FR-13). Best
+    // effort — a failure here must not break the committed listing.
+    if (riskDecision) {
+      try {
+        await recordExecution(db, {
+          decisionId: riskDecision.decisionId,
+          ownerService: 'listings',
+          executionStatus: 'executed',
+          domainEntityType: 'listing',
+          domainEntityId: payload.id,
+        });
+      } catch (execError) {
+        request.log.warn(
+          { err: execError, decisionId: riskDecision.decisionId, listingId: payload.id },
+          'Failed to record risk decision execution after listing upsert',
+        );
+      }
+    }
+
+    // Shadow fraud check — best-effort score and log AFTER the commit.
+    // evaluateRisk() above is now the primary decision; this legacy call is
+    // retained for shadow comparison and post-hoc review only. Catches bulk
+    // listing creation (counterfeit/non-existent goods) and new-account
+    // listing velocity (AGENTS.md §11 — truthful signals).
     try {
       const fraudResult = await checkFraudNonBlocking(
         redis,
@@ -2665,7 +2798,7 @@ app.post('/listings', {
       if (fraudResult.evaluationStatus === 'unavailable') {
         request.log.warn(
           { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
-          'Listing fraud check unavailable — continuing with failover policy'
+          'Listing shadow fraud check unavailable — continuing with failover policy'
         );
       }
     } catch {
@@ -2673,14 +2806,26 @@ app.post('/listings', {
     }
 
     reply.code(201);
+    recordListingCreated();
 
     // Invalidate search cache since listing data changed (fire-and-forget)
     void invalidateSearchCache(redis).catch((cacheError) => {
       app.log.error({ err: cacheError, listingId: payload.id }, 'Failed to invalidate search cache after listing upsert');
     });
 
-    // Sync the new/updated listing into the search index (fire-and-forget)
-    void syncSingleListing(db, payload.id).catch(() => {});
+    // Only active listings are indexed — risk_pending/draft listings must
+    // not be searchable until the owner transitions them to 'active' after
+    // risk clearance (FR-03). Remove from the index otherwise.
+    if (publishedStatus === 'active') {
+      void syncSingleListing(db, payload.id).catch(() => {});
+    } else {
+      void removeListingFromIndex(payload.id).catch((indexError) => {
+        app.log.error(
+          { err: indexError, listingId: payload.id, status: publishedStatus },
+          'Failed to remove risk-held listing from search index',
+        );
+      });
+    }
 
     return { ok: true, listingId: payload.id };
   } catch (error) {
@@ -2866,9 +3011,10 @@ app.get('/listings/:listingId', async (request, reply) => {
           'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
       },
       returnPolicy: {
-        accepted: true,
-        windowDays: 14,
-        conditions: 'Item must be returned in the same condition as received.',
+        accepted: null,
+        windowDays: null,
+        conditions: null,
+        summary: 'Return policy confirmed at checkout based on seller status and your location.',
       },
       authenticity: {
         status: 'not_offered' as const,

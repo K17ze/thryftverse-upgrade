@@ -174,13 +174,14 @@ export type ReportReason =
 export async function reportUser(
   userId: string,
   reason: ReportReason,
-  details?: string
+  details?: string,
+  evidenceUris?: string[]
 ): Promise<{ reportId: string }> {
   const response = await fetchJson<{ ok: boolean; reportId: string }>(
     `/users/${encodeURIComponent(userId)}/report`,
     {
       method: 'POST',
-      body: JSON.stringify({ reason, details: details ?? undefined }),
+      body: JSON.stringify({ reason, details: details ?? undefined, evidence_uris: evidenceUris }),
     }
   );
   return { reportId: response.reportId };

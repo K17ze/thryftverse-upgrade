@@ -22,6 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { BodyEmphasis, Caption } from '../components/ui/Text';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
 
@@ -146,7 +147,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
         onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
       >
         {item.images?.[0] ? (
           <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -160,7 +161,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           <Caption color={colors.textMuted}>{item.brand}</Caption>
         </View>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={styles.removeBtn}
@@ -185,7 +186,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           style={styles.availableInfo}
           onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
           accessibilityRole="button"
-          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
         >
           {item.images?.[0] ? (
             <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -200,7 +201,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           </View>
         </Pressable>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={[styles.addBtn, isAdding && styles.addBtnLoading]}

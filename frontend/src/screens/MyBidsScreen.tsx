@@ -20,6 +20,7 @@ import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../them
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
 import { useBucketedServerClock } from '../hooks/useServerClock';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -219,7 +220,7 @@ export default function MyBidsScreen() {
         activeOpacity={0.92}
         scaleValue={0.985}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, 'GBP')}`}
+        accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE)}`}
         accessibilityHint={item.bidState === 'outbid' ? 'Opens auction with bid sheet ready to place a new bid' : 'Opens auction details'}
       >
         {/* Edge-aligned imagery */}
@@ -252,7 +253,7 @@ export default function MyBidsScreen() {
               <View>
                 <Meta style={styles.activityPriceLabel}>Your bid</Meta>
                 <Body style={styles.activityPriceValue} numberOfLines={1}>
-                  {formatFromFiat(item.amountGbp, 'GBP', { izeFractionDigits: 3 })}
+                  {formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { izeFractionDigits: 3 })}
                 </Body>
               </View>
             )}
@@ -260,7 +261,7 @@ export default function MyBidsScreen() {
               <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
                 <Meta style={styles.activityPriceLabel}>Current</Meta>
                 <Body style={styles.activityPriceValue} numberOfLines={1}>
-                  {formatFromFiat(item.currentBidGbp, 'GBP', { izeFractionDigits: 3 })}
+                  {formatFromFiat(item.currentBidGbp, DEFAULT_CURRENCY_CODE, { izeFractionDigits: 3 })}
                 </Body>
               </View>
             )}

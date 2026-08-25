@@ -223,6 +223,31 @@ export const config = {
     100,
     10_000,
   ),
+  /**
+   * FR-09: Governed IP reputation provider selection.
+   *
+   * - 'noop'      — no provider; returns `unknown` for every IP (default,
+   *                  never fabricates a clean verdict).
+   * - 'spur'      — Spur context API (requires SPUR_API_KEY).
+   * - 'maxmind'   — local MaxMind GeoIP2/GeoLite2 database lookup
+   *                  (requires MAXMIND_DB_PATH and the `maxmind` npm pkg).
+   * - 'composite' — query both Spur and MaxMind in parallel and merge.
+   *
+   * When set to 'noop' (the default) the system is honest about not having
+   * threat-intel data rather than fabricating reputation. See
+   * `src/lib/ipReputationProviders.ts` for the concrete implementations.
+   */
+  ipReputationProvider:
+    (process.env.IP_REPUTATION_PROVIDER?.trim().toLowerCase() || 'noop') as
+      | 'spur' | 'maxmind' | 'composite' | 'noop',
+  /** Spur API key. Required when ipReputationProvider is 'spur' or 'composite'. */
+  spurApiKey: process.env.SPUR_API_KEY?.trim() || null,
+  /**
+   * Filesystem path to a MaxMind GeoLite2-City / GeoIP2 database file.
+   * Required when ipReputationProvider is 'maxmind' or 'composite'.
+   * The `maxmind` npm package must be installed separately.
+   */
+  maxmindDbPath: process.env.MAXMIND_DB_PATH?.trim() || null,
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
   /**
@@ -241,8 +266,23 @@ export const config = {
   authMagicLinkTtlSeconds: asNumber(process.env.AUTH_MAGIC_LINK_TTL_SECONDS, 15 * 60),
   authMagicLinkBaseUrl:
     process.env.AUTH_MAGIC_LINK_BASE_URL?.trim() || 'thryftverse://auth/magic-link',
+  authPasswordResetBaseUrl:
+    process.env.AUTH_PASSWORD_RESET_BASE_URL?.trim() || 'thryftverse://auth/reset-password',
   authOtpTtlSeconds: asNumber(process.env.AUTH_OTP_TTL_SECONDS, 5 * 60),
   authOtpMaxAttempts: asNumber(process.env.AUTH_OTP_MAX_ATTEMPTS, 5),
+  // ── WebAuthn / Passkeys (AUTH-017) ────────────────────────────────────
+  // The RP name shown to users in the passkey prompt. The RP ID is derived
+  // from the app URL's hostname. In production, set WEBAUTHN_RP_ID to the
+  // naked domain (e.g. "thryftverse.app") and WEBAUTHN_ORIGINS to the
+  // allowed origins (comma-separated, including the mobile app's origin
+  // if using app links).
+  webauthnRpName: process.env.WEBAUTHN_RP_NAME?.trim() || 'ThryftVerse',
+  webauthnRpId:
+    process.env.WEBAUTHN_RP_ID?.trim()
+    || new URL(process.env.APP_URL?.trim() || 'http://localhost:4000').hostname,
+  webauthnOrigins: asCsvList(process.env.WEBAUTHN_ORIGINS).length > 0
+    ? asCsvList(process.env.WEBAUTHN_ORIGINS)
+    : [process.env.APP_URL?.trim() || 'http://localhost:4000'],
   authEmailProvider:
     process.env.AUTH_EMAIL_PROVIDER?.trim().toLowerCase()
     || (nodeEnv === 'production' ? 'resend' : 'log'),
@@ -515,6 +555,40 @@ export const config = {
   livekitApiSecret: process.env.LIVEKIT_API_SECRET?.trim() || '',
   presenceHeartbeatIntervalMs: asNumber(process.env.PRESENCE_HEARTBEAT_INTERVAL_MS, 15_000),
   presenceTtlSeconds: asNumber(process.env.PRESENCE_TTL_SECONDS, 30),
+  // ── Workforce / Ops Console ─────────────────────────────────────────
+  // Separate identity plane for the operations console. Consumer JWTs
+  // (audience "thryftverse-app") are cryptographically rejected by ops
+  // routes. Workforce tokens use audience "thryftverse-ops".
+  opsConsoleEnabled: asBoolean(process.env.OPS_CONSOLE_ENABLED, nodeEnv !== 'production'),
+  opsConsoleCorsOrigins: asCsvList(process.env.OPS_CONSOLE_CORS_ORIGINS),
+  workforceSessionIdleTtlSeconds: asIntegerInRange(
+    'WORKFORCE_SESSION_IDLE_TTL_SECONDS',
+    process.env.WORKFORCE_SESSION_IDLE_TTL_SECONDS,
+    1800,
+    60,
+    86_400
+  ),
+  workforceSessionAbsoluteTtlSeconds: asIntegerInRange(
+    'WORKFORCE_SESSION_ABSOLUTE_TTL_SECONDS',
+    process.env.WORKFORCE_SESSION_ABSOLUTE_TTL_SECONDS,
+    28800,
+    900,
+    604_800
+  ),
+  workforceStepUpMaxAgeSeconds: asIntegerInRange(
+    'WORKFORCE_STEP_UP_MAX_AGE_SECONDS',
+    process.env.WORKFORCE_STEP_UP_MAX_AGE_SECONDS,
+    300,
+    30,
+    3600
+  ),
+  opsPiiRevealTtlSeconds: asIntegerInRange(
+    'OPS_PII_REVEAL_TTL_SECONDS',
+    process.env.OPS_PII_REVEAL_TTL_SECONDS,
+    300,
+    30,
+    3600
+  ),
 };
 
 // ── Startup validation for critical secrets ──────────────

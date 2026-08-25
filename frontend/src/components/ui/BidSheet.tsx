@@ -21,6 +21,7 @@ import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
 import {
@@ -381,11 +382,11 @@ export function BidSheet({
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Current bid</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
@@ -492,7 +493,7 @@ export function BidSheet({
 
             {/* Dominant bid amount */}
             <View style={styles.reviewAmountBlock}>
-              <Text style={styles.reviewAmountValue} numberOfLines={1}>
+              <Text style={styles.reviewAmountValue} numberOfLines={1} accessibilityLabel={`${currencyCode} ${bidInput}`}>
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
@@ -507,11 +508,11 @@ export function BidSheet({
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Current value</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
@@ -589,7 +590,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP')} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, DEFAULT_CURRENCY_CODE)} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -615,7 +616,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, 'GBP')}
+                  {formatFromFiat(error.buyNowPriceGbp, DEFAULT_CURRENCY_CODE)}
                 </Text>
               </View>
             )}

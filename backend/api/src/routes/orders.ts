@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { enqueueOutboxDrainJob } from '../lib/queues.js';
+import { recordGmv, recordOrderCompleted } from '../lib/metrics.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
 
 // ── Local helpers (mirrored from index.ts) ──
@@ -731,10 +732,11 @@ app.post('/orders', async (request, reply) => {
       quote_hash: string;
       expires_at: string;
       used_order_id: string | null;
+      source: string;
     }>(
       `SELECT
          id, buyer_id, seller_id, listing_id, address_id,
-         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id, source
        FROM commerce_shipping_quotes
        WHERE id = $1
        LIMIT 1
@@ -761,6 +763,15 @@ app.post('/orders', async (request, reply) => {
         ok: false,
         error: 'Shipping quote is expired, already used, or does not match this checkout',
         code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+    if (shippingQuote.source === 'fallback') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This shipping quote is not carrier-backed and cannot be used for checkout',
+        code: 'FALLBACK_QUOTE_NOT_CHARGEABLE',
       };
     }
 
@@ -1088,10 +1099,11 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       quote_hash: string;
       expires_at: string;
       used_order_id: string | null;
+      source: string;
     }>(
       `SELECT
          id, buyer_id, seller_id, listing_id, address_id,
-         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id, source
        FROM commerce_shipping_quotes
        WHERE id = $1
        LIMIT 1
@@ -1120,6 +1132,15 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         ok: false,
         error: 'Shipping quote is expired, already used, or does not match this checkout',
         code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+    if (shippingQuote.source === 'fallback') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This shipping quote is not carrier-backed and cannot be used for checkout',
+        code: 'FALLBACK_QUOTE_NOT_CHARGEABLE',
       };
     }
 
@@ -2096,12 +2117,13 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 
   const claimsResult = await db.query<{
     id: string;
-    topic: string;
+    topic_id: string;
+    topic_label: string;
     status: string;
     created_at: string;
   }>(
-    `SELECT id, topic, status, created_at FROM support_tickets
-     WHERE order_id = $1 AND topic IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
+    `SELECT id, topic_id, topic_label, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
      ORDER BY created_at DESC`,
     [orderId]
   );
@@ -2116,7 +2138,8 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
       eligibleUntil,
       claims: claimsResult.rows.map((r) => ({
         ticketId: r.id,
-        topic: r.topic,
+        topicId: r.topic_id,
+        topicLabel: r.topic_label,
         status: r.status,
         createdAt: r.created_at,
       })),
@@ -2162,22 +2185,22 @@ app.post('/orders/:orderId/protection/claim', {
     return { ok: false, error: 'Only the buyer can file a protection claim' };
   }
 
+  const ticketId = `ticket_${crypto.randomUUID()}`;
   const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
-    `INSERT INTO support_tickets (user_id, order_id, topic, subject, body, status)
-     VALUES ($1, $2, 'buyer_protection_claim', $3, $4, 'open')
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls)
+     VALUES ($1, $2, $3, 'buyer_protection_claim', $4, $5, 'open', $6)
      RETURNING id, status, created_at`,
-    [request.authUser.userId, orderId, reason, description]
+    [
+      ticketId,
+      request.authUser.userId,
+      orderId,
+      reason,
+      description,
+      evidenceUrls && evidenceUrls.length > 0 ? evidenceUrls : [],
+    ]
   );
 
   const ticket = ticketResult.rows[0];
-  if (evidenceUrls && evidenceUrls.length > 0) {
-    for (const url of evidenceUrls) {
-      await db.query(
-        `INSERT INTO support_ticket_attachments (ticket_id, url) VALUES ($1, $2)`,
-        [ticket.id, url]
-      );
-    }
-  }
 
   reply.code(201);
   return {
@@ -2275,6 +2298,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
   const bodySchema = z.object({
     trackingNumber: z.string().min(1).max(128).optional(),
     shippingProvider: z.string().min(1).max(64).optional(),
+    untracked: z.boolean().optional(),
   });
   const { orderId } = paramsSchema.parse(request.params);
   const body = bodySchema.parse(request.body);
@@ -2317,8 +2341,14 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
       return { ok: false, error: `Cannot mark as shipped from status: ${order.status}` };
     }
 
-    const provider = body.shippingProvider ?? order.shipping_provider ?? 'manual';
-    const tracking = body.trackingNumber ?? order.tracking_number ?? `TV-${orderId.toUpperCase()}`;
+    const provider = body.shippingProvider ?? order.shipping_provider ?? (body.untracked ? 'untracked' : 'manual');
+    const tracking = body.trackingNumber ?? order.tracking_number ?? null;
+
+    if (!tracking && !body.untracked) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return { ok: false, error: 'A tracking number is required, or explicitly confirm untracked shipping', code: 'TRACKING_REQUIRED' };
+    }
 
     await client.query(
       `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
@@ -2326,7 +2356,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
     );
 
     await client.query('COMMIT');
-    return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider };
+    return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider, untracked: body.untracked === true };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -2390,6 +2420,8 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
     });
 
     await client.query('COMMIT');
+    recordGmv(Number(order.subtotal_gbp));
+    recordOrderCompleted();
     return { ok: true, orderId, status: 'delivered' };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -2456,6 +2488,163 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+app.post('/orders/:orderId/refund-request', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    reason: z.string().min(1).max(2000).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+  }
+
+  const orderResult = await db.query<{ buyer_id: string; status: string }>(
+    `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+  }
+
+  if (order.buyer_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can request a refund', code: 'NOT_BUYER' };
+  }
+
+  const allowedStatuses = ['paid', 'shipped', 'delivered', 'completed'];
+  if (!allowedStatuses.includes(order.status)) {
+    reply.code(409);
+    return { ok: false, error: `Cannot request a refund for an order in status: ${order.status}`, code: 'ORDER_ACTION_NOT_ALLOWED' };
+  }
+
+  const ticketId = `ticket_${crypto.randomUUID()}`;
+  const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status)
+     VALUES ($1, $2, $3, 'refund_request', 'Refund request', $4, 'open')
+     RETURNING id, status, created_at`,
+    [ticketId, userId, orderId, body.reason ?? 'Buyer requested a refund']
+  );
+
+  const ticket = ticketResult.rows[0];
+  reply.code(201);
+  return {
+    ok: true,
+    requestId: ticket.id,
+    status: 'request_submitted',
+    ticketStatus: ticket.status,
+    createdAt: ticket.created_at,
+  };
+});
+
+app.post('/orders/:orderId/shipping-label', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const orderResult = await db.query<{ seller_id: string; status: string; shipping_label_url: string | null }>(
+    `SELECT seller_id, status, shipping_label_url FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (order.seller_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can request a shipping label' };
+  }
+
+  if (order.status !== 'paid') {
+    reply.code(409);
+    return { ok: false, error: `Cannot generate a label for an order in status: ${order.status}` };
+  }
+
+  if (order.shipping_label_url) {
+    return { ok: true, orderId, labelUrl: order.shipping_label_url };
+  }
+
+  reply.code(409);
+  return {
+    ok: false,
+    error: 'Label generation is not yet available for this carrier. Use manual shipping with a tracking number.',
+    code: 'LABEL_GENERATION_UNAVAILABLE',
+  };
+});
+
+app.post('/orders/:orderId/fulfilment/handoff-assertion', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    trackingNumber: z.string().min(1).max(128).optional(),
+    shippingProvider: z.string().min(1).max(64).optional(),
+    labelUrl: z.string().url().max(1024).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const orderResult = await db.query<{ seller_id: string; status: string; shipping_provider: string | null; tracking_number: string | null }>(
+    `SELECT seller_id, status, shipping_provider, tracking_number FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  const order = orderResult.rows[0];
+  if (!order) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (order.seller_id !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can assert a handoff' };
+  }
+
+  if (order.status !== 'paid' && order.status !== 'shipped') {
+    reply.code(409);
+    return { ok: false, error: `Cannot assert handoff for an order in status: ${order.status}` };
+  }
+
+  const provider = body.shippingProvider ?? order.shipping_provider ?? 'seller_assertion';
+  const trackingId = body.trackingNumber ?? order.tracking_number ?? null;
+
+  await db.query(
+    `INSERT INTO order_parcel_events (order_id, provider, event_type, tracking_id, occurred_at, received_at, payload)
+     VALUES ($1, $2, 'handoff_asserted', $3, NOW(), NOW(), $4::jsonb)`,
+    [
+      orderId,
+      provider,
+      trackingId,
+      toJsonString({ tracking: trackingId, provider, labelUrl: body.labelUrl ?? null, assertedBy: userId }),
+    ]
+  );
+
+  return {
+    ok: true,
+    orderId,
+    handoffClaimedAt: new Date().toISOString(),
+    status: order.status,
+  };
 });
 
 

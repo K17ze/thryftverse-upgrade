@@ -178,6 +178,211 @@ type EventPropertyValue = string | number | boolean | null | undefined;
  */
 type DefaultEventProperties = Record<string, EventPropertyValue>;
 
+export interface ItemViewedProperties {
+  listing_id: string;
+  seller_id: string;
+  price: number | null;
+}
+
+export interface ItemFavoritedProperties {
+  listing_id: string;
+  action: 'save' | 'unsave';
+}
+
+export interface ItemSharedProperties {
+  listing_id: string;
+  platform: string;
+}
+
+export interface SearchPerformedProperties {
+  query: string;
+  result_count: number;
+}
+
+export interface SearchResultTappedProperties {
+  listing_id: string;
+  query: string;
+  position: number;
+}
+
+export interface FilterAppliedProperties {
+  filter_name: string;
+  filter_value: string | number | boolean;
+}
+
+export interface AuctionBidPlacedProperties {
+  auction_id: string;
+  bid_amount: number;
+}
+
+export interface AuctionViewedProperties {
+  auction_id: string;
+}
+
+export interface OrderPlacedProperties {
+  order_id: string;
+  item_id: string;
+  total: number;
+}
+
+export interface OrderCompletedProperties {
+  order_id: string;
+  total: number;
+}
+
+export interface CheckoutStartedProperties {
+  item_id: string;
+  total: number;
+}
+
+export interface CheckoutAbandonedProperties {
+  item_id: string;
+  stage: string;
+}
+
+export interface PurchaseCompletedProperties {
+  item_id: string;
+  total: number;
+  payment_method: string;
+}
+
+export interface ListingCreatedProperties {
+  category: string;
+  price_range: 'low' | 'mid' | 'high' | 'premium';
+}
+
+export interface ListingPublishedProperties {
+  listing_id: string;
+}
+
+export interface OfferSubmittedProperties {
+  item_id: string;
+  offer_amount: number;
+}
+
+export interface UserSignedUpProperties {
+  method: 'google' | 'apple' | 'email';
+}
+
+export interface UserLoggedInProperties {
+  method: 'google' | 'apple' | 'email' | 'passkey' | 'magic_link';
+}
+
+export interface UserLoggedOutProperties {
+  method?: string;
+}
+
+export interface ProfileViewedProperties {
+  user_id: string;
+}
+
+export interface SellerDashboardViewedProperties {}
+
+export interface FollowToggledProperties {
+  user_id: string;
+  action: 'follow' | 'unfollow';
+}
+
+export interface MessageSentProperties {
+  conversation_id: string;
+  message_type: 'text' | 'image' | 'video';
+}
+
+export interface VoiceMessageSentProperties {
+  conversation_id: string;
+  duration_seconds: number;
+}
+
+export interface WalletViewedProperties {}
+
+export interface WithdrawalInitiatedProperties {
+  amount: number;
+  currency: string;
+}
+
+export interface BiometricLoginAttemptedProperties {}
+
+export interface BiometricLoginSuccessProperties {}
+
+export interface BiometricLoginCancelledProperties {}
+
+export interface OnboardingCompletedProperties {}
+
+export interface AgeVerificationCompletedProperties {
+  method: string;
+}
+
+export interface PushNotificationTappedProperties {
+  notification_type: string | null;
+  target_screen: string | null;
+}
+
+export interface PushNotificationReceivedProperties {
+  notification_type: string | null;
+}
+
+export interface DeepLinkOpenedProperties {
+  url: string;
+  source: string | null;
+}
+
+export interface FeatureFlagEvaluatedProperties {
+  flag_key: string;
+  variant: string | boolean | undefined;
+  enabled: boolean;
+  reason: 'bootstrap' | 'network';
+}
+
+export interface ShareInitiatedProperties {
+  platform: string;
+  content_type: string;
+}
+
+export interface ShareCompletedProperties {
+  platform: string;
+  content_type: string;
+  outcome: 'success' | 'cancelled' | 'error';
+}
+
+export interface LiveStreamViewedProperties {
+  stream_id: string;
+}
+
+export interface LiveStreamJoinedProperties {
+  stream_id: string;
+}
+
+export interface LiveBidPlacedProperties {
+  stream_id: string;
+  bid_amount: number;
+}
+
+export interface LookCreatedProperties {
+  look_id: string;
+}
+
+export interface LookViewedProperties {
+  look_id: string;
+}
+
+export interface MoodboardCreatedProperties {
+  moodboard_id: string;
+}
+
+export interface CollectionCreatedProperties {
+  collection_id: string;
+}
+
+export interface ReviewWrittenProperties {
+  seller_id: string;
+  rating: number;
+}
+
+export interface ReportSubmittedProperties {
+  target_id: string;
+  reason: string;
+}
+
 /**
  * Maps each `EventName` to the properties type that should accompany it.
  *
@@ -209,6 +414,52 @@ type DefaultEventProperties = Record<string, EventPropertyValue>;
  */
 export type EventProperties = {
   screen_view: ScreenViewProperties;
+  item_viewed: ItemViewedProperties;
+  item_favorited: ItemFavoritedProperties;
+  item_shared: ItemSharedProperties;
+  search_performed: SearchPerformedProperties;
+  search_result_tapped: SearchResultTappedProperties;
+  filter_applied: FilterAppliedProperties;
+  auction_bid_placed: AuctionBidPlacedProperties;
+  auction_viewed: AuctionViewedProperties;
+  order_placed: OrderPlacedProperties;
+  order_completed: OrderCompletedProperties;
+  checkout_started: CheckoutStartedProperties;
+  checkout_abandoned: CheckoutAbandonedProperties;
+  purchase_completed: PurchaseCompletedProperties;
+  listing_created: ListingCreatedProperties;
+  listing_published: ListingPublishedProperties;
+  offer_submitted: OfferSubmittedProperties;
+  user_signed_up: UserSignedUpProperties;
+  user_logged_in: UserLoggedInProperties;
+  user_logged_out: UserLoggedOutProperties;
+  profile_viewed: ProfileViewedProperties;
+  seller_dashboard_viewed: SellerDashboardViewedProperties;
+  follow_toggled: FollowToggledProperties;
+  message_sent: MessageSentProperties;
+  voice_message_sent: VoiceMessageSentProperties;
+  wallet_viewed: WalletViewedProperties;
+  withdrawal_initiated: WithdrawalInitiatedProperties;
+  biometric_login_attempted: BiometricLoginAttemptedProperties;
+  biometric_login_success: BiometricLoginSuccessProperties;
+  biometric_login_cancelled: BiometricLoginCancelledProperties;
+  onboarding_completed: OnboardingCompletedProperties;
+  age_verification_completed: AgeVerificationCompletedProperties;
+  push_notification_tapped: PushNotificationTappedProperties;
+  push_notification_received: PushNotificationReceivedProperties;
+  deep_link_opened: DeepLinkOpenedProperties;
+  feature_flag_evaluated: FeatureFlagEvaluatedProperties;
+  share_initiated: ShareInitiatedProperties;
+  share_completed: ShareCompletedProperties;
+  live_stream_viewed: LiveStreamViewedProperties;
+  live_stream_joined: LiveStreamJoinedProperties;
+  live_bid_placed: LiveBidPlacedProperties;
+  look_created: LookCreatedProperties;
+  look_viewed: LookViewedProperties;
+  moodboard_created: MoodboardCreatedProperties;
+  collection_created: CollectionCreatedProperties;
+  review_written: ReviewWrittenProperties;
+  report_submitted: ReportSubmittedProperties;
   screenshot_taken: ScreenshotTakenProperties;
 };
 

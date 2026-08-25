@@ -22,6 +22,7 @@ import {
 } from './lib/apiVersioning.js';
 import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 import { validateCompositionDocument } from './lib/compositionValidation.js';
+import { performUserErasure } from './lib/userErasure.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -79,6 +80,7 @@ import {
   type ProviderPaymentStatus,
   type ProviderSlug,
   verifyAndNormalizeWebhook,
+  normalizeWebhookEvent,
 } from './lib/paymentProviders.js';
 import {
   MONEY_REGISTRY_VERSION,
@@ -197,9 +199,16 @@ import {
   runPerIntentReconciliation,
   getPerIntentReconciliationItems,
   perIntentReconciliationTableAvailable,
+  runThreeWayReconciliation,
+  runSafeguardingCheck,
+  getReconciliationBreaks,
+  getSafeguardingChecks,
   type DailyReconciliationRun,
   type PerIntentReconciliationItem,
   type PerIntentReconciliationStatus,
+  type ReconciliationBreak,
+  type SafeguardingCheck,
+  type ThreeWayReconciliationResult,
 } from './lib/reconciliation.js';
 import {
   collectOperationalAlerts,
@@ -222,6 +231,9 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerSmsRoutes } from './routes/sms.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerSupportReviewRoutes } from './routes/supportReviews.js';
+import { registerSupportRoutes } from './routes/support.js';
+import { registerOperatorSupportRoutes } from './routes/operatorSupport.js';
+import { registerVendorWebhookRoutes } from './routes/vendorWebhooks.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
@@ -249,12 +261,14 @@ import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
+import { registerAccountSecurityRoutes } from './routes/accountSecurity.js';
 import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
 import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
 import { registerAdminAuditRoutes } from './routes/adminAudit.js';
+import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
 import { registerV2Routes } from './routes/v2.js';
 import { registerSellerRoutes } from './routes/sellers.js';
@@ -270,12 +284,15 @@ import { registerLookRoutes } from './routes/looks.js';
 import { registerSearchExtendedRoutes } from './routes/searchExtended.js';
 import { registerOracleRoutes } from './routes/oracle.js';
 import { registerPriceRoutes } from './routes/price.js';
+import { registerTaxonomyRoutes } from './routes/taxonomy.js';
 import { registerCatalogImportRoutes } from './routes/catalogImports.js';
 import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
 import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
 import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
+import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
+import { createIpReputationProvider } from './lib/ipReputationProviders.js';
 import {
   notifyOrderShipped,
   notifyOrderDelivered,
@@ -1364,6 +1381,14 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  // Ops console routes use a separate workforce identity plane (JWT audience
+  // "thryftverse-ops") and their own deny-by-default authorization middleware.
+  // Consumer auth must not interfere — these routes are public to the consumer
+  // preHandler but gated by workforce auth inside the route module.
+  if (path.startsWith('/ops/v1/')) {
+    return true;
+  }
+
   return false;
 }
 
@@ -1709,7 +1734,8 @@ type LedgerAccountCode =
   | 'ize_pending_redemption'
   | 'ize_outstanding'
   | 'ize_fiat_received'
-  | 'reserve_hold';
+  | 'reserve_hold'
+  | 'provider_cash_clearing';
 type PaymentIntentStatus =
   | 'requires_payment_method'
   | 'requires_confirmation'
@@ -2170,7 +2196,7 @@ function formatReactionsMap(
 // avoid N+1. Used by the list route which returns multiple messages.
 async function serializeChatMessageRows(
   rows: ChatMessageRow[],
-  _actorUserId: string,
+  actorUserId: string,
 ): Promise<Record<string, unknown>[]> {
   if (rows.length === 0) return [];
 
@@ -5396,8 +5422,12 @@ async function postCommerceOrderLedgerEntries(
 
 async function hasCommerceOrderRefundReversalPosted(
   client: DbQueryable,
-  orderId: string
+  orderId: string,
+  refundRef: string
 ): Promise<boolean> {
+  // PAY-09 fix: Key the dedup by the specific refund reference, not just
+  // the order ID. This allows multiple partial refunds on the same order
+  // while preventing duplicate postings for the same refund operation.
   const result = await client.query<{ exists: boolean }>(
     `
       SELECT EXISTS (
@@ -5406,9 +5436,10 @@ async function hasCommerceOrderRefundReversalPosted(
         WHERE source_id = $1
           AND source_type = 'refund'
           AND line_type = 'buyer_refund'
+          AND metadata->>'refundRef' = $2
       ) AS exists
     `,
-    [orderId]
+    [orderId, refundRef]
   );
 
   return Boolean(result.rows[0]?.exists);
@@ -5418,7 +5449,8 @@ async function postCommerceOrderRefundLedgerReversal(
   client: DbQueryable,
   orderId: string,
   buyerId: string,
-  totalGbp: number
+  totalGbp: number,
+  refundRef: string
 ): Promise<{ reversed: boolean; alreadyReversed: boolean }> {
   if (totalGbp <= 0) {
     return {
@@ -5427,7 +5459,7 @@ async function postCommerceOrderRefundLedgerReversal(
     };
   }
 
-  if (await hasCommerceOrderRefundReversalPosted(client, orderId)) {
+  if (await hasCommerceOrderRefundReversalPosted(client, orderId, refundRef)) {
     return {
       reversed: false,
       alreadyReversed: true,
@@ -5455,6 +5487,7 @@ async function postCommerceOrderRefundLedgerReversal(
     sourceType: 'refund',
     sourceId: orderId,
     lineType: 'buyer_refund',
+    metadata: { refundRef },
   });
 
   await appendLedgerEntry(client, {
@@ -5465,6 +5498,7 @@ async function postCommerceOrderRefundLedgerReversal(
     sourceType: 'refund',
     sourceId: orderId,
     lineType: 'buyer_refund',
+    metadata: { refundRef },
   });
 
   const orderResult = await client.query<{ buyer_protection_fee_gbp: number, postage_fee_gbp: number }>(
@@ -5489,6 +5523,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'platform_commission_reversal',
+      metadata: { refundRef },
     });
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
@@ -5498,6 +5533,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'platform_commission_reversal',
+      metadata: { refundRef },
     });
   }
 
@@ -5510,6 +5546,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'postage_fee_reversal',
+      metadata: { refundRef },
     });
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
@@ -5519,6 +5556,7 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceType: 'refund',
       sourceId: orderId,
       lineType: 'postage_fee_reversal',
+      metadata: { refundRef },
     });
   }
 
@@ -5739,7 +5777,7 @@ async function releaseCommerceOrderEscrowToSeller(
     accountId: sellerPayableAccountId,
     counterpartyAccountId: escrowAccountId,
     direction: 'credit',
-    amountGbp: creditedToSellerGbp,
+    amountGbp: subtotalGbp,
     sourceType: 'order_delivery',
     sourceId: input.orderId,
     lineType: 'seller_payable_release',
@@ -6636,6 +6674,8 @@ async function createGatewayPaymentIntent(input: {
   platformFeeAmountGbp?: number | null;
   // Stripe Radar fraud scoring session ID from the frontend SDK
   radarSessionId?: string | null;
+  // Buyer's email for providers that require customer identity (Flutterwave)
+  customerEmail?: string | null;
 }): Promise<{
   providerIntentRef: string;
   clientSecret: string | null;
@@ -6810,7 +6850,7 @@ async function createGatewayPaymentIntent(input: {
         currency: normalizedCurrency,
         redirect_url: input.returnUrl ?? 'https://thryftverse.app/payments/return',
         customer: {
-          email: 'payments@thryftverse.app',
+          email: input.customerEmail ?? 'payments@thryftverse.app',
         },
         customizations: {
           title: 'Thryftverse Payment',
@@ -8151,11 +8191,14 @@ async function settlePayoutRequest(
         input.userId,
         'withdrawal_pending'
       );
-      const withdrawableBalanceAccountId = await ensureLedgerAccount(
+      // PAY-07 fix: credit provider_cash_clearing (platform money sent to
+      // the seller's bank via the provider) instead of withdrawable_balance
+      // (which would imply the funds are still available to withdraw).
+      const providerCashClearingAccountId = await ensureLedgerAccount(
         client,
-        'user',
-        input.userId,
-        'withdrawable_balance'
+        'platform',
+        'platform',
+        'provider_cash_clearing'
       );
 
       const payoutMetadataObj = asObject(payoutRequest.metadata);
@@ -8197,7 +8240,7 @@ async function settlePayoutRequest(
       if (netPayoutGbp > 0) {
         await appendLedgerEntry(client, {
           accountId: withdrawalPendingAccountId,
-          counterpartyAccountId: withdrawableBalanceAccountId,
+          counterpartyAccountId: providerCashClearingAccountId,
           direction: 'debit',
           amountGbp: netPayoutGbp,
           sourceType: 'payout',
@@ -8207,7 +8250,7 @@ async function settlePayoutRequest(
         });
 
         await appendLedgerEntry(client, {
-          accountId: withdrawableBalanceAccountId,
+          accountId: providerCashClearingAccountId,
           counterpartyAccountId: withdrawalPendingAccountId,
           direction: 'credit',
           amountGbp: netPayoutGbp,
@@ -11587,6 +11630,12 @@ const fraudShadowService = config.fraudShadowEnabled
     })
   : null;
 
+// ── IP reputation provider (FR-09) ───────────────────────────────────
+// When IP_REPUTATION_PROVIDER is 'noop' (default), the noOp provider
+// returns 'unknown' for all queries — the system never fabricates a
+// clean reputation. Production wires 'spur', 'maxmind', or 'composite'.
+const ipReputationProvider = createIpReputationProvider(config, app.log);
+
 // ── Health & metrics routes (extracted to routes/health.ts) ──────────
 registerHealthRoutes({
   app,
@@ -12184,7 +12233,7 @@ type ProfileUserRow = {
 };
 
 // ── Auth routes (extracted to routes/auth.ts) ────────────────────────
-registerAuthRoutes({ app, db, redis, fraudShadowService });
+registerAuthRoutes({ app, db, redis, fraudShadowService, ipReputationProvider });
 
 function normalizeAuthRole(role: string | null | undefined): AuthRole {
   if (role === 'seller' || role === 'moderator' || role === 'admin') {
@@ -12289,6 +12338,16 @@ app.get('/compliance/profile/:userId', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
 
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
   await ensureUserExists(userId);
   const profile = await getOrCreateComplianceProfile(db, userId);
 
@@ -12312,6 +12371,16 @@ app.patch('/compliance/profile/:userId', async (request, reply) => {
 
   const { userId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   await ensureUserExists(userId);
   const current = await getOrCreateComplianceProfile(db, userId);
@@ -12556,6 +12625,8 @@ app.post('/compliance/kyc-session', async (request, reply) => {
   });
   const body = bodySchema.parse(request.body ?? {});
 
+  const userId = authUser.userId;
+
   // Update compliance profile with provided info before starting KYC
   if (body.legalName || body.dateOfBirth || body.countryCode) {
     await db.query(
@@ -12566,7 +12637,7 @@ app.post('/compliance/kyc-session', async (request, reply) => {
            kyc_status = 'pending',
            updated_at = NOW()
        WHERE user_id = $1`,
-      [authUser.userId, body.legalName ?? null, body.dateOfBirth ?? null, body.countryCode]
+      [userId, body.legalName ?? null, body.dateOfBirth ?? null, body.countryCode]
     );
   }
 
@@ -12576,25 +12647,165 @@ app.post('/compliance/kyc-session', async (request, reply) => {
      SET kyc_status = 'pending',
          updated_at = NOW()
      WHERE user_id = $1`,
-    [authUser.userId]
+    [userId]
   );
 
   // Log compliance audit event
   await appendComplianceAuditSafe(request, {
     eventType: 'compliance.kyc.session_started',
-    subjectUserId: authUser.userId,
+    subjectUserId: userId,
     payload: {
       legalName: body.legalName,
       countryCode: body.countryCode,
     },
   });
 
+  if (!isKycProviderReady()) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'KYC provider is unavailable',
+      code: 'KYC_PROVIDER_NOT_CONFIGURED',
+    };
+  }
+
+  const vendor = config.kycDefaultVendor;
+  const caseId = createComplianceId('kyc_case');
+  const userAgent = resolveRequestUserAgent(request);
+  const ipAddress = resolveRequestIpAddress(request);
+  let providerSession: Awaited<ReturnType<typeof createKycProviderSession>>;
+  try {
+    providerSession = await createKycProviderSession({
+      caseId,
+      userId,
+      requireLiveness: true,
+    });
+  } catch (error) {
+    request.log.error({ err: error, userId }, 'Failed creating KYC provider session');
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'KYC provider is temporarily unavailable',
+      code: 'KYC_PROVIDER_UNAVAILABLE',
+    };
+  }
+  const kycVendorRef = providerSession.providerSessionId;
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `
+        UPDATE user_compliance_profiles
+        SET
+          kyc_status = 'pending',
+          kyc_vendor = $2,
+          kyc_vendor_ref = $3,
+          document_status = CASE
+            WHEN document_status = 'approved' THEN document_status
+            ELSE 'submitted'
+          END,
+          liveness_status = CASE
+            WHEN liveness_status = 'passed' THEN liveness_status
+            ELSE 'pending'
+          END,
+          trading_enabled = FALSE,
+          metadata = metadata || $4::jsonb,
+          updated_at = NOW()
+        WHERE user_id = $1
+      `,
+      [
+        userId,
+        vendor,
+        kycVendorRef,
+        toJsonString({
+          latestKycCaseId: caseId,
+          initiatedAt: new Date().toISOString(),
+        }),
+      ]
+    );
+
+    await client.query(
+      `
+        INSERT INTO kyc_cases (
+          id,
+          user_id,
+          vendor,
+          vendor_case_ref,
+          status,
+          kyc_level,
+          required_checks,
+          document_status,
+          liveness_status,
+          sanctions_status,
+          payload
+        )
+        VALUES ($1, $2, $3, $4, 'pending', 'basic', $5::jsonb, 'submitted', 'pending', 'unknown', $6::jsonb)
+      `,
+      [
+        caseId,
+        userId,
+        vendor,
+        kycVendorRef,
+        toJsonString(['document', 'liveness']),
+        toJsonString({
+          requestedBy: authUser.userId,
+          userAgent,
+          ipAddress,
+        }),
+      ]
+    );
+
+    await client.query(
+      `
+        INSERT INTO kyc_verification_events (
+          user_id,
+          case_id,
+          event_type,
+          status,
+          vendor,
+          vendor_ref,
+          payload,
+          ip_address,
+          user_agent
+        )
+        VALUES ($1, $2, 'session_created', 'pending', $3, $4, $5::jsonb, $6, $7)
+      `,
+      [
+        userId,
+        caseId,
+        vendor,
+        kycVendorRef,
+        toJsonString({ requiredChecks: ['document', 'liveness'] }),
+        ipAddress,
+        userAgent,
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    try {
+      await cancelKycProviderSession(providerSession.providerSessionId);
+    } catch (cancellationError) {
+      request.log.error(
+        { err: cancellationError, providerSessionId: providerSession.providerSessionId },
+        'Failed cancelling orphaned KYC provider session'
+      );
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  reply.header('Cache-Control', 'no-store');
   return {
     ok: true,
     session: {
-      id: `kyc_pending_${authUser.userId}`,
-      verificationUrl: null,
-      vendor: config.kycDefaultVendor,
+      id: caseId,
+      verificationUrl: providerSession.verificationUrl,
+      vendor,
       status: 'pending',
     },
   };
@@ -12627,6 +12838,55 @@ app.get('/compliance/kyc-status/:userId', async (request, reply) => {
       documentStatus: profile.documentStatus,
       livenessStatus: profile.livenessStatus,
       tradingEnabled: profile.tradingEnabled,
+    },
+  };
+});
+
+// GET /compliance/age-assurance/:userId
+// Returns the user's age assurance level under the ICO/Ofcom "waterfall" approach:
+// self-declaration is the first step, KYC verification (Stripe Identity DOB) is the
+// second step. Self-declaration alone is not sufficient for high-risk features such
+// as selling/trading per the ICO/Ofcom joint statement (25 March 2026).
+app.get('/compliance/age-assurance/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const profile = await getOrCreateComplianceProfile(db, userId);
+
+  const dateOfBirthVerified =
+    profile.kycStatus === 'verified' && profile.dateOfBirth != null;
+
+  const kycStatus = profile.kycStatus as string;
+
+  let level: 'self_declared' | 'pending' | 'kyc_verified';
+  if (dateOfBirthVerified) {
+    level = 'kyc_verified';
+  } else if (kycStatus === 'pending' || kycStatus === 'in_review') {
+    level = 'pending';
+  } else {
+    level = 'self_declared';
+  }
+
+  // Real-time status — must not be cached.
+  reply.header('Cache-Control', 'no-store');
+
+  return {
+    ok: true,
+    ageAssurance: {
+      level,
+      kycStatus: profile.kycStatus,
+      dateOfBirthVerified,
+      requiresKycForTrading: true,
     },
   };
 });
@@ -14620,6 +14880,16 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body ?? {});
 
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== payload.userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
   if (payload.vendor !== 'stripe_identity') {
     reply.code(400);
     return {
@@ -14837,6 +15107,73 @@ app.post('/compliance/kyc/webhooks/stripe', async (request, reply) => {
   }
 
   if (!event) {
+    // verifyKycProviderWebhook returns null for event types it does not map
+    // (e.g. identity.verification_session.redacted). The signature was already
+    // verified above, so re-construct the raw event to handle redaction.
+    if (stripe && config.kycWebhookSecret) {
+      try {
+        const signature = request.headers['stripe-signature'];
+        const signatureValue = Array.isArray(signature) ? signature[0] : signature;
+        if (!signatureValue) {
+          return { ok: true, ignored: true };
+        }
+        const webhookSecret = config.kycWebhookSecret;
+        const rawEvent = stripe.webhooks.constructEvent(
+          rawBody,
+          signatureValue,
+          webhookSecret
+        );
+
+        if (rawEvent.type === 'identity.verification_session.redacted') {
+          const session = rawEvent.data.object as Stripe.Identity.VerificationSession;
+          const caseId = session.metadata?.thryftverse_case_id;
+          const redactedUserId = session.metadata?.thryftverse_user_id;
+          if (caseId && redactedUserId) {
+            try {
+              await db.query(
+                `UPDATE kyc_cases
+                 SET redaction_status = 'redacted',
+                     redacted_at = NOW(),
+                     updated_at = NOW()
+                 WHERE id = $1
+                   AND user_id = $2
+                   AND vendor = 'stripe_identity'
+                   AND vendor_case_ref = $3`,
+                [caseId, redactedUserId, session.id]
+              );
+            } catch (redactionError) {
+              // redaction_status / redacted_at columns may not exist yet —
+              // a migration is required to add them to kyc_cases.
+              request.log.warn(
+                { err: redactionError, caseId, userId: redactedUserId },
+                'KYC redaction update failed (redaction_status/redacted_at columns may be missing — migration required)'
+              );
+            }
+
+            await appendComplianceAuditSafe(request, {
+              eventType: 'kyc.provider-webhook.redacted',
+              subjectUserId: redactedUserId,
+              payload: {
+                caseId,
+                providerSessionId: session.id,
+                providerEventId: rawEvent.id,
+              },
+            });
+
+            return {
+              ok: true,
+              redacted: true,
+            };
+          }
+        }
+      } catch (verifyError) {
+        request.log.warn(
+          { err: verifyError },
+          'Failed re-verifying KYC webhook for redaction handling'
+        );
+      }
+    }
+
     return {
       ok: true,
       ignored: true,
@@ -15254,6 +15591,16 @@ app.get('/compliance/kyc/:userId', async (request, reply) => {
 
   const { userId } = paramsSchema.parse(request.params);
   const { caseLimit, eventLimit } = querySchema.parse(request.query);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   await ensureUserExists(userId);
   const profile = await getOrCreateComplianceProfile(db, userId);
@@ -16420,75 +16767,7 @@ app.delete('/users/me', async (request, reply) => {
       ]
     );
 
-    const anonymizedUsername = `deleted_user_${Date.now()}`;
-
-    await client.query(
-      `
-        UPDATE users
-        SET
-          username = $2,
-          email = NULL,
-          password_hash = NULL,
-          email_verified_at = NULL,
-          last_login_at = NULL,
-          two_factor_enabled = FALSE,
-          is_erased = TRUE,
-          erased_at = NOW(),
-          deleted_at = NOW(),
-          password_changed_at = NOW(),
-          role = 'user'
-        WHERE id = $1
-      `,
-      [userId, anonymizedUsername]
-    );
-
-    await client.query('DELETE FROM user_addresses WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_payment_methods WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_secure_profiles WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM wallet_secure_snapshots WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM secure_messages WHERE sender_id = $1 OR recipient_id = $1', [userId]);
-    await client.query('DELETE FROM interactions WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM recommendations WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM recommendation_feedback WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM notification_devices WHERE user_id = $1', [userId]);
-
-    await client.query(
-      `
-        UPDATE notification_events
-        SET
-          title = '[erased]',
-          body = '[erased]',
-          payload = '{}'::jsonb,
-          metadata = metadata || '{"gdprErased": true}'::jsonb
-        WHERE user_id = $1
-      `,
-      [userId]
-    );
-
-    await client.query('DELETE FROM user_totp_factors WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM user_recovery_codes WHERE user_id = $1', [userId]);
-    await client.query('UPDATE user_sessions SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1', [userId]);
-    await client.query('UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
-
-    await client.query(
-      `
-        UPDATE user_compliance_profiles
-        SET
-          legal_name = NULL,
-          date_of_birth = NULL,
-          kyc_status = 'expired',
-          document_status = 'unsubmitted',
-          liveness_status = 'unsubmitted',
-          sanctions_status = 'unknown',
-          pep_status = 'unknown',
-          trading_enabled = FALSE,
-          metadata = metadata || '{"gdprErased": true}'::jsonb,
-          updated_at = NOW()
-        WHERE user_id = $1
-      `,
-      [userId]
-    );
+    await performUserErasure(client, userId, 'gdpr');
 
     await client.query(
       `
@@ -17318,9 +17597,10 @@ app.get('/listings/:listingId', async (request, reply) => {
           'Items covered by Thryftverse Buyer Protection. If your item doesn\u2019t arrive or doesn\u2019t match the description, you may be eligible for a refund.',
       },
       returnPolicy: {
-        accepted: true,
-        windowDays: 14,
-        conditions: 'Item must be returned in the same condition as received.',
+        accepted: null,
+        windowDays: null,
+        conditions: null,
+        summary: 'Return policy confirmed at checkout based on seller status and your location.',
       },
       authenticity: {
         status: 'not_offered' as const,
@@ -18991,11 +19271,15 @@ registerNotificationRoutes({
 
 registerSmsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
-registerFraudDetectionRoutes({ app, redis });
+registerFraudDetectionRoutes({ app, db, redis });
+
+registerAccountSecurityRoutes({ app, db, redis });
 
 registerFraudShadowRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 registerAdminAuditRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerOpsConsoleRoutes({ app });
 
 registerModelArtifactRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
@@ -19003,7 +19287,7 @@ registerMediaEmbeddingRoutes({ app, db, createApiError });
 
 registerImporterExtractionRoutes({ app, db, readDb });
 
-registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
+// registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
 
 app.post('/chat/dm', async (request, reply) => {
   const bodySchema = z.object({
@@ -19813,10 +20097,11 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
          FROM chat_messages m
          WHERE m.conversation_id = $1
            AND m.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
            AND (m.created_at, m.id) < ($2, $3)
          ORDER BY m.created_at DESC, m.id DESC
          LIMIT $4`,
-        [conversationId, center.created_at, center.id, halfLimit]
+        [conversationId, center.created_at, center.id, halfLimit, actorUserId]
       );
       const newer = await db.query<{
         id: string;
@@ -19839,10 +20124,11 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
          FROM chat_messages m
          WHERE m.conversation_id = $1
            AND m.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
            AND (m.created_at, m.id) >= ($2, $3)
          ORDER BY m.created_at ASC, m.id ASC
          LIMIT $4`,
-        [conversationId, center.created_at, center.id, limit - halfLimit]
+        [conversationId, center.created_at, center.id, limit - halfLimit, actorUserId]
       );
       // Combine: older (reversed to ASC) + newer (already ASC)
       const items = [...older.rows.reverse(), ...newer.rows];
@@ -19903,6 +20189,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       FROM chat_messages m
       WHERE m.conversation_id = $1
         AND m.deleted_for_everyone_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = ${cursorCreatedAt ? '$5' : '$3'})
         ${cursorCreatedAt ? (isAfter
           ? 'AND (m.created_at, m.id) > ($2, $3)'
           : 'AND (m.created_at, m.id) < ($2, $3)')
@@ -19911,8 +20198,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       LIMIT $${cursorCreatedAt ? '4' : '2'}
     `,
     cursorCreatedAt
-      ? [conversationId, cursorCreatedAt, cursorId, limit]
-      : [conversationId, limit]
+      ? [conversationId, cursorCreatedAt, cursorId, limit, actorUserId]
+      : [conversationId, limit, actorUserId]
   );
 
   // For `before` and default (DESC query), reverse to chronological ASC for display.
@@ -20024,6 +20311,17 @@ app.post('/chat/conversations/:conversationId/messages', {
 
   await ensureUserExists(actorUserId);
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const actorStateResult = await db.query<{ request_status: string | null }>(
+    `SELECT request_status FROM chat_conversation_user_state
+     WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
+    [actorUserId, conversationId],
+  );
+  const actorRequestStatus = actorStateResult.rowCount ? actorStateResult.rows[0].request_status : null;
+  if (actorRequestStatus === 'pending' || actorRequestStatus === 'declined') {
+    reply.code(403);
+    return { ok: false, error: 'Message request has not been accepted' };
+  }
 
   // P0.8: Validate reply target — must exist in this conversation and not be
   // deleted-for-everyone. This prevents cross-conversation reply spoofing.
@@ -20160,69 +20458,217 @@ app.post('/chat/conversations/:conversationId/messages', {
     }
   }
 
+  if (isMediaMessage && payload.mediaUri) {
+    const mediaUri = payload.mediaUri;
+    if (mediaUri.includes('/media/')) {
+      const assetResult = await db.query<{
+        id: string;
+        owner_id: string;
+        canonical_url: string | null;
+        status: string;
+        media_kind: string;
+      }>(
+        `SELECT id, owner_id, canonical_url, status, media_kind FROM media_assets WHERE canonical_url = $1 LIMIT 1`,
+        [mediaUri],
+      );
+      if (!assetResult.rowCount) {
+        reply.code(403);
+        return { ok: false, error: 'Media asset not found' };
+      }
+      const asset = assetResult.rows[0];
+      if (asset.owner_id !== actorUserId) {
+        reply.code(403);
+        return { ok: false, error: 'Media asset does not belong to the sender' };
+      }
+      const attachmentKind = asset.media_kind === 'video' ? 'video' : 'image';
+      await db.query(
+        `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
+      );
+    } else {
+      request.log.warn(
+        { mediaUri, conversationId, actorUserId },
+        'Chat message media URI does not match canonical media URL pattern — allowing without ownership check',
+      );
+      const attachmentKind = payload.type === 'video' ? 'video' : 'image';
+      await db.query(
+        `INSERT INTO chat_message_attachments (id, message_id, kind, canonical_url, created_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [createRuntimeId('chatatt'), result.rows[0].id, attachmentKind, mediaUri],
+      );
+    }
+  }
+
   await db.query(
     `
       UPDATE chat_conversations
       SET updated_at = NOW()
       WHERE id = $1
     `,
-    [conversationId]
+    [conversationId],
   );
 
   const participantIds = await listChatParticipantIds(db, conversationId);
   const recipientIds = participantIds.filter((memberId) => memberId !== actorUserId);
 
-  await Promise.all(
-    recipientIds.map(async (memberId) => {
-      try {
-        await queueUserNotification({
-          userId: memberId,
-          title: 'New message',
-          body: conversation.type === 'group'
-            ? `New message in ${conversation.title ?? 'your group chat'}`
-            : 'You have a new message in Thryftverse.',
-          payload: {
-            conversationId,
-            messageId: result.rows[0].id,
-            senderId: actorUserId,
-            event: 'chat_message',
-          },
-          metadata: {
-            source: 'chat.conversations.message.create',
-          },
-        });
-      } catch (error) {
-        request.log.error(
-          {
-            err: error,
-            conversationId,
-            memberId,
-          },
-          'Failed to queue chat message notification'
-        );
+  let notifiableRecipientIds = recipientIds;
+  if (recipientIds.length > 0) {
+    const stateResult = await db.query<{
+      user_id: string;
+      is_muted: boolean;
+      is_archived: boolean;
+      request_status: string | null;
+    }>(
+      `SELECT user_id, is_muted, is_archived, request_status
+       FROM chat_conversation_user_state
+       WHERE conversation_id = $1 AND user_id = ANY($2::text[])`,
+      [conversationId, recipientIds],
+    );
+    const suppressedUserIds = new Set<string>();
+    for (const row of stateResult.rows) {
+      if (row.is_muted || row.is_archived || row.request_status === 'pending' || row.request_status === 'declined') {
+        suppressedUserIds.add(row.user_id);
       }
-    })
-  );
+    }
+    notifiableRecipientIds = recipientIds.filter((id) => !suppressedUserIds.has(id));
+  }
 
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.message.created',
-    payload: {
-      id: result.rows[0].id,
-      conversationId,
-      senderType: 'user',
-      senderUserId: actorUserId,
-      senderBotId: null,
-      body: bodyText,
-      metadata: mergedMetadata,
-      createdAt: result.rows[0].created_at,
-      clientMessageId: payload.clientMessageId ?? null,
-      replyToMessageId: payload.replyToMessageId ?? null,
-    },
-  });
+  // ── FR-05: Authoritative risk decision BEFORE fan-out ────────────────
+  // The message is already committed to the DB. We now evaluate risk before
+  // any notification fan-out, realtime event, or bot execution so that
+  // phishing/scam content is quarantined before it reaches recipients.
+  //
+  // Flow: DB insert → evaluateRisk() → conditional fan-out → response.
+  //   allow          → full fan-out (notifications, realtime, bots)
+  //   quarantine     → no fan-out; sender-visible, recipient-hidden
+  //   step_up / manual_review / delay → realtime only, no push; pending_review
+  //   deny           → no fan-out; message blocked
+  //
+  // The legacy checkFraudNonBlocking call is retained below as a shadow log.
+  let riskDecision: Awaited<ReturnType<typeof evaluateRisk>> | null = null;
+  try {
+    riskDecision = await evaluateRisk(
+      { db, redis, logger: request.log, shadowService: fraudShadowService, ipReputationProvider },
+      {
+        eventType: 'chat.message.send',
+        subjectRef: conversationId,
+        userId: actorUserId,
+        headers: request.headers as Record<string, string | string[] | undefined>,
+        ip: request.ip,
+        context: {
+          conversationId,
+          messageId: result.rows[0].id,
+          messageLength: bodyText.length,
+        },
+      },
+    );
+  } catch (err) {
+    // Risk evaluation failures must never break message sending (AGENTS.md §6).
+    // Fail open: treat as allow so the message is delivered.
+    request.log.error(
+      { err, conversationId, actorUserId, messageId: result.rows[0].id },
+      'evaluateRisk failed for chat message — failing open to allow',
+    );
+  }
 
-  // Bot runtime: check if message triggers any deployed bot commands
-  if (conversation.type === 'group') {
+  const ownerDecision = riskDecision?.ownerDecision ?? 'allow';
+  const suppressNotifications =
+    ownerDecision === 'quarantine' ||
+    ownerDecision === 'deny' ||
+    ownerDecision === 'step_up' ||
+    ownerDecision === 'manual_review' ||
+    ownerDecision === 'delay';
+  const suppressRealtimeAndBots =
+    ownerDecision === 'quarantine' || ownerDecision === 'deny';
+
+  if (ownerDecision === 'quarantine') {
+    request.log.warn(
+      {
+        conversationId,
+        actorUserId,
+        messageId: result.rows[0].id,
+        decisionId: riskDecision?.decisionId,
+        riskLevel: riskDecision?.riskLevel,
+        reasonCodes: riskDecision?.ownerReasonCodes,
+      },
+      'Chat message quarantined by risk decision — suppressing all fan-out',
+    );
+  } else if (ownerDecision === 'deny') {
+    request.log.warn(
+      {
+        conversationId,
+        actorUserId,
+        messageId: result.rows[0].id,
+        decisionId: riskDecision?.decisionId,
+        riskLevel: riskDecision?.riskLevel,
+        reasonCodes: riskDecision?.ownerReasonCodes,
+      },
+      'Chat message blocked by risk decision — suppressing all fan-out',
+    );
+  }
+
+  // Push notification fan-out — skipped for quarantine, deny, and
+  // pending_review (step_up / manual_review / delay) decisions.
+  if (!suppressNotifications && notifiableRecipientIds.length > 0) {
+    await Promise.all(
+      notifiableRecipientIds.map(async (memberId) => {
+        try {
+          await queueUserNotification({
+            userId: memberId,
+            title: 'New message',
+            body: conversation.type === 'group'
+              ? `New message in ${conversation.title ?? 'your group chat'}`
+              : 'You have a new message in Thryftverse.',
+            payload: {
+              conversationId,
+              messageId: result.rows[0].id,
+              senderId: actorUserId,
+              event: 'chat_message',
+            },
+            metadata: {
+              source: 'chat.conversations.message.create',
+            },
+          });
+        } catch (error) {
+          request.log.error(
+            {
+              err: error,
+              conversationId,
+              memberId,
+            },
+            'Failed to queue chat message notification'
+          );
+        }
+      })
+    );
+  }
+
+  // Realtime event — skipped for quarantine and deny. For pending_review
+  // (step_up / manual_review / delay) the realtime event still fires so an
+  // active recipient in the chat sees the message in real-time.
+  if (!suppressRealtimeAndBots) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.created',
+      payload: {
+        id: result.rows[0].id,
+        conversationId,
+        senderType: 'user',
+        senderUserId: actorUserId,
+        senderBotId: null,
+        body: bodyText,
+        metadata: mergedMetadata,
+        createdAt: result.rows[0].created_at,
+        clientMessageId: payload.clientMessageId ?? null,
+        replyToMessageId: payload.replyToMessageId ?? null,
+      },
+    });
+  }
+
+  // Bot runtime — skipped for quarantine and deny. Bot execution on
+  // suspicious content could trigger unwanted side-effects.
+  if (!suppressRealtimeAndBots && conversation.type === 'group') {
     try {
       await executeBotCommand(db, {
         conversationId,
@@ -20237,9 +20683,9 @@ app.post('/chat/conversations/:conversationId/messages', {
     }
   }
 
-  // Fraud check — non-blocking: score and log, don't reject unless high risk.
-  // Catches message spam velocity and bot-driven messaging patterns
-  // (AGENTS.md §11 — truthful signals).
+  // Legacy fraud check — retained as a shadow log. The authoritative
+  // decision above (evaluateRisk) is the primary; this provides comparison
+  // data for model calibration (AGENTS.md §11 — truthful signals).
   try {
     const fraudResult = await checkFraudNonBlocking(
       redis,
@@ -20265,9 +20711,46 @@ app.post('/chat/conversations/:conversationId/messages', {
     // Fraud check failures must never break message sending (AGENTS.md §6).
   }
 
-  reply.code(201);
+  // Record execution status for the authoritative risk decision (FR-13).
+  if (riskDecision) {
+    const executionStatus =
+      ownerDecision === 'allow'
+        ? ('executed' as const)
+        : ownerDecision === 'deny'
+          ? ('not_executed' as const)
+          : ('executed' as const);
+    try {
+      await recordExecution(db, {
+        decisionId: riskDecision.decisionId,
+        ownerService: 'messaging',
+        executionStatus,
+        domainEntityType: 'chat_message',
+        domainEntityId: result.rows[0].id,
+      });
+    } catch (err) {
+      request.log.error(
+        { err, decisionId: riskDecision.decisionId, messageId: result.rows[0].id },
+        'Failed to record risk decision execution',
+      );
+    }
+  }
+
+  // Determine the message state to surface to the sender.
+  const messageState =
+    ownerDecision === 'quarantine'
+      ? 'quarantined'
+      : ownerDecision === 'deny'
+        ? 'blocked'
+        : ownerDecision === 'step_up' ||
+            ownerDecision === 'manual_review' ||
+            ownerDecision === 'delay'
+          ? 'pending_review'
+          : 'sent';
+
+  reply.code(ownerDecision === 'deny' ? 403 : 201);
   return {
-    ok: true,
+    ok: ownerDecision !== 'deny',
+    messageState,
     message: {
       id: result.rows[0].id,
       senderType: 'user' as const,
@@ -20456,6 +20939,7 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
     ]),
     details: z.string().trim().max(2000).optional(),
     messageId: z.string().trim().min(2).max(120).optional(),
+    idempotencyKey: z.string().min(2).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -20466,9 +20950,11 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
 
   const reportId = createRuntimeId('chatrpt');
 
-  await db.query(
-    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW())`,
+  const insertResult = await db.query<{ id: string }>(
+    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
+     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
+     ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING id`,
     [
       reportId,
       conversationId,
@@ -20476,17 +20962,22 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
       payload.reason,
       payload.details ?? null,
       payload.messageId ?? null,
+      payload.idempotencyKey ?? null,
     ]
   );
+
+  const effectiveReportId = insertResult.rowCount && insertResult.rowCount > 0
+    ? insertResult.rows[0].id
+    : reportId;
 
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
     type: 'chat.conversation.reported',
-    payload: { conversationId, reportId, reason: payload.reason },
+    payload: { conversationId, reportId: effectiveReportId, reason: payload.reason },
   });
 
   reply.code(201);
-  return { ok: true, reportId, status: 'submitted' };
+  return { ok: true, reportId: effectiveReportId, status: 'submitted' };
 });
 
 // P0 #1 / P2 #56: Typing indicator endpoint.
@@ -20568,15 +21059,22 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
     [conversationId, actorUserId],
   );
 
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.message.read',
-    payload: {
-      conversationId,
-      userId: actorUserId,
-      readAt: new Date().toISOString(),
-    },
-  });
+  const readReceiptsResult = await db.query<{ read_receipts_enabled: boolean }>(
+    `SELECT read_receipts_enabled FROM users WHERE id = $1`,
+    [actorUserId],
+  );
+
+  if (readReceiptsResult.rowCount && readReceiptsResult.rows[0].read_receipts_enabled) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.read',
+      payload: {
+        conversationId,
+        userId: actorUserId,
+        readAt: new Date().toISOString(),
+      },
+    });
+  }
 
   return { ok: true, conversationId, readAt: new Date().toISOString() };
 });
@@ -22875,7 +23373,7 @@ app.get('/users/:userId/wallet/balances', async (request, reply) => {
       FROM ledger_entries
       WHERE account_id = (
         SELECT id FROM ledger_accounts
-        WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+        WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
         LIMIT 1
       )
     `,
@@ -23023,6 +23521,7 @@ app.get('/wallets/:userId/snapshot', async (request, reply) => {
 // ── Oracle & Price routes ───────────────────────────────────────────
 registerOracleRoutes({ app });
 registerPriceRoutes({ app, db });
+registerTaxonomyRoutes({ app, db });
 
 app.get('/wallet/1ze/quote', async (request, reply) => {
   const querySchema = z.object({
@@ -24006,6 +24505,12 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     }
 
     const paymentIntentId = createRuntimeId('pi');
+    // Fetch the user's email for providers that require customer identity
+    const topupEmailRow = await client.query<{ email: string | null }>(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [actorUserId]
+    );
+    const topupCustomerEmail = topupEmailRow.rows[0]?.email ?? null;
     const gatewayIntent = await createGatewayPaymentIntent({
       gatewayId,
       intentId: paymentIntentId,
@@ -24015,6 +24520,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       stripePaymentMethodId,
       returnUrl: payload.returnUrl,
       webhookUrl: payload.webhookUrl,
+      customerEmail: topupCustomerEmail,
       metadata: {
         userId: actorUserId,
         mintOperationId,
@@ -28064,17 +28570,19 @@ app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
   for (const account of dueAccounts.rows) {
     const minimumGbp = Number(account.payout_minimum_gbp) || config.payoutDefaultMinimumGbp;
 
-    // Sum available seller_payable balance (released, not yet requested).
+    // Sum available seller_payable balance (net: credits minus debits for
+    // payouts, reserve holds, and refund reversals).
     const balanceResult = await db.query<{ available_gbp: string }>(
       `
-        SELECT COALESCE(SUM(amount_gbp), 0)::text AS available_gbp
+        SELECT COALESCE(SUM(
+          CASE WHEN direction = 'credit' THEN amount_gbp ELSE -amount_gbp END
+        ), 0)::text AS available_gbp
         FROM ledger_entries
         WHERE account_id = (
           SELECT id FROM ledger_accounts
-          WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+          WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
           LIMIT 1
         )
-        AND direction = 'credit'
         AND created_at <= NOW()
       `,
       [account.user_id]
@@ -28506,7 +29014,16 @@ app.get('/users/:userId/stripe-connect/status', async (request, reply) => {
 app.post('/users/:userId/kyc-fallback', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
-  resolveAuthenticatedUserId(request, userId);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId && authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
 
   const bodySchema = z.object({
     provider: z.enum(['persona', 'onfido']),
@@ -29421,6 +29938,157 @@ app.get('/admin/reconciliation/report', async (request, reply) => {
   };
 });
 
+// ── Three-way reconciliation (PAY-10, PAY-11) ───────────────────────
+app.post('/admin/reconciliation/three-way-run', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const bodySchema = z.object({
+    runDate: z.string().min(8).max(20),
+    endDate: z.string().min(8).max(20).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  try {
+    const result = await runThreeWayReconciliation(db, {
+      runDate: payload.runDate,
+      endDate: payload.endDate,
+    });
+
+    if (result.status === 'critical') {
+      await setPayoutPauseState({
+        paused: true,
+        reason: 'critical_three_way_reconciliation',
+        reconciliationRunId: result.runId,
+      });
+    } else if (result.incomplete) {
+      // Incomplete runs cannot unpause payouts. The reconciliation did not
+      // have all the facts it needed (missing provider/bank tables or
+      // ingestion failures). Payouts stay in their current pause state.
+      request.log.warn(
+        { runId: result.runId, runDate: payload.runDate, status: result.status },
+        'Three-way reconciliation incomplete — payouts pause state unchanged'
+      );
+    } else {
+      // Only unpause when the run is complete AND not critical.
+      await setPayoutPauseState({
+        paused: false,
+        reason: 'three_way_reconciliation_ok',
+      });
+    }
+
+    return { ok: true, result };
+  } catch (error) {
+    request.log.error({ err: error }, 'Three-way reconciliation run failed');
+    reply.code(500);
+    return { ok: false, error: 'Unable to run three-way reconciliation' };
+  }
+});
+
+app.post('/admin/reconciliation/safeguarding-check', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const bodySchema = z.object({
+    checkDate: z.string().min(8).max(20).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+  const checkDate = payload.checkDate ?? new Date().toISOString().slice(0, 10);
+
+  try {
+    const result = await runSafeguardingCheck(db, { checkDate });
+
+    if (result.status === 'shortfall') {
+      try {
+        await dispatchOpsAlert({
+          code: 'safeguarding_shortfall',
+          severity: 'critical',
+          message: `Safeguarding shortfall for ${checkDate}: ${result.differenceMinor} minor units`,
+          metricValue: Math.abs(result.differenceMinor),
+          threshold: 0,
+          metadata: { checkDate, status: result.status },
+        });
+      } catch (alertError) {
+        request.log.error({ err: alertError }, 'Failed to dispatch safeguarding alert');
+      }
+    }
+
+    return { ok: true, result };
+  } catch (error) {
+    request.log.error({ err: error }, 'Safeguarding check failed');
+    reply.code(500);
+    return { ok: false, error: 'Unable to run safeguarding check' };
+  }
+});
+
+app.get('/admin/reconciliation/breaks', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const querySchema = z.object({
+    runId: z.string().min(4).max(140).optional(),
+    breakType: z.string().max(40).optional(),
+    severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+    status: z.enum(['open', 'investigating', 'resolved', 'wont_fix']).optional(),
+    limit: z.coerce.number().min(1).max(500).default(100),
+  });
+
+  const filters = querySchema.parse(request.query ?? {});
+
+  try {
+    const breaks = await getReconciliationBreaks(db, {
+      runId: filters.runId,
+      breakType: filters.breakType as Parameters<typeof getReconciliationBreaks>[1]['breakType'],
+      severity: filters.severity as Parameters<typeof getReconciliationBreaks>[1]['severity'],
+      status: filters.status as Parameters<typeof getReconciliationBreaks>[1]['status'],
+      limit: filters.limit,
+    });
+
+    return { ok: true, breaks };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to fetch reconciliation breaks');
+    reply.code(500);
+    return { ok: false, error: 'Unable to fetch reconciliation breaks' };
+  }
+});
+
+app.get('/admin/reconciliation/safeguarding-checks', async (request, reply) => {
+  const securityError = ensureSecurityAdminAccess(request, reply);
+  if (securityError) {
+    return securityError;
+  }
+
+  const querySchema = z.object({
+    fromDate: z.string().min(8).max(20).optional(),
+    toDate: z.string().min(8).max(20).optional(),
+    limit: z.coerce.number().min(1).max(365).default(30),
+  });
+
+  const filters = querySchema.parse(request.query ?? {});
+
+  try {
+    const checks = await getSafeguardingChecks(db, {
+      fromDate: filters.fromDate,
+      toDate: filters.toDate,
+      limit: filters.limit,
+    });
+
+    return { ok: true, checks };
+  } catch (error) {
+    request.log.error({ err: error }, 'Failed to fetch safeguarding checks');
+    reply.code(500);
+    return { ok: false, error: 'Unable to fetch safeguarding checks' };
+  }
+});
+
 app.post('/admin/payouts/:requestId/review', async (request, reply) => {
   const securityError = ensureSecurityAdminAccess(request, reply);
   if (securityError) {
@@ -29585,6 +30253,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
   const bodySchema = z.object({
     note: z.string().max(400).optional(),
     providerPayoutRef: z.string().min(4).max(140).optional(),
+    bankPayoutConfirmed: z.boolean().optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -29821,14 +30490,17 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
           destinationAccountId: payoutRow.provider_account_ref,
           netAmountGbp: payoutBreakdown.netPayoutGbp,
         });
-        providerPayoutRef = providerTransfer.providerPayoutRef;
+        providerPayoutRef = providerTransfer.providerTransferRef;
         providerExecutionMetadata = {
           provider: 'stripe_connect',
-          providerPayoutRef,
+          providerTransferRef: providerTransfer.providerTransferRef,
           destinationAccountId: providerTransfer.destinationAccountId,
           amountMinor: providerTransfer.amountMinor,
           currency: providerTransfer.currency,
-          confirmedAt: new Date().toISOString(),
+          transferCreatedAt: new Date().toISOString(),
+          // Transfer ≠ bank payout. The payout request stays in 'processing'
+          // until Stripe's payout.paid webhook confirms bank arrival.
+          bankPayoutPending: true,
         };
       }
     } catch (error) {
@@ -29849,10 +30521,17 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
+    // After a Stripe Connect transfer, the payout is in 'processing' —
+    // the transfer moved funds to the connected account's Stripe balance,
+    // but the bank payout has not been confirmed. 'paid' is reserved for
+    // bank terminal evidence (Stripe payout.paid webhook or manual bank
+    // confirmation with explicit bankPayoutConfirmed: true).
+    const targetStatus = payload.bankPayoutConfirmed === true ? 'paid' : 'processing';
+
     const settled = await settlePayoutRequest(client, {
       userId: payoutRow.user_id,
       requestId,
-      targetStatus: 'paid',
+      targetStatus,
       providerPayoutRef: providerPayoutRef ?? undefined,
       metadata: {
         ...(payload.metadata ?? {}),
@@ -29876,7 +30555,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
 
     await client.query('COMMIT');
 
-    if (!settled.idempotent && settled.payoutRequest.status === 'paid') {
+    if (!settled.idempotent && (settled.payoutRequest.status === 'paid' || settled.payoutRequest.status === 'processing')) {
       try {
         await queuePayoutProcessedNotification({
           payoutRequest: settled.payoutRequest,
@@ -30861,6 +31540,13 @@ app.post('/payments/intents', async (request, reply) => {
     }
 
     const intentId = createRuntimeId('pi');
+    // Fetch the buyer's email for providers that require customer identity
+    // (e.g. Flutterwave). Fall back to platform email if not available.
+    const buyerEmailRow = await client.query<{ email: string | null }>(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [actorUserId]
+    );
+    const customerEmail = buyerEmailRow.rows[0]?.email ?? null;
     const gatewayIntent = await createGatewayPaymentIntent({
       gatewayId,
       intentId,
@@ -30872,6 +31558,7 @@ app.post('/payments/intents', async (request, reply) => {
       webhookUrl: payload.webhookUrl,
       platformFeeAmountGbp,
       radarSessionId: payload.radarSessionId ?? null,
+      customerEmail,
       metadata: {
         ...(payload.metadata ?? {}),
         userId: actorUserId,
@@ -31114,6 +31801,7 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
     scaExpiresAt: z.string().datetime().optional(),
     failureCode: z.string().max(80).optional(),
     failureMessage: z.string().max(240).optional(),
+    approverId: z.string().min(2).max(140).optional(),
     payload: z.record(z.unknown()).optional(),
   });
 
@@ -31153,7 +31841,15 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
       };
     }
 
-    if (!request.authUser || (request.authUser.role !== 'admin' && request.authUser.userId !== ownerRow.user_id)) {
+    // PAY-16 fix: Terminal status confirmation (succeeded/failed/cancelled)
+    // requires admin role. The intent owner must NOT be able to confirm
+    // their own payment as succeeded — that's a provider-owned terminal
+    // state. Only admin operators can override, and in production, terminal
+    // status requires a second approver (maker-checker).
+    const isTerminalStatus = payload.simulateStatus !== 'processing';
+    const isAdmin = request.authUser?.role === 'admin';
+
+    if (!request.authUser || (!isAdmin && request.authUser.userId !== ownerRow.user_id)) {
       await client.query('ROLLBACK');
       reply.code(403);
       return {
@@ -31162,13 +31858,39 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
       };
     }
 
-    if (payload.simulateStatus !== 'processing') {
-      if (config.nodeEnv === 'production' && request.authUser?.role !== 'admin') {
+    if (isTerminalStatus) {
+      // Non-admin users cannot set terminal status in any environment.
+      if (!isAdmin) {
         await client.query('ROLLBACK');
         reply.code(403);
         return {
           ok: false,
-          error: 'Forbidden: terminal status simulation is not allowed in production for non-admin users',
+          error: 'Forbidden: terminal status confirmation requires admin role',
+          code: 'TERMINAL_STATUS_REQUIRES_ADMIN',
+        };
+      }
+
+      // PAY-16: In production, terminal status requires maker-checker.
+      // The admin making the request (maker) must provide an approver ID
+      // (checker) who is a different admin. This prevents a single admin
+      // from unilaterally confirming a payment as succeeded.
+      if (config.nodeEnv === 'production' && !payload.approverId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Terminal status confirmation in production requires a second admin approver (maker-checker)',
+          code: 'MAKER_CHECKER_REQUIRED',
+        };
+      }
+
+      if (payload.approverId && payload.approverId === request.authUser.userId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'The approver must be a different admin from the one making the request',
+          code: 'APPROVER_MUST_DIFFER',
         };
       }
     }
@@ -31270,6 +31992,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
     amount: z.number().positive().optional(),
     currency: z.string().length(3).optional(),
     reason: z.string().max(240).optional(),
+    idempotencyKey: z.string().min(4).max(140).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -31336,12 +32059,18 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
       };
     }
 
-    if (!request.authUser || (request.authUser.role !== 'admin' && request.authUser.userId !== intent.user_id)) {
+    // PAY-01 fix: Only admin roles can initiate provider refunds.
+    // A buyer must NOT be able to call the provider refund endpoint for
+    // their own payment — refunds are policy-owned commands that require
+    // authorization (returns policy, dispute resolution, admin override).
+    // The buyer's cancellation creates a refund request, never a direct
+    // provider mutation.
+    if (!request.authUser || request.authUser.role !== 'admin') {
       await client.query('ROLLBACK');
       reply.code(403);
       return {
         ok: false,
-        error: 'Forbidden: payment intent access denied',
+        error: 'Forbidden: refunds can only be initiated by authorized operators',
       };
     }
 
@@ -31356,6 +32085,35 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
 
     const amount = roundTo(payload.amount ?? Number(intent.amount_gbp), 2);
     const currency = (payload.currency ?? intent.amount_currency ?? 'GBP').toUpperCase();
+
+    // PAY-02 fix: Remaining-refundable guard. Sum of succeeded + pending
+    // (in-flight) refunds must not exceed the captured amount. This
+    // prevents duplicate/concurrent refunds from over-refunding.
+    const intentAmountGbp = roundTo(Number(intent.amount_gbp), 2);
+    const existingRefundsResult = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(amount), 0)::text AS total
+       FROM payment_refunds
+       WHERE intent_id = $1
+         AND status IN ('succeeded', 'pending')`,
+      [intentId]
+    );
+    const alreadyRefundedGbp = roundTo(Number(existingRefundsResult.rows[0]?.total ?? '0'), 2);
+    const remainingRefundableGbp = roundTo(intentAmountGbp - alreadyRefundedGbp, 2);
+
+    if (amount > remainingRefundableGbp + 1e-6) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Refund amount exceeds remaining refundable amount',
+        code: 'REFUND_AMOUNT_EXCEEDS_REMAINING',
+        remainingRefundableGbp,
+      };
+    }
+
+    // PAY-02 fix: Scoped idempotency key for the refund operation.
+    // If the same key is used twice, the second call is idempotent.
+    const refundOperationId = payload.idempotencyKey ?? `rf_${intentId}_${amount}_${currency}_${Date.now()}`;
     let providerRefundRef = createRuntimeId(`refund_${intent.gateway_id}`);
     let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' = 'pending';
 
@@ -31395,8 +32153,10 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
       reason: payload.reason,
       metadata: {
         source: 'manual_refund_request',
+        remainingRefundableGbp,
         ...(payload.metadata ?? {}),
       },
+      idempotencyKey: refundOperationId,
     });
 
     await client.query('COMMIT');
@@ -32412,11 +33172,33 @@ app.post('/webhooks/:provider', async (request, reply) => {
     );
 
     if (!webhookInsert.rowCount) {
-      await client.query('COMMIT');
-      return {
-        ok: true,
-        duplicate: true,
-      };
+      // PAY-03 fix: The insert returned 0 rows because this event was
+      // already received. But "received" != "processed" — a crash after
+      // the insert but before processed_at was set leaves the event
+      // unprocessed. Check whether the existing row has processed_at.
+      // If not, re-process it instead of silently returning duplicate.
+      const existingRow = await client.query<{ processed_at: string | null }>(
+        `SELECT processed_at FROM payment_webhook_events
+         WHERE gateway_id = $1 AND provider_event_id = $2
+         LIMIT 1`,
+        [expectedGateway, event.providerEventId]
+      );
+
+      if (existingRow.rows[0]?.processed_at) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          duplicate: true,
+        };
+      }
+
+      // Event was received but never processed — fall through and process it.
+      await client.query(
+        `UPDATE payment_webhook_events
+         SET event_type = $3, intent_id = $4
+         WHERE gateway_id = $1 AND provider_event_id = $2`,
+        [expectedGateway, event.providerEventId, event.eventType, intentRow?.id ?? null]
+      );
     }
 
     let settledIntent: ReturnType<typeof toPaymentIntentPayload> | undefined;
@@ -32539,7 +33321,8 @@ app.post('/webhooks/:provider', async (request, reply) => {
           intentRow.user_id,
           refundMoney?.currency === 'GBP'
             ? Number(moneyToMajorDecimal(refundMoney))
-            : Number(intentRow.amount_gbp)
+            : Number(intentRow.amount_gbp),
+          event.refund.providerRefundRef ?? event.providerEventId
         );
       }
 
@@ -32595,7 +33378,8 @@ app.post('/webhooks/:provider', async (request, reply) => {
           intentRow.user_id,
           disputeMoney?.currency === 'GBP'
             ? Number(moneyToMajorDecimal(disputeMoney))
-            : Number(intentRow.amount_gbp)
+            : Number(intentRow.amount_gbp),
+          event.dispute.providerDisputeRef ?? event.providerEventId
         );
 
         await client.query(
@@ -32893,6 +33677,11 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
       );
 
       // Re-normalize and re-process the webhook event.
+      // PAY-04 fix: Do NOT re-verify the signature with empty headers.
+      // The signature was verified once when the webhook was first received.
+      // Re-verification with {} headers always fails for signed providers
+      // (Stripe, Razorpay). Use normalizeWebhookEvent which normalizes
+      // without re-verifying the signature.
       const provider: ProviderSlug = item.gateway_id === 'stripe_americas' ? 'stripe'
         : item.gateway_id === 'razorpay_in' ? 'razorpay'
         : item.gateway_id === 'mollie_eu' ? 'mollie'
@@ -32901,18 +33690,11 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
         : item.gateway_id === 'wise_global' ? 'wise'
         : 'stripe';
 
-      const verification = await verifyAndNormalizeWebhook(
-        provider,
-        toJsonString(item.raw_payload),
-        {},
-        item.raw_payload
-      );
+      const event = await normalizeWebhookEvent(provider, item.raw_payload);
 
-      if (!verification.verified || !verification.event) {
-        throw new Error(verification.reason ?? 'Webhook re-verification failed');
+      if (!event) {
+        throw new Error('Webhook event normalization failed during retry');
       }
-
-      const event = verification.event;
       let intentRow: PaymentIntentRow | null = null;
       if (event.intentId) {
         const byId = await client.query<PaymentIntentRow>(
@@ -35092,12 +35874,13 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 
   const claimsResult = await db.query<{
     id: string;
-    topic: string;
+    topic_id: string;
+    topic_label: string;
     status: string;
     created_at: string;
   }>(
-    `SELECT id, topic, status, created_at FROM support_tickets
-     WHERE order_id = $1 AND topic IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
+    `SELECT id, topic_id, topic_label, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
      ORDER BY created_at DESC`,
     [orderId]
   );
@@ -35112,7 +35895,8 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
       eligibleUntil,
       claims: claimsResult.rows.map((r) => ({
         ticketId: r.id,
-        topic: r.topic,
+        topicId: r.topic_id,
+        topicLabel: r.topic_label,
         status: r.status,
         createdAt: r.created_at,
       })),
@@ -35159,22 +35943,22 @@ app.post('/orders/:orderId/protection/claim', {
     return { ok: false, error: 'Only the buyer can file a protection claim' };
   }
 
+  const ticketId = `ticket_${crypto.randomUUID()}`;
   const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
-    `INSERT INTO support_tickets (user_id, order_id, topic, subject, body, status)
-     VALUES ($1, $2, 'buyer_protection_claim', $3, $4, 'open')
+    `INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls)
+     VALUES ($1, $2, $3, 'buyer_protection_claim', $4, $5, 'open', $6)
      RETURNING id, status, created_at`,
-    [request.authUser.userId, orderId, reason, description]
+    [
+      ticketId,
+      request.authUser.userId,
+      orderId,
+      reason,
+      description,
+      evidenceUrls && evidenceUrls.length > 0 ? evidenceUrls : [],
+    ]
   );
 
   const ticket = ticketResult.rows[0];
-  if (evidenceUrls && evidenceUrls.length > 0) {
-    for (const url of evidenceUrls) {
-      await db.query(
-        `INSERT INTO support_ticket_attachments (ticket_id, url) VALUES ($1, $2)`,
-        [ticket.id, url]
-      );
-    }
-  }
 
   reply.code(201);
   return {
@@ -35534,7 +36318,14 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
         reason: body.reason,
         metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId },
       });
-      await postCommerceOrderRefundLedgerReversal(recordClient, orderId, authUser.userId, refundAmount);
+      // PAY-08 fix: Only post the ledger reversal when the refund is
+      // confirmed succeeded. Unknown/pending refunds must NOT trigger a
+      // reversal — the money has not been returned to the buyer yet.
+      // The reversal is posted when the refund.* webhook confirms success
+      // or when reconciliation resolves the unknown state.
+      if (refundStatus === 'succeeded') {
+        await postCommerceOrderRefundLedgerReversal(recordClient, orderId, authUser.userId, refundAmount, providerRefundRef);
+      }
       // Only set order to 'refunded' when the provider confirms success.
       // For 'unknown' or 'pending', set to 'refunding' so the state is honest.
       const orderStatus = refundStatus === 'succeeded' ? 'refunded' : 'refunding';
@@ -43638,6 +44429,16 @@ const start = async () => {
 // ── Support tickets ────────────────────────────────────────────────
 
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
+registerSupportRoutes({ app, db, createApiError, queueUserNotification });
+registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification });
+registerVendorWebhookRoutes({
+  app,
+  db,
+  vendorSecrets: {
+    intercom: process.env.INTERCOM_WEBHOOK_SECRET ?? '',
+    zendesk: process.env.ZENDESK_WEBHOOK_SECRET ?? '',
+  },
+});
 
 registerCollectionRoutes({ app, db: createKysely(db), createApiError });
 

@@ -26,6 +26,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import type { Listing } from '../domain';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -303,7 +304,7 @@ export default function CreateCollectionScreen() {
                         {item.title}
                       </Text>
                       <Text style={[styles.itemCardPrice, { color: colors.textMuted }]} numberOfLines={1}>
-                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                        {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                       </Text>
                     </View>
                   </Pressable>

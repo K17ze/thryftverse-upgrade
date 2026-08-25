@@ -50,6 +50,7 @@ import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { createStableId } from '../utils/createStableId';
 import { formatBidActivityRow } from '../utils/auctionDetailLogic';
 import { useBucketedServerClock } from '../hooks/useServerClock';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 
@@ -356,7 +357,7 @@ export default function AuctionsScreen() {
 
     if (amountInGbp < selectedBidAuction.minimumNextBid) {
       show(
-        `Bid must be at least ${formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}`,
+        `Bid must be at least ${formatFromFiat(selectedBidAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`,
         'error'
       );
       return;
@@ -373,7 +374,7 @@ export default function AuctionsScreen() {
       });
       await syncAuctions();
       show(
-        t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, 'GBP', { displayMode: 'fiat' }) }),
+        t('auctions.bid.success.placed', { title: selectedBidAuction.title, amount: formatFromFiat(roundedAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) }),
         'success'
       );
       if (remoteResult.aml?.alertId) show(t('auctions.bid.info.aml'), 'info');
@@ -530,7 +531,7 @@ export default function AuctionsScreen() {
         <View style={styles.upcomingMeta}>
           <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
           <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
-          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
+          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) })}</Meta>
         </View>
       </AnimatedPressable>
     ),
@@ -584,7 +585,7 @@ export default function AuctionsScreen() {
               <View>
                 <Meta style={styles.featuredStatLabel}>Current Bid</Meta>
                 <BodyEmphasis style={styles.featuredStatValue}>
-                  {formatFromFiat(featuredAuction.currentBid, 'GBP', { displayMode: 'fiat' })}
+                  {formatFromFiat(featuredAuction.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                 </BodyEmphasis>
               </View>
               <View>
@@ -778,7 +779,7 @@ export default function AuctionsScreen() {
         image={item.image}
         sellerName={sellerLabel}
         sellerId={item.sellerId}
-        currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+        currentBid={formatFromFiat(item.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         bidCount={item.bidCount}
         timeRemaining={formatCountdown(item.msToEnd ?? 0)}
         progress={item.progress ?? 0}
@@ -787,7 +788,7 @@ export default function AuctionsScreen() {
         viewerState={item.viewerState}
         timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
         endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
-        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
         onPress={() => navigateToDetail(item)}
         onBid={() => openBidComposer(item)}
         onBuyNow={() => void handleBuyNow(item)}
@@ -863,8 +864,8 @@ export default function AuctionsScreen() {
       <BidComposer
         visible={bidComposerVisible}
         auctionTitle={selectedBidAuction?.title ?? ''}
-        currentBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.currentBid, 'GBP', { displayMode: 'fiat' }) : undefined}
-        minimumNextBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' }) : undefined}
+        currentBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.currentBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
+        minimumNextBid={selectedBidAuction ? formatFromFiat(selectedBidAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : undefined}
         bidInput={bidInput}
         currencyCode={currencyCode}
         isSubmitting={isSubmittingBid}
@@ -930,7 +931,7 @@ export default function AuctionsScreen() {
                 <View style={styles.bidHistoryMinNextBidRow}>
                   <Meta style={styles.bidHistoryMinNextBidLabel}>Min next bid</Meta>
                   <BodyEmphasis style={styles.bidHistoryMinNextBidValue}>
-                    {formatFromFiat(bidHistoryAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}
+                    {formatFromFiat(bidHistoryAuction.minimumNextBid, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                   </BodyEmphasis>
                 </View>
               ) : null}

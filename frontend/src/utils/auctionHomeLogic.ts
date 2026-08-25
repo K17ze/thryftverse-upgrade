@@ -1,5 +1,6 @@
 import { resolveAuctionTiming, formatCountdown, type AuctionTimingInput, type AuctionEffectiveState } from '../hooks/useServerClock';
-import type { AuctionScope, AuctionSortMode } from '../services/marketApi';
+import type { AuctionScope, AuctionSortMode, MarketAuction, AttentionReason, CategoryWorld, AuctionHomeActivity, SellerSummary } from '../services/marketApi';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
 
@@ -117,7 +118,7 @@ export function resolvePriceText(
 ): string {
   if (priceLabel === 'No bids') return 'No bids';
   const amount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
-  return formatFromFiat(amount, 'GBP');
+  return formatFromFiat(amount, DEFAULT_CURRENCY_CODE);
 }
 
 export function resolvePriceDisplay(
@@ -321,3 +322,84 @@ export function createSearchState(
 ): AuctionSearchState {
   return { query, status, items, cursor };
 }
+
+// ── API → view-model mapper ──
+
+export function toViewModel(api: MarketAuction): AuctionHomeItem {
+  return {
+    id: api.id,
+    listingId: api.listingId,
+    sellerId: api.seller.id,
+    sellerUsername: api.seller.username,
+    sellerDisplayName: api.seller.displayName,
+    sellerAvatarUrl: api.seller.avatarUrl,
+    title: api.title,
+    imageUrl: api.imageUrl ?? '',
+    brand: api.brand,
+    startsAt: api.startsAt,
+    endsAt: api.endsAt,
+    startingBidGbp: api.startingBidGbp,
+    currentBidGbp: api.currentBidGbp,
+    minimumNextBidGbp: api.minimumNextBidGbp,
+    bidCount: api.bidCount,
+    buyNowPriceGbp: api.buyNowPriceGbp,
+    reservePriceGbp: api.reservePriceGbp ?? null,
+    viewerState: api.viewerState,
+    isWatched: api.isWatched,
+    winnerBidderId: api.winnerBidderId ?? null,
+    cancelledAt: api.cancelledAt ?? null,
+    settledAt: api.settledAt ?? null,
+    lifecycle: api.lifecycle,
+    terminalReason: api.terminalReason,
+    category: api.category,
+  };
+}
+
+// ── Home data shape from /auctions/home ──
+
+export interface HomeData {
+  attentionItem: AuctionHomeItem | null;
+  attentionReason: AttentionReason;
+  activity: AuctionHomeActivity;
+  closingSoon: AuctionHomeItem[];
+  live: AuctionHomeItem[];
+  upcoming: AuctionHomeItem[];
+  categoryWorlds: CategoryWorld[];
+  recentlyClosed: AuctionHomeItem[];
+  sellerSummary?: SellerSummary;
+  sellerAuctions: AuctionHomeItem[];
+  watchlist: AuctionHomeItem[];
+  serverNow: string | null;
+}
+
+export const EMPTY_HOME_DATA: HomeData = {
+  attentionItem: null,
+  attentionReason: null,
+  activity: { activeCount: 0, needsAttentionCount: 0, leadingCount: 0, outbidCount: 0, watchingCount: 0, unresolvedWonCount: 0 },
+  closingSoon: [],
+  live: [],
+  upcoming: [],
+  categoryWorlds: [],
+  recentlyClosed: [],
+  sellerAuctions: [],
+  watchlist: [],
+  serverNow: null,
+};
+
+// ── Filter sheet options ──
+
+export const SORT_OPTIONS: { key: AuctionBrowseSort; label: string }[] = [
+  { key: 'recommended', label: 'Recommended' },
+  { key: 'endingSoon', label: 'Ending soon' },
+  { key: 'newest', label: 'Newest' },
+  { key: 'mostBids', label: 'Most bids' },
+  { key: 'priceLow', label: 'Price: low to high' },
+  { key: 'priceHigh', label: 'Price: high to low' },
+];
+
+export const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
+  { label: 'Under £50', max: 50 },
+  { label: '£50 – £200', min: 50, max: 200 },
+  { label: '£200 – £500', min: 200, max: 500 },
+  { label: 'Over £500', min: 500 },
+];

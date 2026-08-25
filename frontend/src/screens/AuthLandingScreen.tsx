@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,10 @@ import { Typography, Radius, Type, Space, FontSize, Stroke, Control } from '../t
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppInput } from '../components/ui/AppInput';
 import { useStore } from '../store/useStore';
-import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword } from '../services/authApi';
+import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword, type MagicLinkConsumeError } from '../services/authApi';
+import { loginWithPasskey } from '../services/passkeyApi';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,10 +47,21 @@ export default function AuthLandingScreen() {
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
-  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | 'passkey' | null>(null);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [isDevBypassLoading, setIsDevBypassLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [magicLinkTwoFactorRequired, setMagicLinkTwoFactorRequired] = useState(false);
+  // Retain the magic-link token + email for inline 2FA retry. The backend
+  // does NOT consume the token when TWO_FACTOR_REQUIRED is returned (the
+  // transaction rolls back), so the same token can be retried with a 2FA code.
+  const magicLinkTokenRef = useRef<string | null>(null);
+  const magicLinkEmailRef = useRef<string | undefined>(undefined);
+  const [magicLinkTwoFactorCode, setMagicLinkTwoFactorCode] = useState('');
+  const [magicLinkRecoveryCode, setMagicLinkRecoveryCode] = useState('');
+  const [magicLinkUseRecovery, setMagicLinkUseRecovery] = useState(false);
+  const [isMagicLinkTwoFactorVerifying, setIsMagicLinkTwoFactorVerifying] = useState(false);
+  const [magicLinkTwoFactorError, setMagicLinkTwoFactorError] = useState<string | null>(null);
 
   // UI-21P: Prevent crash when OAuth client IDs are not configured in dev builds
   const hasGoogleOAuth = Boolean(
@@ -85,6 +98,10 @@ export default function AuthLandingScreen() {
         return;
       }
 
+      // Persist token + email for the inline 2FA retry path.
+      magicLinkTokenRef.current = token;
+      magicLinkEmailRef.current = email;
+
       setIsMagicLinkLoading(true);
       try {
         const result = await consumeMagicLink({
@@ -95,13 +112,87 @@ export default function AuthLandingScreen() {
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
       } catch (error) {
-        setAuthError(`Magic link failed: ${(error as Error).message}`);
+        // The backend does NOT consume the magic-link token when
+        // TWO_FACTOR_REQUIRED is returned (the transaction rolls back), so
+        // the same token can be retried with a 2FA code. Show an inline
+        // 2FA challenge instead of redirecting to password login.
+        const magicLinkError = error as MagicLinkConsumeError;
+        if (magicLinkError.code === 'TWO_FACTOR_REQUIRED') {
+          setMagicLinkTwoFactorRequired(true);
+          setMagicLinkTwoFactorError(null);
+          setMagicLinkTwoFactorCode('');
+          setMagicLinkRecoveryCode('');
+          setMagicLinkUseRecovery(false);
+        } else {
+          setAuthError(`Magic link failed: ${(error as Error).message}`);
+        }
       } finally {
         setIsMagicLinkLoading(false);
       }
     },
     [login, navigation, setTwoFactorEnabled]
   );
+
+  const handleVerifyMagicLinkTwoFactor = useCallback(async () => {
+    const token = magicLinkTokenRef.current;
+    if (!token || isMagicLinkTwoFactorVerifying) {
+      return;
+    }
+
+    const twoFactorCode = magicLinkTwoFactorCode.trim();
+    const recoveryCode = magicLinkRecoveryCode.trim();
+
+    if (magicLinkUseRecovery) {
+      if (!recoveryCode) {
+        setMagicLinkTwoFactorError('Enter your recovery code.');
+        return;
+      }
+    } else {
+      if (twoFactorCode.length < 6) {
+        setMagicLinkTwoFactorError('Enter the 6-digit code from your authenticator app.');
+        return;
+      }
+    }
+
+    setMagicLinkTwoFactorError(null);
+    setIsMagicLinkTwoFactorVerifying(true);
+
+    try {
+      const result = await consumeMagicLink({
+        token,
+        email: magicLinkEmailRef.current,
+        twoFactorCode: magicLinkUseRecovery ? undefined : twoFactorCode,
+        recoveryCode: magicLinkUseRecovery ? recoveryCode : undefined,
+      });
+      login(result.storeUser);
+      setTwoFactorEnabled(result.user.twoFactorEnabled);
+      navigation.replace('MainTabs');
+    } catch (error) {
+      // Token is not consumed on TWO_FACTOR_REQUIRED — keep it so the
+      // user can retry with a corrected code.
+      setMagicLinkTwoFactorError((error as Error).message || 'Unable to verify two-factor code.');
+    } finally {
+      setIsMagicLinkTwoFactorVerifying(false);
+    }
+  }, [
+    isMagicLinkTwoFactorVerifying,
+    login,
+    magicLinkRecoveryCode,
+    magicLinkTwoFactorCode,
+    magicLinkUseRecovery,
+    navigation,
+    setTwoFactorEnabled,
+  ]);
+
+  const cancelMagicLinkTwoFactor = useCallback(() => {
+    setMagicLinkTwoFactorRequired(false);
+    setMagicLinkTwoFactorCode('');
+    setMagicLinkRecoveryCode('');
+    setMagicLinkUseRecovery(false);
+    setMagicLinkTwoFactorError(null);
+    magicLinkTokenRef.current = null;
+    magicLinkEmailRef.current = undefined;
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -174,6 +265,29 @@ export default function AuthLandingScreen() {
     } catch (error) {
       setSocialLoading(null);
       setAuthError(`Google sign-in failed: ${(error as Error).message}`);
+    }
+  };
+
+  const handlePasskeySignIn = async () => {
+    if (socialLoading || isMagicLinkLoading) return;
+    setSocialLoading('passkey');
+    setAuthError(null);
+    try {
+      const result = await loginWithPasskey();
+      login({
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        role: result.user.role,
+        emailVerified: result.user.emailVerified,
+      } as never);
+      setTwoFactorEnabled(false);
+      navigation.replace('MainTabs');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Passkey sign-in failed';
+      setAuthError(msg);
+    } finally {
+      setSocialLoading(null);
     }
   };
 
@@ -291,6 +405,125 @@ export default function AuthLandingScreen() {
           </View>
         ) : null}
 
+        {/* Inline 2FA challenge for magic-link sign-in. The backend does NOT
+            consume the token when TWO_FACTOR_REQUIRED is returned (the
+            transaction rolls back), so the same token can be retried with a
+            2FA code. This is a focused inline state — one dominant action
+            ("Verify"), one restrained secondary ("Use recovery code" toggle
+            + "Cancel") — matching the screen's visual language. */}
+        {magicLinkTwoFactorRequired ? (
+          <View
+            style={styles.twoFactorNotice}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+          >
+            <View style={styles.twoFactorNoticeHeader}>
+              <View style={[styles.twoFactorNoticeIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.commerceTrust} />
+              </View>
+              <Text style={styles.twoFactorNoticeTitle} maxFontSizeMultiplier={1.3}>
+                Two-factor authentication required
+              </Text>
+            </View>
+            <Text style={styles.twoFactorNoticeBody} maxFontSizeMultiplier={1.3}>
+              Enter the code from your authenticator app to continue signing in.
+            </Text>
+
+            {magicLinkUseRecovery ? (
+              <AppInput
+                appearance="outline"
+                label="Recovery code"
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                value={magicLinkRecoveryCode}
+                onChangeText={(value) => {
+                  setMagicLinkRecoveryCode(value.toUpperCase());
+                  if (magicLinkTwoFactorError) {
+                    setMagicLinkTwoFactorError(null);
+                  }
+                }}
+                containerStyle={styles.twoFactorNoticeInput}
+              />
+            ) : (
+              <AppInput
+                appearance="outline"
+                label="Authenticator code"
+                placeholder="000000"
+                keyboardType="numeric"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={6}
+                autoFocus
+                value={magicLinkTwoFactorCode}
+                onChangeText={(value) => {
+                  setMagicLinkTwoFactorCode(value.replace(/\D/g, '').slice(0, 6));
+                  if (magicLinkTwoFactorError) {
+                    setMagicLinkTwoFactorError(null);
+                  }
+                }}
+                containerStyle={styles.twoFactorNoticeInput}
+              />
+            )}
+
+            <Pressable
+              onPress={() => {
+                setMagicLinkUseRecovery((prev) => !prev);
+                setMagicLinkTwoFactorError(null);
+              }}
+              hitSlop={Control.hit / 2}
+              accessibilityRole="button"
+              accessibilityLabel={magicLinkUseRecovery ? 'Use authenticator code instead' : 'Use recovery code instead'}
+              style={styles.twoFactorNoticeToggle}
+            >
+              <Text style={styles.twoFactorNoticeToggleText} maxFontSizeMultiplier={1.3}>
+                {magicLinkUseRecovery ? 'Use authenticator code' : 'Use recovery code'}
+              </Text>
+            </Pressable>
+
+            {magicLinkTwoFactorError ? (
+              <Text
+                style={styles.twoFactorNoticeError}
+                accessibilityLiveRegion="assertive"
+                maxFontSizeMultiplier={1.3}
+              >
+                {magicLinkTwoFactorError}
+              </Text>
+            ) : null}
+
+            <AnimatedPressable
+              style={[styles.twoFactorNoticePrimaryBtn, isMagicLinkTwoFactorVerifying && styles.socialBtnDisabled]}
+              activeOpacity={0.9}
+              onPress={handleVerifyMagicLinkTwoFactor}
+              disabled={isMagicLinkTwoFactorVerifying}
+              accessibilityRole="button"
+              accessibilityLabel="Verify two-factor code"
+              accessibilityHint="Submits your two-factor code and continues signing in"
+            >
+              {isMagicLinkTwoFactorVerifying ? (
+                <ActivityIndicator color={colors.textInverse} size="small" />
+              ) : (
+                <Text style={styles.twoFactorNoticePrimaryText} maxFontSizeMultiplier={1.2}>
+                  Verify
+                </Text>
+              )}
+            </AnimatedPressable>
+
+            <Pressable
+              onPress={cancelMagicLinkTwoFactor}
+              hitSlop={Control.hit / 2}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              accessibilityHint="Dismisses the two-factor prompt and returns to the sign-in screen"
+              style={styles.twoFactorNoticeCancel}
+            >
+              <Text style={styles.twoFactorNoticeCancelText} maxFontSizeMultiplier={1.3}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Bottom — CTAs. Per 2026 research (Gummble, Eleken), social login
             buttons go at the TOP — the old pattern of burying them below
             email fields is dead. Apple first (platform native on iOS),
@@ -340,6 +573,26 @@ export default function AuthLandingScreen() {
               )}
             </AnimatedPressable>
           ) : null}
+
+          {/* Passkey — phishing-resistant sign-in (NCSC recommended) */}
+          <AnimatedPressable
+            style={[styles.socialFullBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
+            activeOpacity={0.85}
+            onPress={handlePasskeySignIn}
+            disabled={!!socialLoading || isMagicLinkLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in with passkey"
+            accessibilityHint="Use Face ID, Touch ID, or a security key to sign in"
+          >
+            {socialLoading === 'passkey' ? (
+              <ActivityIndicator color={colors.textPrimary} size="small" />
+            ) : (
+              <>
+                <Ionicons name="key-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Sign in with passkey</Text>
+              </>
+            )}
+          </AnimatedPressable>
 
           {isMagicLinkLoading && (
             <Text style={styles.magicLinkLoadingText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.3}>
@@ -525,6 +778,93 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.danger,
     lineHeight: Type.caption.size + 2,
+  },
+  twoFactorNotice: {
+    paddingHorizontal: Space.lg + 4,
+    paddingVertical: Space.md + 2,
+    marginHorizontal: Space.lg + 4,
+    marginBottom: Space.xs + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+  },
+  twoFactorNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    marginBottom: Space.xs,
+  },
+  twoFactorNoticeIcon: {
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoFactorNoticeTitle: {
+    flex: 1,
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+  },
+  twoFactorNoticeBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 4,
+    marginBottom: Space.sm + 2,
+  },
+  twoFactorNoticePrimaryBtn: {
+    backgroundColor: colors.brand,
+    height: Space.xl + Space.xl + 4,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoFactorNoticePrimaryText: {
+    color: colors.textInverse,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.2,
+  },
+  twoFactorNoticeCancel: {
+    alignSelf: 'center',
+    marginTop: Space.sm,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  twoFactorNoticeCancelText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  twoFactorNoticeInput: {
+    marginBottom: Space.sm,
+  },
+  twoFactorNoticeToggle: {
+    alignSelf: 'flex-start',
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.xs,
+    marginBottom: Space.xs,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  twoFactorNoticeToggleText: {
+    color: colors.textSecondary,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    textDecorationLine: 'underline',
+  },
+  twoFactorNoticeError: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: colors.danger,
+    lineHeight: Type.caption.size + 2,
+    marginBottom: Space.sm,
   },
   primaryBtn: {
     backgroundColor: colors.brand,

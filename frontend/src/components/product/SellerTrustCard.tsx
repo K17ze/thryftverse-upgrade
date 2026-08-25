@@ -154,7 +154,8 @@ export function SellerTrustCard({
                 ))}
               </View>
             ) : null}
-            {/* Seller standards badges — derived from trust metrics */}
+            {/* Seller standards badges — fail-closed: only rendered when the
+                backend provides an explicit, persisted programme decision. */}
             {(() => {
               const earned = deriveSellerBadges(seller);
               if (earned.length === 0) return null;

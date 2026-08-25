@@ -107,6 +107,7 @@ import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterS
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { t } from '../i18n';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type ItemDetailRoute = RouteProp<RootStackParamList, 'ItemDetail'>;
 type ItemDetailNav = NativeStackNavigationProp<RootStackParamList>;
@@ -610,16 +611,16 @@ export default function ItemDetailScreen() {
     && item.originalPrice !== undefined
     && item.originalPrice > item.price!;
   const formattedPrice = hasPrice
-    ? formatFromFiat(item.price!, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(item.price!, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : 'Price unavailable';
   const formattedOriginal = hasDiscount
-    ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(item.originalPrice!, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
   const discountPercent = hasDiscount && item.originalPrice
     ? ((item.originalPrice - item.price!) / item.originalPrice) * 100
     : null;
   const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
-    ? formatFromFiat(serverCommerce.estimatedTotal, 'GBP', { displayMode: 'fiat' })
+    ? formatFromFiat(serverCommerce.estimatedTotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
   const priceIzeText = hasPrice && goldRates && displayMode !== 'fiat'
     ? formatIzeAmount(toIze(item.price!, 'GBP', goldRates))
@@ -1470,7 +1471,7 @@ export default function ItemDetailScreen() {
                 <View style={styles.moreLikeThisGrid}>
                   {visualSimilar.map((simItem) => {
                     const simPriceFormatted = simItem.price != null
-                      ? formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })
+                      ? formatFromFiat(simItem.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
                       : null;
                     return (
                     <Pressable
@@ -1848,7 +1849,7 @@ export default function ItemDetailScreen() {
           {commerce.buyerProtectionFee != null ? (
             <CommerceDetailMetricRow
               label="Buyer protection fee"
-              value={formatFromFiat(commerce.buyerProtectionFee, 'GBP', { displayMode: 'fiat' })}
+              value={formatFromFiat(commerce.buyerProtectionFee, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
             />
           ) : null}
           <CommerceDetailMetricRow

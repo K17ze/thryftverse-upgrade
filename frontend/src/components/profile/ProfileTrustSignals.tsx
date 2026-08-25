@@ -114,7 +114,9 @@ export function ProfileTrustSignals({
     chips.push({ icon: 'chatbubble-ellipses', label: `${sellerTrust.responseRate}% reply` });
   }
 
-  // Seller standards badges — derived from trust metrics
+  // Seller standards badges — fail-closed: only rendered when the backend
+  // provides an explicit, persisted programme decision via `badges` field.
+  // No client-side derivation from mutable summary values or regex over labels.
   const earnedBadges = deriveSellerBadges(sellerTrust ?? null);
   for (const badgeType of earnedBadges) {
     const badge = SELLER_BADGES[badgeType];

@@ -39,7 +39,7 @@ import { AppButton } from '../../ui/AppButton';
 import { CachedImage } from '../../CachedImage';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../../../context/CurrencyContext';
-import { CURRENCIES } from '../../../constants/currencies';
+import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../../../constants/currencies';
 import { useConnectivity } from '../../../hooks/useConnectivity';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
@@ -273,7 +273,7 @@ export function MakeOfferSheet({
         },
       });
 
-      const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
+      const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
       onSent({
         // Use the real conversation ID from the API response — never fabricate
         // an ID (§11). Null means the backend created the offer but did not
@@ -316,8 +316,8 @@ export function MakeOfferSheet({
 
   if (!listing) return null;
 
-  const askingDisplay = formatFromFiat(askingPriceGbp, 'GBP', { displayMode: 'fiat' });
-  const offerDisplayFormatted = formatFromFiat(numericOfferGbp, 'GBP', { displayMode: 'fiat' });
+  const askingDisplay = formatFromFiat(askingPriceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' });
+  const offerDisplayFormatted = formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' });
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.78}>
@@ -441,7 +441,7 @@ export function MakeOfferSheet({
               ]}
               accessibilityRole="button"
               accessibilityLabel={`Offer ${entry.discount} percent below asking price`}
-              accessibilityHint={`Sets your offer to ${formatFromFiat(askingPriceGbp * entry.fraction, 'GBP', { displayMode: 'fiat' })}`}
+              accessibilityHint={`Sets your offer to ${formatFromFiat(askingPriceGbp * entry.fraction, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
               accessibilityState={{ selected: isSelected }}
             >
               <Text
@@ -487,7 +487,7 @@ export function MakeOfferSheet({
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
             {SMART_SELL_DEMO_MODE ? 'Demo mode — ' : ''}
             Seller has Smart Sell enabled — offers above{' '}
-            {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
+            {formatFromFiat(smartSellThreshold, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} auto-accept
           </Text>
         </View>
       ) : null}

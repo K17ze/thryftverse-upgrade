@@ -77,6 +77,7 @@ import {
 import { t } from '../i18n';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { track, trackFunnelStep } from '../analytics';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -1340,7 +1341,7 @@ export default function CheckoutScreen() {
         ? 'Waiting for confirmation'
         : walletAvailable
           ? 'Pay with card'
-          : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
+          : `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1416,7 +1417,7 @@ export default function CheckoutScreen() {
             username: resolvedSeller.username,
             avatar: resolvedSeller.avatar,
           }}
-          priceLabel={formatFromFiat(item.price, 'GBP')}
+          priceLabel={formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}
           onPressSeller={
             resolvedSeller.id
               ? () => { haptics.tap(); openProfile(navigation, resolvedSeller.id, currentUser?.id); }
@@ -1449,7 +1450,7 @@ export default function CheckoutScreen() {
           label="Delivery"
           title={postageOption.label}
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' · Tracking' : ''}`}
-          actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
+          actionLabel={formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}
           onPress={canChangePostage ? handleDeliveryPress : undefined}
           icon="cube-outline"
           isFilled={!!postageOption.carrierId}
@@ -1460,7 +1461,7 @@ export default function CheckoutScreen() {
                 ? undefined
                 : shippingError ?? undefined
           }
-          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
+          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}`}
         />
 
         {/* 5. Payment method — unified with address/delivery row family */}
@@ -1528,8 +1529,8 @@ export default function CheckoutScreen() {
               </View>
               <View style={styles.balanceTextCol}>
                 <Text style={[styles.balanceLabel, t.balanceLabel]} maxFontSizeMultiplier={1}>Use wallet balance</Text>
-                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1}>
-                  {formatFromFiat(walletBalance, 'GBP')} available
+                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1} accessibilityLabel={`${formatFromFiat(walletBalance, DEFAULT_CURRENCY_CODE)} available`}>
+                  {formatFromFiat(walletBalance, DEFAULT_CURRENCY_CODE)} available
                 </Text>
               </View>
             </Pressable>
@@ -1540,7 +1541,7 @@ export default function CheckoutScreen() {
           <View style={[styles.savingsBadge, t.savingsBadge]}>
             <Ionicons name="wallet-outline" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1}>
-              Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
+              Saving {formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)} with wallet balance
             </Text>
           </View>
         )}
@@ -1601,25 +1602,25 @@ export default function CheckoutScreen() {
           style={styles.compactSummary}
           onPress={() => { haptics.tap(); setBreakdownSheetVisible(true); }}
           accessibilityRole="button"
-          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, 'GBP')}, Delivery ${formatFromFiat(POSTAGE_FEE, 'GBP')}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, 'GBP')}. Total ${formatFromFiat(TOTAL, 'GBP')}. View full breakdown.`}
+          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}, Delivery ${formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)}. Total ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}. View full breakdown.`}
           accessibilityHint="Open the full cost breakdown and returns policy"
         >
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Item</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Delivery</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Buyer protection</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, 'GBP')}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)}</Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <View style={styles.compactSummaryRow}>
               <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Wallet applied</Text>
-              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, 'GBP')}</Text>
+              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)}</Text>
             </View>
           )}
           <View style={[styles.compactSummaryDivider, t.compactSummaryDivider]} />
@@ -1629,10 +1630,10 @@ export default function CheckoutScreen() {
               <Text
                 style={[styles.compactSummaryTotalValue, t.compactSummaryTotalValue]}
                 accessibilityLiveRegion="polite"
-                accessibilityLabel={`Total ${formatFromFiat(TOTAL, 'GBP')}`}
+                accessibilityLabel={`Total ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`}
                 maxFontSizeMultiplier={2}
               >
-                {formatFromFiat(TOTAL, 'GBP')}
+                {formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}
               </Text>
             </View>
             <View style={styles.breakdownChevron}>
@@ -1662,7 +1663,7 @@ export default function CheckoutScreen() {
               ]}
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
-              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with Apple Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-apple" size={22} color={colors.textInverse} aria-hidden={true} />
@@ -1682,7 +1683,7 @@ export default function CheckoutScreen() {
               ]}
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
-              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Google Pay`}
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with Google Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-google" size={22} color={colors.textInverse} aria-hidden={true} />
@@ -1702,8 +1703,8 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               walletAvailable
-                ? `Pay ${formatFromFiat(TOTAL, 'GBP')} with card`
-                : `Pay ${formatFromFiat(TOTAL, 'GBP')}`
+                ? `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} with card`
+                : `Pay ${formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}`
             }
             accessibilityState={{
               disabled: !checkoutEligible || isInteractionLocked,
@@ -1766,26 +1767,26 @@ export default function CheckoutScreen() {
       >
         <View style={styles.breakdownSheetContent}>
           <Text style={[styles.breakdownSheetTitle, t.breakdownSheetTitle]}>Full breakdown</Text>
-          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
-          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
+          <PriceRow label="Item" value={formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)} />
+          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, DEFAULT_CURRENCY_CODE)} />
           <PriceRow
             label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
-            value={formatFromFiat(POSTAGE_FEE, 'GBP')}
+            value={formatFromFiat(POSTAGE_FEE, DEFAULT_CURRENCY_CODE)}
           />
           <View style={styles.protectionIncludedRow}>
             <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
-              Includes buyer protection — funds held in escrow until you confirm
+              Includes buyer protection — funds held until you receive your order
             </Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <>
               <PriceRow
                 label="Wallet balance applied"
-                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
+                value={`-${formatFromFiat(balanceApplied, DEFAULT_CURRENCY_CODE)}`}
               />
               <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
-              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
+              <PriceRow label="To pay" value={formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)} bold />
             </>
           )}
           {!useBalance && (
@@ -1794,7 +1795,7 @@ export default function CheckoutScreen() {
           <View style={styles.breakdownSheetTotalRow}>
             <Text style={[styles.breakdownSheetTotalLabel, t.breakdownSheetTotalLabel]}>Total</Text>
             <Text style={[styles.breakdownSheetTotalValue, t.breakdownSheetTotalValue]}>
-              {formatFromFiat(TOTAL, 'GBP')}
+              {formatFromFiat(TOTAL, DEFAULT_CURRENCY_CODE)}
             </Text>
           </View>
           <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />

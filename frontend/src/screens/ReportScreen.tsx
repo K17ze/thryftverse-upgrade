@@ -19,6 +19,14 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { useConnectivity } from '../hooks/useConnectivity';
 
+type EvidenceState = 'uploading' | 'attached' | 'submitted';
+
+interface EvidenceItem {
+  id: string;
+  uri: string;
+  state: EvidenceState;
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
 const REPORT_REASONS: Array<{
@@ -114,13 +122,14 @@ export default function ReportScreen({ navigation, route }: Props) {
   const [selectedReason, setSelectedReason] =
     useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
-  const [evidenceUris, setEvidenceUris] = useState<string[]>([]);
+  const [evidenceItems, setEvidenceItems] = useState<EvidenceItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [hasBlocked, setHasBlocked] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
 
   const canSubmit =
     Boolean(targetId) &&
@@ -129,7 +138,7 @@ export default function ReportScreen({ navigation, route }: Props) {
     !isUploading;
 
   const handlePickEvidence = useCallback(async () => {
-    if (evidenceUris.length >= 3) {
+    if (evidenceItems.length >= 3) {
       show('Attach up to 3 photos.', 'info');
       return;
     }
@@ -147,26 +156,46 @@ export default function ReportScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 3 - evidenceUris.length,
+        selectionLimit: 3 - evidenceItems.length,
       });
       if (result.canceled || !result.assets?.length) return;
+      const placeholders: EvidenceItem[] = result.assets.map((_, idx) => ({
+        id: `pick_${Date.now()}_${idx}`,
+        uri: '',
+        state: 'uploading',
+      }));
+      setEvidenceItems((prev) => [...prev, ...placeholders]);
       setIsUploading(true);
-      const uploaded: string[] = [];
-      for (const asset of result.assets) {
-        const media = await uploadMedia(asset.uri, 'evidence');
-        uploaded.push(media.publicUrl);
+      let successCount = 0;
+      for (let i = 0; i < result.assets.length; i++) {
+        try {
+          const media = await uploadMedia(result.assets[i].uri, 'evidence');
+          setEvidenceItems((prev) =>
+            prev.map((it) =>
+              it.id === placeholders[i].id
+                ? { ...it, uri: media.publicUrl, state: 'attached' }
+                : it
+            )
+          );
+          successCount++;
+        } catch {
+          setEvidenceItems((prev) => prev.filter((it) => it.id !== placeholders[i].id));
+        }
       }
-      setEvidenceUris((prev) => [...prev, ...uploaded]);
-      show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
+      if (successCount > 0) {
+        show(`${successCount} photo${successCount > 1 ? 's' : ''} attached.`, 'success');
+      } else {
+        show('Unable to upload photo(s). Try again.', 'error');
+      }
     } catch {
       show('Unable to upload photo(s). Try again.', 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceUris.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show]);
 
   const handleTakeEvidence = useCallback(async () => {
-    if (evidenceUris.length >= 3) {
+    if (evidenceItems.length >= 3) {
       show('Attach up to 3 photos.', 'info');
       return;
     }
@@ -187,42 +216,69 @@ export default function ReportScreen({ navigation, route }: Props) {
         quality: 0.85,
       });
       if (result.canceled || !result.assets?.length) return;
+      const placeholder: EvidenceItem = {
+        id: `cam_${Date.now()}`,
+        uri: '',
+        state: 'uploading',
+      };
+      setEvidenceItems((prev) => [...prev, placeholder]);
       setIsUploading(true);
-      const media = await uploadMedia(result.assets[0].uri, 'evidence');
-      setEvidenceUris((prev) => [...prev, media.publicUrl]);
-      show('Photo attached.', 'success');
+      try {
+        const media = await uploadMedia(result.assets[0].uri, 'evidence');
+        setEvidenceItems((prev) =>
+          prev.map((it) =>
+            it.id === placeholder.id
+              ? { ...it, uri: media.publicUrl, state: 'attached' }
+              : it
+          )
+        );
+        show('Photo attached.', 'success');
+      } catch {
+        setEvidenceItems((prev) => prev.filter((it) => it.id !== placeholder.id));
+        show('Unable to upload photo. Try again.', 'error');
+      }
     } catch {
       show('Unable to upload photo. Try again.', 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceUris.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show]);
 
-  const handleRemoveEvidence = useCallback((index: number) => {
-    setEvidenceUris((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveEvidence = useCallback((id: string) => {
+    setEvidenceItems((prev) => prev.filter((it) => it.id !== id));
   }, []);
 
   const handleSubmit = async () => {
     if (!canSubmit || !selectedReason || !targetId) return;
     setIsSubmitting(true);
     try {
+      const evidenceUris = evidenceItems
+        .filter((e) => e.state === 'attached')
+        .map((e) => e.uri);
+      const evidenceParam = evidenceUris.length ? evidenceUris : undefined;
       let result: { reportId: string };
       if (type === 'user') {
-        result = await reportUser(targetId, selectedReason, details.trim() || undefined);
+        result = await reportUser(targetId, selectedReason, details.trim() || undefined, evidenceParam);
       } else if (type === 'group') {
         result = await reportConversationOnApi(
           targetId,
           selectedReason,
           details.trim() || undefined,
+          undefined,
+          undefined,
+          evidenceParam,
         );
       } else {
         result = await reportListing(
           targetId,
           selectedReason as ListingReportReason,
-          details.trim() || undefined
+          details.trim() || undefined,
+          evidenceParam
         );
       }
       setReportId(result.reportId);
+      setEvidenceItems((prev) => prev.map((it) => ({ ...it, state: 'submitted' as const })));
+      setSubmittedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
       setIsSubmitted(true);
     } catch {
       show('The report could not be sent. Check your connection and try again.', 'error');
@@ -252,7 +308,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report submitted"
+            title="Report received"
             onBack={() => navigation.goBack()}
           />
         }
@@ -263,16 +319,36 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textPrimary}
           />
-          <Text style={styles.completeTitle}>Report submitted</Text>
+          <Text style={styles.completeTitle}>Report received</Text>
           {reportId ? (
             <Text style={styles.reportIdText}>
               Report #{reportId}
             </Text>
           ) : null}
           <Text style={styles.completeBody}>
-            Report submitted. We'll review within 24 hours and take action
-            if a policy is violated.
+            We'll review and let you know the outcome.
           </Text>
+          {submittedAt ? (
+            <Text style={styles.submittedAtText}>
+              Received at {submittedAt}
+            </Text>
+          ) : null}
+          {evidenceItems.length > 0 ? (
+            <View style={styles.submittedEvidence}>
+              {evidenceItems.map((item) => (
+                <View key={item.id} style={styles.evidenceTileWrap}>
+                  <RNImage
+                    source={{ uri: item.uri }}
+                    style={styles.evidenceTile}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.evidenceStateBadge}>
+                    <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {reportId ? (
             <Text style={styles.reportIdNote}>
               Reference this number in future support contact.
@@ -466,30 +542,46 @@ export default function ReportScreen({ navigation, route }: Props) {
 
           {/* Evidence photo upload */}
           <Text style={styles.evidenceLabel}>Evidence photos (optional)</Text>
-          {evidenceUris.length > 0 ? (
+          {evidenceItems.length > 0 ? (
             <View style={styles.evidenceGrid}>
-              {evidenceUris.map((uri, i) => (
-                <View key={uri + i} style={styles.evidenceTileWrap}>
-                  <RNImage
-                    source={{ uri }}
-                    style={styles.evidenceTile}
-                    resizeMode="cover"
-                    accessibilityLabel={`Evidence photo ${i + 1}`}
-                  />
-                  <Pressable
-                    style={styles.evidenceRemoveBtn}
-                    onPress={() => handleRemoveEvidence(i)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove evidence photo ${i + 1}`}
-                  >
-                    <Ionicons name="close-circle" size={22} color={colors.danger} />
-                  </Pressable>
+              {evidenceItems.map((item, i) => (
+                <View key={item.id} style={styles.evidenceTileWrap}>
+                  {item.uri ? (
+                    <RNImage
+                      source={{ uri: item.uri }}
+                      style={styles.evidenceTile}
+                      resizeMode="cover"
+                      accessibilityLabel={`Evidence photo ${i + 1}`}
+                    />
+                  ) : (
+                    <View style={[styles.evidenceTile, styles.evidenceTilePlaceholder]} />
+                  )}
+                  {item.state === 'uploading' ? (
+                    <View style={styles.evidenceStateOverlay}>
+                      <ActivityIndicator size="small" color={colors.textPrimary} />
+                    </View>
+                  ) : null}
+                  {item.state === 'attached' ? (
+                    <View style={styles.evidenceStateBadge}>
+                      <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                    </View>
+                  ) : null}
+                  {item.state === 'attached' ? (
+                    <Pressable
+                      style={styles.evidenceRemoveBtn}
+                      onPress={() => handleRemoveEvidence(item.id)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove evidence photo ${i + 1}`}
+                    >
+                      <Ionicons name="close-circle" size={22} color={colors.danger} />
+                    </Pressable>
+                  ) : null}
                 </View>
               ))}
             </View>
           ) : null}
-          {evidenceUris.length < 3 ? (
+          {evidenceItems.length < 3 ? (
             <View style={styles.evidenceUploadRow}>
               <AnimatedPressable
                 style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -520,7 +612,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <Text style={styles.evidenceCount}>
-            {evidenceUris.length}/3 photos
+            {evidenceItems.length}/3 photos
           </Text>
         </View>
       ) : null}
@@ -671,6 +763,29 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  evidenceTilePlaceholder: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  evidenceStateOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  evidenceStateBadge: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+    width: Space.lg - Space.xs,
+    height: Space.lg - Space.xs,
+    borderRadius: Radius.full,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   evidenceUploadRow: {
     flexDirection: 'row',
     gap: Space.sm,
@@ -754,6 +869,22 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight + 2,
     textAlign: 'center',
+  },
+  submittedAtText: {
+    marginTop: Space.xs,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
+    textAlign: 'center',
+  },
+  submittedEvidence: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    marginTop: Space.md,
+    justifyContent: 'center',
   },
   doneAction: {
     minWidth: 150,

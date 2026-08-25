@@ -54,6 +54,7 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -155,11 +156,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  // 'saved' is retained in the union so a stale value (e.g. from a previous
-  // session) can be guarded against in render, even though the Saved tab is no
-  // longer offered in the identity rail. Saved remains reachable via the
-  // utility rail / Closet navigation.
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'saved' | 'about'>('listings');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
   const tabContentY = React.useRef(0);
 
   const { show } = useToast();
@@ -725,8 +722,8 @@ export default function MyProfileScreen() {
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
-            onPressFollowers={() => { haptic.light(); navigation.navigate('Followers', { userId: currentUser!.id }); }}
-            onPressFollowing={() => { haptic.light(); navigation.navigate('Following', { userId: currentUser!.id }); }}
+            onPressFollowers={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'followers' }); }}
+            onPressFollowing={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'following' }); }}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
@@ -781,7 +778,7 @@ export default function MyProfileScreen() {
               { key: 'looks', label: 'Looks', count: myLooks.length },
               { key: 'about', label: 'About' },
             ]}
-            activeKey={activeTab === 'saved' ? 'listings' : activeTab}
+            activeKey={activeTab}
             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
           />
         </View>
@@ -886,7 +883,7 @@ export default function MyProfileScreen() {
                             />
                             <View style={styles.heroPriceOverlay} pointerEvents="none">
                               <Text style={[styles.heroPriceText, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
-                                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                               </Text>
                               {item.brand ? (
                                 <Text style={[styles.heroBrandText, { color: colors.scrimTextSecondary }]} numberOfLines={1}>{item.brand}</Text>
@@ -899,7 +896,7 @@ export default function MyProfileScreen() {
                       {isHero ? null : (
                         <>
                           <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                            {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                            {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
                           </Text>
                           {item.brand ? (
                             <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>

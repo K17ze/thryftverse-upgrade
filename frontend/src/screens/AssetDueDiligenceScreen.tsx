@@ -59,6 +59,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -506,7 +507,7 @@ export default function AssetDueDiligenceScreen() {
               {navPerUnitGbp != null && (
                 <CommerceDetailMetricRow
                   label="NAV / unit"
-                  value={formatFromFiat(navPerUnitGbp, 'GBP')}
+                  value={formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)}
                 />
               )}
               {referenceVsNavPct != null && (

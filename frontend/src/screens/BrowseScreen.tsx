@@ -632,7 +632,9 @@ export default function BrowseScreen() {
       if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
       if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
 
-      // Sustainable — client-side heuristic: only A/B graded items.
+      // Sustainable — fail-closed: returns false in production (no real
+      // data), so the filter yields no results until a backend impact
+      // service or seller tags exist.
       if (
         browseFilters.sustainableOnly &&
         !isSustainableGrade({
@@ -691,9 +693,9 @@ export default function BrowseScreen() {
     </View>
   );
 
-  // Sustainability is a client-side heuristic, so it must be applied to both
-  // the cached list and the backend-filtered list (the backend does not know
-  // about the grade).
+  // Sustainability filter is fail-closed: isSustainableGrade returns false
+  // in production (no real data), so this filter yields no results until a
+  // backend impact service or seller tags exist.
   const displayListings = useMemo(() => {
     const base = backendListings ?? dataToRender;
     if (!browseFilters.sustainableOnly) return base;

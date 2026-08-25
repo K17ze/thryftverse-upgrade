@@ -3,11 +3,12 @@
  *
  * Lets the user set carbon-saving targets, a secondhand ratio goal, preferred
  * shipping/packaging, and toggle sustainability badges, impact tracking and
- * local-first prioritisation. A stats summary shows the user's impact.
+ * local-first prioritisation.
  *
- * Per AGENTS.md §11 (Truthful UI): impact stats are illustrative in demo mode,
- * so a "Demo mode" indicator is always shown. We never claim the figures come
- * from a live backend — they are session-local and clearly labelled.
+ * Per AGENTS.md §11 (Truthful UI): impact data is not yet available from a
+ * backend service, so an honest empty state is shown instead of fabricated
+ * figures. User preferences are persisted locally and will be used to
+ * personalize the experience once real impact data exists.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
@@ -17,7 +18,7 @@
  * - All colors via useAppTheme(), all geometry via design tokens
  *
  * State coverage (per AGENTS.md §14):
- * - Populated: full preference set with illustrative impact stats
+ * - Populated: full preference set with honest empty-state for impact
  * - Disabled: master toggle disables dependent rows
  */
 
@@ -35,9 +36,6 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SustainabilityPreferences'>;
-
-// Demo mode flag — the sustainability impact service is mock in this build.
-const SUSTAINABILITY_DEMO_MODE = __DEV__;
 
 // Carbon-saving target options (kg CO2 per year).
 const CARBON_TARGETS = [10, 25, 50, 100, 250];
@@ -125,10 +123,6 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
     ).catch(() => {});
   }, [hydrated, carbonTarget, ratioTarget, carbonNeutralShipping, plasticFreePackaging, showBadges, trackImpact, localFirst]);
 
-  // Illustrative impact stats (demo mode).
-  const co2SavedKg = 34;
-  const itemsRescued = 12;
-
   const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
     haptic.selection();
     setter(v);
@@ -153,35 +147,14 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {SUSTAINABILITY_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Impact figures are illustrative in demo mode.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Impact summary — flat intro block ── */}
+      {/* ── Impact summary — honest empty state (fail-closed per AGENTS.md §11) ── */}
         <View style={styles.summaryBlock}>
           <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Your impact</Text>
-          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
-            {co2SavedKg} kg CO₂ saved · {itemsRescued} items kept from landfill
-          </Text>
-          <View style={styles.statsRow}>
-            <View style={[styles.statCell, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.statValue, { color: colors.success }]}>{co2SavedKg}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>kg CO₂ saved</Text>
-            </View>
-            <View style={[styles.statCell, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.statValue, { color: colors.success }]}>{itemsRescued}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>items rescued</Text>
-            </View>
+          <View style={[styles.emptyStateWrap, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="leaf-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+              Impact tracking is being calibrated. Your sustainability preferences are saved and will be used to personalize your experience once impact data is available.
+            </Text>
           </View>
         </View>
 
@@ -295,23 +268,6 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
-    demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      color: colors.textSecondary,
-      flex: 1,
-    },
     summaryBlock: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
@@ -323,34 +279,20 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    summarySubtitle: {
+    emptyStateWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+      borderRadius: Radius.lg,
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      marginTop: Space.sm,
+    },
+    emptyStateText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
-    statsRow: {
-      flexDirection: 'row',
-      gap: Space.sm,
-      marginTop: Space.md,
-    },
-    statCell: {
       flex: 1,
-      borderRadius: Radius.md,
-      paddingVertical: Space.sm + 2,
-      paddingHorizontal: Space.md,
-      alignItems: 'center',
-    },
-    statValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    statLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
     },
     goalRow: {
       paddingHorizontal: Space.md,

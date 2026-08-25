@@ -31,11 +31,15 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  mapApiMessageToConversationMessage,
 } from "../../services/chatApi";
 import { uploadMedia } from "../../services/mediaUpload";
 import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
+  useChatMessageDeletedEvent,
+  useChatReactionEvent,
+  useChatReadReceiptEvent,
   realtimePayloadToMessage,
   chatConversationTopic,
   type ChatMessageCreatedPayload,
@@ -48,6 +52,7 @@ import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { CurrencyDisplayMode } from "../../utils/currency";
 
 import type { Message } from "./types";
@@ -124,6 +129,12 @@ export function useConversationMessages({
   const [syncError, setSyncError] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  // P0.6: Cursor-based pagination state. oldestCursor is used to fetch
+  // older history incrementally; newestCursor is used to detect gaps.
+  const [oldestCursor, setOldestCursor] = useState<string | undefined>(undefined);
+  const [newestCursor, setNewestCursor] = useState<string | undefined>(undefined);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
   const [composerSending, setComposerSending] = useState(false);
 
@@ -157,9 +168,14 @@ export function useConversationMessages({
     setIsSyncing(true);
     setSyncError(false);
     try {
-      const syncedMessages = await fetchConversationMessagesFromApi(conversationId);
-      if (!syncedMessages.length) return;
+      const { messages: apiMessages, oldestCursor: oc, newestCursor: nc } = await fetchConversationMessagesFromApi(conversationId);
+      if (!apiMessages.length) return;
+      const syncedMessages = apiMessages.map(mapApiMessageToConversationMessage);
       replaceConversationMessages(conversationId, syncedMessages);
+      // P0.6: Capture cursors for incremental pagination.
+      setOldestCursor(oc);
+      setNewestCursor(nc);
+      setHasMoreOlder(Boolean(oc));
     } catch {
       setSyncError(true);
     } finally {
@@ -180,6 +196,37 @@ export function useConversationMessages({
     );
     return () => unsubscribe();
   }, [syncMessagesFromApi]);
+
+  // P0.6: Incremental older-history load using the oldestCursor. Prepends
+  // older messages to the list without losing scroll position. The caller
+  // (onScroll handler) is responsible for preserving the visual anchor.
+  const loadOlderMessages = useCallback(async () => {
+    if (!conversationId || !oldestCursor || !hasMoreOlder || isLoadingOlder) return;
+    setIsLoadingOlder(true);
+    try {
+      const { messages: olderMessages, oldestCursor: oc } = await fetchConversationMessagesFromApi(
+        conversationId,
+        { before: oldestCursor },
+      );
+      if (!olderMessages.length) {
+        setHasMoreOlder(false);
+        return;
+      }
+      const mapped = olderMessages.map(mapApiMessageToConversationMessage) as Message[];
+      setMessages((prev) => {
+        // Dedup by id — if a resnapshot already loaded some of these.
+        const existingIds = new Set(prev.map((m) => m.id));
+        const deduped = mapped.filter((m) => !existingIds.has(m.id));
+        return [...deduped, ...prev];
+      });
+      setOldestCursor(oc);
+      setHasMoreOlder(Boolean(oc));
+    } catch {
+      // Silently fail — the user can retry by scrolling up again.
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [conversationId, oldestCursor, hasMoreOlder, isLoadingOlder]);
 
   // AppState listener — sync on foreground
   useEffect(() => {
@@ -214,8 +261,8 @@ export function useConversationMessages({
       senderLabel: currentUser?.username ?? "you",
       text:
         (counterRound ?? 0) > 0
-          ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
-          : `Offer: ${formatFromFiat(price, "GBP")}`,
+          ? `Counter-offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`
+          : `Offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`,
       offer: {
         offerId,
         price,
@@ -326,6 +373,87 @@ export function useConversationMessages({
         scheduleScrollToEnd();
       },
       [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd],
+    ),
+  );
+
+  // P0.9: Consume delete realtime events — remove the message from the local
+  // list when the server confirms a delete (for-me or for-everyone). This
+  // handles second-device state and optimistic reconciliation.
+  useChatMessageDeletedEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; scope: 'me' | 'everyone'; deletedBy: string }) => {
+        setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
+      },
+      [],
+    ),
+  );
+
+  // P0.9: Consume reaction realtime events — update the local message's
+  // reactions when another participant adds or removes a reaction.
+  useChatReactionEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; emoji: string; userId: string; action: 'added' | 'removed' }) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== event.messageId) return m;
+            const reactions = [...(m.reactions ?? [])];
+            const idx = reactions.findIndex((r) => r.emoji === event.emoji);
+            const isMe = event.userId === currentUser?.id;
+            if (event.action === 'added') {
+              if (idx >= 0) {
+                reactions[idx] = {
+                  ...reactions[idx],
+                  count: reactions[idx].count + 1,
+                  reactedByMe: reactions[idx].reactedByMe || isMe,
+                };
+              } else {
+                reactions.push({ emoji: event.emoji, count: 1, reactedByMe: isMe });
+              }
+            } else {
+              if (idx >= 0) {
+                const nextCount = reactions[idx].count - 1;
+                if (nextCount <= 0) {
+                  reactions.splice(idx, 1);
+                } else {
+                  reactions[idx] = {
+                    ...reactions[idx],
+                    count: nextCount,
+                    reactedByMe: reactions[idx].reactedByMe && !isMe ? true : !isMe && reactions[idx].reactedByMe,
+                  };
+                }
+              }
+            }
+            return { ...m, reactions };
+          }),
+        );
+      },
+      [currentUser?.id],
+    ),
+  );
+
+  // P0.9: Consume read receipt realtime events — when another participant
+  // reads the conversation, mark all of our messages sent before the read
+  // cursor as "read". This closes the second-device read-state gap.
+  useChatReadReceiptEvent(
+    conversationId,
+    useCallback(
+      (event: { userId: string; readAt: string }) => {
+        if (event.userId === currentUser?.id) return; // ignore our own read
+        const readAtTime = new Date(event.readAt).getTime();
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.sender !== 'me') return m;
+            const msgTime = m.date ? new Date(m.date).getTime() : 0;
+            if (msgTime <= readAtTime && m.readStatus !== 'read') {
+              return { ...m, readStatus: 'read' as const };
+            }
+            return m;
+          }),
+        );
+      },
+      [currentUser?.id],
     ),
   );
 
@@ -561,27 +689,35 @@ export function useConversationMessages({
   );
 
   const sendMediaMessage = useCallback(
-    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string) => {
+    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string, existingCanonicalUrl?: string) => {
       if (!conversationId) return;
       // P0-MSG-2: stable clientMessageId for idempotent media send/retry.
       const clientMessageId = createStableId('cmsg');
 
-      // P0.4: Upload via the canonical media platform BEFORE sending the
-      // message. The raw file:/// URI is only valid on the sender's device.
-      // uploadMedia() does presign → PUT → finalize → returns a canonical
-      // publicUrl that recipients and second devices can read.
+      // P0.7: If a canonical URL from a previous successful upload already
+      // exists (retry scenario), reuse it — do NOT re-upload. Re-uploading
+      // would create duplicate media_assets rows and waste bandwidth. The
+      // canonical URL is immutable once finalized.
       let canonicalUrl: string;
-      try {
-        const uploaded = await uploadMedia(uri, 'uploads');
-        canonicalUrl = uploaded.publicUrl;
-      } catch {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
-          ),
-        );
-        show("Upload failed. Tap media to retry.", "error");
-        return;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        // P0.4: Upload via the canonical media platform BEFORE sending the
+        // message. The raw file:/// URI is only valid on the sender's device.
+        // uploadMedia() does presign → PUT → finalize → returns a canonical
+        // publicUrl that recipients and second devices can read.
+        try {
+          const uploaded = await uploadMedia(uri, 'uploads');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          show("Upload failed. Tap media to retry.", "error");
+          return;
+        }
       }
 
       // P0-MSG-1: send a discriminated media payload with the CANONICAL URL
@@ -602,12 +738,23 @@ export function useConversationMessages({
           );
         })
         .catch(() => {
+          // P0.4: The upload succeeded but the message send response was
+          // dropped — this is an UNKNOWN outcome, not a known failure. The
+          // server may have created the message. Enter reconciling state and
+          // enqueue to the durable outbox so the drain can replay with the
+          // same clientMessageId (server dedups) and canonical URL (no
+          // re-upload needed).
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
             ),
           );
-          show("Upload failed. Tap media to retry.", "error");
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: caption ?? "",
+            metadata: { mediaUri: canonicalUrl, type: mediaType },
+          });
         });
 
       if (!pushPermissionAskedRef.current) {
@@ -624,10 +771,18 @@ export function useConversationMessages({
         const msg = prev.find((m) => m.id === msgId);
         if (!msg?.mediaUri || !msg.mediaType) return prev;
         if (msg.uploadStatus === "uploading") return prev;
-        // Trigger upload after state update. Forward any caption text so a
-        // retried media send preserves the user's original caption.
+        // P0.7: If the media was already uploaded (canonical URL exists),
+        // pass it so sendMediaMessage skips re-upload and only retries the
+        // message send with the same clientMessageId.
+        const alreadyUploaded = msg.mediaUri.startsWith('http');
         setTimeout(
-          () => sendMediaMessage(msgId, msg.mediaUri!, msg.mediaType!, msg.text || undefined),
+          () => sendMediaMessage(
+            msgId,
+            msg.mediaUri!,
+            msg.mediaType!,
+            msg.text || undefined,
+            alreadyUploaded ? msg.mediaUri : undefined,
+          ),
           0,
         );
         return prev.map((m) =>
@@ -784,28 +939,52 @@ export function useConversationMessages({
 
   const handleDeleteMessage = useCallback(
     (msg: Message) => {
-      Alert.alert("Delete message?", "This message will be removed.", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            haptic.medium();
-            deleteApiStatusRef.current = "pending";
-            setRecentlyDeleted([msg]);
-            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-            scheduleUndoClear();
-            try {
-              if (!conversationId) throw new Error("No conversation");
-              await deleteConversationMessageOnApi(conversationId, msg.id, 'me');
-              deleteApiStatusRef.current = "success";
-            } catch {
-              deleteApiStatusRef.current = "error";
-              show("Message deleted locally. It may still be visible to others.", "info");
-            }
+      const isOwnMessage = msg.sender === "me";
+      const messageAgeMs = msg.date ? Date.now() - new Date(msg.date).getTime() : Infinity;
+      const withinDeleteWindow = messageAgeMs < 24 * 60 * 60 * 1000;
+      const canDeleteForEveryone = isOwnMessage && withinDeleteWindow;
+
+      const performDelete = async (scope: 'me' | 'everyone') => {
+        haptic.medium();
+        deleteApiStatusRef.current = "pending";
+        setRecentlyDeleted([msg]);
+        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+        scheduleUndoClear();
+        try {
+          if (!conversationId) throw new Error("No conversation");
+          await deleteConversationMessageOnApi(conversationId, msg.id, scope);
+          deleteApiStatusRef.current = "success";
+        } catch {
+          deleteApiStatusRef.current = "error";
+          show(scope === 'everyone'
+            ? "Delete failed. The message may still be visible to others."
+            : "Message deleted locally. It may still be visible to others.", "info");
+        }
+      };
+
+      if (canDeleteForEveryone) {
+        Alert.alert("Delete message?", "Choose how to delete this message.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete for me",
+            onPress: () => performDelete('me'),
           },
-        },
-      ]);
+          {
+            text: "Delete for everyone",
+            style: "destructive",
+            onPress: () => performDelete('everyone'),
+          },
+        ]);
+      } else {
+        Alert.alert("Delete message?", "This message will be removed for you.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => performDelete('me'),
+          },
+        ]);
+      }
     },
     [conversationId, haptic, show, scheduleUndoClear],
   );
@@ -887,8 +1066,14 @@ export function useConversationMessages({
       const isNearBottom =
         contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
       setShowScrollToBottom(!isNearBottom);
+      // P0.6: Trigger incremental history load when the user scrolls near
+      // the top. The FlashList's maintainVisibleContentPosition or the
+      // screen's scroll-anchor logic preserves the visual position.
+      if (contentOffset.y < 100 && hasMoreOlder && !isLoadingOlder) {
+        void loadOlderMessages();
+      }
     },
-    [],
+    [hasMoreOlder, isLoadingOlder, loadOlderMessages],
   );
 
   return {
@@ -923,5 +1108,8 @@ export function useConversationMessages({
     unreadDividerIndex,
     handleMessageListScroll,
     syncMessagesFromApi,
+    loadOlderMessages,
+    isLoadingOlder,
+    hasMoreOlder,
   };
 }

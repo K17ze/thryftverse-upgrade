@@ -124,8 +124,8 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
     { label: 'UserProfile', screen: 'UserProfile', needsData: 'user' },
     { label: 'Closet', screen: 'Closet' },
     { label: 'MyOrders', screen: 'MyOrders' },
-    { label: 'CreatePoster', screen: 'CreatePoster' },
-    { label: 'CreateLook', screen: 'CreateLook' },
+    { label: 'CreatorStudio (poster)', screen: 'CreatorStudio', params: { type: 'poster' } },
+    { label: 'CreatorStudio (look)', screen: 'CreatorStudio', params: { type: 'look' } },
     { label: 'ItemDetail', screen: 'ItemDetail', needsData: 'listing' },
   ];
 

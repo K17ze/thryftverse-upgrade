@@ -22,6 +22,7 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { CommerceDetailMetricRow } from './CommerceDetailMetricRow';
 import type { ListingCommerceContext } from '../../../platform/product';
+import { DEFAULT_CURRENCY_CODE } from '../../../constants/currencies';
 import type { SupportedCurrencyCode } from '../../../constants/currencies';
 import { formatShortDate } from '../../../utils/dateFormat';
 
@@ -55,7 +56,7 @@ export function ShippingReturnsInfo({
   const shippingCostLabel = (() => {
     if (isFreeShipping) return 'Free shipping';
     if (commerce.shippingPrice != null) {
-      return `Shipping: ${formatFromFiat(commerce.shippingPrice, (commerce.currency || 'GBP') as SupportedCurrencyCode, { displayMode: 'fiat' })}`;
+      return `Shipping: ${formatFromFiat(commerce.shippingPrice, (commerce.currency || DEFAULT_CURRENCY_CODE) as SupportedCurrencyCode, { displayMode: 'fiat' })}`;
     }
     return 'Shipping calculated at checkout';
   })();
@@ -70,15 +71,17 @@ export function ShippingReturnsInfo({
   })();
 
   const returnsLabel = commerce.returnPolicy
-    ? commerce.returnPolicy.accepted
+    ? commerce.returnPolicy.accepted === true
       ? commerce.returnPolicy.windowDays
         ? `${commerce.returnPolicy.windowDays}-day returns`
         : 'Returns accepted'
-      : 'No returns'
+      : commerce.returnPolicy.accepted === false
+        ? 'No returns'
+        : 'Confirmed at checkout'
     : 'Confirmed at checkout';
 
   const restockingLabel = restockingFeeGbp != null && restockingFeeGbp > 0
-    ? formatFromFiat(restockingFeeGbp, (commerce.currency || 'GBP') as SupportedCurrencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(restockingFeeGbp, (commerce.currency || DEFAULT_CURRENCY_CODE) as SupportedCurrencyCode, { displayMode: 'fiat' })
     : 'No restocking fee';
 
   const summaryLine = [shippingCostLabel, deliveryWindow ? `Est. delivery: ${deliveryWindow}` : null]
@@ -128,7 +131,7 @@ export function ShippingReturnsInfo({
           <CommerceDetailMetricRow
             label="Shipping cost"
             value={isFreeShipping ? 'Free shipping' : hasKnownShippingCost && commerce.shippingPrice != null
-              ? formatFromFiat(commerce.shippingPrice, (commerce.currency || 'GBP') as SupportedCurrencyCode, { displayMode: 'fiat' })
+              ? formatFromFiat(commerce.shippingPrice, (commerce.currency || DEFAULT_CURRENCY_CODE) as SupportedCurrencyCode, { displayMode: 'fiat' })
               : 'Calculated at checkout'}
             muted={!isFreeShipping && commerce.shippingPrice == null}
           />

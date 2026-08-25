@@ -7,19 +7,21 @@
  *
  * Per AGENTS.md §11 (Truthful UI): postage preferences are persisted to the
  * server via PATCH /users/me/postage and rehydrated on mount via
- * GET /users/me/postage. A persistence banner makes the sync state clear.
+ * GET /users/me/postage. Sync is expected behaviour and not bannered.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
  * - One flat summary block (no decorative hero card)
- * - Max two non-avatar radius sizes (Radius.md for banner, no other chrome)
  * - Max three type sizes per viewport (bodyStrong, body, caption)
  * - All colors via useAppTheme(), all geometry via design tokens
  * - Carrier rows answer 4 questions: what, cost, when, conditions (ETA + tracking)
+ * - Honest pricing: "from £X.XX" with a note that actual costs are calculated
+ *   at checkout — no fabricated quotes on a preferences surface
  *
  * State coverage (per AGENTS.md §14):
- * - Loading: skeleton shimmer while capabilities + postage hydrate
+ * - Loading: skeleton rows matching carrier row geometry (no layout shift)
  * - Error: FlagshipState with retry when capabilities fetch fails
+ * - Empty: FlagshipState with retry when no carriers resolve for the region
  * - Populated: full carrier list + toggles
  */
 
@@ -29,7 +31,6 @@ import {
   Text,
   StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -45,15 +46,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type Props = NativeStackScreenProps<RootStackParamList, 'Postage'>;
-
-// UK fallback carriers — used only when capabilities fetch fails AND user has
-// no cached carrier data. InPost removed (not in any backend cluster template).
-const FALLBACK_CARRIERS: CapabilityCarrier[] = [
-  { id: 'evri', label: 'Evri', priceFromGbp: 2.89, etaMinDays: 2, etaMaxDays: 4, tracking: true },
-  { id: 'royal_mail', label: 'Royal Mail', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 3, tracking: true },
-  { id: 'dpd', label: 'DPD', priceFromGbp: 4.5, etaMinDays: 1, etaMaxDays: 2, tracking: true },
-];
 
 type LoadState = 'loading' | 'populated' | 'error';
 
@@ -101,9 +95,9 @@ export default function PostageScreen({ navigation }: Props) {
 
   const hydrate = useCallback(async () => {
     if (!currentUser?.id) {
-      setCarriers(FALLBACK_CARRIERS.map((c) => toCarrierRow(c, postagePreferences.carrierKey)));
+      setCarriers([]);
       setCarrierScopeLabel(null);
-      setLoadState('populated');
+      setLoadState('error');
       return;
     }
     setLoadState('loading');
@@ -112,22 +106,18 @@ export default function PostageScreen({ navigation }: Props) {
         getUserCountryCapabilities(currentUser.id),
         hydratePostagePreferences(),
       ]);
-      const sourceCarriers =
-        capabilities.postage.carriers.length > 0
-          ? capabilities.postage.carriers
-          : FALLBACK_CARRIERS;
+      const sourceCarriers = capabilities.postage.carriers;
       // Read the freshly-hydrated carrier key from the store
       const currentKey = useStore.getState().postagePreferences.carrierKey;
       setCarriers(sourceCarriers.map((c) => toCarrierRow(c, currentKey)));
       setCarrierScopeLabel(formatCountryPolicyScope(capabilities));
       setLoadState('populated');
     } catch {
-      // Fall back to UK carriers with the current persisted key
-      setCarriers(FALLBACK_CARRIERS.map((c) => toCarrierRow(c, postagePreferences.carrierKey)));
+      setCarriers([]);
       setCarrierScopeLabel(null);
       setLoadState('error');
     }
-  }, [currentUser?.id, hydratePostagePreferences, postagePreferences.carrierKey]);
+  }, [currentUser?.id, hydratePostagePreferences]);
 
   useEffect(() => {
     void hydrate();
@@ -167,27 +157,15 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Honest persistence banner ── */}
-      <View
-        style={[styles.persistenceBanner, { backgroundColor: colors.surfaceAlt }]}
-        accessibilityRole="header"
-        accessibilityLabel="Shipping preferences sync"
-      >
-        <Ionicons name="sync-outline" size={16} color={colors.textSecondary} />
-        <Text style={styles.persistenceBannerText}>
-          Preferences sync to your account and apply to new listings.
-        </Text>
-      </View>
-
-      {/* ── Flat summary block ── */}
+      {/* ── Flat summary block — dominant object is the selected carrier ── */}
       <View style={styles.summaryBlock}>
         <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
-          {selectedCarrier ? selectedCarrier.label : 'Choose a carrier'}
+          {selectedCarrier ? selectedCarrier.label : 'Select a default carrier'}
         </Text>
         <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
           {selectedCarrier
-            ? `${formatFromFiat(selectedCarrier.priceFromGbp, 'GBP', { displayMode: 'fiat' })} from · ${formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays)}`
-            : 'Set your default carrier and postage options'}
+            ? `from ${formatFromFiat(selectedCarrier.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} · ${formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays)}${selectedCarrier.tracking ? ' · tracking' : ''}`
+            : 'Select a default carrier below.'}
         </Text>
       </View>
 
@@ -202,8 +180,33 @@ export default function PostageScreen({ navigation }: Props) {
         />
       ) : loadState === 'loading' ? (
         <SettingsSection title="Default carrier">
-          <FlagshipState variant="loading" />
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.skeletonRow,
+                i < 2 && styles.carrierRowBorder,
+                { backgroundColor: colors.surfaceAlt },
+              ]}
+              accessibilityRole="none"
+            >
+              <View style={styles.skeletonText}>
+                <View style={[styles.skeletonBar, styles.skeletonLabel, { backgroundColor: colors.surface }]} />
+                <View style={[styles.skeletonBar, styles.skeletonMeta, { backgroundColor: colors.surface }]} />
+              </View>
+              <View style={[styles.skeletonRadio, { backgroundColor: colors.surface }]} />
+            </View>
+          ))}
         </SettingsSection>
+      ) : carriers.length === 0 ? (
+        <FlagshipState
+          variant="empty"
+          icon="cube-outline"
+          title="No carriers available"
+          subtitle="Shipping options unavailable for your region."
+          actionLabel="Retry"
+          onAction={() => void hydrate()}
+        />
       ) : (
         <SettingsSection
           title="Default carrier"
@@ -220,7 +223,7 @@ export default function PostageScreen({ navigation }: Props) {
               hapticFeedback="light"
               accessibilityRole="radio"
               accessibilityState={{ checked: c.selected }}
-              accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' })}, ${formatEta(c.etaMinDays, c.etaMaxDays)}${c.tracking ? ', tracking included' : ''}`}
+              accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}, ${formatEta(c.etaMinDays, c.etaMaxDays)}${c.tracking ? ', tracking included' : ''}`}
             >
               <View style={styles.carrierText}>
                 <Text
@@ -233,13 +236,16 @@ export default function PostageScreen({ navigation }: Props) {
                   {c.label}
                 </Text>
                 <Text style={[styles.carrierMeta, { color: colors.textMuted }]}>
-                  from {formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' })} · {formatEta(c.etaMinDays, c.etaMaxDays)}
+                  from {formatFromFiat(c.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} · {formatEta(c.etaMinDays, c.etaMaxDays)}
                   {c.tracking ? ' · tracking' : ''}
                 </Text>
               </View>
               <RadioButton selected={c.selected} />
             </AnimatedPressable>
           ))}
+          <Text style={[styles.pricingNote, { color: colors.textMuted }]}>
+            Actual shipping costs are calculated at checkout based on item size, weight, and destination.
+          </Text>
         </SettingsSection>
       )}
 
@@ -249,7 +255,7 @@ export default function PostageScreen({ navigation }: Props) {
           icon="gift-outline"
           iconColor={colors.brand}
           title="Offer free shipping"
-          subtitle="You'll cover the postage cost for buyers"
+          subtitle="You cover postage"
           toggleValue={freeShipping}
           onToggle={handleFreeShippingToggle}
           isFirst
@@ -258,7 +264,7 @@ export default function PostageScreen({ navigation }: Props) {
           icon="cube-outline"
           iconColor={colors.brand}
           title="Bundle discount on postage"
-          subtitle="Buyers save when buying multiple items"
+          subtitle="Save on multi-item orders"
           toggleValue={bundleDiscount}
           onToggle={handleBundleDiscountToggle}
           isLast
@@ -280,7 +286,7 @@ export default function PostageScreen({ navigation }: Props) {
 
       {/* ── Footer note ── */}
       <Text style={[styles.footerNote, { color: colors.textMuted }]}>
-        Override postage for individual items when listing.
+        You can override these defaults for individual items when creating a listing.
       </Text>
     </FlagshipScreen>
   );
@@ -288,23 +294,6 @@ export default function PostageScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    persistenceBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
-    persistenceBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      color: colors.textSecondary,
-      flex: 1,
-    },
     summaryBlock: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
@@ -350,6 +339,43 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
+    },
+    pricingNote: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+    },
+    // ── Loading skeleton rows (match carrier row geometry, no layout shift) ──
+    skeletonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + Space.xs,
+      minHeight: 56,
+    },
+    skeletonText: {
+      flex: 1,
+      marginRight: Space.sm,
+    },
+    skeletonBar: {
+      borderRadius: Radius.sm,
+    },
+    skeletonLabel: {
+      width: '45%',
+      height: Type.body.size,
+    },
+    skeletonMeta: {
+      width: '65%',
+      height: Type.caption.size,
+      marginTop: Space.xs / 2,
+    },
+    skeletonRadio: {
+      width: 22,
+      height: 22,
+      borderRadius: Radius.full,
     },
     footerNote: {
       fontSize: Type.caption.size,

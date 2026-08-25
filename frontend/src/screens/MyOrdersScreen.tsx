@@ -30,6 +30,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
 import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   OrdersFilterSheet,
   FilterClassification,
@@ -302,7 +303,7 @@ export default function MyOrdersScreen() {
     ({ item }: { item: OrderViewModel }) => (
       <OrderLedgerRow
         order={item}
-        formattedTotal={formatFromFiat(item.totalGbp, 'GBP', { displayMode: 'fiat' })}
+        formattedTotal={formatFromFiat(item.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
         onPress={() => handleOrderPress(item.id)}
       />
     ),

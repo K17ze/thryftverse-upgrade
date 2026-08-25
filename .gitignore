@@ -74,3 +74,12 @@ bugreport-*/
 
 # Flagship elevation planning docs (all .md)
 thryftverse_flagship_elevation_phase_2_*/
+
+# reg-suit visual regression output (actual + diff are ephemeral)
+frontend/.reg/
+frontend/report.html
+frontend/src/__tests__/__screenshots__/actual/
+frontend/src/__tests__/__screenshots__/diff/
+
+# Maestro screenshot capture output
+frontend/.maestro/screenshots/

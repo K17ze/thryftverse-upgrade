@@ -81,6 +81,21 @@ export interface DeviceFingerprint {
   signals: DeviceSignals;
 }
 
+/**
+ * Alias for `DeviceFingerprint` that reflects what the hash actually is:
+ * a hash of mutable request headers + IP, NOT a stable device identity.
+ *
+ * FR-08 correction: the previous name (`deviceFingerprint`) implied a
+ * stable, spoof-resistant device identity. It is not — it changes with
+ * network/header churn and is easy to spoof. The new name
+ * (`requestEnvironmentHash`) is honest about what it represents.
+ *
+ * Future device-identity signals (app-instance id, passkey credential id,
+ * hardware attestation) will be separate fields with confidence/rotation
+ * metadata, not conflated with this request-environment hash.
+ */
+export type RequestEnvironmentHash = DeviceFingerprint;
+
 export interface FraudSignal {
   /** Stable identifier for the signal (e.g. "velocity.account_creation"). */
   ruleId: string;
@@ -96,6 +111,18 @@ export interface FraudCheckResult {
   eventId: string;
   eventType: FraudEventType;
   userId: string | null;
+  /**
+   * Hash of mutable request headers + IP. NOT a stable device identity.
+   *
+   * FR-08: renamed from `deviceFingerprint` to `requestEnvironmentHash`.
+   * The old name implied a stable, spoof-resistant device identity. It is
+   * not — it changes with network/header churn and is easy to spoof.
+   *
+   * The `deviceFingerprint` alias is kept for backward compatibility but
+   * is deprecated. New code should use `requestEnvironmentHash`.
+   */
+  requestEnvironmentHash: string;
+  /** @deprecated Use `requestEnvironmentHash`. Kept for backward compat. */
   deviceFingerprint: string;
   ipAddress: string;
   /** Whether the evaluation ran to completion. See `FraudEvaluationStatus`. */
@@ -153,7 +180,10 @@ export interface FraudUserRiskProfile {
   currentScore: number | null;
   riskLevel: FraudRiskLevel;
   signals: FraudSignal[];
+  /** @deprecated Use `requestEnvironmentHashes`. Kept for backward compat. */
   deviceFingerprints: string[];
+  /** FR-08: honest name for the request-environment hash. */
+  requestEnvironmentHashes: string[];
   lastCheckedAt: string;
   eventCount: number;
 }
@@ -795,6 +825,7 @@ export async function persistFraudAudit(
       riskLevel: result.riskLevel,
       signals: result.signals,
       deviceFingerprints: [result.deviceFingerprint],
+      requestEnvironmentHashes: [result.requestEnvironmentHash],
       lastCheckedAt: result.checkedAt,
       eventCount: 1,
     };
@@ -953,6 +984,7 @@ export async function checkFraud(
     eventId: `fraud_${crypto.randomUUID()}`,
     eventType: input.eventType,
     userId: input.userId ?? null,
+    requestEnvironmentHash: deviceFingerprint,
     deviceFingerprint,
     ipAddress: input.ip,
     evaluationStatus: 'completed',
@@ -1099,6 +1131,7 @@ export async function checkFraudNonBlocking(
       eventId: `fraud_err_${crypto.randomUUID()}`,
       eventType: input.eventType,
       userId: input.userId ?? null,
+      requestEnvironmentHash: '',
       deviceFingerprint: '',
       ipAddress: input.ip,
       evaluationStatus: 'unavailable',

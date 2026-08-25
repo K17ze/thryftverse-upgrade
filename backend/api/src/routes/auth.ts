@@ -38,6 +38,23 @@ import {
 } from '../lib/totp.js';
 import { resolveClientIp } from '../lib/compliance.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
+import { recordUserSignup } from '../lib/metrics.js';
+import {
+  evaluateRisk,
+  recordExecution,
+  type RiskDecision,
+} from '../lib/riskDecision.js';
+import {
+  generatePasskeyRegistrationOptions,
+  verifyPasskeyRegistration,
+  generatePasskeyAuthenticationOptions,
+  verifyPasskeyAuthentication,
+  generatePasskeyStepUpOptions,
+  verifyPasskeyStepUp,
+  listPasskeys,
+  renamePasskey,
+  removePasskey,
+} from '../lib/passkeyService.js';
 import type { Redis } from 'ioredis';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -86,6 +103,16 @@ type RecoveryCodeRow = {
   code_hash: string;
   consumed_at: string | null;
 };
+
+/**
+ * Typed next action returned by the signup flow when the authoritative
+ * risk decision is not `allow`. The client uses this to route the user
+ * to the correct surface instead of receiving unrestricted credentials.
+ */
+type SignupNextAction =
+  | { type: 'verify_email'; route: '/auth/verify-email' }
+  | { type: 'account_under_review'; route: '/support' }
+  | { type: 'denied'; route: '/support' };
 
 // ── Inline helpers (copied from index.ts — auth-specific) ──────────────
 
@@ -361,6 +388,7 @@ async function createAuthUserFromIdentity(
     [userId, username, input.email, emailVerifiedAt]
   );
 
+  recordUserSignup('oauth');
   return result.rows[0];
 }
 
@@ -547,9 +575,10 @@ type AuthRouteDependencies = {
       input: unknown,
     ): Promise<void>;
   } | null;
+  ipReputationProvider?: import('../lib/riskDecision.js').IpReputationProvider;
 };
 
-export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthRouteDependencies) => {
+export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReputationProvider }: AuthRouteDependencies) => {
   // ── POST /auth/signup ──────────────────────────────────────────────
   app.post(
     '/auth/signup',
@@ -604,57 +633,179 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
 
       const userId = createPublicToken('usr');
       const passwordHash = await hashPassword(payload.password);
+      const requestHeaders = request.headers as Record<string, string | string[] | undefined>;
+      const requestIp = request.ip;
 
+      // ── FR-01: evaluate risk BEFORE session issuance ────────────────
+      //
+      // The authoritative risk decision is computed before any privileged
+      // session is issued. The subjectRef is the pre-allocated userId so
+      // the decision is bound to the account that will be created. The
+      // domain owner (this handler) is responsible for enforcing the
+      // ownerDecision inside its transaction boundary and recording the
+      // execution status via recordExecution().
+      const riskDecision: RiskDecision = await evaluateRisk(
+        { db, redis, logger: request.log, shadowService: fraudShadowService, ipReputationProvider },
+        {
+          eventType: 'auth.signup.attempted',
+          subjectRef: userId,
+          userId,
+          email,
+          headers: requestHeaders,
+          ip: requestIp,
+        },
+      );
+
+      // ── FR-02: enforce the decision ─────────────────────────────────
+      //
+      // deny            — do NOT create the user; return 403 with a
+      //                   user-safe message that never reveals the fraud
+      //                   signal.
+      // manual_review   — create the user with account_risk_state =
+      //                   'suspected' and issue NO session.
+      // step_up         — create the user with email_verified_at = NULL
+      //                   and issue a verification-only session. The
+      //                   middleware enforces the restriction based on
+      //                   email_verified_at being NULL.
+      // unavailable     — failover policy: create the user with
+      //                   account_risk_state = 'suspected' and issue a
+      //                   restricted session requiring email verification.
+      //                   Unrestricted credentials are NEVER issued when
+      //                   the risk evaluation is unavailable.
+      // allow           — normal signup: create user + issue session.
+      if (riskDecision.ownerDecision === 'deny') {
+        await recordExecution(db, {
+          decisionId: riskDecision.decisionId,
+          ownerService: 'auth',
+          executionStatus: 'not_executed',
+          domainEntityType: 'user',
+          domainEntityId: userId,
+        }).catch((err) => request.log.warn({ err }, 'Failed to record risk execution (deny)'));
+
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'We are unable to create an account at this time. Please contact support if you believe this is an error.',
+          nextAction: { type: 'denied', route: '/support' } satisfies SignupNextAction,
+        };
+      }
+
+      const isUnavailable = riskDecision.evaluationStatus === 'unavailable';
+      const isManualReview = riskDecision.ownerDecision === 'manual_review';
+      const isSuspected = isUnavailable || isManualReview;
+      const riskState = isSuspected ? 'suspected' : 'normal';
+
+      // Create the user. email_verified_at is NULL at signup for every
+      // non-deny path; verification is a separate step. account_risk_state
+      // is escalated to 'suspected' for manual_review and unavailable
+      // failover so downstream middleware and operators can act on it.
       const createResult = await db.query<AuthUserRow>(
         `
-          INSERT INTO users (id, username, email, password_hash, role)
-          VALUES ($1, $2, $3, $4, 'user')
+          INSERT INTO users (id, username, email, password_hash, role, account_risk_state)
+          VALUES ($1, $2, $3, $4, 'user', $5)
           RETURNING id, username, email, role, password_hash, email_verified_at, two_factor_enabled
         `,
-        [userId, payload.username.trim(), email, passwordHash]
+        [userId, payload.username.trim(), email, passwordHash, riskState]
       );
 
       const user = createResult.rows[0];
+      recordUserSignup('email');
+
+      // Shadow fraud check (backward-compat during migration). The
+      // authoritative decision above (evaluateRisk) is the primary and
+      // already invokes the rule engine internally. This legacy call is
+      // retained only for score comparison/logging and must never issue
+      // or suppress credentials on its own.
+      try {
+        const shadowResult = await checkFraudNonBlocking(
+          redis,
+          {
+            eventType: 'signup',
+            userId: user.id,
+            email,
+            headers: requestHeaders,
+            ip: requestIp,
+          },
+          undefined,
+          request.log,
+          fraudShadowService,
+        );
+        if (shadowResult.evaluationStatus === 'unavailable') {
+          request.log.warn(
+            { userId: user.id, reasonCode: shadowResult.reasonCode, shadow: true },
+            'Shadow fraud check unavailable during signup migration',
+          );
+        }
+      } catch {
+        // Shadow check failures must never break signup
+      }
+
+      // manual_review: persist the restriction and return a typed next
+      // action. No session is issued while the account is under review.
+      if (isManualReview) {
+        await recordExecution(db, {
+          decisionId: riskDecision.decisionId,
+          ownerService: 'auth',
+          executionStatus: 'executed',
+          domainEntityType: 'user',
+          domainEntityId: user.id,
+        }).catch((err) => request.log.warn({ err }, 'Failed to record risk execution (manual_review)'));
+
+        reply.code(201);
+        return {
+          ok: true,
+          user: toAuthUserPayload(user),
+          nextAction: { type: 'account_under_review', route: '/support' } satisfies SignupNextAction,
+        };
+      }
+
+      // allow / step_up / unavailable: issue a session. For step_up and
+      // unavailable the session is verification-only — the middleware
+      // enforces the restriction because email_verified_at is NULL. No
+      // unrestricted credentials are issued while the decision is
+      // unresolved.
       const authSession = await issueAuthSession(
         {
           userId: user.id,
           role: normalizeAuthRole(user.role),
         },
         {
-          userAgent: request.headers['user-agent'],
-          ipAddress: request.ip,
+          userAgent: resolveRequestUserAgent(request) ?? undefined,
+          ipAddress: requestIp,
         }
       );
 
-      try {
-        const fraudResult = await checkFraudNonBlocking(
-          redis,
-          {
-            eventType: 'signup',
-            userId: user.id,
-            email,
-            headers: request.headers as Record<string, string | string[] | undefined>,
-            ip: request.ip,
-          },
-          undefined,
-          request.log,
-          fraudShadowService,
-        );
-        // When the fraud service is unavailable, signup maps to `step_up`.
-        // The account is created but should be flagged for additional
-        // verification. We log the policy action; enforcement (e.g.
-        // requiring email verification before full access) is handled
-        // downstream.
-        if (fraudResult.evaluationStatus === 'unavailable' && fraudResult.policyAction === 'step_up') {
+      await recordExecution(db, {
+        decisionId: riskDecision.decisionId,
+        ownerService: 'auth',
+        executionStatus: 'executed',
+        domainEntityType: 'user',
+        domainEntityId: user.id,
+      }).catch((err) => request.log.warn({ err }, 'Failed to record risk execution (session issued)'));
+
+      // step_up / unavailable: tell the client to verify email before
+      // gaining full access.
+      if (riskDecision.ownerDecision === 'step_up' || isUnavailable) {
+        if (isUnavailable) {
           request.log.warn(
-            { userId: user.id, reasonCode: fraudResult.reasonCode },
-            'Signup fraud check unavailable — step-up verification recommended'
+            { userId: user.id, decisionId: riskDecision.decisionId },
+            'Signup risk evaluation unavailable — failover: restricted session issued, email verification required',
           );
         }
-      } catch {
-        // Fraud check failures must never break signup
+
+        reply.code(201);
+        return {
+          ok: true,
+          user: toAuthUserPayload(user),
+          accessToken: authSession.accessToken,
+          refreshToken: authSession.refreshToken,
+          accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
+          refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
+          nextAction: { type: 'verify_email', route: '/auth/verify-email' } satisfies SignupNextAction,
+        };
       }
 
+      // allow: normal signup response with unrestricted session.
       reply.code(201);
       return {
         ok: true,
@@ -819,6 +970,13 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const bodySchema = z.object({
+        twoFactorCode: z.string().trim().min(4).max(12).optional(),
+        recoveryCode: z.string().trim().min(6).max(32).optional(),
+      });
+
+      const payload = bodySchema.parse(request.body ?? {});
+
       if (!request.authUser) {
         reply.code(401);
         return {
@@ -834,6 +992,76 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
           ok: false,
           error: 'User not found',
         };
+      }
+
+      const existingFactor = await loadTotpFactor(db, user.id, false);
+      const hasEnabledFactor = user.two_factor_enabled || (existingFactor?.enabled ?? false);
+
+      if (hasEnabledFactor) {
+        const reauthClient = await db.connect();
+        try {
+          await reauthClient.query('BEGIN');
+
+          const lockedUser = await loadAuthUserById(reauthClient, user.id, true);
+          if (!lockedUser || !lockedUser.two_factor_enabled) {
+            await reauthClient.query('ROLLBACK');
+            reply.code(401);
+            return {
+              ok: false,
+              error: 'Re-authentication required to replace your existing authenticator',
+              code: 'REAUTH_REQUIRED',
+            };
+          } else if (payload.recoveryCode) {
+            const recoveryValidation = await validateRecoveryCodeForUser(
+              reauthClient,
+              lockedUser.id,
+              payload.recoveryCode
+            );
+
+            if (!recoveryValidation.ok) {
+              await reauthClient.query('ROLLBACK');
+              reply.code(recoveryValidation.status ?? 401);
+              return {
+                ok: false,
+                error: recoveryValidation.error ?? 'Two-factor authentication failed',
+                code: recoveryValidation.code,
+              };
+            }
+
+            await reauthClient.query('COMMIT');
+          } else if (payload.twoFactorCode) {
+            const tokenValidation = await validateTwoFactorTokenForUser(
+              reauthClient,
+              lockedUser,
+              payload.twoFactorCode
+            );
+
+            if (!tokenValidation.ok) {
+              await reauthClient.query('ROLLBACK');
+              reply.code(tokenValidation.status ?? 401);
+              return {
+                ok: false,
+                error: tokenValidation.error ?? 'Two-factor authentication failed',
+                code: tokenValidation.code,
+              };
+            }
+
+            await reauthClient.query('COMMIT');
+          } else {
+            await reauthClient.query('ROLLBACK');
+            reply.code(401);
+            return {
+              ok: false,
+              error: 'Re-authentication required to replace your existing authenticator',
+              code: 'REAUTH_REQUIRED',
+            };
+          }
+        } catch (error) {
+          await reauthClient.query('ROLLBACK');
+          throw error;
+        } finally {
+          reauthClient.release();
+        }
       }
 
       const secret = generateTotpSecret();
@@ -1100,6 +1328,8 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
     async (request: FastifyRequest, reply: FastifyReply) => {
       const bodySchema = z.object({
         idToken: z.string().min(20),
+        twoFactorCode: z.string().trim().min(4).max(12).optional(),
+        recoveryCode: z.string().trim().min(6).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -1116,6 +1346,68 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       }
 
       const user = await resolveUserFromSocialIdentity(identity, db);
+
+      if (user.two_factor_enabled) {
+        const twoFactorClient = await db.connect();
+        try {
+          await twoFactorClient.query('BEGIN');
+
+          const lockedUser = await loadAuthUserById(twoFactorClient, user.id, true);
+          if (!lockedUser || !lockedUser.two_factor_enabled) {
+            await twoFactorClient.query('ROLLBACK');
+          } else if (payload.recoveryCode) {
+            const recoveryValidation = await validateRecoveryCodeForUser(
+              twoFactorClient,
+              lockedUser.id,
+              payload.recoveryCode
+            );
+
+            if (!recoveryValidation.ok) {
+              await twoFactorClient.query('ROLLBACK');
+              reply.code(recoveryValidation.status ?? 401);
+              return {
+                ok: false,
+                error: recoveryValidation.error ?? 'Two-factor authentication failed',
+                code: recoveryValidation.code,
+              };
+            }
+
+            await twoFactorClient.query('COMMIT');
+          } else if (payload.twoFactorCode) {
+            const tokenValidation = await validateTwoFactorTokenForUser(
+              twoFactorClient,
+              lockedUser,
+              payload.twoFactorCode
+            );
+
+            if (!tokenValidation.ok) {
+              await twoFactorClient.query('ROLLBACK');
+              reply.code(tokenValidation.status ?? 401);
+              return {
+                ok: false,
+                error: tokenValidation.error ?? 'Two-factor authentication failed',
+                code: tokenValidation.code,
+              };
+            }
+
+            await twoFactorClient.query('COMMIT');
+          } else {
+            await twoFactorClient.query('ROLLBACK');
+            reply.code(401);
+            return {
+              ok: false,
+              error: 'Two-factor authentication is required',
+              code: 'TWO_FACTOR_REQUIRED',
+            };
+          }
+        } catch (error) {
+          await twoFactorClient.query('ROLLBACK');
+          throw error;
+        } finally {
+          twoFactorClient.release();
+        }
+      }
+
       return issueSessionForAuthUser(user, request);
     }
   );
@@ -1134,6 +1426,8 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
     async (request: FastifyRequest, reply: FastifyReply) => {
       const bodySchema = z.object({
         identityToken: z.string().min(20),
+        twoFactorCode: z.string().trim().min(4).max(12).optional(),
+        recoveryCode: z.string().trim().min(6).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -1150,6 +1444,68 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       }
 
       const user = await resolveUserFromSocialIdentity(identity, db);
+
+      if (user.two_factor_enabled) {
+        const twoFactorClient = await db.connect();
+        try {
+          await twoFactorClient.query('BEGIN');
+
+          const lockedUser = await loadAuthUserById(twoFactorClient, user.id, true);
+          if (!lockedUser || !lockedUser.two_factor_enabled) {
+            await twoFactorClient.query('ROLLBACK');
+          } else if (payload.recoveryCode) {
+            const recoveryValidation = await validateRecoveryCodeForUser(
+              twoFactorClient,
+              lockedUser.id,
+              payload.recoveryCode
+            );
+
+            if (!recoveryValidation.ok) {
+              await twoFactorClient.query('ROLLBACK');
+              reply.code(recoveryValidation.status ?? 401);
+              return {
+                ok: false,
+                error: recoveryValidation.error ?? 'Two-factor authentication failed',
+                code: recoveryValidation.code,
+              };
+            }
+
+            await twoFactorClient.query('COMMIT');
+          } else if (payload.twoFactorCode) {
+            const tokenValidation = await validateTwoFactorTokenForUser(
+              twoFactorClient,
+              lockedUser,
+              payload.twoFactorCode
+            );
+
+            if (!tokenValidation.ok) {
+              await twoFactorClient.query('ROLLBACK');
+              reply.code(tokenValidation.status ?? 401);
+              return {
+                ok: false,
+                error: tokenValidation.error ?? 'Two-factor authentication failed',
+                code: tokenValidation.code,
+              };
+            }
+
+            await twoFactorClient.query('COMMIT');
+          } else {
+            await twoFactorClient.query('ROLLBACK');
+            reply.code(401);
+            return {
+              ok: false,
+              error: 'Two-factor authentication is required',
+              code: 'TWO_FACTOR_REQUIRED',
+            };
+          }
+        } catch (error) {
+          await twoFactorClient.query('ROLLBACK');
+          throw error;
+        } finally {
+          twoFactorClient.release();
+        }
+      }
+
       return issueSessionForAuthUser(user, request);
     }
   );
@@ -1262,6 +1618,8 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       const bodySchema = z.object({
         token: z.string().min(20),
         email: z.string().trim().email().max(320).optional(),
+        twoFactorCode: z.string().trim().min(4).max(12).optional(),
+        recoveryCode: z.string().trim().min(6).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -1344,18 +1702,70 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
               user = maybeVerified.rows[0] ?? user;
             }
 
-            await client.query(
-              `
-                UPDATE auth_magic_links
-                SET
-                  consumed_at = NOW(),
-                  user_id = $2
-                WHERE id = $1
-              `,
-              [tokenRow.id, user.id]
-            );
+            if (user.two_factor_enabled) {
+              if (payload.recoveryCode) {
+                const recoveryValidation = await validateRecoveryCodeForUser(
+                  client,
+                  user.id,
+                  payload.recoveryCode
+                );
 
-            await client.query('COMMIT');
+                if (!recoveryValidation.ok) {
+                  await client.query('ROLLBACK');
+                  failure = {
+                    status: recoveryValidation.status ?? 401,
+                    body: {
+                      ok: false,
+                      error: recoveryValidation.error ?? 'Two-factor authentication failed',
+                      code: recoveryValidation.code ?? 'TWO_FACTOR_FAILED',
+                    },
+                  };
+                }
+              } else if (payload.twoFactorCode) {
+                const tokenValidation = await validateTwoFactorTokenForUser(
+                  client,
+                  user,
+                  payload.twoFactorCode
+                );
+
+                if (!tokenValidation.ok) {
+                  await client.query('ROLLBACK');
+                  failure = {
+                    status: tokenValidation.status ?? 401,
+                    body: {
+                      ok: false,
+                      error: tokenValidation.error ?? 'Two-factor authentication failed',
+                      code: tokenValidation.code ?? 'TWO_FACTOR_FAILED',
+                    },
+                  };
+                }
+              } else {
+                await client.query('ROLLBACK');
+                failure = {
+                  status: 401,
+                  body: {
+                    ok: false,
+                    error: 'Two-factor authentication is required',
+                    code: 'TWO_FACTOR_REQUIRED',
+                  },
+                };
+              }
+            }
+
+            if (!failure) {
+              await client.query(
+                `
+                  UPDATE auth_magic_links
+                  SET
+                    consumed_at = NOW(),
+                    user_id = $2
+                  WHERE id = $1
+                `,
+                [tokenRow.id, user.id]
+              );
+
+              await client.query('COMMIT');
+            }
           }
         }
       } catch (error) {
@@ -1494,6 +1904,8 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       const bodySchema = z.object({
         challengeId: z.string().min(20),
         code: z.string().trim().min(4).max(10),
+        twoFactorCode: z.string().trim().min(4).max(12).optional(),
+        recoveryCode: z.string().trim().min(6).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -1609,19 +2021,71 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
               user = maybeVerified.rows[0] ?? user;
             }
 
-            await client.query(
-              `
-                UPDATE auth_otp_challenges
-                SET
-                  attempts = attempts + 1,
-                  consumed_at = NOW(),
-                  user_id = $2
-                WHERE id = $1
-              `,
-              [challenge.id, user.id]
-            );
+            if (user.two_factor_enabled) {
+              if (payload.recoveryCode) {
+                const recoveryValidation = await validateRecoveryCodeForUser(
+                  client,
+                  user.id,
+                  payload.recoveryCode
+                );
 
-            await client.query('COMMIT');
+                if (!recoveryValidation.ok) {
+                  await client.query('ROLLBACK');
+                  failure = {
+                    status: recoveryValidation.status ?? 401,
+                    body: {
+                      ok: false,
+                      error: recoveryValidation.error ?? 'Two-factor authentication failed',
+                      code: recoveryValidation.code ?? 'TWO_FACTOR_FAILED',
+                    },
+                  };
+                }
+              } else if (payload.twoFactorCode) {
+                const tokenValidation = await validateTwoFactorTokenForUser(
+                  client,
+                  user,
+                  payload.twoFactorCode
+                );
+
+                if (!tokenValidation.ok) {
+                  await client.query('ROLLBACK');
+                  failure = {
+                    status: tokenValidation.status ?? 401,
+                    body: {
+                      ok: false,
+                      error: tokenValidation.error ?? 'Two-factor authentication failed',
+                      code: tokenValidation.code ?? 'TWO_FACTOR_FAILED',
+                    },
+                  };
+                }
+              } else {
+                await client.query('ROLLBACK');
+                failure = {
+                  status: 401,
+                  body: {
+                    ok: false,
+                    error: 'Two-factor authentication is required',
+                    code: 'TWO_FACTOR_REQUIRED',
+                  },
+                };
+              }
+            }
+
+            if (!failure) {
+              await client.query(
+                `
+                  UPDATE auth_otp_challenges
+                  SET
+                    attempts = attempts + 1,
+                    consumed_at = NOW(),
+                    user_id = $2
+                  WHERE id = $1
+                `,
+                [challenge.id, user.id]
+              );
+
+              await client.query('COMMIT');
+            }
           }
         }
       } catch (error) {
@@ -1906,6 +2370,32 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
         [userId, resetTokenHash, expiresAt]
       );
 
+      const separator = config.authPasswordResetBaseUrl.includes('?') ? '&' : '?';
+      const resetUrl = `${config.authPasswordResetBaseUrl}${separator}token=${encodeURIComponent(resetToken)}`;
+      const ttlMinutes = Math.round(config.authPasswordResetTokenTtlSeconds / 60);
+      const resetEmail = {
+        subject: 'Reset your ThryftVerse password',
+        text: `Reset your ThryftVerse password: ${resetUrl}\n\nThis link expires in ${ttlMinutes} minutes.`,
+        html: `
+          <div style="font-family: Inter, Arial, sans-serif; line-height: 1.5; color: #171717;">
+            <h2 style="margin-bottom: 12px;">Reset your password</h2>
+            <p style="margin-bottom: 20px;"><a href="${resetUrl}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;border-radius:999px;text-decoration:none;">Reset password</a></p>
+            <p style="margin-bottom: 0; color: #525252;">This link expires in ${ttlMinutes} minutes.</p>
+          </div>
+        `.trim(),
+      };
+
+      try {
+        await sendAuthEmail({
+          to: normalizedEmail,
+          subject: resetEmail.subject,
+          html: resetEmail.html,
+          text: resetEmail.text,
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'Password reset email delivery failed');
+      }
+
       if (config.nodeEnv !== 'production' && config.authExposeDevelopmentArtifacts) {
         developmentToken = resetToken;
       }
@@ -1928,35 +2418,39 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
     const payload = bodySchema.parse(request.body ?? {});
     const tokenHash = hashOpaqueValue(payload.token);
 
-    const tokenResult = await db.query<{
-      id: number;
-      user_id: string;
-      expires_at: string;
-      used_at: string | null;
-    }>(
-      `
-        SELECT id, user_id, expires_at, used_at
-        FROM password_reset_tokens
-        WHERE token_hash = $1
-        LIMIT 1
-      `,
-      [tokenHash]
-    );
-
-    const tokenRow = tokenResult.rows[0];
-    if (!tokenRow || tokenRow.used_at || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
-      reply.code(400);
-      return {
-        ok: false,
-        error: 'Reset token invalid or expired',
-      };
-    }
-
-    const nextPasswordHash = await hashPassword(payload.newPassword);
-
     const client = await db.connect();
+    let resetUserId: string | null = null;
+
     try {
       await client.query('BEGIN');
+
+      const tokenResult = await client.query<{
+        id: number;
+        user_id: string;
+        expires_at: string;
+        used_at: string | null;
+      }>(
+        `
+          SELECT id, user_id, expires_at, used_at
+          FROM password_reset_tokens
+          WHERE token_hash = $1
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [tokenHash]
+      );
+
+      const tokenRow = tokenResult.rows[0];
+      if (!tokenRow || tokenRow.used_at || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return {
+          ok: false,
+          error: 'Reset token invalid or expired',
+        };
+      }
+
+      const nextPasswordHash = await hashPassword(payload.newPassword);
 
       await client.query(
         `
@@ -1979,6 +2473,19 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
         [tokenRow.id]
       );
 
+      await client.query(
+        `
+          UPDATE password_reset_tokens
+          SET used_at = NOW()
+          WHERE user_id = $1
+            AND used_at IS NULL
+            AND id <> $2
+        `,
+        [tokenRow.user_id, tokenRow.id]
+      );
+
+      resetUserId = tokenRow.user_id;
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -1987,11 +2494,339 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthR
       client.release();
     }
 
-    await revokeAllUserSessions(tokenRow.user_id);
+    if (resetUserId) {
+      await revokeAllUserSessions(resetUserId);
+    }
+
+    // ── Recovery-equivalence hardening (AUTH-018) ─────────────────────
+    //
+    // A recovery path must never grant more authority with less evidence
+    // than the authentication method it replaces. Password reset only
+    // requires email access; if the user has enrolled phishing-resistant
+    // passkeys (AAL2), the email-only reset path must NOT silently bypass
+    // or weaken that stronger factor. Passkeys are credentials, not
+    // sessions, so revokeAllUserSessions() above correctly leaves them
+    // intact. We surface passkeysEnrolled so the frontend can tell the
+    // user honestly that their passkeys are unaffected, and we emit a
+    // distinct audit event so security monitoring can track resets on
+    // passkey-protected accounts.
+    let passkeysEnrolled = false;
+    if (resetUserId) {
+      const passkeyCountResult = await db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM user_passkeys WHERE user_id = $1`,
+        [resetUserId]
+      );
+      passkeysEnrolled = Number(passkeyCountResult.rows[0]?.count ?? 0) > 0;
+
+      if (passkeysEnrolled) {
+        request.log.info(
+          { userId: resetUserId, event: 'auth.password_reset.completed_with_passkeys' },
+          'Password reset completed on an account with passkeys enrolled; passkeys left intact'
+        );
+      } else {
+        request.log.info(
+          { userId: resetUserId, event: 'auth.password_reset.completed' },
+          'Password reset completed'
+        );
+      }
+    }
 
     return {
       ok: true,
-      message: 'Password reset complete. Please log in again.',
+      message: 'Password has been reset',
+      passkeysEnrolled,
     };
+  });
+
+  // ── Passkey/WebAuthn Routes (AUTH-017) ──────────────────────────────
+  // NCSC CYBERUK 2026: passkeys are the recommended phishing-resistant
+  // authentication factor. These endpoints implement registration,
+  // authentication, step-up, and management flows.
+
+  // POST /auth/passkey/register/options — authenticated
+  app.post('/auth/passkey/register/options', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    try {
+      // Fetch user email for the registration options
+      const userResult = await db.query(
+        `SELECT email, username FROM users WHERE id = $1`,
+        [authUser.userId],
+      );
+      if (!userResult.rowCount || userResult.rowCount === 0) {
+        reply.code(404);
+        return { ok: false, error: 'User not found', code: 'NOT_FOUND' };
+      }
+
+      const { email, username } = userResult.rows[0];
+      const result = await generatePasskeyRegistrationOptions(
+        db,
+        authUser.userId,
+        email,
+        username ?? undefined,
+      );
+
+      return { ok: true, options: result.options };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId }, 'Failed to generate passkey registration options');
+      reply.code(500);
+      return { ok: false, error: 'Could not start passkey registration', code: 'INTERNAL_ERROR' };
+    }
+  });
+
+  // POST /auth/passkey/register/verify — authenticated
+  const registerVerifySchema = z.object({
+    response: z.record(z.unknown()),
+    name: z.string().min(1).max(120).optional(),
+  });
+
+  app.post('/auth/passkey/register/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    try {
+      const payload = registerVerifySchema.parse(request.body);
+      const result = await verifyPasskeyRegistration(
+        db,
+        authUser.userId,
+        payload.response as never,
+        payload.name,
+      );
+
+      return {
+        ok: true,
+        passkey: {
+          credentialId: result.credentialId,
+          deviceType: result.deviceType,
+          transports: result.transports,
+          backupEligible: result.backupEligible,
+        },
+      };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId }, 'Passkey registration verification failed');
+      reply.code(400);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Passkey registration failed',
+        code: 'PASSKEY_REGISTRATION_FAILED',
+      };
+    }
+  });
+
+  // POST /auth/passkey/login/options — public (no auth required)
+  const loginOptionsSchema = z.object({
+    email: z.string().email().optional(),
+  });
+
+  app.post('/auth/passkey/login/options', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const payload = loginOptionsSchema.parse(request.body ?? {});
+      const result = await generatePasskeyAuthenticationOptions(db, payload.email);
+
+      return { ok: true, options: result.options };
+    } catch (err) {
+      request.log.error({ err }, 'Failed to generate passkey login options');
+      reply.code(500);
+      return { ok: false, error: 'Could not start passkey login', code: 'INTERNAL_ERROR' };
+    }
+  });
+
+  // POST /auth/passkey/login/verify — public (authenticates the user)
+  const loginVerifySchema = z.object({
+    response: z.record(z.unknown()),
+  });
+
+  app.post('/auth/passkey/login/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const payload = loginVerifySchema.parse(request.body);
+      const result = await verifyPasskeyAuthentication(
+        db,
+        payload.response as never,
+      );
+
+      // Issue a session for the authenticated user
+      const userResult = await db.query(
+        `SELECT id, email, role, email_verified_at, username, two_factor_enabled FROM users WHERE id = $1`,
+        [result.userId],
+      );
+      if (!userResult.rowCount || userResult.rowCount === 0) {
+        reply.code(404);
+        return { ok: false, error: 'User not found', code: 'NOT_FOUND' };
+      }
+
+      const user = userResult.rows[0] as AuthUserRow;
+      const authSession = await issueAuthSession(
+        {
+          userId: user.id,
+          role: normalizeAuthRole(user.role),
+        },
+        {
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'] ?? '',
+        },
+      );
+
+      return {
+        ok: true,
+        user: toAuthUserPayload(user),
+        accessToken: authSession.accessToken,
+        refreshToken: authSession.refreshToken,
+        accessTokenExpiresInSeconds: authSession.accessTokenExpiresInSeconds,
+        refreshTokenExpiresAt: authSession.refreshTokenExpiresAt,
+      };
+    } catch (err) {
+      request.log.error({ err }, 'Passkey login verification failed');
+      reply.code(401);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Passkey login failed',
+        code: 'PASSKEY_LOGIN_FAILED',
+      };
+    }
+  });
+
+  // POST /auth/passkey/step-up/options — authenticated
+  app.post('/auth/passkey/step-up/options', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    try {
+      const result = await generatePasskeyStepUpOptions(db, authUser.userId);
+      return { ok: true, options: result.options };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId }, 'Failed to generate passkey step-up options');
+      reply.code(400);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Could not start step-up verification',
+        code: 'STEP_UP_FAILED',
+      };
+    }
+  });
+
+  // POST /auth/passkey/step-up/verify — authenticated
+  const stepUpVerifySchema = z.object({
+    response: z.record(z.unknown()),
+  });
+
+  app.post('/auth/passkey/step-up/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    try {
+      const payload = stepUpVerifySchema.parse(request.body);
+      const verified = await verifyPasskeyStepUp(
+        db,
+        authUser.userId,
+        payload.response as never,
+      );
+
+      if (!verified) {
+        reply.code(401);
+        return { ok: false, error: 'Step-up verification failed', code: 'STEP_UP_FAILED' };
+      }
+
+      return { ok: true, verified: true };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId }, 'Passkey step-up verification failed');
+      reply.code(401);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Step-up verification failed',
+        code: 'STEP_UP_FAILED',
+      };
+    }
+  });
+
+  // GET /auth/passkeys — authenticated (list user's passkeys)
+  app.get('/auth/passkeys', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    try {
+      const passkeys = await listPasskeys(db, authUser.userId);
+      return { ok: true, passkeys };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId }, 'Failed to list passkeys');
+      reply.code(500);
+      return { ok: false, error: 'Failed to load passkeys', code: 'INTERNAL_ERROR' };
+    }
+  });
+
+  // PATCH /auth/passkeys/:credentialId — authenticated (rename)
+  const renamePasskeySchema = z.object({
+    name: z.string().min(1).max(120),
+  });
+
+  app.patch('/auth/passkeys/:credentialId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    const { credentialId } = request.params as { credentialId: string };
+    if (!credentialId || credentialId.length < 2 || credentialId.length > 300) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid credential id', code: 'INVALID_CREDENTIAL_ID' };
+    }
+
+    try {
+      const payload = renamePasskeySchema.parse(request.body);
+      await renamePasskey(db, authUser.userId, credentialId, payload.name);
+      return { ok: true };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId, credentialId }, 'Failed to rename passkey');
+      reply.code(400);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Failed to rename passkey',
+        code: 'PASSKEY_RENAME_FAILED',
+      };
+    }
+  });
+
+  // DELETE /auth/passkeys/:credentialId — authenticated (remove)
+  app.delete('/auth/passkeys/:credentialId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUser = request.authUser;
+    if (!authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    const { credentialId } = request.params as { credentialId: string };
+    if (!credentialId || credentialId.length < 2 || credentialId.length > 300) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid credential id', code: 'INVALID_CREDENTIAL_ID' };
+    }
+
+    try {
+      await removePasskey(db, authUser.userId, credentialId);
+      return { ok: true };
+    } catch (err) {
+      request.log.error({ err, userId: authUser.userId, credentialId }, 'Failed to remove passkey');
+      reply.code(400);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Failed to remove passkey',
+        code: 'PASSKEY_REMOVAL_FAILED',
+      };
+    }
   });
 };

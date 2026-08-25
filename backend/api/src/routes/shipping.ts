@@ -7,7 +7,7 @@ import {
   getShippingQuotes,
   normalizeAndVerifyShippingWebhook,
 } from '../lib/shippingProvider.js';
-import { resolveCountryCapabilities } from '../lib/countryCapabilities.js';
+import { resolveCountryCapabilities, type UserCountryCapabilities } from '../lib/countryCapabilities.js';
 import { getOrCreateComplianceProfile } from '../lib/compliance.js';
 
 type ShippingRouteDependencies = {
@@ -243,9 +243,7 @@ export const registerShippingRoutes = ({
       };
     }
 
-    let capabilities = resolveCountryCapabilities({
-      countryCode: 'GB',
-    });
+    let capabilities: UserCountryCapabilities | null = null;
 
     try {
       if (await onezeP2pTablesAvailable(db)) {
@@ -256,7 +254,16 @@ export const registerShippingRoutes = ({
         });
       }
     } catch {
-      // Falls back to GB capability profile.
+      capabilities = null;
+    }
+
+    if (!capabilities) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: 'Shipping context unavailable for your region. Please try again or contact support.',
+        code: 'COUNTRY_CONTEXT_UNAVAILABLE',
+      };
     }
 
     const carriers = [...capabilities.postage.carriers];
@@ -264,7 +271,7 @@ export const registerShippingRoutes = ({
     if (carriers.length === 0) {
       return {
         ok: true,
-        source: 'fallback',
+        source: 'unavailable',
         originPostcode,
         destinationPostcode,
         recommendedQuote: null,

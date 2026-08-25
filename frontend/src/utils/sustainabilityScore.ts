@@ -1,17 +1,18 @@
 /**
- * Sustainability Score — heuristic, client-side estimate for ThryftVerse listings.
+ * Sustainability Score — fail-closed impact data for ThryftVerse listings.
  *
- * TRUTHFUL LABELING (AGENTS.md §11): Every value this module produces is an
- * *estimate*, not a precise scientific measurement. CO2 and water figures are
- * industry-average approximations scaled by category, and the grade is a
- * heuristic composite of listing attributes. All copy surfaced to the user
- * must say "Estimated impact" — never "measured" or "verified".
+ * TRUTHFUL LABELING (AGENTS.md §11): a badge rendered from a hardcoded value
+ * or a frontend default is a lie. Until a backend impact service exists that
+ * provides real emissions data, this module returns `null` in production —
+ * no fabricated CO2, water, or grade figures are ever surfaced to users.
  *
- * The score is computed purely from listing data already on the client
- * (condition, category, brand, seller location, co-own eligibility). No
- * backend call is required.
+ * In development (`__DEV__`), a heuristic estimate runs so the UI can be
+ * tested. The heuristic computes a 0–100 composite and A–D grade from listing
+ * attributes (condition, category, brand, seller location, co-own eligibility)
+ * using industry-average approximations. These figures are never shown in
+ * production.
  *
- * Sources for the averages used:
+ * Sources for the dev-mode averages:
  *  - New garment average: ~8 kg CO2e and ~2,900 L water (industry literature,
  *    e.g. WRAP UK / ThredUp resale reports).
  *  - Resale is estimated to displace ~60% of that new-production footprint.
@@ -198,13 +199,33 @@ function gradeForScore(score: number): SustainabilityScore['grade'] {
 }
 
 /**
- * Compute a heuristic sustainability score for a listing.
+ * Returns `true` when a backend impact service provides real emissions data.
+ * Currently `false` — no backend impact service exists yet. When this returns
+ * `false`, `computeSustainabilityScore` returns `null` in production.
+ */
+export function hasRealImpactData(): boolean {
+  return false;
+}
+
+/**
+ * Compute a sustainability score for a listing.
  *
- * Returns a `SustainabilityScore` with a 0–100 composite, an A–D grade, a
- * transparent factor breakdown, and estimated CO2 / water savings. All figures
- * are estimates derived from listing attributes and industry averages.
+ * In development (`__DEV__`), returns a heuristic `SustainabilityScore` with
+ * a 0–100 composite, an A–D grade, a factor breakdown, and estimated CO2 /
+ * water savings derived from listing attributes and industry averages.
+ *
+ * In production, returns `null` — no fabricated impact data is surfaced.
+ * Callers must handle `null` by rendering nothing (fail-closed).
  */
 export function computeSustainabilityScore(
+  input: SustainabilityInput,
+): SustainabilityScore | null {
+  if (!__DEV__ && !hasRealImpactData()) {
+    return null;
+  }
+  return computeHeuristicScore(input);
+}
+function computeHeuristicScore(
   input: SustainabilityInput,
 ): SustainabilityScore {
   const condition = lower(input.condition);
@@ -290,9 +311,12 @@ export function computeSustainabilityScore(
 
 /**
  * Convenience predicate for the "Sustainable" browse filter — true when the
- * computed grade is A or B. Kept here so the filter and the card chip agree.
+ * computed grade is A or B. Returns `false` when no real data is available
+ * (production), so the filter honestly yields no results until a backend
+ * impact service exists.
  */
 export function isSustainableGrade(input: SustainabilityInput): boolean {
-  const { grade } = computeSustainabilityScore(input);
-  return grade === 'A' || grade === 'B';
+  const score = computeSustainabilityScore(input);
+  if (!score) return false;
+  return score.grade === 'A' || score.grade === 'B';
 }

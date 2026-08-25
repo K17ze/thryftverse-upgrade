@@ -168,14 +168,15 @@ export default function AgeVerificationScreen({ navigation }: Props) {
           </View>
 
           {/* Data-transparency microcopy (ICO 2026). The gate stores only a
-              boolean 18+ confirmation in hardware-backed SecureStore — never
-              the user's date of birth. Being explicit about this meets
-              data-protection transparency expectations. */}
+              boolean self-declaration (declared_18_plus) in hardware-backed
+              SecureStore — never the user's date of birth. Being explicit
+              that this is a self-declaration, not verified age assurance,
+              meets data-protection transparency expectations. */}
           <Text
             style={[styles.microcopy, { color: colors.textMuted }]}
             maxFontSizeMultiplier={1.3}
           >
-            We store only your 18+ confirmation on this device — not your date of birth.
+            This is a self-declaration stored on your device. Some features may require age verification later.
           </Text>
         </View>
       ) : (

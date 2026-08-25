@@ -1,17 +1,27 @@
 # ThryftVerse Message Department — Flagship Research and Upgrade Strategy
 
-**Research date:** 24 August 2026  
+**Original research date:** 24 August 2026
+**Latest revalidation:** 25 August 2026; official-source cutoff 25 August 2026
 **Scope:** Inbox, direct messages, group chat, composer, media, realtime, notifications, privacy, safety, commerce context, server contracts, persistence and multi-device behavior  
-**Repository state reviewed:** working tree at `ab0b99d8f8ea54c0f156fa4ae39b8c99fe6716ce` on `feat/product-detail-contract-media-device-closure`  
+**Repository state reviewed:** `f82f74a54be79a1721017380ddd5472d856f1679` on `feat/product-detail-contract-media-device-closure`
+**Delta reviewed:** messaging implementation in `cbf8abf1afae0b8b6e5159bbffbc471f9afc0100`, including migrations 135 and 149
 **Assessment type:** code-backed product and architecture audit; no native visual claim
 
 ---
 
 ## 1. Executive decision
 
+**Direct answer: no.** ThryftVerse is not 1:1 with WhatsApp or Telegram in feature breadth, reliability, multi-device behavior, privacy architecture or native interaction quality. It also does not yet meet the smaller and more important bar of **flagship baseline parity** for every visible core messaging action.
+
+This is not a recommendation to clone both products. Telegram's channels, giant communities and exhaustive power-user surface are not automatically useful to a marketplace. The correct target is:
+
+1. **Non-negotiable baseline parity:** messages, media and user state remain truthful across failure, reload, reconnect and another device.
+2. **Selective capability parity:** voice, files, history search, edits, deletion, receipts, requests, pins and useful group coordination.
+3. **ThryftVerse differentiation:** listing identity, structured offers, order milestones, evidence, protected checkout and dispute handoff.
+
 ThryftVerse does not chiefly have a feature-count problem. It has a **truth, lifecycle and source-of-truth problem**.
 
-The repository already contains a broad-looking message department: inbox segments, DMs, groups, typing, realtime, optimistic sending, replies, reactions, translation labels, media, offers, order cards, message requests, mute/archive, quick replies, shared media, safety warnings, AI agents and group administration. That breadth is misleading. Several visible capabilities are local simulations, several client calls have no backend route, and several backend states never hydrate into the client.
+The repository already contains a broad-looking message department: inbox segments, DMs, groups, typing, realtime, optimistic sending, replies, reactions, media, offers, order cards, message requests, mute/archive, quick replies, shared media, safety warnings, AI agents and group administration. That breadth is misleading. Some visible capabilities remain local simulations, the two conversation surfaces have different guarantees, and several new backend lifecycle entities are not used by the client.
 
 The current department therefore feels less complete than its component inventory suggests. Users do not judge messaging by how many controls exist. They judge it by whether:
 
@@ -26,9 +36,56 @@ The current department therefore feels less complete than its component inventor
 
 Today those guarantees are not consistently met.
 
+### 1.1 Revalidation verdict after the chat-outbox implementation
+
+The implementation added real foundations. It did **not** close the department:
+
+| Area | 24 August finding | 25 August code-backed status |
+|---|---|---|
+| DM idempotency and realtime reconciliation | optimistic/realtime duplicates | **Substantially fixed** with `clientMessageId` in API, realtime and local reconciliation |
+| Unknown HTTP outcome | shown as failure | **Fixed only in canonical DM text**; group, media and agent sends still use false-failure behavior |
+| Latest history page | oldest page returned | **Backend fixed** with newest-first keyset queries; client does not consume cursors or prepend older history |
+| Text offline outbox | absent | **Foundation added, integration incomplete**; durable rows exist, but reconnect initialization is never called and the group path bypasses it |
+| Cross-device photo/video | sender-local URI persisted | **Improved but not hardened**; upload now precedes DM send, but the server accepts arbitrary URLs and does not bind the new attachment table or finalized asset receipt |
+| Reply | local only | **Fixed in DM; still broken in GroupChat** because the group send omits `replyToMessageId` |
+| Reactions | local only | **Database/API added; convergence incomplete** because reaction realtime events are not consumed and optimistic failures are not rolled back |
+| Delete | endpoint absent | **API added; semantics still defective** because delete-for-me tombstones are not excluded by message reads, and the UI does not offer an honest me/everyone choice |
+| Read receipts | decorative | **Backend cursor/event added; client remains decorative** because the read event hook is unused and per-message receipt rows are never written |
+| Report | fabricated success | **Real route added**; idempotency and unknown-outcome reconciliation remain absent |
+| Mute/archive/request hydration | discarded | **Mute/archive/request hydration fixed**; pin and mark-unread still mutate only local state |
+| Request creation policy | not enforced | **Creation policy added**; pending chats can still send repeatedly, rich attachments are not gated, and ordinary push ignores request state |
+| Fake translation | same text relabeled | **Removed from the canonical chat path** |
+| DM/group architecture | two drifting engines | **Still open and now the largest immediate risk** |
+| E2EE | absent | **Unchanged**; canonical chat is server-readable plaintext |
+
+### 1.2 New release-blocking findings from the revalidation
+
+1. **GroupChat is a second, weaker messaging product.** It removes an optimistic message on an ambiguous send outcome, has no durable outbox, does not pass reply metadata, ignores delete failures, and injects local demo-agent responses into the visible transcript.
+2. **Group typing is untruthful.** The screen derives `isTyping` from the current user's own composer, then displays `typing…` in the header and above the composer as though another participant is typing.
+3. **Delete for me is not durable in the read model.** The mutation inserts `chat_message_deletions`, but every message query omits the anti-join/filter. Deleted content returns after reload.
+4. **Lifecycle tables exceed lifecycle behavior.** Migration 149 creates revisions, attachments and per-message receipts, while current routes do not write or consume those entities. Schema presence is not a shipped capability.
+5. **Notification policy violates mute/request semantics.** The send handler queues ordinary push for every other participant without checking per-user mute or pending-request state.
+6. **The outbox promise is overstated.** `initChatOutboxDrain()` exists but has no application call site. Mount-time drain is not connectivity-driven background recovery, and GroupChat never enters the outbox.
+7. **Realtime mutations are publish-only.** Delete, reaction and read events are emitted, but the conversation UI subscribes only to created messages. A second device does not converge live for these mutations.
+
+### 1.3 Current code evidence map
+
+| Guarantee | Current owner/evidence | Result |
+|---|---|---|
+| DM send/reconcile | `frontend/src/hooks/chat/useConversationMessages.ts`; `POST /chat/conversations/:id/messages` | Improved; DM text only |
+| Group send/reconcile | `frontend/src/screens/GroupChatScreen.tsx` | Separate weaker engine; P0 |
+| Durable queue | `frontend/src/services/chatOutbox.ts` | Persist/drain functions exist; reconnect initializer has no call site |
+| Message paging | `GET /chat/conversations/:id/messages`; `frontend/src/services/chatApi.ts` | Server cursors exist; client discards them |
+| Delete | migration 149; `DELETE /chat/conversations/:id/messages/:messageId` | Mutations exist; delete-for-me omitted from read queries |
+| Reactions | `chat_message_reactions`; add/remove routes | Fetch persistence exists; no live client convergence |
+| Receipts | `chat_members.last_read_at`; read endpoint/event | Conversation cursor exists; UI and privacy integration absent |
+| Attachments | `chat_message_attachments`; DM upload/send hook | Table unused; server trusts client URL metadata |
+| Requests | DM creation transaction; `chat_conversation_user_state` | Creation/hydration improved; send/push gates incomplete |
+| AI agents | backend bot runtime plus `frontend/src/services/chatAgentsApi.ts` | Real runtime foundations coexist with a separate demo transcript path |
+
 ### Recommendation
 
-Do **not** start by adding polls, stickers, calls or more attachment buttons. First build a reliable message platform with one canonical contract and one canonical conversation surface. Then add expressive and coordination features in deliberate waves.
+Do **not** start by adding polls, stickers, calls or more attachment buttons. First finish the reliable message platform already begun, converge DM and group into one engine, and prove it on two devices. Then add expressive and coordination features in deliberate waves.
 
 The strategic product position should not be “another WhatsApp.” It should be:
 
@@ -57,6 +114,7 @@ Primary implementation surfaces reviewed include:
 - `frontend/src/components/chat/*`
 - `frontend/src/hooks/chat/*`
 - `frontend/src/services/chatApi.ts`
+- `frontend/src/services/chatOutbox.ts`
 - `frontend/src/services/realtimeClient.ts`
 - `frontend/src/platform/realtime/*`
 - `frontend/src/domain/conversation.ts`
@@ -68,9 +126,10 @@ Primary implementation surfaces reviewed include:
 
 ### Validation completed
 
-- Frontend TypeScript: passed (`npm run typecheck`).
-- Messaging-focused frontend tests: 81/81 passed across four files.
-- Backend test command did not produce a clean result: it ran beyond the intended filter, hit an unrelated media-finalization failure, and remained alive retrying unavailable Redis connections until stopped.
+- 25 August frontend TypeScript revalidation: passed (`npm run typecheck`).
+- 25 August messaging-focused frontend revalidation: 71/71 passed across three files. These are helper/behavior tests, not two-device lifecycle proof.
+- 25 August backend TypeScript build: passed (`npm run build`).
+- The original backend test attempt did not produce a clean result: it ran beyond the intended filter, hit an unrelated media-finalization failure, and remained alive retrying unavailable Redis connections until stopped. No live chat endpoint or two-device test was completed in either pass.
 - The two checked-in “golden” chat screenshots are 67-byte, 1×1 PNGs. They are not visual evidence.
 - No native device or emulator render was available in this research pass.
 
@@ -95,6 +154,7 @@ By 2026, its relevant baseline includes:
 - voice/video calls, screen sharing and cross-device call transfer;
 - disappearing messages, View Once, Chat Lock, hidden notification contents and stricter unknown-sender protections;
 - per-chat storage management and cross-platform history transfer;
+- direct iPad account creation, upgraded in-car continuity, and inline PDF viewing/annotation on web and desktop;
 - increasingly private AI assistance that does not need to clutter the main conversation.
 
 Official 2026 references:
@@ -103,6 +163,7 @@ Official 2026 references:
 - [Member tags, text stickers and event reminders](https://about.fb.com/news/2026/01/whatsapp-group-chats-member-tags-text-stickers-event-reminders/)
 - [Storage management, cross-platform transfer and private writing help](https://about.fb.com/news/2026/03/whatsapp-new-features-simplify-storage-switch-accounts/)
 - [Web calling, device transfer, waiting rooms and noise suppression](https://about.fb.com/news/2026/07/whatsapp-web-calling-new-features/)
+- [iPad account creation, in-car continuity and inline PDF tools](https://about.fb.com/news/2026/07/new-whatsapp-features-keep-up-with-the-way-you-actually-live/)
 - [On-device message translation](https://about.fb.com/news/2025/09/introducing-message-translations-whatsapp/)
 - [Strict protections for unknown attachments and callers](https://about.fb.com/news/2026/01/whatsapp-strict-account-settings-safeguarding-against-cyber-attacks/amp/)
 
@@ -130,6 +191,9 @@ Official references:
 - [Topic tabs, voice trimming and HD photos](https://telegram.org/blog/direct-to-channel-trim-voice-and-more/tr?setln=en)
 - [Repeated scheduled messages](https://telegram.org/blog/live-stories-gift-auctions/be?setln=en)
 - [Secure group calls](https://telegram.org/blog/group-calls-made-easy/fa?setln=en)
+- [Telegram official release feed](https://telegram.org/blog?offset=0)
+
+As of the 25 August 2026 cutoff, Telegram's official feed lists 14 July 2026 as its latest product release; no August 2026 Telegram release was available to include. This report does not invent or extrapolate unreleased capability.
 
 **Lesson for ThryftVerse:** power should be progressive. The main composer stays simple; advanced behavior lives behind long-press, attachment context, search or group tools.
 
@@ -185,33 +249,33 @@ Official references:
 
 ## 4. Competitive capability matrix
 
-Legend: **Yes** = mature product capability; **Partial** = constrained or platform-specific; **No** = materially absent; **Local** = current ThryftVerse UI/store only; **Broken** = visible contract conflicts with backend/runtime.
+Legend: **Yes** = mature product capability; **Partial** = constrained, divergent or not proven end-to-end; **No** = materially absent; **Local** = current ThryftVerse UI/store only; **Broken** = visible contract conflicts with backend/runtime. ThryftVerse status reflects current `f82f74a5`, not schema intent.
 
 | Capability | WhatsApp | Telegram | Signal | iMessage | ThryftVerse now |
 |---|---:|---:|---:|---:|---:|
-| Idempotent text send | Yes | Yes | Yes | Yes | Partial |
-| Persistent offline outbox | Yes | Yes | Yes | Yes | No; UI implies it exists |
-| Delivered/read lifecycle | Yes | Yes | Yes | Yes | Broken/partial |
-| Correct latest-message pagination | Yes | Yes | Yes | Yes | Broken |
-| Reply persistence | Yes | Yes | Yes | Yes | Local only |
-| Reactions persistence | Yes | Yes | Yes | Yes | Local only |
+| Idempotent text send | Yes | Yes | Yes | Yes | Partial; DM fixed, GroupChat divergent |
+| Persistent offline outbox | Yes | Yes | Yes | Yes | Partial; DM text rows exist, reconnect/group integration absent |
+| Delivered/read lifecycle | Yes | Yes | Yes | Yes | Partial; server read cursor exists, bubble lifecycle not hydrated |
+| Correct latest-message pagination | Yes | Yes | Yes | Yes | Partial; server fixed, client history pagination absent |
+| Reply persistence | Yes | Yes | Yes | Yes | Partial; DM yes, GroupChat no |
+| Reactions persistence | Yes | Yes | Yes | Yes | Partial; DB/API yes, realtime/rollback no |
 | Edit with history | Yes | Yes | Yes | Yes | No |
-| Delete for me / everyone | Yes | Yes | Yes | Yes | Broken/ambiguous |
+| Delete for me / everyone | Yes | Yes | Yes | Yes | Broken; tombstone read filter and UI semantics missing |
 | Voice messages | Yes | Yes | Yes | Yes | Component exists; not wired end-to-end |
-| Cross-device media | Yes | Yes | Yes | Yes | Broken; local URI is sent |
+| Cross-device media | Yes | Yes | Yes | Yes | Partial; canonical URL upload, no server asset binding |
 | Documents/files | Yes | Yes | Yes | Yes | No in canonical chat |
 | Location/contact sharing | Yes | Yes | Partial | Yes | No in canonical chat |
 | In-chat search across history | Yes | Yes | Yes | Yes | Loaded-page only |
-| Pins/bookmarks | Yes | Yes | Yes | Partial | Conversation pin is local only; no message pins |
+| Pins/bookmarks | Yes | Yes | Yes | Partial | Conversation pin remains local; no message pins |
 | Polls/events/coordination | Yes | Yes | Yes | Yes | No |
 | Topics/side conversations | Emerging | Yes | No | No | No |
 | Calls | Yes | Yes | Yes | Yes | No |
-| Message requests | Yes | Yes | Yes | Yes | Backend/client policy disconnected |
-| Per-chat mute/archive hydration | Yes | Yes | Yes | Yes | Backend exists; client ignores returned state |
+| Message requests | Yes | Yes | Yes | Yes | Partial; creation/hydration yes, send/push/privacy gates incomplete |
+| Per-chat mute/archive hydration | Yes | Yes | Yes | Yes | Yes for state; push suppression still broken |
 | Disappearing/View Once | Yes | Yes | Yes | Partial | No |
 | Default E2EE | Yes | Secret-chat dependent | Yes | Yes | No |
 | Multi-device crypto identity | Yes | Cloud/secret-chat model | Yes | Yes | No |
-| AI help without group clutter | Sidechat/incognito direction | Private ephemeral bot replies | No | Writing tools | Demo agent in main product path |
+| AI help without group clutter | Sidechat/incognito direction | Private ephemeral bot replies | No | Writing tools | Broken in GroupChat; demo response enters transcript |
 | Native marketplace transaction context | No | No | No | No | Partial and strategically valuable |
 
 The conclusion is not that ThryftVerse should ship every cell. Calls, channels and giant communities may be low-value. The non-negotiable parity layer is: exactly-once appearance, history, receipts, offline behavior, replies, reactions, edit/delete semantics, media, search, request/privacy enforcement and truthful security.
@@ -239,98 +303,97 @@ The upgrade should consolidate and complete these strengths—not discard them.
 
 ## 6. Critical findings: source-of-truth and lifecycle
 
-### P0.1 Messages can duplicate through optimistic/realtime reconciliation
+Status vocabulary in this section is deliberately strict: **resolved** means the complete visible path is closed; **partial** means useful code landed but the cross-device state machine is not complete; **open** means the user-facing guarantee is still absent.
 
-The client creates a local ID, appends it, and sends a separate `clientMessageId`. The server publishes realtime with only the server ID. The conversation realtime handler deduplicates by message ID, but the optimistic ID and server ID differ. The event can arrive before the HTTP response, append a second message, and then the response can rename the optimistic message to the same server ID.
+### P0.1 DM optimistic/realtime reconciliation — substantially resolved, GroupChat open
 
-**Owner fix:** include `clientMessageId` in create response, fetch payload and realtime payload; index the client outbox by it; reconcile, never append, when sender/device/client ID matches.
+The canonical DM path now echoes `clientMessageId` from create, fetch and realtime and reconciles the optimistic bubble by that identity. The server has a matching unique conflict backstop. This is the correct architecture.
 
-### P0.2 Unknown network outcome is shown as failure
+GroupChat still deduplicates only by server ID and keeps a separate send engine. It can append the realtime message and later rename the optimistic message, recreating the original race.
 
-A dropped response may mean the server accepted the message. The code correctly uses idempotency on retry, but immediately labels the message “failed.” That is an ambiguous outcome, not a known failure.
+**Owner fix:** delete the independent GroupChat send/realtime state machine. Route DM and group through one conversation controller and one tested reconciliation function.
 
-**Owner fix:** use states such as `queued → sending → accepted → delivered → read`, plus `reconciling` for unknown outcome. Retry/reconcile by idempotency key before telling the user it failed.
+### P0.2 Unknown network outcome — partial
 
-### P0.3 Message history returns the oldest page
+DM text now enters `reconciling`, which is honest. GroupChat removes the bubble and says it failed; media marks upload failed even when upload succeeded and only the message response was lost; agent drafts also collapse ambiguous outcome into failure.
 
-The backend query orders ascending and applies `LIMIT`. In a chat with more than 120 messages, reopening retrieves the earliest 120, not the latest messages. There is no cursor or around-message fetch.
+**Owner fix:** apply `queued → sending → accepted → delivered → read`, plus `reconciling`, to every message kind and conversation type. Query/replay by idempotency key before declaring failure.
 
-**Owner fix:** keyset pagination on `(created_at, id)`, select newest descending, reverse for display; support `before`, `after` and `aroundMessageId`.
+### P0.3 Latest history and pagination — server resolved, client partial
 
-### P0.4 Media is not a real delivery pipeline
+The server correctly selects the newest page and supports keyset `before`, `after` and `aroundMessageId`. The frontend service still exposes only `limit`, discards `hasMore` and both cursors, and replaces the loaded list with at most 120 messages. Scroll-back history and jump-to-unloaded-result are therefore not shipped.
 
-The sender's local `file://`/device URI is passed as `mediaUri` to the chat API and stored in message metadata. No canonical upload/finalization occurs in the canonical chat send path. A recipient or second device cannot read that URI.
+**Owner fix:** expose a typed page contract, prepend older pages while preserving the visible anchor, and use `aroundMessageId` for search/reply jumps.
 
-**Owner fix:** `pick/capture → optimistic local preview → upload session → finalize asset → bind asset to message → send asset ID → server projects canonical renditions → retry/reconcile`.
+### P0.4 Media delivery — improved, still not a trusted asset pipeline
 
-Do not store arbitrary client URLs as the media contract. Store a media asset ID with owned, scanned, moderated renditions.
+Canonical DM photo/video now uploads before message send and sends the returned public URL, so the original sender-local URI defect is improved. The server still accepts any client URL, persists it inside metadata, and does not bind or authorize `chat_message_attachments`. A finalized upload receipt, ownership check and moderation/scan state are not enforced at message commit.
 
-### P0.5 Delete message calls a nonexistent backend endpoint
+Media message unknown outcomes are also unsafe: retry reuploads and generates a new `clientMessageId`, which can create duplicate messages after a dropped response.
 
-`chatApi.ts` calls `DELETE /chat/conversations/:conversationId/messages/:messageId`, but no corresponding route is registered. Single and bulk deletion therefore fall back to local removal and warn that others may still see the message.
+**Owner fix:** `pick/capture → local preview → upload/finalize receipt → message attachment asset ID → server authorization → canonical renditions → idempotent retry`. Never accept an arbitrary URL as attachment authority.
 
-**Owner fix:** first decide semantics:
+### P0.5 Delete for me/everyone — endpoint added, behavior broken
 
-- **Delete for me:** per-user tombstone; no effect on others.
-- **Delete for everyone:** sender/admin policy, time window, server tombstone, realtime mutation, audit metadata.
+The backend now separates `scope=me` and `scope=everyone`. However, reads never filter `chat_message_deletions`, so delete-for-me content returns on reload. The canonical UI exposes one generic “Delete” action and always calls `scope=me`; GroupChat immediately says “Message deleted” and discards API failure.
 
-Never label both as “Delete message.”
+**Owner fix:** apply the per-user tombstone to every list, around-message, search, shared-media and reply-target read. Present explicit “Delete for me” and policy-gated “Delete for everyone” choices, with unknown-outcome handling and realtime convergence.
 
-### P0.6 “Delete conversation” actually leaves the conversation
+### P0.6 Conversation deletion/leave semantics — partially resolved, needs product verification
 
-The inbox copy says the conversation will be removed from the inbox. The backend route deletes the actor's `chat_members` row and posts “A participant left the conversation.” In a DM this is not an inbox cleanup; it changes membership and can permanently remove access.
+The client can now send explicit `scope=me` or `scope=leave`, and the backend has separate paths. Every inbox/info label and navigation outcome must still be verified against that distinction, especially for DMs versus groups.
 
-**Owner fix:** separate `clear/archive/delete-for-me` from `leave group`. DMs should not use group-leave semantics.
+**Owner fix:** use Archive/Clear from inbox-management context and Leave group only from group membership context. Never render group-leave semantics in a DM.
 
-### P0.7 Read receipts are decorative rather than canonical
+### P0.7 Read receipts — backend foundation, client still decorative
 
-The backend has a mark-read endpoint and emits `chat.message.read`. The canonical client path only flips local `conversation.unread`; it does not call the read endpoint or subscribe to receipt events. Bubble types support delivered/read, but fetched messages do not contain those states.
+`chat_members.last_read_at` now exists, mark-read writes it, and the server publishes `chat.message.read`. But `useChatReadReceiptEvent` has no caller, fetched messages do not derive delivered/read status, and `chat_message_read_receipts` is never written. The server also does not enforce `read_receipts_enabled` or request-pending privacy when publishing the receipt.
 
-**Owner fix:** store a per-member read cursor referencing a message/order key, publish receipt deltas, hydrate them, and respect the read-receipts privacy setting server-side.
+**Owner fix:** use a message/sequence read cursor, consume it in the active conversation and details views, hide receipts before request acceptance, and make privacy reciprocal and server-enforced.
 
-### P0.8 Reply context is not sent
+### P0.8 Reply persistence — DM resolved, GroupChat open
 
-The optimistic message receives `replyToMessageId`, but the send API is called without that metadata. Reply quotes therefore disappear after refresh or on other devices.
+The DM contract now sends and validates `replyToMessageId`. GroupChat sets the local reply target but calls `sendConversationMessageOnApi` without the option, so its reply disappears after refresh.
 
-**Owner fix:** make reply target a typed top-level contract field with membership and visibility validation.
+**Owner fix:** converge engines. Reply rendering must also fetch context around an unloaded parent and handle a deleted parent with an honest tombstone.
 
-### P0.9 Reactions are local store mutations
+### P0.9 Reactions — persistence added, convergence partial
 
-There are no chat reaction routes or reaction tables. The interaction looks successful but does not persist or reach the other participant.
+Reaction table and add/remove routes now exist, and fetched messages serialize aggregated reactions. Client mutations are fire-and-forget without rollback, and the published add/remove realtime events have no subscriber. Other devices update only after refetch.
 
-**Owner fix:** canonical reaction entity keyed by `(message_id, actor_id, emoji)` with add/remove realtime events and optimistic rollback/reconcile.
+**Owner fix:** use optimistic mutation IDs, rollback/reconcile on failure, consume mutation events, and cover deleted/request-restricted messages.
 
-### P0.10 “Translate” does not translate
+### P0.10 Fake translation — resolved by removal
 
-The context action toggles a set and renders the same text with a “Translated” badge. This is a direct truthful-UI violation.
+The prior action that relabeled unchanged text as “Translated” is absent from the canonical current path. Keep it absent until real translation can preserve original text, language provenance, privacy mode and failure state.
 
-**Owner fix:** remove it until real on-device or server translation exists. When implemented, preserve original/translated text, language provenance, privacy mode and error state.
+### P0.11 Conversation reports — route resolved, mutation semantics partial
 
-### P0.11 Report success is fabricated and the conversation-report route is absent
+The server now returns a real report ID and status, and current group reporting waits for the response before success. Submission has no idempotency key or unknown-outcome reconciliation, so a dropped response can create duplicate reports or encourage unsafe retry.
 
-Long-press Report immediately displays “Report submitted.” The service used by the full report screen points at another unregistered conversation route.
+**Owner fix:** idempotent report submission, evidence authorization, safe retry, explicit unknown outcome, and a canonical report sheet shared by DM/group.
 
-**Owner fix:** one canonical report workflow, evidence selection, idempotent submission, report ID from server, and retry/unknown-outcome handling.
+### P0.12 Per-user conversation state — partial
 
-### P0.12 Server user state is returned but discarded
+Mute, archive and request status now hydrate into the conversation projection. Pin and manual mark-unread have schema/projection fields but the store toggle remains local and there are no matching chat routes. Hydrated values therefore overwrite rather than validate those local promises.
 
-The API returns `isMuted`, `isArchived` and `requestStatus`, but `ApiConversationPayload`/mapping does not model them. Store arrays therefore do not hydrate across devices. Conversation pinning and manual read/unread are local only.
+**Owner fix:** one server projection and mutation API for mute, archive, request, pin and private mark-unread, with optimistic rollback and cross-device events.
 
-**Owner fix:** make per-user conversation state part of the canonical conversation projection and update it transactionally.
+### P0.13 Message requests/privacy — creation fixed, enforcement incomplete
 
-### P0.13 Message requests and message privacy are not enforced at creation
+DM creation now reads `allow_messages_from` and relationship state and seeds a pending request for the recipient. The send route does not enforce request state, limit the sender to an initial request, block rich attachments, or suppress read receipts. Notification fan-out also ignores pending status.
 
-The DM route checks blocks, but it does not enforce `allow_messages_from`, follow relationships or pending request creation. New user-state rows default to accepted. The request UI can therefore exist while the server never truthfully feeds it.
+`allow_messages_from = nobody` currently means “create a pending request,” which may contradict user intent; product policy must explicitly decide whether it means no requests or requests-only.
 
-**Owner fix:** decide request state within the DM-creation transaction from recipient privacy, relationship, trust and rate-limit policy. Suppress normal read/delivery details and rich attachments until accepted.
+**Owner fix:** authorize every send and attachment against sender/recipient request state, trust tier and rate limits; suppress ordinary push and receipt leakage until acceptance.
 
-### P0.14 Offline promise is not backed by an outbox
+### P0.14 Offline outbox — foundation added, runtime promise not closed
 
-The UI says messages will send after reconnect. The send path makes a request immediately and marks the item failed; there is no persistent, connectivity-driven client outbox.
+DM text failures can persist in `mutation_outbox` with the original `clientMessageId`, and a drain function can replay idempotently. But `initChatOutboxDrain()` is never called, the conversation's reconnect listener only resyncs messages, GroupChat bypasses the outbox, media is not queued safely, and terminal outbox failures have no recovery UI.
 
-**Owner fix:** either remove the promise or ship a durable local outbox with background flush, exponential backoff, idempotency and explicit queued state.
+**Owner fix:** one app-owned drain lifecycle covering startup, reconnect and foreground; a message-kind-safe payload; per-entry reconciliation callback; backoff/terminal retry UI; app-kill tests.
 
-### P0.15 Production chat is not end-to-end encrypted
+### P0.15 Production chat is not end-to-end encrypted — open
 
 Canonical messages are stored as plaintext `body` plus metadata in `chat_messages`. A separate `secure_messages` route uses server-side envelope encryption and server-side decryption, is not used by the main chat, and is still not E2EE because the server holds decryption capability.
 
@@ -349,13 +412,13 @@ Signal's published architecture shows why this cannot be implemented as one encr
 
 ### 7.1 Two canonical chat screens are drifting
 
-`ChatScreen.tsx` is 2,255 lines and already has group-aware branches, while `GroupChatScreen.tsx` independently implements another send, realtime, typing, reply, reaction and agent path. Their capability sets and failure behavior differ.
+`ChatScreen.tsx` already has group-aware branches, while `GroupChatScreen.tsx` independently implements another send, realtime, typing, reply, reaction and agent path. Their capability sets and failure behavior differ materially. The second engine is responsible for multiple P0 defects listed above.
 
 **Recommendation:** one conversation engine and one rendered conversation surface, parameterized by conversation capabilities. Group-specific headers and management remain focused components.
 
 ### 7.2 Domain types are fragmented
 
-`frontend/src/domain/conversation.ts` supports a narrow set; `hooks/chat/types.ts` defines another richer message shape; backend metadata is untyped. Mapping discards offers, replies, reactions, commerce state, client IDs, delivery state, edits and attachment identity.
+`frontend/src/domain/conversation.ts` and `hooks/chat/types.ts` still define different message shapes. Mapping now preserves replies and reactions, but still drops client identity, edit state, deletion state, attachment identity, delivery state and reload-safe structured commerce state. Backend metadata remains an unbounded escape hatch.
 
 **Recommendation:** generate or share one versioned message contract. Do not use JSON metadata as an unbounded substitute for domain modeling.
 
@@ -394,6 +457,18 @@ Offer and order UI exists, but the chat message mapper does not reconstruct thes
 Skeletons and state components exist, but the checked-in golden assets are 1×1 images. No credible before/after or parity gate currently protects the inbox/chat silhouette.
 
 **Recommendation:** real device-sized baselines for light/dark, loading/populated/empty/error/offline, large text and keyboard-open states. Keep captures local unless explicitly requested for source control.
+
+### 7.9 GroupChat violates truthful AI and anti-AI composition policy
+
+The group composer shows an agent-chip rail, a separate “Manage AI agents” row and explanatory caption, then injects a deterministic demo response into the human transcript after send. This simultaneously creates label duplication, chrome around secondary controls, and a false participant/history object. The UI comments openly identify the runtime as demo-mode.
+
+**Recommendation:** remove the demo injection and production entry point until a deployed backend runtime is verified. When enabled, use one quiet, capability-gated entry point. Default to private draft/sidecar results, disclose context and retention, label agent identity at the message boundary, and require confirmation for send or commerce actions.
+
+### 7.10 Schema completion is being mistaken for product completion
+
+Migration 149 creates edit revisions, attachment identity and per-message read receipts, but current route coverage has no edit mutation/history API, does not bind the attachment table, and does not write per-message receipts. Comments say gaps are closed before the execution paths exist.
+
+**Recommendation:** capability status must be derived from the vertical live-sign chain—migration, transaction, serializer, client contract, mutation, realtime, state matrix and two-device proof—not from table presence or comments.
 
 ---
 
@@ -569,7 +644,8 @@ Rules:
 - Two attachment-sheet systems with divergent capabilities.
 - Multiple message type definitions and duplicated group/DM engines.
 - Attachment/action rows wrapped in equal surfaces with icon circles, subtitles and chevrons.
-- “Translated” and “AI” badges that label behavior without real capability.
+- Permanent agent chips, a separate management row and explanatory caption around one secondary capability.
+- Demo-agent transcript messages that visually impersonate canonical participants/history.
 - Randomly generated voice waveforms that look active but do not represent audio.
 - Screen-local compensation for backend gaps.
 
@@ -674,34 +750,37 @@ Timings are sequencing guidance, not a commitment. Each wave should ship vertica
 
 ### Wave 0 — Truth and data integrity (P0)
 
-1. Freeze new visible chat features.
-2. Define one versioned message/conversation contract.
-3. Echo and reconcile `clientMessageId` everywhere.
-4. Fix latest-page keyset pagination and scroll anchoring.
-5. Build persistent outbox and unknown-outcome reconciliation.
-6. Replace local URI media with finalized media assets.
-7. Implement typed reply persistence.
-8. Correct delete-for-me/delete-for-everyone/leave semantics.
-9. Wire canonical read cursors and receipt privacy.
-10. Hydrate mute/archive/request/pin/read state.
-11. Enforce request/privacy policy in DM creation.
-12. Remove fake translation, fake report success and demo agent output from production.
-13. Harden or remove the unused `secure_messages` route.
+Foundations already landed: DM `clientMessageId` reconciliation, newest-page server pagination, typed DM reply target, photo/video pre-upload, message lifecycle schema, reaction/report/delete APIs, read cursor, mute/archive/request hydration, request creation policy, removal of fake translation, and a text outbox module.
+
+They are not Wave 0 exit evidence. Complete the following in order:
+
+1. Freeze new visible chat features and remove/feature-gate demo agent UI from production.
+2. Converge `ChatScreen` and `GroupChatScreen` on one conversation controller before fixing more screen-local symptoms.
+3. Define one versioned message/page/mutation contract and eliminate metadata-only lifecycle fields.
+4. Apply `clientMessageId`, unknown-outcome reconciliation and durable outbox behavior to DM, group, media, agent-confirmed and structured commerce messages.
+5. Mount one application-owned outbox drain; prove reconnect, foreground, app-kill and terminal retry behavior.
+6. Expose history cursors to the client, preserve scroll anchor, and use around-message fetch.
+7. Bind only finalized, owned and authorized media assets at message commit; queue/retry media without duplicate upload or message creation.
+8. Apply delete-for-me tombstones to every read projection; add explicit delete-for-everyone UI and live mutation handling.
+9. Consume reaction, delete and read realtime events; reconcile optimistic mutations and second-device state.
+10. Enforce read-receipt privacy and request-pending gates server-side.
+11. Persist pin and private mark-unread; make notification fan-out honor mute, request, mention and quiet-hour policy.
+12. Make report submission idempotent and unknown-outcome safe.
+13. Remove the false GroupChat self-typing indicator and subscribe to authorized remote typers only.
+14. Harden or remove the unused `secure_messages` route and document canonical chat's server-readable security model.
 
 **Exit gate:** two devices can exchange 1,000 messages with induced duplicate requests, dropped responses, reconnects and app restarts with zero duplicates, zero lost accepted messages and truthful final state.
 
 ### Wave 1 — Core parity
 
-1. Persistent reactions.
-2. Edit with bounded window and visible history.
-3. Delete semantics and tombstones.
-4. Server-backed in-chat/inbox search.
-5. Delivered/read message details.
-6. Per-chat notification policy and quiet hours.
-7. Real voice messages.
-8. Documents and safe file handling.
-9. Shared-media/links/docs views backed by server pagination.
-10. Consolidate DM/group conversation engine.
+1. Edit with bounded window, edit history and receipt preservation.
+2. Server-backed in-chat/inbox search with around-message jump.
+3. Delivered/read message details and group read-details sheet.
+4. Real voice messages: permission, lock/pause/trim, real waveform, upload, background playback, speed, seek and retry.
+5. Documents and safe file handling with scanning and request-state gates.
+6. Shared-media/links/docs views backed by server pagination and deletion propagation.
+7. Message pins/bookmarks with permissions and cross-device state.
+8. Notification quiet hours, bundling and private preview controls.
 
 **Exit gate:** reload, second-device and offline parity for every visible action.
 
@@ -873,7 +952,10 @@ Anything else produces a feature-rich prototype. This order produces a flagship 
 ## 16. Audit status
 
 **Report status:** COMPLETE — TARGET MET  
-**Implementation status:** NOT STARTED — this document is the implementation brief  
+**Implementation status:** PARTIAL — meaningful Wave 0 foundations landed, but cross-surface and cross-device guarantees remain open
+**Competitive parity verdict:** NO — neither 1:1 feature parity nor flagship core-quality parity is currently met
 **Native visual validation:** PENDING  
 **Live endpoint validation:** PENDING  
-**Primary blocker:** message lifecycle contracts and server/client state ownership must be corrected before feature expansion
+**Static validation at reviewed HEAD:** frontend TypeScript passed; backend TypeScript build passed; 71/71 messaging-focused frontend tests passed
+**Primary blockers:** converge DM/group engines; finish the outbox runtime; filter delete tombstones; consume read/reaction/delete events; enforce mute/request/privacy in push and send; bind canonical media assets; remove demo AI transcript behavior
+**Product completion status:** PARTIAL — INTERACTION FAILURES REMAIN

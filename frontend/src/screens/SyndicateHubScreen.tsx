@@ -38,6 +38,7 @@ import {
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'progress' | 'closing' | 'roi';
@@ -365,7 +366,7 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, 'GBP', { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {

@@ -6,6 +6,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 /**
  * Normalised item shape for the ShopRail — decoupled from both the domain
@@ -68,7 +69,7 @@ export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps)
               onLongPress={onLongPressItem ? () => onLongPressItem(item.id) : undefined}
               activeOpacity={0.9}
               accessibilityRole="button"
-              accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.isPinned ? ', pinned' : ''}${item.isSold ? ', sold' : ''}`}
+              accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.isPinned ? ', pinned' : ''}${item.isSold ? ', sold' : ''}`}
               accessibilityHint="Opens listing details"
             >
               <View style={styles.imageWrap}>
@@ -97,7 +98,7 @@ export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps)
                 ) : null}
               </View>
               <Text style={styles.price} numberOfLines={1}>
-                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
               </Text>
               <Text style={styles.brand} numberOfLines={1}>
                 {item.brand ?? item.title}

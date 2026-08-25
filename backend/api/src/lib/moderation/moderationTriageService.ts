@@ -420,8 +420,10 @@ export class ModerationTriageService {
 
   /**
    * Return the human review queue: triaged items awaiting human review,
-   * ordered by confidence ascending (lowest confidence = most ambiguous =
-   * highest priority for human attention).
+   * ordered by severity first (minor-safety > violence/hate > sexual > other),
+   * then by confidence (most ambiguous first within same severity), then by
+   * age (FIFO). This ensures imminent harm is reviewed before low-confidence
+   * low-harm content.
    *
    * Includes both `human_review` decisions and `auto_reject` decisions
    * (auto-reject items need human confirmation before action).
@@ -440,7 +442,15 @@ export class ModerationTriageService {
        FROM moderation_triage
        WHERE triage_status = 'triaged'
          AND triage_decision IN ('human_review', 'auto_reject')
-       ORDER BY confidence_score ASC, created_at ASC
+       ORDER BY
+         CASE
+           WHEN detected_labels::text ILIKE '%minor%' OR detected_labels::text ILIKE '%csam%' THEN 0
+           WHEN detected_labels::text ILIKE '%violence%' OR detected_labels::text ILIKE '%hate%' THEN 1
+           WHEN detected_labels::text ILIKE '%sexual%' THEN 2
+           ELSE 3
+         END ASC,
+         confidence_score ASC,
+         created_at ASC
        LIMIT $1 OFFSET $2`,
       [clampedLimit, clampedOffset],
     );

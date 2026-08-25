@@ -24,6 +24,7 @@ import { createStableId } from '../../utils/createStableId';
 import { toIze, formatAuctionIze } from '../../utils/currency';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
+import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
 export interface BuyNowSheetAuctionContext {
@@ -250,7 +251,7 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, 'GBP')
+    ? formatFromFiat(displayPriceGbp, DEFAULT_CURRENCY_CODE)
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'

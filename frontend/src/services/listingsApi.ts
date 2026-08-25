@@ -459,7 +459,10 @@ export interface ListingsResponse {
 export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok: boolean; listingId: string }> {
   return fetchJson<{ ok: boolean; listingId: string }>('/listings', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': body.id,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -527,14 +530,15 @@ export async function answerListingQuestion(
 export async function reportListing(
   listingId: string,
   reason: ListingReportReason,
-  details?: string
+  details?: string,
+  evidenceUris?: string[]
 ): Promise<{ reportId: string }> {
   return fetchJson<{ ok: boolean; reportId: string }>(
     `/listings/${encodeURIComponent(listingId)}/report`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, details }),
+      body: JSON.stringify({ reason, details, evidence_uris: evidenceUris }),
     }
   );
 }
