@@ -1187,7 +1187,36 @@ export default function SellScreen() {
             </View>
           )}
 
-          {/* -- 1c. NEW SELLER TIPS -- */}
+          {/* -- 1c. IMPORT A SHOP -- secondary action below the primary
+              listing flow. A single flat row (not a card) with a hairline
+              separator above. Restrained — does not compete with the
+              primary camera/listing action (blueprint §5.1). -- */}
+          {!hasDraftContent && (
+            <AnimatedPressable
+              style={styles.importShopRow}
+              onPress={() => { haptics.tap(); navigation.navigate('CatalogImportStart'); }}
+              activeOpacity={0.6}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Import a shop"
+              accessibilityHint="Bring your existing listings from eBay or a file"
+            >
+              <View style={[styles.importShopSeparator, { backgroundColor: colors.borderSubtle }]} />
+              <View style={styles.importShopContent}>
+                <Ionicons name="cube-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <View style={styles.importShopText}>
+                  <Text style={[styles.importShopTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Import a shop
+                  </Text>
+                  <Text style={[styles.importShopSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                    Bring your existing listings from eBay or a file
+                  </Text>
+                </View>
+              </View>
+            </AnimatedPressable>
+          )}
+
+          {/* -- 1d. NEW SELLER TIPS -- */}
           {/* Per research: new seller tips/guidance if first-time seller.
               Dismissible, only shows when isNewSeller and not dismissed.
               Flat inline — no card chrome (§4 surface budget). */}
@@ -2909,6 +2938,40 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- import a shop row (flat, hairline-separated, 44pt target) -- */
+  importShopRow: {
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  importShopSeparator: {
+    height: Stroke.hairline,
+    marginBottom: Space.sm + Space.xs,
+  },
+  importShopContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+  },
+  importShopText: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: Space.xxs,
+  },
+  importShopTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  importShopSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   /* -- new seller tips (flat inline, no card chrome) -- */

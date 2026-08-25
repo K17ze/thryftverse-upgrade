@@ -15,7 +15,7 @@ import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 import { Motion } from '../../theme/motionTokens';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -24,7 +24,6 @@ interface MessageContextMenuProps {
   messageText?: string;
   isOwnMessage?: boolean;
   isFailed?: boolean;
-  isTranslated?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -36,7 +35,6 @@ export function MessageContextMenu({
   messageText,
   isOwnMessage,
   isFailed,
-  isTranslated,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -46,9 +44,8 @@ export function MessageContextMenu({
       isOwnMessage: Boolean(isOwnMessage),
       isFailed: Boolean(isFailed),
       messageText,
-      isTranslated: Boolean(isTranslated),
     });
-  }, [messageText, isOwnMessage, isFailed, isTranslated]);
+  }, [messageText, isOwnMessage, isFailed]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

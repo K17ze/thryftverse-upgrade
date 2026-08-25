@@ -45,18 +45,18 @@ export default function ArchivedConversationsScreen() {
 
   const handleDelete = (id: string, title: string) => {
     Alert.alert(
-      'Delete conversation?',
-      `"${title}" will be permanently removed.`,
+      'Remove from inbox?',
+      `"${title}" will be removed from your archived conversations.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteConversationOnApi(id);
+              await deleteConversationOnApi(id, 'me');
               deleteConversation(id);
-              show('Conversation deleted', 'info');
+              show('Conversation removed', 'info');
             } catch {
               show('Could not delete this conversation. Check your connection and try again.', 'error');
             }
@@ -81,7 +81,7 @@ export default function ArchivedConversationsScreen() {
             await Promise.all(
               archivedConversations.map(async (c) => {
                 try {
-                  await deleteConversationOnApi(c.id);
+                  await deleteConversationOnApi(c.id, 'me');
                   deleteConversation(c.id);
                 } catch {
                   failedCount++;

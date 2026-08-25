@@ -25,6 +25,7 @@
  */
 import React, { useCallback } from 'react';
 import { StyleSheet, ActivityIndicator, Pressable, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
@@ -36,7 +37,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Control, Radius } from '../../theme/designTokens';
+import { Control, EditorRadius, EditorMaterial } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -57,8 +58,6 @@ const PRESS_SCALE = 0.97;
 const DISABLED_OPACITY = 0.4;
 /** Selected backplate opacity (accent at 12%). */
 const SELECTED_BACKPLATE_ALPHA = 0.12;
-/** Overlay backplate opacity for media contrast. */
-const OVERLAY_OPACITY = 0.35;
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -183,14 +182,14 @@ export function CreatorIconButton({
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
       style={{ width: targetSize, height: targetSize, opacity: disabled ? DISABLED_OPACITY : 1 }}
     >
-      {/* Selected backplate — 32pt rounded square, accent at 12% opacity */}
+      {/* Selected backplate — 32pt, 10pt radius (2026 flagship plate) */}
       <Reanimated.View
         style={[
           styles.backplate,
           {
             width: BACKPLATE_SIZE,
             height: BACKPLATE_SIZE,
-            borderRadius: Radius.sm,
+            borderRadius: EditorRadius.plate,
             backgroundColor: colors.brand,
           },
           backplateStyle,
@@ -198,7 +197,9 @@ export function CreatorIconButton({
         pointerEvents="none"
       />
 
-      {/* Media contrast overlay — tiny dark translucent backplate */}
+      {/* Media contrast overlay — glass plate (2026: blur + overlay + hairline
+          replaces the flat black square). Only shown when not selected and
+          overlay mode is requested for on-media legibility. */}
       {overlay && !selected && (
         <View
           style={[
@@ -206,13 +207,21 @@ export function CreatorIconButton({
             {
               width: BACKPLATE_SIZE,
               height: BACKPLATE_SIZE,
-              borderRadius: Radius.sm,
-              backgroundColor: '#000000',
-              opacity: OVERLAY_OPACITY,
+              borderRadius: EditorRadius.plate,
+              overflow: 'hidden',
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: EditorMaterial.plate.hairline,
             },
           ]}
           pointerEvents="none"
-        />
+        >
+          <BlurView
+            intensity={EditorMaterial.plate.blurIntensity}
+            tint={EditorMaterial.plate.tint}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay }]} />
+        </View>
       )}
 
       {/* Pressable content with animated scale */}

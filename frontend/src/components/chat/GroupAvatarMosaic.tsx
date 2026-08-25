@@ -152,7 +152,7 @@ export function GroupAvatarMosaic({
             style={{
               fontSize: size * 0.22,
               fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-              color: colors.textInverse,
+              color: colors.scrimTextPrimary,
             }}
           >
             +{overflowCount}

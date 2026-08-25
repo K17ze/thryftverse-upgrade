@@ -21,6 +21,7 @@ import {
   type ApiVersion,
 } from './lib/apiVersioning.js';
 import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
+import { validateCompositionDocument } from './lib/compositionValidation.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -224,8 +225,21 @@ import { registerSupportReviewRoutes } from './routes/supportReviews.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
+import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
+import {
+  processCatalogImportDiscovery,
+  processCatalogImportHydration,
+  processCatalogImportMedia,
+  processCatalogImportNormalisation,
+  processCatalogImportPublication,
+  processCatalogImportRetention,
+  processCatalogImportReconcile,
+  processMediaEmbeddingJob,
+  processModerationTriageJob,
+  processImporterExtraction,
+} from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
@@ -235,6 +249,7 @@ import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
+import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
 import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
@@ -255,7 +270,12 @@ import { registerLookRoutes } from './routes/looks.js';
 import { registerSearchExtendedRoutes } from './routes/searchExtended.js';
 import { registerOracleRoutes } from './routes/oracle.js';
 import { registerPriceRoutes } from './routes/price.js';
+import { registerCatalogImportRoutes } from './routes/catalogImports.js';
+import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
+import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
+import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
+import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
 import {
   notifyOrderShipped,
   notifyOrderDelivered,
@@ -1270,6 +1290,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && path === '/feed/discover') {
+    return true;
+  }
+
   if (method === 'GET' && /^\/co-own\/assets\/[^/]+\/price-history$/.test(path)) {
     return true;
   }
@@ -2029,12 +2053,14 @@ async function ensureGroupManagementAccess(
   });
 }
 
-async function ensureOwnedGroupAvatarReceipt(
+async function ensureOwnedGroupMediaReceipt(
   client: DbQueryable,
   input: {
     actorUserId: string;
     finalizationId: string;
-    avatarUrl: string;
+    mediaUrl: string;
+    folder: 'avatars' | 'covers';
+    scope: 'avatar' | 'cover';
   }
 ): Promise<void> {
   const result = await client.query<OwnedGroupAvatarReceipt>(
@@ -2069,26 +2095,128 @@ async function ensureOwnedGroupAvatarReceipt(
   ]);
   const urlMatchesReceipt = Boolean(
     receipt
-    && (input.avatarUrl === receipt.finalization_url || input.avatarUrl === receipt.canonical_url)
+    && (input.mediaUrl === receipt.finalization_url || input.mediaUrl === receipt.canonical_url)
   );
 
+  const label = input.folder === 'covers' ? 'cover photo' : 'group photo';
   if (
     !receipt
     || receipt.owner_id !== input.actorUserId
     || receipt.finalization_status !== 'finalized'
     || !receipt.content_type.startsWith('image/')
-    || receipt.folder !== 'avatars'
-    || receipt.scope !== 'avatar'
+    || receipt.folder !== input.folder
+    || receipt.scope !== input.scope
     || !receipt.media_asset_id
     || (receipt.media_asset_status !== null && invalidAssetStatuses.has(receipt.media_asset_status))
     || !urlMatchesReceipt
   ) {
     throw createApiError(
       'CHAT_GROUP_AVATAR_INVALID',
-      'Group photo must be a finalized image uploaded by the current user',
+      `Group ${label} must be a finalized image uploaded by the current user`,
       { finalizationId: input.finalizationId }
     );
   }
+}
+
+// Backward-compatible alias for existing call sites that upload avatars.
+async function ensureOwnedGroupAvatarReceipt(
+  client: DbQueryable,
+  input: {
+    actorUserId: string;
+    finalizationId: string;
+    avatarUrl: string;
+  }
+): Promise<void> {
+  return ensureOwnedGroupMediaReceipt(client, {
+    actorUserId: input.actorUserId,
+    finalizationId: input.finalizationId,
+    mediaUrl: input.avatarUrl,
+    folder: 'avatars',
+    scope: 'avatar',
+  });
+}
+
+// ── Chat message serialization ───────────────────────────────────────────
+// P0.1/P0.7/P0.8/P0.9: Canonical message serializer that includes all
+// lifecycle fields — clientMessageId, replyToMessageId, reactions, edit
+// state, deleted state. Used by both the list and create routes so the
+// contract is identical everywhere.
+
+interface ChatMessageRow {
+  id: string;
+  sender_type: ChatSenderType;
+  sender_user_id: string | null;
+  sender_bot_id: string | null;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  client_message_id: string | null;
+  reply_to_message_id: string | null;
+  deleted_for_everyone_at: string | null;
+  edit_version: number;
+  edited_at: string | null;
+}
+
+function formatReactionsMap(
+  reactionsByMessage: Map<string, Map<string, string[]>>,
+  messageId: string,
+): Array<{ emoji: string; userIds: string[] }> {
+  const byEmoji = reactionsByMessage.get(messageId);
+  if (!byEmoji) return [];
+  return Array.from(byEmoji.entries()).map(([emoji, userIds]) => ({ emoji, userIds }));
+}
+
+// Batch serializer — loads reactions for all messages in a single query to
+// avoid N+1. Used by the list route which returns multiple messages.
+async function serializeChatMessageRows(
+  rows: ChatMessageRow[],
+  _actorUserId: string,
+): Promise<Record<string, unknown>[]> {
+  if (rows.length === 0) return [];
+
+  const messageIds = rows.map((r) => r.id);
+  const reactionsResult = await db.query<{ message_id: string; emoji: string; user_id: string }>(
+    `SELECT message_id, emoji, user_id FROM chat_message_reactions WHERE message_id = ANY($1::text[])`,
+    [messageIds]
+  );
+
+  const reactionsByMessage = new Map<string, Map<string, string[]>>();
+  for (const r of reactionsResult.rows) {
+    let byEmoji = reactionsByMessage.get(r.message_id);
+    if (!byEmoji) {
+      byEmoji = new Map();
+      reactionsByMessage.set(r.message_id, byEmoji);
+    }
+    const existing = byEmoji.get(r.emoji);
+    if (existing) existing.push(r.user_id);
+    else byEmoji.set(r.emoji, [r.user_id]);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    senderType: row.sender_type,
+    senderUserId: row.sender_user_id,
+    senderBotId: row.sender_bot_id,
+    body: row.body,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    clientMessageId: row.client_message_id ?? undefined,
+    replyToMessageId: row.reply_to_message_id ?? undefined,
+    deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
+    editVersion: row.edit_version,
+    editedAt: row.edited_at ?? undefined,
+    reactions: formatReactionsMap(reactionsByMessage, row.id),
+  }));
+}
+
+// Single-message serializer — for the create route where only one message
+// is returned. Uses the batch serializer with a single-element array.
+async function serializeChatMessageRow(
+  row: ChatMessageRow,
+  actorUserId: string,
+): Promise<Record<string, unknown>> {
+  const results = await serializeChatMessageRows([row], actorUserId);
+  return results[0];
 }
 
 async function listChatParticipantIds(client: DbQueryable, conversationId: string): Promise<string[]> {
@@ -11444,6 +11572,21 @@ function stopOpsAlertingScheduler(): void {
   opsAlertingTimer = null;
 }
 
+// ── Fraud shadow scoring service (Phase 6) ───────────────────────────
+// Shared across all fraud check call sites. When FRAUD_SHADOW_ENABLED is
+// false, this is null and shadow scoring is skipped entirely. When enabled,
+// every fraud check also scores the event with the shadow ML model and logs
+// both scores to fraud_scoring_ledger. The shadow score NEVER affects the
+// user-facing fraud decision — the rule engine remains the champion.
+const fraudShadowService = config.fraudShadowEnabled
+  ? new FraudShadowScoringService({
+      db,
+      mlServiceUrl: config.decisionServiceUrl,
+      mlServiceToken: config.decisionServiceToken,
+      timeoutMs: config.fraudShadowTimeoutMs,
+    })
+  : null;
+
 // ── Health & metrics routes (extracted to routes/health.ts) ──────────
 registerHealthRoutes({
   app,
@@ -12041,7 +12184,7 @@ type ProfileUserRow = {
 };
 
 // ── Auth routes (extracted to routes/auth.ts) ────────────────────────
-registerAuthRoutes({ app, db, redis });
+registerAuthRoutes({ app, db, redis, fraudShadowService });
 
 function normalizeAuthRole(role: string | null | undefined): AuthRole {
   if (role === 'seller' || role === 'moderator' || role === 'admin') {
@@ -16608,7 +16751,8 @@ registerPosterRoutes({ app, db, resolveAuthenticatedUserId });
 
 registerLookRoutes({ app, db, resolveAuthenticatedUserId });
 
-
+// ── Catalogue Import API ───────────────────────────────────────────
+registerCatalogImportRoutes({ app, db, readDb });
 
 // ── Listings API ───────────────────────────────────────────────────
 app.post('/listings', {
@@ -16953,7 +17097,7 @@ app.post('/listings', {
     // Catches bulk listing creation (counterfeit/non-existent goods) and
     // new-account listing velocity (AGENTS.md §11 — truthful signals).
     try {
-      await checkFraudNonBlocking(
+      const fraudResult = await checkFraudNonBlocking(
         redis,
         {
           eventType: 'listing',
@@ -16964,7 +17108,18 @@ app.post('/listings', {
         },
         undefined,
         request.log,
+        fraudShadowService,
       );
+      // Listing events map to `allow_low_risk_flow` when the fraud service
+      // is unavailable — listing creation continues and can be reviewed
+      // post-hoc. No caller action needed beyond the audit log already
+      // written by checkFraudNonBlocking.
+      if (fraudResult.evaluationStatus === 'unavailable') {
+        request.log.warn(
+          { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
+          'Listing fraud check unavailable — continuing with failover policy'
+        );
+      }
     } catch {
       // Fraud check failures must never break listing creation (AGENTS.md §6).
     }
@@ -18838,7 +18993,15 @@ registerSmsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 registerFraudDetectionRoutes({ app, redis });
 
+registerFraudShadowRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
 registerAdminAuditRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerModelArtifactRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerMediaEmbeddingRoutes({ app, db, createApiError });
+
+registerImporterExtractionRoutes({ app, db, readDb });
 
 registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
 
@@ -18902,6 +19065,30 @@ app.post('/chat/dm', async (request, reply) => {
       };
     }
 
+    // P0.13: Enforce recipient privacy — check allow_messages_from.
+    // 'everyone' → accepted immediately. 'following' → pending if not
+    // mutually following. 'nobody' → pending (request must be accepted).
+    const recipientPrivacy = await client.query<{ allow_messages_from: string }>(
+      `SELECT allow_messages_from FROM users WHERE id = $1 LIMIT 1`,
+      [payload.recipientUserId]
+    );
+    const recipientAllowMessages = recipientPrivacy.rows[0]?.allow_messages_from ?? 'everyone';
+    let requestStatus: 'pending' | 'accepted' = 'accepted';
+
+    if (recipientAllowMessages === 'nobody') {
+      requestStatus = 'pending';
+    } else if (recipientAllowMessages === 'following') {
+      // Check if the recipient follows the actor (mutual follow = accepted)
+      const followResult = await client.query<{ id: string }>(
+        `SELECT id FROM user_follows
+         WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+        [payload.recipientUserId, actorUserId]
+      );
+      if (!followResult.rowCount) {
+        requestStatus = 'pending';
+      }
+    }
+
     const existingResult = await client.query<{ id: string }>(
       `
         SELECT c.id
@@ -18934,6 +19121,14 @@ app.post('/chat/dm', async (request, reply) => {
          WHERE id = $1`,
         [existingResult.rows[0].id, dmPairKey],
       );
+      // P0.13: Fetch the actor's request status for this conversation so the
+      // client knows whether messages can be sent or are pending acceptance.
+      const actorState = await client.query<{ request_status: string }>(
+        `SELECT request_status FROM chat_conversation_user_state
+         WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
+        [actorUserId, existingResult.rows[0].id]
+      );
+      const existingRequestStatus = actorState.rows[0]?.request_status ?? 'accepted';
       await client.query('COMMIT');
       const conversationId = existingResult.rows[0].id;
       reply.code(200);
@@ -18946,6 +19141,7 @@ app.post('/chat/dm', async (request, reply) => {
           itemId: payload.itemId ?? null,
           ownerId: actorUserId,
           participantIds: [actorUserId, payload.recipientUserId],
+          requestStatus: existingRequestStatus,
         },
       };
     }
@@ -18977,6 +19173,23 @@ app.post('/chat/dm', async (request, reply) => {
       [conversationId, payload.recipientUserId]
     );
 
+    // P0.13: Create per-user conversation state with the correct request
+    // status. The sender is always 'accepted' (they initiated). The recipient
+    // gets 'pending' if their privacy settings require it.
+    await client.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
+       VALUES ($1, $2, 'accepted')
+       ON CONFLICT (user_id, conversation_id) DO NOTHING`,
+      [actorUserId, conversationId]
+    );
+    await client.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, conversation_id)
+       DO UPDATE SET request_status = EXCLUDED.request_status, updated_at = NOW()`,
+      [payload.recipientUserId, conversationId, requestStatus]
+    );
+
     await client.query(
       `UPDATE chat_conversations SET updated_at = NOW() WHERE id = $1`,
       [conversationId]
@@ -18991,27 +19204,32 @@ app.post('/chat/dm', async (request, reply) => {
         conversationId,
         ownerId: actorUserId,
         participantIds: [actorUserId, payload.recipientUserId],
+        requestStatus,
       },
     });
 
-    try {
-      await queueUserNotification({
-        userId: payload.recipientUserId,
-        title: 'New conversation',
-        body: 'Someone started a conversation with you.',
-        payload: {
-          conversationId,
-          event: 'chat_dm_created',
-        },
-        metadata: {
-          source: 'chat.dm.create',
-        },
-      });
-    } catch (error) {
-      request.log.error(
-        { err: error, conversationId, recipientUserId: payload.recipientUserId },
-        'Failed to queue DM notification'
-      );
+    // Only notify the recipient if the request is accepted (pending requests
+    // appear in the Requests inbox, not as push notifications)
+    if (requestStatus === 'accepted') {
+      try {
+        await queueUserNotification({
+          userId: payload.recipientUserId,
+          title: 'New conversation',
+          body: 'Someone started a conversation with you.',
+          payload: {
+            conversationId,
+            event: 'chat_dm_created',
+          },
+          metadata: {
+            source: 'chat.dm.create',
+          },
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error, conversationId, recipientUserId: payload.recipientUserId },
+          'Failed to queue DM notification'
+        );
+      }
     }
 
     reply.code(201);
@@ -19024,6 +19242,7 @@ app.post('/chat/dm', async (request, reply) => {
         itemId: payload.itemId ?? null,
         ownerId: actorUserId,
         participantIds: [actorUserId, payload.recipientUserId],
+        requestStatus,
       },
     };
   } catch (error) {
@@ -19042,12 +19261,21 @@ app.post('/chat/groups', async (request, reply) => {
     description: z.string().trim().max(280).optional(),
     avatar: z.string().trim().max(512).optional(),
     avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+    coverPhoto: z.string().trim().max(512).optional(),
+    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
   }).superRefine((value, context) => {
     if (value.avatar && !value.avatarFinalizationId) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['avatarFinalizationId'],
         message: 'A finalized upload receipt is required for a group photo',
+      });
+    }
+    if (value.coverPhoto && !value.coverPhotoFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['coverPhotoFinalizationId'],
+        message: 'A finalized upload receipt is required for a cover photo',
       });
     }
   });
@@ -19069,6 +19297,16 @@ app.post('/chat/groups', async (request, reply) => {
       actorUserId,
       finalizationId: payload.avatarFinalizationId,
       avatarUrl: payload.avatar,
+    });
+  }
+
+  if (payload.coverPhoto && payload.coverPhotoFinalizationId) {
+    await ensureOwnedGroupMediaReceipt(db, {
+      actorUserId,
+      finalizationId: payload.coverPhotoFinalizationId,
+      mediaUrl: payload.coverPhoto,
+      folder: 'covers',
+      scope: 'cover',
     });
   }
 
@@ -19136,6 +19374,10 @@ app.post('/chat/groups', async (request, reply) => {
           ...(payload.avatarFinalizationId
             ? { avatarFinalizationId: payload.avatarFinalizationId }
             : {}),
+          ...(payload.coverPhoto ? { coverPhoto: payload.coverPhoto } : {}),
+          ...(payload.coverPhotoFinalizationId
+            ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
+            : {}),
         }),
       ]
     );
@@ -19179,6 +19421,7 @@ app.post('/chat/groups', async (request, reply) => {
         ownerId: actorUserId,
         description: payload.description ?? null,
         avatar: payload.avatar ?? null,
+        coverPhoto: payload.coverPhoto ?? null,
         participantIds: normalizedMemberIds,
         memberRoles: Object.fromEntries(
           normalizedMemberIds.map((memberId) => [
@@ -19368,7 +19611,7 @@ app.get('/chat/conversations', async (request) => {
     };
   }
 
-  const [memberRows, botRows, stateRows] = await Promise.all([
+  const [memberRows, botRows, stateRows, readStateRows] = await Promise.all([
     db.query<{
       conversation_id: string;
       user_id: string;
@@ -19408,10 +19651,23 @@ app.get('/chat/conversations', async (request) => {
       is_muted: boolean;
       is_archived: boolean;
       request_status: string;
+      pinned_rank: number;
+      marked_unread_message_id: string | null;
     }>(
       `
-        SELECT conversation_id, is_muted, is_archived, request_status
+        SELECT conversation_id, is_muted, is_archived, request_status, pinned_rank, marked_unread_message_id
         FROM chat_conversation_user_state
+        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
+      `,
+      [actorUserId, conversationIds]
+    ),
+    db.query<{
+      conversation_id: string;
+      last_read_at: string | null;
+    }>(
+      `
+        SELECT conversation_id, last_read_at::text
+        FROM chat_members
         WHERE user_id = $1 AND conversation_id = ANY($2::text[])
       `,
       [actorUserId, conversationIds]
@@ -19452,13 +19708,21 @@ app.get('/chat/conversations', async (request) => {
     botsByConversation.set(row.conversation_id, current);
   }
 
-  const stateByConversation = new Map<string, { isMuted: boolean; isArchived: boolean; requestStatus: string }>();
+  const stateByConversation = new Map<string, { isMuted: boolean; isArchived: boolean; requestStatus: string; pinnedRank: number; markedUnreadMessageId: string | null }>();
   for (const row of stateRows.rows) {
     stateByConversation.set(row.conversation_id, {
       isMuted: row.is_muted,
       isArchived: row.is_archived,
       requestStatus: row.request_status,
+      pinnedRank: row.pinned_rank,
+      markedUnreadMessageId: row.marked_unread_message_id,
     });
+  }
+
+  // Build last_read_at map for unread computation.
+  const lastReadByConversation = new Map<string, string | null>();
+  for (const row of readStateRows.rows) {
+    lastReadByConversation.set(row.conversation_id, row.last_read_at);
   }
 
   return {
@@ -19473,6 +19737,7 @@ app.get('/chat/conversations', async (request) => {
         ownerId: row.owner_id,
         description: typeof metadata.description === 'string' ? metadata.description : null,
         avatar: typeof metadata.avatar === 'string' ? metadata.avatar : null,
+        coverPhoto: typeof metadata.coverPhoto === 'string' ? metadata.coverPhoto : null,
         itemId: row.item_id,
         participantIds: membersByConversation.get(row.id) ?? [],
         memberRoles: rolesByConversation.get(row.id) ?? {},
@@ -19480,10 +19745,17 @@ app.get('/chat/conversations', async (request) => {
         botIds: botsByConversation.get(row.id) ?? [],
         lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
         lastMessageTime: row.last_message_created_at ?? row.updated_at,
-        unread: false,
+        unread: (() => {
+          const lastRead = lastReadByConversation.get(row.id);
+          const lastMsgTime = row.last_message_created_at ?? row.updated_at;
+          if (!lastRead || !lastMsgTime) return false;
+          return new Date(lastRead) < new Date(lastMsgTime);
+        })(),
         isMuted: state?.isMuted ?? false,
         isArchived: state?.isArchived ?? false,
         requestStatus: state?.requestStatus ?? 'accepted',
+        pinnedRank: state?.pinnedRank ?? 0,
+        markedUnread: Boolean(state?.markedUnreadMessageId),
       };
     }),
   };
@@ -19493,16 +19765,122 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
   });
+  // P0.3: Keyset pagination on (created_at, id). Default returns the NEWEST
+  // page (descending), reversed for display. `before` cursor fetches older
+  // messages; `after` fetches newer ones. `aroundMessageId` fetches context
+  // around a specific message (used for jump-to-result and reply scroll).
   const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(250).default(120),
+    limit: z.coerce.number().int().min(1).max(250).default(50),
+    before: z.string().min(2).max(120).optional(),
+    after: z.string().min(2).max(120).optional(),
+    aroundMessageId: z.string().min(2).max(120).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query ?? {});
+  const { limit, before, after, aroundMessageId } = querySchema.parse(request.query ?? {});
 
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  // ── aroundMessageId: fetch a window centered on a message ──────────────
+  if (aroundMessageId) {
+    const centerResult = await db.query<{ created_at: string; id: string }>(
+      `SELECT created_at::text, id FROM chat_messages
+       WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+      [aroundMessageId, conversationId]
+    );
+    if (centerResult.rowCount) {
+      const center = centerResult.rows[0];
+      const halfLimit = Math.ceil(limit / 2);
+      const older = await db.query<{
+        id: string;
+        sender_type: ChatSenderType;
+        sender_user_id: string | null;
+        sender_bot_id: string | null;
+        body: string;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        client_message_id: string | null;
+        reply_to_message_id: string | null;
+        deleted_for_everyone_at: string | null;
+        edit_version: number;
+        edited_at: string | null;
+      }>(
+        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.metadata, m.created_at::text, m.client_message_id,
+                m.reply_to_message_id, m.deleted_for_everyone_at,
+                m.edit_version, m.edited_at::text
+         FROM chat_messages m
+         WHERE m.conversation_id = $1
+           AND m.deleted_for_everyone_at IS NULL
+           AND (m.created_at, m.id) < ($2, $3)
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT $4`,
+        [conversationId, center.created_at, center.id, halfLimit]
+      );
+      const newer = await db.query<{
+        id: string;
+        sender_type: ChatSenderType;
+        sender_user_id: string | null;
+        sender_bot_id: string | null;
+        body: string;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        client_message_id: string | null;
+        reply_to_message_id: string | null;
+        deleted_for_everyone_at: string | null;
+        edit_version: number;
+        edited_at: string | null;
+      }>(
+        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.metadata, m.created_at::text, m.client_message_id,
+                m.reply_to_message_id, m.deleted_for_everyone_at,
+                m.edit_version, m.edited_at::text
+         FROM chat_messages m
+         WHERE m.conversation_id = $1
+           AND m.deleted_for_everyone_at IS NULL
+           AND (m.created_at, m.id) >= ($2, $3)
+         ORDER BY m.created_at ASC, m.id ASC
+         LIMIT $4`,
+        [conversationId, center.created_at, center.id, limit - halfLimit]
+      );
+      // Combine: older (reversed to ASC) + newer (already ASC)
+      const items = [...older.rows.reverse(), ...newer.rows];
+      return {
+        ok: true,
+        conversation: {
+          id: conversation.id,
+          type: conversation.type,
+          title: conversation.title,
+          ownerId: conversation.owner_id,
+          itemId: conversation.item_id,
+        },
+        items: await serializeChatMessageRows(items, actorUserId),
+        hasMore: older.rows.length >= halfLimit,
+        oldestCursor: items.length > 0
+          ? `${items[0].created_at}|${items[0].id}` : null,
+        newestCursor: items.length > 0
+          ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
+      };
+    }
+  }
+
+  // ── Cursor-based keyset pagination ──────────────────────────────────────
+  // Default (no cursor): return the NEWEST page.
+  // `before`: messages older than the cursor (for scrolling up in history).
+  // `after`: messages newer than the cursor ( for catching up after a gap).
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
+  if (before || after) {
+    const cursorStr = (before ?? after) as string;
+    const sepIdx = cursorStr.lastIndexOf('|');
+    if (sepIdx > 0) {
+      cursorCreatedAt = cursorStr.slice(0, sepIdx);
+      cursorId = cursorStr.slice(sepIdx + 1);
+    }
+  }
+
+  const isAfter = Boolean(after);
   const result = await db.query<{
     id: string;
     sender_type: ChatSenderType;
@@ -19511,23 +19889,35 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
     body: string;
     metadata: Record<string, unknown> | null;
     created_at: string;
+    client_message_id: string | null;
+    reply_to_message_id: string | null;
+    deleted_for_everyone_at: string | null;
+    edit_version: number;
+    edited_at: string | null;
   }>(
     `
-      SELECT
-        id,
-        sender_type,
-        sender_user_id,
-        sender_bot_id,
-        body,
-        metadata,
-        created_at::text
-      FROM chat_messages
-      WHERE conversation_id = $1
-      ORDER BY created_at ASC
-      LIMIT $2
+      SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+             m.metadata, m.created_at::text, m.client_message_id,
+             m.reply_to_message_id, m.deleted_for_everyone_at,
+             m.edit_version, m.edited_at::text
+      FROM chat_messages m
+      WHERE m.conversation_id = $1
+        AND m.deleted_for_everyone_at IS NULL
+        ${cursorCreatedAt ? (isAfter
+          ? 'AND (m.created_at, m.id) > ($2, $3)'
+          : 'AND (m.created_at, m.id) < ($2, $3)')
+          : ''}
+      ORDER BY m.created_at ${isAfter ? 'ASC' : 'DESC'}, m.id ${isAfter ? 'ASC' : 'DESC'}
+      LIMIT $${cursorCreatedAt ? '4' : '2'}
     `,
-    [conversationId, limit]
+    cursorCreatedAt
+      ? [conversationId, cursorCreatedAt, cursorId, limit]
+      : [conversationId, limit]
   );
+
+  // For `before` and default (DESC query), reverse to chronological ASC for display.
+  // For `after` (ASC query), keep as-is.
+  const items = isAfter ? result.rows : result.rows.reverse();
 
   return {
     ok: true,
@@ -19538,15 +19928,12 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       ownerId: conversation.owner_id,
       itemId: conversation.item_id,
     },
-    items: result.rows.map((row) => ({
-      id: row.id,
-      senderType: row.sender_type,
-      senderUserId: row.sender_user_id,
-      senderBotId: row.sender_bot_id,
-      body: row.body,
-      metadata: row.metadata ?? {},
-      createdAt: row.created_at,
-    })),
+    items: await serializeChatMessageRows(items, actorUserId),
+    hasMore: result.rows.length >= limit,
+    oldestCursor: items.length > 0
+      ? `${items[0].created_at}|${items[0].id}` : null,
+    newestCursor: items.length > 0
+      ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
   };
 });
 
@@ -19576,6 +19963,7 @@ app.post('/chat/conversations/:conversationId/messages', {
         mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
         clientMessageId: { type: 'string', minLength: 1, maxLength: 120 },
+        replyToMessageId: { type: 'string', minLength: 2, maxLength: 120 },
       },
       additionalProperties: false,
     },
@@ -19594,6 +19982,7 @@ app.post('/chat/conversations/:conversationId/messages', {
       mediaUri: z.string().min(1).max(2048).optional(),
       metadata: z.record(z.unknown()).optional(),
       clientMessageId: z.string().trim().min(1).max(120).optional(),
+      replyToMessageId: z.string().trim().min(2).max(120).optional(),
     })
     .superRefine((val, ctx) => {
       const isMedia = val.type === 'image' || val.type === 'video';
@@ -19636,6 +20025,21 @@ app.post('/chat/conversations/:conversationId/messages', {
   await ensureUserExists(actorUserId);
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  // P0.8: Validate reply target — must exist in this conversation and not be
+  // deleted-for-everyone. This prevents cross-conversation reply spoofing.
+  if (payload.replyToMessageId) {
+    const replyTarget = await db.query<{ id: string }>(
+      `SELECT id FROM chat_messages
+       WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL
+       LIMIT 1`,
+      [payload.replyToMessageId, conversationId]
+    );
+    if (!replyTarget.rowCount) {
+      reply.code(400);
+      return { ok: false, error: 'Reply target message not found in this conversation' };
+    }
+  }
+
   // P0-MSG-2: Idempotent replay. If the client retried a send after a dropped
   // response, the same clientMessageId will be presented. Return the original
   // message instead of creating a duplicate. The partial unique index on
@@ -19647,9 +20051,11 @@ app.post('/chat/conversations/:conversationId/messages', {
       body: string;
       metadata: Record<string, unknown>;
       created_at: string;
+      client_message_id: string | null;
+      reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text
+        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -19672,6 +20078,8 @@ app.post('/chat/conversations/:conversationId/messages', {
           body: row.body,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
+          clientMessageId: row.client_message_id ?? undefined,
+          replyToMessageId: row.reply_to_message_id ?? undefined,
         },
       };
     }
@@ -19688,9 +20096,10 @@ app.post('/chat/conversations/:conversationId/messages', {
         sender_bot_id,
         body,
         metadata,
-        client_message_id
+        client_message_id,
+        reply_to_message_id
       )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6)
+      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6, $7)
       ON CONFLICT (conversation_id, sender_user_id, client_message_id)
         WHERE client_message_id IS NOT NULL
       DO NOTHING
@@ -19703,6 +20112,7 @@ app.post('/chat/conversations/:conversationId/messages', {
       bodyText,
       toJsonString(mergedMetadata),
       payload.clientMessageId ?? null,
+      payload.replyToMessageId ?? null,
     ]
   );
 
@@ -19716,9 +20126,11 @@ app.post('/chat/conversations/:conversationId/messages', {
       body: string;
       metadata: Record<string, unknown>;
       created_at: string;
+      client_message_id: string | null;
+      reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text
+        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -19741,6 +20153,8 @@ app.post('/chat/conversations/:conversationId/messages', {
           body: row.body,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
+          clientMessageId: row.client_message_id ?? undefined,
+          replyToMessageId: row.reply_to_message_id ?? undefined,
         },
       };
     }
@@ -19802,6 +20216,8 @@ app.post('/chat/conversations/:conversationId/messages', {
       body: bodyText,
       metadata: mergedMetadata,
       createdAt: result.rows[0].created_at,
+      clientMessageId: payload.clientMessageId ?? null,
+      replyToMessageId: payload.replyToMessageId ?? null,
     },
   });
 
@@ -19825,7 +20241,7 @@ app.post('/chat/conversations/:conversationId/messages', {
   // Catches message spam velocity and bot-driven messaging patterns
   // (AGENTS.md §11 — truthful signals).
   try {
-    await checkFraudNonBlocking(
+    const fraudResult = await checkFraudNonBlocking(
       redis,
       {
         eventType: 'message',
@@ -19835,7 +20251,16 @@ app.post('/chat/conversations/:conversationId/messages', {
       },
       undefined,
       request.log,
+      fraudShadowService,
     );
+    // Message events map to `allow_low_risk_flow` when the fraud service
+    // is unavailable — messaging continues and spam can be caught post-hoc.
+    if (fraudResult.evaluationStatus === 'unavailable') {
+      request.log.warn(
+        { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
+        'Message fraud check unavailable — continuing with failover policy'
+      );
+    }
   } catch {
     // Fraud check failures must never break message sending (AGENTS.md §6).
   }
@@ -19851,8 +20276,217 @@ app.post('/chat/conversations/:conversationId/messages', {
       body: bodyText,
       metadata: mergedMetadata,
       createdAt: result.rows[0].created_at,
+      clientMessageId: payload.clientMessageId ?? undefined,
+      replyToMessageId: payload.replyToMessageId ?? undefined,
     },
   };
+});
+
+// ── P0.5: Delete message — delete-for-me and delete-for-everyone ──────────
+// Two distinct semantics, never both labeled "Delete message":
+//   DELETE .../messages/:messageId           → delete-for-me (per-user tombstone)
+//   DELETE .../messages/:messageId?scope=everyone → delete-for-everyone (sender/admin, time-windowed)
+app.delete('/chat/conversations/:conversationId/messages/:messageId', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    scope: z.enum(['me', 'everyone']).default('me'),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { scope } = querySchema.parse(request.query ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const messageResult = await db.query<{
+    sender_user_id: string | null;
+    created_at: string;
+    deleted_for_everyone_at: string | null;
+  }>(
+    `SELECT sender_user_id, created_at::text, deleted_for_everyone_at
+     FROM chat_messages WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!messageResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  const msg = messageResult.rows[0];
+
+  if (msg.deleted_for_everyone_at) {
+    // Already deleted for everyone — idempotent success
+    return { ok: true, deleted: true, scope: 'everyone' };
+  }
+
+  if (scope === 'everyone') {
+    // Only the sender can delete for everyone, within a 24h window.
+    if (msg.sender_user_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the sender can delete a message for everyone' };
+    }
+    const ageMs = Date.now() - new Date(msg.created_at).getTime();
+    if (ageMs > 24 * 60 * 60 * 1000) {
+      reply.code(403);
+      return { ok: false, error: 'Delete for everyone is only available within 24 hours of sending' };
+    }
+
+    await db.query(
+      `UPDATE chat_messages
+       SET deleted_for_everyone_at = NOW(), deleted_by_user_id = $3, body = ''
+       WHERE id = $1 AND conversation_id = $2`,
+      [messageId, conversationId, actorUserId]
+    );
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.deleted',
+      payload: { conversationId, messageId, scope: 'everyone', actorUserId },
+    });
+
+    return { ok: true, deleted: true, scope: 'everyone' };
+  }
+
+  // scope === 'me' — per-user tombstone
+  await db.query(
+    `INSERT INTO chat_message_deletions (message_id, user_id)
+     VALUES ($1, $2)
+     ON CONFLICT (message_id, user_id) DO NOTHING`,
+    [messageId, actorUserId]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.deleted',
+    payload: { conversationId, messageId, scope: 'me', actorUserId },
+  });
+
+  return { ok: true, deleted: true, scope: 'me' };
+});
+
+// ── P0.9: Message reactions — add and remove ─────────────────────────────
+app.post('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    emoji: z.string().trim().min(1).max(32),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { emoji } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // Verify message exists and isn't deleted
+  const msgResult = await db.query<{ id: string }>(
+    `SELECT id FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL LIMIT 1`,
+    [messageId, conversationId]
+  );
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  await db.query(
+    `INSERT INTO chat_message_reactions (message_id, user_id, emoji)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
+    [messageId, actorUserId, emoji]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.reaction.added',
+    payload: { conversationId, messageId, userId: actorUserId, emoji },
+  });
+
+  reply.code(201);
+  return { ok: true, reacted: true, emoji };
+});
+
+app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    emoji: z.string().trim().min(1).max(32),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { emoji } = querySchema.parse(request.query ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `DELETE FROM chat_message_reactions
+     WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
+    [messageId, actorUserId, emoji]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.reaction.removed',
+    payload: { conversationId, messageId, userId: actorUserId, emoji },
+  });
+
+  return { ok: true, removed: true, emoji };
+});
+
+// ── P0.11: Conversation report route ─────────────────────────────────────
+// One canonical report workflow with evidence selection, idempotent submission,
+// and a real report ID from the server.
+app.post('/chat/conversations/:conversationId/report', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    reason: z.enum([
+      'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
+      'off_platform_payment', 'impersonation', 'other',
+    ]),
+    details: z.string().trim().max(2000).optional(),
+    messageId: z.string().trim().min(2).max(120).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const reportId = createRuntimeId('chatrpt');
+
+  await db.query(
+    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW())`,
+    [
+      reportId,
+      conversationId,
+      actorUserId,
+      payload.reason,
+      payload.details ?? null,
+      payload.messageId ?? null,
+    ]
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.conversation.reported',
+    payload: { conversationId, reportId, reason: payload.reason },
+  });
+
+  reply.code(201);
+  return { ok: true, reportId, status: 'submitted' };
 });
 
 // P0 #1 / P2 #56: Typing indicator endpoint.
@@ -19909,6 +20543,42 @@ app.post('/chat/conversations/:conversationId/typing', {
   });
 
   return { ok: true };
+});
+
+// ── Mark conversation as read ────────────────────────────────────────
+// Updates chat_members.last_read_at for the current user. Used by the
+// client when the user opens a conversation or scrolls to the bottom.
+// Also publishes a realtime event so other participants can see read
+// receipts update.
+app.post('/chat/conversations/:conversationId/read', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  await db.query(
+    `
+      UPDATE chat_members
+      SET last_read_at = NOW()
+      WHERE conversation_id = $1 AND user_id = $2
+    `,
+    [conversationId, actorUserId],
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.read',
+    payload: {
+      conversationId,
+      userId: actorUserId,
+      readAt: new Date().toISOString(),
+    },
+  });
+
+  return { ok: true, conversationId, readAt: new Date().toISOString() };
 });
 
 app.post('/chat/conversations/:conversationId/members', async (request) => {
@@ -20122,17 +20792,237 @@ app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (r
   };
 });
 
-app.delete('/chat/conversations/:conversationId', async (request) => {
+// ── Member role management: promote/demote ───────────────────────────
+app.patch('/chat/conversations/:conversationId/members/:memberUserId/role', async (request) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
+    memberUserId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    role: z.enum(['admin', 'member']),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
+  const { role: newRole } = bodySchema.parse(request.body ?? {});
+
+  const conversation = await ensureGroupManagementAccess(
+    db,
+    conversationId,
+    actorUserId,
+    request.authUser?.role,
+  );
+
+  // Cannot change the owner's role via this route — use transfer-ownership.
+  if (conversation.owner_id === memberUserId) {
+    throw createApiError(
+      'CHAT_CANNOT_CHANGE_OWNER_ROLE',
+      'The group owner\'s role cannot be changed. Transfer ownership instead.',
+      { conversationId, memberUserId },
+    );
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const updateResult = await client.query<{ role: string }>(
+      `
+        UPDATE chat_members
+        SET role = $3
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING role
+      `,
+      [conversationId, memberUserId, newRole],
+    );
+
+    if (updateResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError(
+        'CHAT_MEMBER_NOT_FOUND',
+        'The specified user is not a member of this conversation',
+        { conversationId, memberUserId },
+      );
+    }
+
+    const rolesResult = await client.query<{ user_id: string; role: string }>(
+      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
+      [conversationId],
+    );
+    const memberRoles = Object.fromEntries(
+      rolesResult.rows.map((r) => [r.user_id, r.role]),
+    );
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.role_updated',
+      payload: {
+        conversationId,
+        actorUserId,
+        memberUserId,
+        newRole,
+      },
+    });
+
+    return {
+      ok: true,
+      memberRoles,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+// ── Transfer group ownership ─────────────────────────────────────────
+app.post('/chat/conversations/:conversationId/transfer-ownership', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    newOwnerId: z.string().trim().min(2).max(120),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId } = paramsSchema.parse(request.params);
+  const { newOwnerId } = bodySchema.parse(request.body ?? {});
 
-  // Verify the user is a member of the conversation before leaving.
+  const conversation = await ensureGroupManagementAccess(
+    db,
+    conversationId,
+    actorUserId,
+    request.authUser?.role,
+  );
+
+  // Only the current owner can transfer ownership.
+  if (conversation.owner_id !== actorUserId) {
+    throw createApiError(
+      'CHAT_NOT_OWNER',
+      'Only the group owner can transfer ownership',
+      { conversationId, actorUserId, ownerId: conversation.owner_id },
+    );
+  }
+
+  if (newOwnerId === actorUserId) {
+    throw createApiError(
+      'CHAT_CANNOT_TRANSFER_TO_SELF',
+      'You are already the owner of this group',
+      { conversationId, newOwnerId },
+    );
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify the target is a member.
+    const memberCheck = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM chat_members WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, newOwnerId],
+    );
+    if (memberCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError(
+        'CHAT_MEMBER_NOT_FOUND',
+        'The specified user is not a member of this conversation',
+        { conversationId, newOwnerId },
+      );
+    }
+
+    // Promote new owner to 'owner' role, demote current owner to 'admin'.
+    await client.query(
+      `UPDATE chat_members SET role = 'owner' WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, newOwnerId],
+    );
+    await client.query(
+      `UPDATE chat_members SET role = 'admin' WHERE conversation_id = $1 AND user_id = $2`,
+      [conversationId, actorUserId],
+    );
+
+    // Update the conversation owner_id.
+    await client.query(
+      `UPDATE chat_conversations SET owner_id = $2, updated_at = NOW() WHERE id = $1`,
+      [conversationId, newOwnerId],
+    );
+
+    const rolesResult = await client.query<{ user_id: string; role: string }>(
+      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
+      [conversationId],
+    );
+    const memberRoles = Object.fromEntries(
+      rolesResult.rows.map((r) => [r.user_id, r.role]),
+    );
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.group.ownership_transferred',
+      payload: {
+        conversationId,
+        actorUserId,
+        newOwnerId,
+      },
+    });
+
+    return {
+      ok: true,
+      ownerId: newOwnerId,
+      memberRoles,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+// P0.6: Separate "delete for me" (hide from inbox, per-user, reversible)
+// from "leave" (membership mutation, posts system message, irreversible for DMs).
+//   DELETE /chat/conversations/:id              → delete-for-me (archive + hide)
+//   DELETE /chat/conversations/:id?scope=leave  → leave conversation (membership mutation)
+app.delete('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    scope: z.enum(['me', 'leave']).default('me'),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const { scope } = querySchema.parse(request.query ?? {});
+
+  // Verify the user is a member of the conversation.
   const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  if (scope === 'me') {
+    // Delete-for-me: archive the conversation for this user only. No
+    // membership change, no system message, no effect on other participants.
+    // This is the inbox-cleanup action the UI copy describes.
+    await db.query(
+      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, request_status, updated_at)
+       VALUES ($1, $2, TRUE, 'accepted', NOW())
+       ON CONFLICT (user_id, conversation_id)
+       DO UPDATE SET is_archived = TRUE, updated_at = NOW()`,
+      [actorUserId, conversationId]
+    );
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.conversation.archived',
+      payload: { conversationId, actorUserId },
+    });
+
+    return { ok: true, archived: true, scope: 'me' };
+  }
+
+  // scope === 'leave' — actual membership mutation
   const client = await db.connect();
   let participantIds: string[] = [];
   let updateMessage: { id: string; createdAt: string } | null = null;
@@ -21295,6 +22185,9 @@ app.get('/chat/conversations/:conversationId', async (request) => {
       avatar: typeof conversationMetadata.avatar === 'string'
         ? conversationMetadata.avatar
         : null,
+      coverPhoto: typeof conversationMetadata.coverPhoto === 'string'
+        ? conversationMetadata.coverPhoto
+        : null,
       metadata: conversation.metadata,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
@@ -21322,6 +22215,8 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
     description: z.string().trim().max(280).optional(),
     avatar: z.string().trim().max(512).nullable().optional(),
     avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
+    coverPhoto: z.string().trim().max(512).nullable().optional(),
+    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
   }).superRefine((value, context) => {
     if (typeof value.avatar === 'string' && !value.avatarFinalizationId) {
       context.addIssue({
@@ -21330,10 +22225,18 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
         message: 'A finalized upload receipt is required for a group photo',
       });
     }
+    if (typeof value.coverPhoto === 'string' && !value.coverPhotoFinalizationId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['coverPhotoFinalizationId'],
+        message: 'A finalized upload receipt is required for a cover photo',
+      });
+    }
     if (
       value.title === undefined
       && value.description === undefined
       && value.avatar === undefined
+      && value.coverPhoto === undefined
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -21382,6 +22285,16 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
       });
     }
 
+    if (typeof payload.coverPhoto === 'string' && payload.coverPhotoFinalizationId) {
+      await ensureOwnedGroupMediaReceipt(client, {
+        actorUserId,
+        finalizationId: payload.coverPhotoFinalizationId,
+        mediaUrl: payload.coverPhoto,
+        folder: 'covers',
+        scope: 'cover',
+      });
+    }
+
     const currentResult = await client.query<{
       title: string | null;
       metadata: Record<string, unknown> | null;
@@ -21401,6 +22314,12 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
         : payload.avatar === null
           ? { avatarFinalizationId: null }
           : {}),
+      ...(payload.coverPhoto !== undefined ? { coverPhoto: payload.coverPhoto } : {}),
+      ...(payload.coverPhotoFinalizationId !== undefined
+        ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
+        : payload.coverPhoto === null
+          ? { coverPhotoFinalizationId: null }
+          : {}),
     };
 
     const updatedResult = await client.query<{ updated_at: string }>(
@@ -21417,6 +22336,7 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
       payload.title !== undefined ? 'name' : null,
       payload.description !== undefined ? 'description' : null,
       payload.avatar !== undefined ? 'photo' : null,
+      payload.coverPhoto !== undefined ? 'cover photo' : null,
     ].filter((value): value is string => Boolean(value));
     const identityUpdateText = changedFields.length === 1
       ? `Group ${changedFields[0]} updated.`
@@ -21441,6 +22361,7 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
         itemId: conversation.item_id,
         description: typeof nextMetadata.description === 'string' ? nextMetadata.description : null,
         avatar: typeof nextMetadata.avatar === 'string' ? nextMetadata.avatar : null,
+        coverPhoto: typeof nextMetadata.coverPhoto === 'string' ? nextMetadata.coverPhoto : null,
         updatedAt: updatedResult.rows[0].updated_at,
       },
       systemMessage: {
@@ -26073,6 +26994,7 @@ registerMediaAssetRoutes({
   authorizeInternalServiceRequest,
 });
 registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
   db,
@@ -42601,6 +43523,36 @@ const start = async () => {
         handleMediaIngestJob: async ({ assetId, reason }) => {
           await processMediaAsset(assetId, db);
         },
+        handleMediaEmbeddingJob: async (job) => {
+          await processMediaEmbeddingJob(job);
+        },
+        handleModerationTriageJob: async (job) => {
+          await processModerationTriageJob(job);
+        },
+        handleImporterExtractionJob: async (job) => {
+          await processImporterExtraction(job);
+        },
+        handleCatalogImportDiscoveryJob: async ({ batchId }) => {
+          await processCatalogImportDiscovery({ batchId });
+        },
+        handleCatalogImportHydrationJob: async ({ batchId, itemId }) => {
+          await processCatalogImportHydration({ batchId, itemId });
+        },
+        handleCatalogImportMediaJob: async ({ mediaId }) => {
+          await processCatalogImportMedia({ mediaId });
+        },
+        handleCatalogImportNormalisationJob: async ({ batchId, itemId }) => {
+          await processCatalogImportNormalisation({ batchId, itemId });
+        },
+        handleCatalogImportPublicationJob: async ({ batchId }) => {
+          await processCatalogImportPublication({ batchId });
+        },
+        handleCatalogImportRetentionJob: async ({ batchId }) => {
+          await processCatalogImportRetention({ batchId });
+        },
+        handleCatalogImportReconcileJob: async ({ itemId, publicationKey }) => {
+          await processCatalogImportReconcile({ itemId, publicationKey });
+        },
       });
     } else {
       app.log.info('[api] background workers disabled — running in separate container');
@@ -43167,6 +44119,23 @@ app.post('/poster-stories', async (request, reply) => {
           ? receipt.canonical_url!
           : (receipt.canonical_url ?? receipt.public_url),
       });
+    }
+
+    // Validate the composition document envelope (version, type, id)
+    // before persisting. The body is stored as opaque JSONB for WYSIWYG
+    // rendering, but the envelope must match the publication context.
+    const compositionValidation = validateCompositionDocument(
+      payload.compositionDocument,
+      { type: 'poster', id: payload.id },
+    );
+    if (!compositionValidation.ok) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return {
+        ok: false,
+        error: compositionValidation.error,
+        code: compositionValidation.code,
+      };
     }
 
     const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);

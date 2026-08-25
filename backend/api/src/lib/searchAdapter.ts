@@ -20,12 +20,45 @@ import {
 
 // ── Public Types ─────────────────────────────────────────────────────────────
 
+/**
+ * Backend identity reported by `SearchAdapter.retrievalInfo()`. Lets search
+ * routes disclose which engine actually served a request, including the
+ * Elasticsearch placeholder that silently behaves as in-memory search.
+ */
+export type SearchBackend =
+  | 'in_memory'
+  | 'meilisearch'
+  | 'elasticsearch_placeholder';
+
+/**
+ * Capability descriptor for a search backend. Used by routes to build the
+ * honest `retrievalMeta` on every response.
+ */
+export interface RetrievalInfo {
+  backend: SearchBackend;
+  /**
+   * Whether a vector embedder is provably configured. Defaults to false:
+   * there is no code-level evidence of a production embedder, and the
+   * in-memory / Elasticsearch-placeholder backends have no vector support.
+   * Set to true only when a hybrid/semantic search actually succeeds.
+   */
+  embedderConfigured: boolean;
+  /** Engine version string when known. */
+  searchEngineVersion?: string;
+}
+
 export interface SearchAdapter {
   index(listing: ListingDocument): Promise<void>;
   remove(id: string): Promise<void>;
   search(query: SearchQuery): Promise<SearchResult[]>;
   autocomplete(prefix: string, limit?: number): Promise<AutocompleteEntry[]>;
   health(): Promise<boolean>;
+  /**
+   * Report this backend's identity and vector capability so search routes
+   * can attach honest `retrievalMeta` to responses. Does not perform a
+   * search and must not throw.
+   */
+  retrievalInfo(): RetrievalInfo;
 }
 
 export interface ListingDocument {
@@ -150,6 +183,16 @@ export class InMemorySearchAdapter implements SearchAdapter {
   async health(): Promise<boolean> {
     // The in-memory index is always healthy if the process is running.
     return true;
+  }
+
+  retrievalInfo(): RetrievalInfo {
+    // The in-memory index is a lexical keyword index with no vector
+    // embedder. Honest default: embedderConfigured is always false here.
+    return {
+      backend: 'in_memory',
+      embedderConfigured: false,
+      searchEngineVersion: 'in-memory-v1',
+    };
   }
 }
 
@@ -287,14 +330,33 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
       return false;
     }
   }
+
+  retrievalInfo(): RetrievalInfo {
+    // No code-level evidence proves a production embedder is configured on
+    // this Meilisearch instance. We report embedderConfigured = false until
+    // a hybrid/semantic search actually succeeds (see vectorSearch.ts),
+    // which flips the per-response marker to true. This keeps the default
+    // honest: the adapter does not pretend vector search is available just
+    // because a Meilisearch URL is set.
+    return {
+      backend: 'meilisearch',
+      embedderConfigured: false,
+      searchEngineVersion: 'meilisearch-0.60',
+    };
+  }
 }
 
 // ── Elasticsearch Adapter (future) ───────────────────────────────────────────
 
 /**
  * Placeholder Elasticsearch adapter. The interface is stable; the
- * implementation will be added when Elasticsearch is adopted. Falls
- * back to the in-memory adapter until then.
+ * implementation will be added when Elasticsearch is adopted. Until then
+ * every operation silently delegates to the in-memory adapter.
+ *
+ * `retrievalInfo()` exposes `backend: 'elasticsearch_placeholder'` so search
+ * routes can disclose that requests are NOT served by Elasticsearch — they
+ * are served by the in-memory index. This prevents the API from implying an
+ * Elasticsearch backend that is not actually in use.
  */
 export class ElasticsearchSearchAdapter implements SearchAdapter {
   private fallback = new InMemorySearchAdapter();
@@ -317,6 +379,16 @@ export class ElasticsearchSearchAdapter implements SearchAdapter {
 
   async health(): Promise<boolean> {
     return this.fallback.health();
+  }
+
+  retrievalInfo(): RetrievalInfo {
+    // Honest marker: this is a placeholder that behaves as in-memory search,
+    // not a real Elasticsearch backend. No vector embedder is configured.
+    return {
+      backend: 'elasticsearch_placeholder',
+      embedderConfigured: false,
+      searchEngineVersion: 'in-memory-v1 (elasticsearch placeholder)',
+    };
   }
 }
 

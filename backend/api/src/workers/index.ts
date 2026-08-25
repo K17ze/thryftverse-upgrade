@@ -11,6 +11,16 @@ import {
   processQueuedOnezeMintReserveAllocation,
   processQueuedOnezeWithdrawalExecution,
   processMediaIngestJob,
+  processMediaEmbeddingJob,
+  processModerationTriageJob,
+  processImporterExtraction,
+  processCatalogImportDiscovery,
+  processCatalogImportHydration,
+  processCatalogImportMedia,
+  processCatalogImportNormalisation,
+  processCatalogImportPublication,
+  processCatalogImportRetention,
+  processCatalogImportReconcile,
 } from './handlers/index.js';
 
 /**
@@ -60,6 +70,36 @@ async function main(): Promise<void> {
       },
       handleMediaIngestJob: async ({ assetId, reason }) => {
         await processMediaIngestJob({ assetId, reason });
+      },
+      handleMediaEmbeddingJob: async (job) => {
+        await processMediaEmbeddingJob(job);
+      },
+      handleModerationTriageJob: async (job) => {
+        await processModerationTriageJob(job);
+      },
+      handleImporterExtractionJob: async (job) => {
+        await processImporterExtraction(job);
+      },
+      handleCatalogImportDiscoveryJob: async ({ batchId }) => {
+        await processCatalogImportDiscovery({ batchId });
+      },
+      handleCatalogImportHydrationJob: async ({ batchId, itemId }) => {
+        await processCatalogImportHydration({ batchId, itemId });
+      },
+      handleCatalogImportMediaJob: async ({ mediaId }) => {
+        await processCatalogImportMedia({ mediaId });
+      },
+      handleCatalogImportNormalisationJob: async ({ batchId, itemId }) => {
+        await processCatalogImportNormalisation({ batchId, itemId });
+      },
+      handleCatalogImportPublicationJob: async ({ batchId }) => {
+        await processCatalogImportPublication({ batchId });
+      },
+      handleCatalogImportRetentionJob: async ({ batchId }) => {
+        await processCatalogImportRetention({ batchId });
+      },
+      handleCatalogImportReconcileJob: async ({ itemId, publicationKey }) => {
+        await processCatalogImportReconcile({ itemId, publicationKey });
       },
     },
     logger,

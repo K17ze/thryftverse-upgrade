@@ -14,6 +14,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Pressable, PressableProps, ViewStyle, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { BlurView } from 'expo-blur';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,13 +25,9 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, EditorRadius, EditorMaterial } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-
-// ── Timing presets ─────────────────────────────────────────────────
-const TIMING_SNAP = { duration: Motion.duration.fast, easing: Easing.out(Easing.cubic) };
-const TIMING_SHEET = { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) };
 
 // ── PressScale ─────────────────────────────────────────────────────
 // Wraps a Pressable with spring-based scale-on-press feedback.
@@ -62,11 +59,10 @@ export function PressScale({
 
   const animatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
-      return { transform: [{ scale: 1 }], opacity: pressedSV.value > 0 ? 0.7 : 1 };
+      return { transform: [{ scale: 1 }] };
     }
     return {
       transform: [{ scale: 1 - (1 - defaultScale) * pressedSV.value }],
-      opacity: 1 - 0.3 * pressedSV.value,
     };
   });
 
@@ -77,11 +73,11 @@ export function PressScale({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       onPressIn={(e) => {
-        pressedSV.value = withTiming(1, TIMING_SNAP);
+        pressedSV.value = withSpring(1, Motion.spring.tap);
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        pressedSV.value = withTiming(0, TIMING_SNAP);
+        pressedSV.value = withSpring(0, Motion.spring.tap);
         onPressOut?.(e);
       }}
     >
@@ -149,7 +145,8 @@ export function SheetContainer({
         translateY.value = 0;
         backdropOpacity.value = 1;
       } else {
-        translateY.value = withTiming(0, TIMING_SHEET);
+        // Flagship sheet spring — physics-based settle, zero float.
+        translateY.value = withSpring(0, Motion.spring.sheetFlagship);
         backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {
@@ -157,7 +154,8 @@ export function SheetContainer({
         translateY.value = 1000;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(1000, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        // Exit: timing-based slide down (ease-in accelerates away).
+        translateY.value = withTiming(1000, { duration: Motion.duration.slow, easing: Easing.in(Easing.ease) });
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
@@ -187,12 +185,12 @@ export function SheetContainer({
           backdropOpacity.value = 0;
           runOnJS(onClose)();
         } else {
-          translateY.value = withTiming(1000, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+          translateY.value = withTiming(1000, { duration: Motion.duration.slow, easing: Easing.in(Easing.ease) });
           backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
           // Fire onClose after the dismiss animation completes.
           setTimeout(() => {
             runOnJS(onClose)();
-          }, 200);
+          }, 280);
         }
       } else {
         // Spring back to rest.
@@ -222,17 +220,21 @@ export function SheetContainer({
         </Reanimated.View>
       )}
 
-      {/* Sheet — swipe-down-to-dismiss via GestureDetector */}
+      {/* Sheet — swipe-down-to-dismiss via GestureDetector.
+          Glass material: BlurView provides the translucent backdrop blur,
+          the overlay color adds legibility/depth, and the hairline gives
+          the glass edge definition. This matches the 2026 flagship editor
+          sheet grammar (IG/Snapchat translucent dark sheets over media). */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
           style={[
             sheetStyles.sheet,
             {
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: Radius.xl,
-              borderTopRightRadius: Radius.xl,
+              borderTopLeftRadius: EditorRadius.sheet,
+              borderTopRightRadius: EditorRadius.sheet,
               maxHeight: `${effectiveMaxHeight * 100}%`,
               paddingBottom: Math.max(insets.bottom, Space.lg),
+              overflow: 'hidden',
             },
             sheetStyle,
           ]}
@@ -240,9 +242,19 @@ export function SheetContainer({
             sheetHeightRef.current = e.nativeEvent.layout.height;
           }}
         >
+          {/* Glass blur layer */}
+          <BlurView
+            intensity={EditorMaterial.sheet.blurIntensity}
+            tint={EditorMaterial.sheet.tint}
+            style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]}
+          />
+          {/* Overlay tint for legibility */}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+          {/* Hairline top edge */}
+          <View style={[sheetStyles.hairlineTop, { backgroundColor: EditorMaterial.sheet.hairline }]} />
           {/* Grabber handle — primary gesture anchor (whole sheet is pannable) */}
           <View style={sheetStyles.handleContainer}>
-            <View style={[sheetStyles.handle, { backgroundColor: colors.borderSubtle }]} />
+            <View style={[sheetStyles.handle, { backgroundColor: 'rgba(255,255,255,0.30)' }]} />
           </View>
           {children}
         </Reanimated.View>
@@ -263,13 +275,20 @@ const sheetStyles = StyleSheet.create({
     right: 0,
     paddingTop: Space.xs,
   },
+  hairlineTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
   handleContainer: {
     alignItems: 'center',
     paddingVertical: Space.xs,
   },
   handle: {
-    width: 32,
-    height: 4,
-    borderRadius: Radius.sm,
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
   },
 });

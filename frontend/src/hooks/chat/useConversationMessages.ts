@@ -32,6 +32,8 @@ import {
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
 } from "../../services/chatApi";
+import { uploadMedia } from "../../services/mediaUpload";
+import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
   realtimePayloadToMessage,
@@ -262,9 +264,32 @@ export function useConversationMessages({
     conversationId,
     useCallback(
       (payload: ChatMessageCreatedPayload) => {
-        // Deduplicate by message id — the server may replay events after a
-        // reconnect, and the optimistic local send also inserts by id.
+        // P0.1: Deduplicate by BOTH server id AND clientMessageId. The
+        // realtime event can arrive before the HTTP response, and the
+        // optimistic message has a local id (not the server id). If the
+        // realtime payload includes clientMessageId, match against the
+        // optimistic message's clientMessageId to reconcile instead of
+        // appending a duplicate.
         if (messagesRef.current.some((m) => m.id === payload.id)) return;
+
+        // P0.1: If the realtime payload has a clientMessageId, check if we
+        // already have an optimistic message with that clientMessageId. If so,
+        // reconcile it (update id + status) instead of appending.
+        if (payload.clientMessageId) {
+          const optimistic = messagesRef.current.find(
+            (m) => m.clientMessageId === payload.clientMessageId,
+          );
+          if (optimistic) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.clientMessageId === payload.clientMessageId
+                  ? { ...m, id: payload.id, status: "sent" as const }
+                  : m,
+              ),
+            );
+            return;
+          }
+        }
 
         const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
 
@@ -287,6 +312,7 @@ export function useConversationMessages({
           mediaUri: domainMessage.mediaUri,
           mediaType: domainMessage.mediaType,
           status: "sent",
+          replyToMessageId: domainMessage.replyToMessageId,
         };
 
         setMessages((prev) => [...prev, localMessage]);
@@ -314,6 +340,12 @@ export function useConversationMessages({
       void syncMessagesFromApi();
     }
   }, [needsResnapshot, syncMessagesFromApi]);
+
+  // P0.14: Drain the chat outbox on mount — in case messages were queued
+  // while offline and the user is now opening the conversation.
+  useEffect(() => {
+    void drainChatOutbox();
+  }, []);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
   // below, because it performs the canonical server send and only then
@@ -465,7 +497,9 @@ export function useConversationMessages({
 
       performance.mark("chat:send");
 
-      sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId)
+      sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId, {
+        replyToMessageId: replyTo?.id,
+      })
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -475,17 +509,27 @@ export function useConversationMessages({
           performance.mark("chat:delivered");
         })
         .catch(() => {
-          // The response was lost (network error or non-2xx). The message may
-          // or may not have been created server-side. Mark as failed so the
-          // user can retry; retry reuses the same clientMessageId, so even if
-          // the original request succeeded, the retry replays the original
-          // message instead of duplicating it (idempotent replay).
+          // P0.2: A dropped response is an UNKNOWN outcome, not a known
+          // failure. The server may have accepted the message. Mark as
+          // "reconciling" — the user sees a quiet pending state, not a
+          // failure. The next sync or realtime event will reconcile via
+          // clientMessageId. Only after a retry attempt also fails do we
+          // show "failed".
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === localId ? { ...m, status: "failed" as const } : m,
+              m.id === localId ? { ...m, status: "reconciling" as const } : m,
             ),
           );
-          show("Message failed to send. Tap to retry.", "error");
+          // P0.14: Persist to the durable outbox so the message is flushed
+          // automatically when connectivity returns. The clientMessageId
+          // ensures idempotent replay — the server will return the original
+          // message if the send actually succeeded, or create it now.
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: trimmed,
+            replyToMessageId: replyTo?.id,
+          }).catch(() => undefined);
         })
         .finally(() => {
           composerSendingRef.current = false;
@@ -497,39 +541,11 @@ export function useConversationMessages({
 
       clearComposerState(conversationId).catch(() => undefined);
 
-      // AI chat agent response (demo)
-      if (deployedChatAgents.length > 0 && conversationId) {
-        setTimeout(() => {
-          const agentResponse = getChatAgentResponse(conversationId, trimmed);
-          if (!agentResponse.content) return;
-          const agentMsg: Message = {
-            id: agentResponse.id,
-            type: "text",
-            sender: "them",
-            senderId: agentResponse.agentId,
-            senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
-            text: agentResponse.content,
-            // Per spec 16: agent drafts are not sent messages. They enter the
-            // history only after the user confirms them via confirmAgentDraft,
-            // which performs the canonical server send and only then inserts
-            // the message into the conversation store. The draft is ephemeral
-            // local state so the user can review it before it is committed.
-            status: "draft",
-            isAgent: true,
-            agentAvatar: deployedChatAgents[0]?.avatar,
-            // P0-MSG-2: assign the clientMessageId up front so confirmAgentDraft
-            // can reuse it on retry for idempotent replay.
-            clientMessageId: createStableId('cmsg'),
-          };
-          pushMessage(agentMsg);
-          setChatAgentSuggestionsExternal(
-            getChatAgentSuggestions(conversationId, agentResponse.content),
-          );
-          scheduleScrollToEnd();
-        }, 500);
-      } else if (conversationId) {
-        setChatAgentSuggestionsExternal(getChatAgentSuggestions(conversationId, trimmed));
-      }
+      // P0.15/anti-AI policy: Demo agent auto-injection removed from production.
+      // The report (§8.9) states: "never inject mock AI replies into production
+      // history." Agent drafts that auto-appear after every user message are
+      // mock output. When a real agent runtime exists, it will be invoked
+      // explicitly by the user, not auto-injected after every send.
     },
     [
       conversationId,
@@ -539,35 +555,49 @@ export function useConversationMessages({
       appendToConversationStore,
       scheduleScrollToEnd,
       clearComposerState,
-      deployedChatAgents,
-      getChatAgentResponse,
-      getChatAgentSuggestions,
-      setChatAgentSuggestionsExternal,
       currentUser?.username,
       currentUser?.id,
     ],
   );
 
   const sendMediaMessage = useCallback(
-    (msgId: string, uri: string, mediaType: "image" | "video", caption?: string) => {
+    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string) => {
       if (!conversationId) return;
       // P0-MSG-2: stable clientMessageId for idempotent media send/retry.
       const clientMessageId = createStableId('cmsg');
-      // P0-MSG-1: send a discriminated media payload so the backend schema
-      // accepts the message. `type` makes text optional; the mediaUri is
-      // forwarded both at the top level (for validation) and inside
-      // metadata (for the read path / realtime mapping).
+
+      // P0.4: Upload via the canonical media platform BEFORE sending the
+      // message. The raw file:/// URI is only valid on the sender's device.
+      // uploadMedia() does presign → PUT → finalize → returns a canonical
+      // publicUrl that recipients and second devices can read.
+      let canonicalUrl: string;
+      try {
+        const uploaded = await uploadMedia(uri, 'uploads');
+        canonicalUrl = uploaded.publicUrl;
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+          ),
+        );
+        show("Upload failed. Tap media to retry.", "error");
+        return;
+      }
+
+      // P0-MSG-1: send a discriminated media payload with the CANONICAL URL
+      // (not the local file:/// URI). The canonical URL is readable by all
+      // devices and recipients.
       sendConversationMessageOnApi(
         conversationId,
         caption ?? "",
-        { mediaUri: uri, mediaType },
+        { mediaUri: canonicalUrl, mediaType },
         clientMessageId,
-        { type: mediaType, mediaUri: uri },
+        { type: mediaType, mediaUri: canonicalUrl },
       )
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const } : m,
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
             ),
           );
         })
@@ -737,7 +767,7 @@ export function useConversationMessages({
               try {
                 if (!conversationId) throw new Error("No conversation");
                 await Promise.all(
-                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id)),
+                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
                 );
                 deleteApiStatusRef.current = "success";
               } catch {
@@ -767,7 +797,7 @@ export function useConversationMessages({
             scheduleUndoClear();
             try {
               if (!conversationId) throw new Error("No conversation");
-              await deleteConversationMessageOnApi(conversationId, msg.id);
+              await deleteConversationMessageOnApi(conversationId, msg.id, 'me');
               deleteApiStatusRef.current = "success";
             } catch {
               deleteApiStatusRef.current = "error";

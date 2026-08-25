@@ -204,6 +204,25 @@ export const config = {
     'DECISION_SERVICE_TOKEN',
     'local-decision-service-token'
   ),
+  /**
+   * Fraud shadow scoring (Phase 6). When enabled, every fraud check also
+   * scores the event with the shadow ML model (via the ml-service) and logs
+   * both scores to fraud_scoring_ledger for offline comparison. The shadow
+   * score NEVER affects the user-facing fraud decision — the rule engine
+   * remains the champion until the shadow model is promoted via the model
+   * artifact registry (migration 144).
+   */
+  fraudShadowEnabled: asBoolean(
+    process.env.FRAUD_SHADOW_ENABLED,
+    false,
+  ),
+  fraudShadowTimeoutMs: asIntegerInRange(
+    'FRAUD_SHADOW_TIMEOUT_MS',
+    process.env.FRAUD_SHADOW_TIMEOUT_MS,
+    1_500,
+    100,
+    10_000,
+  ),
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
   /**

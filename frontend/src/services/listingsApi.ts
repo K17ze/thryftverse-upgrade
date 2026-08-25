@@ -149,18 +149,25 @@ export interface ListingSearchResult {
   category?: string | null;
 }
 
-export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {
+export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean; retrievalMeta?: { method: string; fallbackReason?: string; embedderConfigured: boolean; searchEngineVersion?: string } }> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return { items: [], fallback: false };
   const params = new URLSearchParams();
   params.set('q', trimmed);
   if (limit) params.set('limit', String(Math.min(limit, 100)));
-  const payload = await fetchJson<{ ok: boolean; query: string; items: ListingSearchResult[]; fallback?: boolean }>(
+  const payload = await fetchJson<{
+    ok: boolean;
+    query: string;
+    items: ListingSearchResult[];
+    fallback?: boolean;
+    retrievalMeta?: { method: string; fallbackReason?: string; embedderConfigured: boolean; searchEngineVersion?: string };
+  }>(
     `/search/listings?${params.toString()}`
   );
   return {
     items: Array.isArray(payload.items) ? payload.items : [],
     fallback: payload.fallback === true,
+    retrievalMeta: payload.retrievalMeta,
   };
 }
 
@@ -215,6 +222,17 @@ export interface VisualSearchResult {
   visualMatching: boolean;
   /** Honest label describing how results were matched. */
   similarityMethod?: string;
+  /**
+   * Structured retrieval capability metadata from the backend. Discloses
+   * the actual method used and any fallback reason. Present on API
+   * responses; absent on client-side fallback.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured: boolean;
+    searchEngineVersion?: string;
+  };
   note?: string;
   error?: string;
 }
@@ -252,6 +270,12 @@ export async function visualSearch(params: {
       runtimeAvailable?: boolean;
       visualMatching?: boolean;
       similarityMethod?: string;
+      retrievalMeta?: {
+        method: string;
+        fallbackReason?: string;
+        embedderConfigured: boolean;
+        searchEngineVersion?: string;
+      };
       note?: string;
       items?: ApiListingRow[];
     }>('/visual-search', {
@@ -278,6 +302,7 @@ export async function visualSearch(params: {
       source: 'api',
       visualMatching: payload.visualMatching === true,
       similarityMethod: payload.similarityMethod,
+      retrievalMeta: payload.retrievalMeta,
       note: payload.note,
       error: rows.length === 0 ? 'No listings match your photo filters yet.' : undefined,
     };

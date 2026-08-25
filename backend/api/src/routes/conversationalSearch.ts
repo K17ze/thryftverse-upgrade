@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { createSearchAdapter, type SearchQuery } from '../lib/searchAdapter.js';
+import type { RetrievalMeta } from '../lib/retrievalMeta.js';
 
 type ConversationalSearchRouteDependencies = {
   app: FastifyInstance;
@@ -194,11 +195,21 @@ export function registerConversationalSearchRoutes({
     try {
       const adapter = createSearchAdapter();
       const results = await adapter.search(searchQuery);
-
+      const info = adapter.retrievalInfo();
+      // Honest capability marker: this route parses natural language into
+      // structured filters via keyword rules — it is NOT an AI/ML model.
+      // The structured retrievalMeta.method is 'keyword_parser' so the API
+      // contract is honest even if the product label stays "conversational".
+      const retrievalMeta: RetrievalMeta = {
+        method: 'keyword_parser',
+        embedderConfigured: info.embedderConfigured,
+        searchEngineVersion: info.searchEngineVersion,
+      };
       return {
         ok: true,
         query,
         method: 'heuristic keyword matching, not AI',
+        retrievalMeta,
         parsedFilters,
         total: results.length,
         items: results.map((result) => ({

@@ -43,14 +43,23 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
-  const participantNameLookup = useStore(
-    (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
-  );
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId]
   );
+
+  // Build participant name lookup from the conversation's profiles.
+  const participantNameLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    if (currentUser?.id) {
+      map.set(currentUser.id, currentUser.displayName ?? currentUser.username ?? 'you');
+    }
+    for (const profile of conversation?.participantProfiles ?? []) {
+      map.set(profile.id, profile.displayName ?? profile.username ?? `User ${profile.id.slice(-6)}`);
+    }
+    return map;
+  }, [conversation?.participantProfiles, currentUser]);
 
   if (!conversation) {
     return (
@@ -65,7 +74,9 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     );
   }
 
-  const counterpartyId = conversation.participantIds?.find((id) => id !== 'me');
+  const counterpartyId = conversation.participantIds?.find(
+    (id) => id !== 'me' && id !== currentUser?.id,
+  );
   const isMuted = mutedIds.includes(conversationId);
   const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
   const displayName =
@@ -134,17 +145,17 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   const deleteForMe = () => {
     Alert.alert(
-      'Delete for me?',
+      'Remove from inbox?',
       'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete for me',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             haptic.heavy();
             try {
-              await deleteConversationOnApi(conversationId);
+              await deleteConversationOnApi(conversationId, 'me');
               deleteConversation(conversationId);
               show('Conversation removed from your inbox', 'info');
               navigation.navigate('MainTabs', { screen: 'Inbox' });
@@ -252,7 +263,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             onPress={toggleBlock}
             danger={!isBlocked}
           />
-          <ChatInfoRow icon="trash-outline" label="Delete for me" onPress={deleteForMe} danger />
+          <ChatInfoRow icon="trash-outline" label="Remove from inbox" onPress={deleteForMe} danger />
         </ChatInfoSection>
       </ScrollView>
     </FlagshipScreen>

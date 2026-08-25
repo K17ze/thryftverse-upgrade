@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -37,13 +37,14 @@ import { InlineTextEditor } from '../tools/text/InlineTextEditor';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
 import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
-import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/CutoutService';
+import { cutoutService, type CutoutResult } from '../core/cutout/CutoutService';
 import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
-import { CreatorEntryEditorCrossfade } from '../CreatorEntryEditorCrossfade';
+import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import type { CaptureViewport } from '../capture/CaptureViewport';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
 import { PageMenu } from '../studio/PageMenu';
@@ -246,12 +247,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const [cutoutPreviewTarget, setCutoutPreviewTarget] = useState<CreatorLayer | null>(null);
   const [cutoutSupported, setCutoutSupported] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supported = await isCutoutSupportedAsync();
-      if (!cancelled) setCutoutSupported(supported);
-    })();
-    return () => { cancelled = true; };
+    const cap = cutoutService.getCapability();
+    setCutoutSupported(cap.brushRefinement);
   }, []);
   const [cropMode, setCropMode] = useState(false);
   // ── Compare-to-original (Lightroom long-press pattern) ─────────────
@@ -349,7 +346,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         else if (showA11yMove) setShowA11yMove(false);
         else if (showA11yZOrder) setShowA11yZOrder(false);
         else if (bottomSurface === 'effects') setBottomSurface('tools');
-        else if (userRequestedTimeline) { setUserRequestedTimeline(false); setBottomSurface('tools'); }
+        else if (bottomSurface === 'timeline') { setUserRequestedTimeline(false); setBottomSurface('tools'); }
         else if (showTransitions) setShowTransitions(false);
         else if (showKeyframes) setShowKeyframes(false);
         else if (showSpeedCurve) setShowSpeedCurve(false);
@@ -375,7 +372,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, userRequestedTimeline, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // ── Hardware back button — intercept to close sheets first ─────────
   useFocusEffect(
@@ -386,7 +383,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         if (showA11yMove) { setShowA11yMove(false); return true; }
         if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
         if (bottomSurface === 'effects') { setBottomSurface('tools'); return true; }
-        if (userRequestedTimeline) { setUserRequestedTimeline(false); setBottomSurface('tools'); return true; }
+        if (bottomSurface === 'timeline') { setUserRequestedTimeline(false); setBottomSurface('tools'); return true; }
         if (showTransitions) { setShowTransitions(false); return true; }
         if (showKeyframes) { setShowKeyframes(false); return true; }
         if (showSpeedCurve) { setShowSpeedCurve(false); return true; }
@@ -407,7 +404,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         return false;
       };
       return onBackPress;
-    }, [editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, userRequestedTimeline, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -704,24 +701,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     [timelineClips],
   );
 
-  // ── Timeline visibility (spec: no permanent timeline for single photo) ──
-  // The timeline expands only when:
-  //   a) There's a video clip (hasVideoContent)
-  //   b) There are multiple clips (timelineClips.length > 1)
-  //   c) The user explicitly tapped "Timeline" / "Edit Clip"
-  // It is suppressed when another bottom surface (effects) is active so
-  // only one bottom surface occupies the canvas edge at a time.
-  const shouldShowTimeline =
-    (hasVideoContent || timelineClips.length > 1 || userRequestedTimeline) &&
-    bottomSurface !== 'effects' &&
-    bottomSurface !== null;
+  // ── Timeline visibility (spec: one bottom surface at a time) ──────
+  // The timeline is the bottom surface when bottomSurface === 'timeline'.
+  // It replaces the tool rail — never stacks on top of it. The tool rail
+  // is only rendered when bottomSurface === 'tools', and the effects sheet
+  // only when bottomSurface === 'effects'. This enforces the spec's
+  // "one bottom surface" constraint: tools, timeline, and effects are
+  // mutually exclusive, not layered.
+  const shouldShowTimeline = bottomSurface === 'timeline' && timelineClips.length > 0;
 
   // ── Auto-expand timeline when video or second clip is added ──────
   // When the composition transitions from single-photo to video or
   // multi-clip, the timeline auto-expands without requiring a user tap.
+  // This sets bottomSurface to 'timeline' so the tool rail is replaced
+  // (not stacked underneath) — one bottom surface at a time.
   useEffect(() => {
     if (hasVideoContent || timelineClips.length > 1) {
       setUserRequestedTimeline(true);
+      setBottomSurface('timeline');
     }
   }, [hasVideoContent, timelineClips.length]);
 
@@ -905,9 +902,32 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // chrome fades in around it — upload-department-convergence-loop.md §5).
   const [entryPinnedUri, setEntryPinnedUri] = useState<string | null>(null);
   const [entryPinnedKind, setEntryPinnedKind] = useState<'image' | 'video'>('image');
+  // Source content transform — the camera viewport guide rect captured at
+  // the moment of capture. The transition animates the pinned media from
+  // this frame to the editor canvas frame, preserving the focal point.
+  const [entrySourceTransform, setEntrySourceTransform] = useState<CreatorContentTransform | null>(null);
+  // The camera reports its measured viewport via onViewportChange so the
+  // source transform is available when the capture commits.
+  const cameraViewportRef = useRef<CaptureViewport | null>(null);
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
     setEntryPinnedUri(media[0]?.uri ?? null);
     setEntryPinnedKind(media[0]?.kind ?? 'image');
+    // Build the source content transform from the measured camera viewport
+    // so the transition animates from the guide frame, not full-screen.
+    const vp = cameraViewportRef.current;
+    if (vp) {
+      setEntrySourceTransform({
+        frame: {
+          left: vp.viewRect.x,
+          top: vp.viewRect.y,
+          width: vp.viewRect.width,
+          height: vp.viewRect.height,
+        },
+        aspectRatio: vp.authoredAspectRatio,
+      });
+    } else {
+      setEntrySourceTransform(null);
+    }
     addPosterFrames(media);
     setEntryComplete(true);
   }, [addPosterFrames]);
@@ -915,6 +935,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const handleEntryBlankStart = useCallback(() => {
     setEntryPinnedUri(null);
     setEntryPinnedKind('image');
+    setEntrySourceTransform(null);
     setEntryComplete(true);
   }, []);
 
@@ -1078,6 +1099,17 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       setBottomSurface(next ? 'timeline' : 'tools');
       return next;
     });
+  }, [haptic]);
+
+  // ── Timeline Done — collapses the timeline, returns to canvas tools ──
+  // Per spec: "Done returns to canvas tools." This is the exit from the
+  // video state back to the default tool rail. The tool rail re-renders
+  // because bottomSurface switches to 'tools'.
+  const handleTimelineDone = useCallback(() => {
+    haptic.light();
+    setUserRequestedTimeline(false);
+    setBottomSurface('tools');
+    setSelectedClipId(null);
   }, [haptic]);
 
   // ── Effects handler ────────────────────────────────────────────────
@@ -1404,6 +1436,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       accessibilityHint?: string,
       glyph?: ToolDefinition['glyph'],
       active?: boolean,
+      capabilityId?: string,
     ): ToolDefinition => ({
       id,
       label,
@@ -1413,6 +1446,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       accessibilityLabel,
       accessibilityHint,
       active,
+      capabilityId,
     });
 
     // Overflow tools shared across contexts (Layers, Preview, Safe Zone,
@@ -1432,7 +1466,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       : [];
 
     const productOverflow: ToolDefinition[] = [
-      mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag'),
+      mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
     ];
 
     // ── poster-photo-default: Text, Stickers, Product, Draw ──
@@ -1447,17 +1481,20 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     // creative tools — this is the designed icon family for the creator
     // department. Universally understood actions (close, delete, etc.) still
     // use Ionicons.
+    //
+    // capabilityId gates each creation tool against the capability registry
+    // (acceptance gate 6: tools generated from capability truth).
     const photoDefault: ToolGroup = {
       context: 'poster-photo-default',
       primary: [
-        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker', 'text'),
+        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker', 'text', undefined, 'stickerText'),
         mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker', 'sticker'),
         ...productOverflow,
-        mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing'),
+        mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing', undefined, 'layerDraw'),
       ],
       overflow: [
-        mk('effects', 'Effects', 'color-filter-outline', handleAddEffects, 'Effects', 'Opens effects for the background photo', 'filter'),
-        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays', undefined, userRequestedTimeline),
+        mk('effects', 'Effects', 'color-filter-outline', handleAddEffects, 'Effects', 'Opens effects for the background photo', 'filter', undefined, 'imageFilter'),
+        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays', undefined, bottomSurface === 'timeline'),
         ...addFrameOverflow,
         ...sharedOverflow,
       ],
@@ -1470,24 +1507,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const videoDefault: ToolGroup = {
       context: 'poster-video-default',
       primary: [
-        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Toggles the video timeline', undefined, userRequestedTimeline),
-        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker', 'text'),
+        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Toggles the video timeline', undefined, bottomSurface === 'timeline'),
+        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker', 'text', undefined, 'stickerText'),
         mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker', 'sticker'),
         ...productOverflow,
       ],
       overflow: [
-        mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing'),
+        mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing', undefined, 'layerDraw'),
         ...addFrameOverflow,
         ...sharedOverflow,
       ],
     };
 
-    // ── poster-media-selected: Replace, Crop, Auto, Adjust ──
-    // Effects moves to overflow — it's already accessible from the default
-    // rail, and the 4 most relevant media-editing actions (replace, crop,
-    // auto-enhance, adjust) are the job-to-be-done when a media layer is
-    // selected. Advanced tools (cutout, animation, speed curve, etc.) remain
-    // in overflow.
+    // ── poster-media-selected: Replace, Crop, Adjust, Effects ──
+    // Per report §7.4: the 4 most relevant media-editing actions are
+    // Replace, Crop, Adjust, Effects. Auto-enhance moves to overflow —
+    // it's a one-tap convenience, not a primary editing mode. Advanced
+    // tools (cutout, animation, speed curve, reverse, freeze frame,
+    // audio fade) remain in overflow grouped under Edit.
     const isVideoMedia = selectedLayer?.type === 'media' && selectedLayer.payload.mediaType === 'video';
     const editClipTool = mk('edit-clip', 'Edit Clip', 'film-outline', () => {
       if (!selectedLayer) return;
@@ -1508,15 +1545,25 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         : [
             mk('replace', 'Replace', 'swap-horizontal-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Replace photo', 'Replaces the selected photo'),
             mk('crop', 'Crop', 'crop-outline', handleCropAction, 'Crop', 'Opens the pixel crop editor', 'crop'),
-            mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap color correction', 'enhance'),
             mk('adjust', 'Adjust', 'options-outline', handleAdjustAction, 'Adjust', 'Opens exposure and color controls', 'adjust'),
+            mk('effects', 'Effects', 'color-filter-outline', handleAddEffects, 'Effects', 'Opens photo effects and filters', 'filter'),
           ],
       overflow: [
         ...(!isVideoMedia ? [
-          mk('effects', 'Effects', 'color-filter-outline', handleAddEffects, 'Effects', 'Opens photo effects', 'filter'),
+          mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap color correction', 'enhance'),
           mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'cut-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the photo background using on-device subject segmentation' : 'Crops the selected photo', cutoutSupported ? 'cutout' : 'crop'),
           mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); setShowKeyframes(true); }, 'Animation', 'Opens the keyframe editor for the selected layer', 'keyframe'),
-        ] : []),
+        ] : [
+          // ── Video-specific advanced tools (time context) ──
+          // Per report §7.4: Split, Trim, Speed, Volume appear only when
+          // a video clip is selected (via Edit Clip → timeline toolbar).
+          // These advanced tools extend that set — they are grouped under
+          // Edit in the overflow, not flat-dumped.
+          mk('speed-curve', 'Speed Curve', 'analytics-outline', () => { haptic.light(); setShowSpeedCurve(true); }, 'Speed curve', 'Opens the variable speed ramping editor'),
+          mk('reverse', 'Reverse', 'play-skip-back-outline', () => { haptic.light(); setShowReverse(true); }, 'Reverse', 'Reverses the video clip playback'),
+          mk('freeze-frame', 'Freeze Frame', 'pause-outline', () => { haptic.light(); setShowFreezeFrame(true); }, 'Freeze frame', 'Adds a freeze frame at a specific point'),
+          mk('audio-fade', 'Audio Fade', 'volume-mute-outline', () => { haptic.light(); setShowAudioFade(true); }, 'Audio fade', 'Sets audio fade in and out durations'),
+        ]),
         mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
         mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
         mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
@@ -1630,7 +1677,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     handleAddFrame, handleTimelineToggle, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
     handleDeleteLayer, handleCropAction, handleCutoutAction, handleAdjustAction, handleAutoAdjust,
     selectedLayer, updateLayer, haptic, show, navigation,
-    pageCount, cutoutSupported, showSafeZone, userRequestedTimeline,
+    pageCount, cutoutSupported, showSafeZone, bottomSurface,
   ]);
 
   // ── Active context resolution ──────────────────────────────────────
@@ -1695,6 +1742,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       onClose={handleEntryClose}
       onMediaSelected={handleEntryMediaSelected}
       onBlankStart={handleEntryBlankStart}
+      onViewportChange={(vp) => { cameraViewportRef.current = vp; }}
       onVisualSearchCapture={(uri: string) => {
         navigation.navigate('VisualSearch', { initialImageUri: uri });
       }}
@@ -1705,16 +1753,16 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     <View style={styles.container}>
       {/* ── Crash recovery banner ────────────────────────────────────── */}
       {hasPendingRecovery && (
-        <View style={styles.recoveryBanner}>
+        <View style={[styles.recoveryBanner, { borderLeftColor: colors.antiqueGold }]}>
           <Ionicons name="alert-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
-          <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
+          <Text style={[styles.recoveryText, { color: colors.scrimTextPrimary }]}>Recover your last unsaved project?</Text>
           <PressScale
             onPress={() => { void recoverCrashedProject(); }}
             style={styles.recoveryBtn}
             accessibilityLabel="Recover project"
             accessibilityRole="button"
           >
-            <Text style={styles.recoveryBtnText}>Recover</Text>
+            <Text style={[styles.recoveryBtnText, { color: colors.antiqueGold }]}>Recover</Text>
           </PressScale>
           <PressScale
             onPress={dismissRecovery}
@@ -1812,8 +1860,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           {isLoadingDraft && (
             <View style={styles.canvasLoadingOverlay} pointerEvents="none">
               <View style={styles.canvasLoadingPill}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.canvasLoadingText}>Loading…</Text>
+                <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={StyleSheet.absoluteFill} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay }]} />
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+                <Text style={[styles.canvasLoadingText, { color: colors.scrimTextPrimary }]}>Loading…</Text>
               </View>
             </View>
           )}
@@ -1830,14 +1880,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             <View style={styles.safeZoneOverlay} pointerEvents="none">
               <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 56 }]}>
                 <View style={styles.safeZoneLabel}>
-                  <Ionicons name="scan-outline" size={IconGrammar.badge} color="#C9A46A" />
-                  <Text style={styles.safeZoneLabelText}>Top chrome</Text>
+                  <Ionicons name="scan-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
+                  <Text style={[styles.safeZoneLabelText, { color: colors.antiqueGold }]}>Top chrome</Text>
                 </View>
               </View>
               <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]}>
                 <View style={styles.safeZoneLabel}>
-                  <Ionicons name="scan-outline" size={IconGrammar.badge} color="#C9A46A" />
-                  <Text style={styles.safeZoneLabelText}>Tool dock</Text>
+                  <Ionicons name="scan-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
+                  <Text style={[styles.safeZoneLabelText, { color: colors.antiqueGold }]}>Tool dock</Text>
                 </View>
               </View>
               <View style={[styles.safeZoneContent, { top: insets.top + 56, bottom: insets.bottom + 120 }]} />
@@ -1859,9 +1909,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           recedes (fades to 0.15 opacity) during active layer manipulation,
           making the canvas feel infinite (Snapchat/Instagram pattern). */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
-        <BlurView intensity={20} tint="dark" style={styles.topBarScrim} />
+        <BlurView intensity={40} tint="dark" style={styles.topBarScrim} />
         <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+          colors={Scrim.top.colors}
+          locations={Scrim.top.locations}
           style={styles.topBarScrimOverlay}
         />
         <View style={[styles.topBar, { backgroundColor: 'transparent' }]}>
@@ -1893,7 +1944,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color="#fff" />
+                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
                   </PressScale>
                 </View>
               </>
@@ -1908,9 +1959,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint="Closes the composer, offers to save draft if there are unsaved changes"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
+                    <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
                   </PressScale>
-                  {isDirty && <View style={styles.unsavedDot} />}
+                  {isDirty && <View style={[styles.unsavedDot, { backgroundColor: colors.antiqueGold }]} />}
                 </View>
 
                 <View style={styles.topCenterGroup}>
@@ -1924,7 +1975,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color="#fff" />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
@@ -1936,7 +1987,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color="#fff" />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
                   </PressScale>
                 </View>
 
@@ -1949,7 +2000,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     scale={0.97}
                     hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
                   >
-                    <Text style={styles.publishBtnText}>Next</Text>
+                    <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
                   </PressScale>
                 </View>
               </>
@@ -1985,7 +2036,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                       styles.pageSegmentFill,
                       {
                         flex: i === activePageIndex ? 1 : 0,
-                        backgroundColor: i <= activePageIndex ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.2)',
+                        backgroundColor: i <= activePageIndex ? colors.scrimTextPrimary : 'rgba(255,255,255,0.2)',
                       },
                     ]}
                   />
@@ -2000,7 +2051,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               accessibilityHint="Shows or hides the bottom frame thumbnail tray"
               hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             >
-              <Ionicons name="film-outline" size={IconGrammar.metadata} color={showFrameTray ? '#fff' : 'rgba(255,255,255,0.5)'} />
+              <Ionicons name="film-outline" size={IconGrammar.metadata} color={showFrameTray ? colors.scrimTextPrimary : colors.scrimTextSecondary} />
             </PressScale>
             {/* Add frame */}
             {pageCount < 10 && (
@@ -2011,7 +2062,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Adds a new frame to the story"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="add" size={IconGrammar.metadata} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="add" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
               </PressScale>
             )}
           </View>
@@ -2019,12 +2070,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       )}
 
       {/* ── Bottom gradient scrim ────────────────────────────────────── */}
-      <View style={styles.bottomScrimContainer} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.6)']}
-          style={styles.bottomScrim}
-        />
-      </View>
+      {/* Only rendered when the tool rail is the active bottom surface.
+          The timeline has its own glass material; the effects sheet has
+          its own backdrop. No scrim when no bottom surface is visible. */}
+      {bottomSurface === 'tools' && (
+        <View style={styles.bottomScrimContainer} pointerEvents="none">
+          <LinearGradient
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
+            style={styles.bottomScrim}
+          />
+        </View>
+      )}
 
       {/* ── Poster timeline (conditional — spec: no permanent timeline for single photo) ── */}
       {/* The timeline expands for video, multiple clips, or explicit user
@@ -2035,9 +2092,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View
           style={[
             styles.timelineContainer,
-            { bottom: insets.bottom + 76 },
+            { bottom: insets.bottom },
           ]}
         >
+          {/* Glass rail material — translucent blur + overlay + hairline edge */}
+          <BlurView intensity={EditorMaterial.rail.blurIntensity} tint={EditorMaterial.rail.tint} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.rail.overlay }]} />
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: EditorRadius.rail, borderWidth: StyleSheet.hairlineWidth, borderColor: EditorMaterial.rail.hairline }} />
           {/* ── Playback bar ── */}
           <View style={styles.timelinePlaybackBar}>
             <PressScale
@@ -2054,7 +2115,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               <Ionicons
                 name={playbackState.isPlaying ? 'pause' : 'play'}
                 size={IconGrammar.standard}
-                color="#fff"
+                color={colors.scrimTextPrimary}
               />
             </PressScale>
 
@@ -2074,7 +2135,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               accessibilityState={{ disabled: !canUndo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              <Ionicons name="arrow-undo" size={IconGrammar.metadata} color="#fff" />
+              <Ionicons name="arrow-undo" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
             </PressScale>
             <PressScale
               onPress={handleRedo}
@@ -2086,7 +2147,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               accessibilityState={{ disabled: !canRedo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              <Ionicons name="arrow-redo" size={IconGrammar.metadata} color="#fff" />
+              <Ionicons name="arrow-redo" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
+            </PressScale>
+
+            {/* Done — collapses the timeline, returns to canvas tools */}
+            <PressScale
+              onPress={handleTimelineDone}
+              style={styles.timelineDoneBtn}
+              accessibilityLabel="Done"
+              accessibilityHint="Collapses the timeline and returns to canvas tools"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.timelineDoneText, { color: colors.antiqueGold }]}>Done</Text>
             </PressScale>
           </View>
 
@@ -2175,39 +2247,47 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           Up to 4 primary actions are always visible; additional tools are
           revealed under the trailing "More" button.
           Frame count indicator sits at the start when multiple frames. */}
-      <Reanimated.View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.6)']}
-          style={styles.bottomRailScrim}
-          pointerEvents="none"
-        />
-        <View style={styles.bottomRailContent}>
-          {/* Frame count — tappable to open frame tray */}
-          {hasMultipleFrames && !selectedLayer && (
-            <>
-              <PressScale
-                onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-                style={styles.frameCountBtn}
-                accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
-                accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              >
-                <Text style={styles.frameCountText}>
-                  {activePageIndex + 1}/{pageCount}
-                </Text>
-              </PressScale>
-              <View style={styles.railDivider} />
-            </>
-          )}
-
-          <ContextToolRail
-            context={activeToolContext}
-            groups={toolGroups}
-            onOverflowPress={() => setShowOverflow(true)}
-            style={styles.contextRail}
+      {/* ── Bottom tool rail — only when bottomSurface === 'tools' ────── */}
+      {/* The tool rail is the default bottom surface. When the timeline or
+          effects sheet is active, the tool rail is unmounted — one bottom
+          surface at a time per the spec. The timeline has its own Done
+          button to return here; the effects sheet has its own Done button. */}
+      {bottomSurface === 'tools' && (
+        <Reanimated.View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+          <LinearGradient
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
+            style={styles.bottomRailScrim}
+            pointerEvents="none"
           />
-        </View>
-      </Reanimated.View>
+          <View style={styles.bottomRailContent}>
+            {/* Frame count — tappable to open frame tray */}
+            {hasMultipleFrames && !selectedLayer && (
+              <>
+                <PressScale
+                  onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
+                  style={styles.frameCountBtn}
+                  accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
+                  accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.frameCountText}>
+                    {activePageIndex + 1}/{pageCount}
+                  </Text>
+                </PressScale>
+                <View style={styles.railDivider} />
+              </>
+            )}
+
+            <ContextToolRail
+              context={activeToolContext}
+              groups={toolGroups}
+              onOverflowPress={() => setShowOverflow(true)}
+              style={styles.contextRail}
+            />
+          </View>
+        </Reanimated.View>
+      )}
 
       {/* ── Frame tray (collapsible filmstrip) ───────────────────────── */}
       {/* Per doc 04: appears when frame change occurs or user adds another
@@ -2250,6 +2330,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             ]}
             accessibilityViewIsModal
           >
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.overflowHeader}>
               <Text style={styles.overflowTitle}>Tools</Text>
               <Pressable
@@ -2258,7 +2342,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityRole="button"
                 accessibilityLabel="Close tools"
               >
-                <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
+                <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
               </Pressable>
             </View>
             <ScrollView
@@ -2352,6 +2436,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTransitions(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Transitions</Text>
               <PressScale
@@ -2361,7 +2449,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Closes the transitions panel"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <ScrollView
@@ -2388,6 +2476,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowKeyframes(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Animation</Text>
               <PressScale
@@ -2397,7 +2489,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Closes the keyframe editor"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <KeyframeEditor
@@ -2421,6 +2513,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSpeedCurve(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Speed Curve</Text>
               <PressScale
@@ -2430,7 +2526,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Closes the speed curve editor"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <ScrollView
@@ -2452,6 +2548,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowReverse(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Reverse Clip</Text>
               <PressScale
@@ -2460,7 +2560,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityLabel="Done"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <View style={{ padding: Space.md, alignItems: 'center' }}>
@@ -2483,6 +2583,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFreezeFrame(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Freeze Frame</Text>
               <PressScale
@@ -2491,7 +2595,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityLabel="Done"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <FreezeFramePicker
@@ -2518,6 +2622,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAudioFade(false)} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Audio Fade</Text>
               <PressScale
@@ -2526,7 +2634,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityLabel="Done"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <AudioFadeControls
@@ -2646,6 +2754,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.effectsSheetBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setBottomSurface('tools')} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            {/* Glass material — translucent blur + overlay + hairline edge */}
+            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Effects</Text>
               <PressScale
@@ -2655,7 +2767,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Closes the effects panel"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={styles.effectsSheetDoneText}>Done</Text>
+                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
               </PressScale>
             </View>
             <ScrollView
@@ -2709,6 +2821,15 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         top: canvasVerticalOffset,
         width: canvasWidth,
         height: canvasHeight,
+      }}
+      sourceContentTransform={entrySourceTransform}
+      destinationContentTransform={{
+        frame: {
+          left: 0,
+          top: canvasVerticalOffset,
+          width: canvasWidth,
+          height: canvasHeight,
+        },
       }}
     />
   );
@@ -2776,11 +2897,9 @@ const styles = StyleSheet.create({
     zIndex: 100,
     backgroundColor: 'rgba(201, 164, 106, 0.08)',
     borderLeftWidth: 3,
-    borderLeftColor: '#C9A46A',
   },
   recoveryText: {
     flex: 1,
-    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     marginLeft: 8,
   },
@@ -2791,7 +2910,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   recoveryBtnText: {
-    color: '#C9A46A',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -2855,11 +2973,13 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
+    ...GlyphShadow.title,
   },
   doneText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
+    ...GlyphShadow.glyph,
   },
   topRight: {
     flexDirection: 'row',
@@ -2893,13 +3013,11 @@ const styles = StyleSheet.create({
   publishBtnText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
-    color: '#fff',
   },
   unsavedDot: {
     width: 7,
     height: 7,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: '#C9A46A',
     marginLeft: -Space.xs,
     marginTop: Space.xs + 2,
   },
@@ -2958,13 +3076,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: EditorRadius.plate,
+    overflow: 'hidden',
   },
   canvasLoadingText: {
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.body.size,
-    color: 'rgba(255,255,255,0.85)',
   },
   // ── Empty canvas hint ──
   canvasEmptyHint: {
@@ -3028,7 +3145,6 @@ const styles = StyleSheet.create({
   safeZoneLabelText: {
     fontFamily: FontFamily.medium,
     fontSize: 9,
-    color: '#C9A46A',
     letterSpacing: 0.3,
   },
   // ── Bottom gradient scrim ──
@@ -3076,6 +3192,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
     color: '#fff',
+    ...GlyphShadow.glyph,
   },
   railDivider: {
     width: 1,
@@ -3095,9 +3212,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   overflowMenu: {
-    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
-    borderTopRightRadius: RadiusRoleValue.standalonePanel,
-    backgroundColor: '#141416',
+    borderTopLeftRadius: EditorRadius.sheet,
+    borderTopRightRadius: EditorRadius.sheet,
     overflow: 'hidden',
   },
   overflowHeader: {
@@ -3157,11 +3273,11 @@ const styles = StyleSheet.create({
     left: Space.md,
     right: Space.md,
     zIndex: 96,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: RadiusRoleValue.compactControl,
+    borderRadius: EditorRadius.rail,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     gap: Space.xs,
+    overflow: 'hidden',
   },
   timelinePlaybackBar: {
     flexDirection: 'row',
@@ -3192,6 +3308,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  timelineDoneBtn: {
+    minWidth: 44,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+    marginLeft: Space.xs,
+  },
+  timelineDoneText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+  },
   timelineOverlayWrap: {
     marginTop: Space.xxs,
   },
@@ -3206,10 +3334,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   effectsSheet: {
-    backgroundColor: '#141416',
-    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
-    borderTopRightRadius: RadiusRoleValue.standalonePanel,
+    borderTopLeftRadius: EditorRadius.sheet,
+    borderTopRightRadius: EditorRadius.sheet,
     maxHeight: '50%',
+    overflow: 'hidden',
   },
   effectsSheetHeader: {
     flexDirection: 'row',
@@ -3234,7 +3362,6 @@ const styles = StyleSheet.create({
   effectsSheetDoneText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
-    color: '#C9A46A',
   },
   effectsSheetScroll: {
     paddingVertical: Space.sm,

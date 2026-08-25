@@ -40,6 +40,7 @@ import { useStore } from "../store/useStore";
 
 import {
   clearComposerStateOnApi,
+  reportConversationOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
@@ -639,9 +640,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
 
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-
-  // Messages that have been toggled to show a translated view
-  const [translatedMessageIds, setTranslatedMessageIds] = useState<Set<string>>(new Set());
 
   // Messages where the off-platform payment warning has been dismissed
   const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
@@ -1376,7 +1374,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             timestamp={isLastInCluster ? formatMessageTime(msg.date) : undefined}
-            isTranslated={translatedMessageIds.has(msg.id)}
             isAgent={msg.isAgent}
             agentAvatar={msg.agentAvatar}
             isDraft={msg.isAgent && msg.status === "draft"}
@@ -1520,7 +1517,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       partnerProfile?.avatar ||
       partnerSummary?.avatar ||
       null
-    : null;
+    : conversation?.avatar ?? null;
   const topBarTitle = isGroup
     ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
@@ -2207,9 +2204,17 @@ export default function ChatScreen({ navigation, route }: Props) {
                   handleRetrySendMessage(selectedMessage.id);
                 }
                 break;
-              case "report":
-                show("Report submitted. Thank you.", "success");
+              case "report": {
+                const reportMessageId = selectedMessage.id;
+                reportConversationOnApi(conversationId, 'other', undefined, reportMessageId)
+                  .then(() => {
+                    show("Report submitted. Thank you.", "success");
+                  })
+                  .catch(() => {
+                    show("Failed to submit report. Please try again.", "error");
+                  });
                 break;
+              }
               case "askAgent": {
                 // Spec 16: long press message → Ask agent about this.
                 // Pre-fill the composer with the message text so the user can
@@ -2224,19 +2229,6 @@ export default function ChatScreen({ navigation, route }: Props) {
                 }
                 break;
               }
-              case "translate": {
-                setTranslatedMessageIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(selectedMessage.id)) {
-                    next.delete(selectedMessage.id);
-                  } else {
-                    next.add(selectedMessage.id);
-                    show("Showing translated message. Tap 'Show original' to revert.", "info");
-                  }
-                  return next;
-                });
-                break;
-              }
               default:
                 break;
             }
@@ -2247,7 +2239,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
-          isTranslated={selectedMessage ? translatedMessageIds.has(selectedMessage.id) : false}
         />
       </View>
     </SafeAreaView>

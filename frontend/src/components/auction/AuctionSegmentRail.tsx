@@ -72,6 +72,7 @@ export function AuctionSegmentRail({
     <View style={styles.container}>
       <ScrollView
         horizontal
+        style={styles.scroll}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.segmentsRow}
       >
@@ -112,8 +113,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   container: {
     position: 'relative',
   },
+  scroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   segmentsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
   },

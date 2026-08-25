@@ -67,4 +67,9 @@ export interface Conversation {
   draftText?: string;
   /** Member roles: userId → 'owner' | 'admin' | 'member'. Populated from backend. */
   memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
+  /** P0.12: Per-user conversation state — hydrated from backend, not local-only. */
+  isMuted?: boolean;
+  isArchived?: boolean;
+  requestStatus?: 'pending' | 'accepted' | 'declined';
+  markedUnread?: boolean;
 }

@@ -323,19 +323,19 @@ export default function InboxScreen() {
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
     Alert.alert(
-      'Delete conversation?',
-      'This conversation will be removed from your inbox.',
+      'Remove from inbox?',
+      'This conversation will be hidden from your inbox. The other participant keeps their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             const previous = conversations.find((c) => c.id === id);
             deleteConversation(id);
-            showError('Conversation deleted', 'This conversation was removed from your inbox.');
+            showError('Conversation removed', 'This conversation was removed from your inbox.');
             try {
-              await deleteConversationOnApi(id);
+              await deleteConversationOnApi(id, 'me');
             } catch {
               showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
               if (previous) {

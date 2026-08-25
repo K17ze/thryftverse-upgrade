@@ -1,22 +1,81 @@
 ---
 auto_execution_mode: 0
-description: Review code changes for bugs, security issues, and improvements
+description: Review a defined diff for correctness, security, product truth, regressions, and operational risk without modifying it
 ---
-You are a senior software engineer performing a thorough code review to identify potential bugs.
 
-Your task is to find all potential bugs and code improvements in the code changes. Focus on:
-1. Logic errors and incorrect behavior
-2. Edge cases that aren't handled
-3. Null/undefined reference issues
-4. Race conditions or concurrency issues
-5. Security vulnerabilities
-6. Improper resource management or resource leaks
-7. API contract violations
-8. Incorrect caching behavior, including cache staleness issues, cache key-related bugs, incorrect cache invalidation, and ineffective caching
-9. Violations of existing code patterns or conventions
+# Change Review
 
-Make sure to:
-1. If exploring the codebase, call multiple tools in parallel for increased efficiency. Do not spend too much time exploring.
-2. If you find any pre-existing bugs in the code, you should also report those since it's important for us to maintain general code quality for the user.
-3. Do NOT report issues that are speculative or low-confidence. All your conclusions should be based on a complete understanding of the codebase.
-4. Remember that if you were given a specific git commit, it may not be checked out and local code states may be different.
+Review is read-only unless the user explicitly asks for fixes. The objective is to
+find actionable defects in the requested change, not to produce a large list.
+
+## Required inputs
+
+Establish the review target before analysis:
+
+- pull request, commit range, staged diff, or working-tree diff;
+- base and head SHAs;
+- intended behavior and acceptance criteria;
+- generated files and unrelated dirty paths to exclude.
+
+If the target is ambiguous, infer the narrowest safe diff and state the inference.
+Do not review the entire repository because the worktree is dirty.
+
+## Review sequence
+
+1. Capture repository root, remote, branch, HEAD, status, and applicable
+   `AGENTS.md`.
+2. Read the change description and inspect `--stat`, `--numstat`, renames, deleted
+   capabilities, dependency/lockfile changes, migrations, and workflow changes.
+3. Read the highest-risk owner files in full, then trace every changed contract
+   through its callers and consumers.
+4. Review data/contracts → business logic → async/concurrency → security/privacy →
+   state/cache → UI/accessibility → release/operations.
+5. Run the smallest non-mutating verification that can prove or disprove a finding.
+   Record the command and result; do not repair code during review.
+6. Re-read the final diff for accidental scope, dead paths, fabricated success,
+   missing cleanup, and documentation drift.
+
+For UI changes, inspect hierarchy, state coverage, truthfulness, touch targets,
+screen-reader order, reduced motion, media crop, keyboard behavior, and native
+evidence. For backend changes, inspect authorization, validation, atomicity,
+idempotency, privacy projection, observability, migration compatibility, and
+rollback. For CI/release changes, inspect least privilege, immutable action pins,
+secret exposure, environment protection, artifact identity, and failure behavior.
+
+## Severity and evidence
+
+Report only findings the author can act on:
+
+- **P0** — active data loss, security/privacy breach, money ambiguity, or release
+  path that can harm production;
+- **P1** — likely user-visible failure, broken contract, race, dead capability, or
+  major regression;
+- **P2** — maintainability or quality defect with a concrete future failure mode;
+- **P3** — optional improvement; never block on personal style.
+
+Every finding must include:
+
+```text
+[P#] imperative title
+location: exact file and tight line range
+trigger: the state/input/timing that exposes it
+impact: what fails for the user or operator
+evidence: code path, command, or reproducible reasoning
+fix direction: the owner layer to change, without over-designing the patch
+confidence: high or medium
+```
+
+Do not report speculative or low-confidence issues. Do not treat missing evidence
+as proof of a bug; label it as an unverified gate. Pre-existing defects belong in
+a short, separate appendix only when directly discovered through the changed path.
+
+## Output
+
+Lead with findings ordered by severity. Then list open questions and a terse test
+gap summary. If there are no findings, say so and identify the residual risks or
+verification not performed. Never claim native, live, security, or production
+verification from static inspection.
+
+Research basis: [Google's code review standard](https://google.github.io/eng-practices/review/reviewer/standard.html),
+[what to look for](https://google.github.io/eng-practices/review/reviewer/looking-for.html),
+and [small changes](https://google.github.io/eng-practices/review/developer/small-cls.html).

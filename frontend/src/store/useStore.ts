@@ -30,7 +30,10 @@ import {
   unarchiveConversationOnApi,
   acceptMessageRequestOnApi,
   declineMessageRequestOnApi,
+  addMessageReactionOnApi,
+  removeMessageReactionOnApi,
 } from '../services/chatApi';
+import { fetchJson } from '../lib/apiClient';
 import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
@@ -325,6 +328,25 @@ const makeLedgerEntry = (
 // eBay, Catawiki, and other flagship auction platforms.
 const ANTI_SNIPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes before end
 const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000; // extend by 5 minutes
+
+// P0.12: Derive the per-user conversation state arrays (muted / archived /
+// pending message requests) from the hydrated conversation objects. The
+// backend now returns `isMuted`, `isArchived` and `requestStatus` on each
+// conversation, so these arrays are projections of the canonical state
+// rather than independently-maintained local lists.
+function deriveConversationStateArrays(conversations: Conversation[]) {
+  return {
+    mutedConversationIds: conversations
+      .filter((c) => c.isMuted === true)
+      .map((c) => c.id),
+    archivedConversationIds: conversations
+      .filter((c) => c.isArchived === true)
+      .map((c) => c.id),
+    messageRequests: conversations
+      .filter((c) => c.requestStatus === 'pending')
+      .map((c) => c.id),
+  };
+}
 
 async function persistLocalAuthSnapshot(
   currentUser: User | null,
@@ -1376,33 +1398,45 @@ export const useStore = create<StoreState>()(
   upsertConversation: (conversation) =>
     set((state) => {
       const existing = state.conversations.find((item) => item.id === conversation.id);
+      let nextConversations: Conversation[];
       if (!existing) {
-        return {
-          conversations: [conversation, ...state.conversations],
+        nextConversations = [conversation, ...state.conversations];
+      } else {
+        const mergedConversation: Conversation = {
+          ...existing,
+          ...conversation,
+          participantIds: conversation.participantIds ?? existing.participantIds,
+          botIds: conversation.botIds ?? existing.botIds,
+          messages: conversation.messages.length ? conversation.messages : existing.messages,
         };
-      }
-
-      const mergedConversation: Conversation = {
-        ...existing,
-        ...conversation,
-        participantIds: conversation.participantIds ?? existing.participantIds,
-        botIds: conversation.botIds ?? existing.botIds,
-        messages: conversation.messages.length ? conversation.messages : existing.messages,
-      };
-
-      return {
-        conversations: [
+        nextConversations = [
           mergedConversation,
           ...state.conversations.filter((item) => item.id !== conversation.id),
-        ],
+        ];
+      }
+
+      // P0.12: Re-derive the muted/archived/request arrays from the hydrated
+      // conversation fields so they stay in sync with server state.
+      return {
+        conversations: nextConversations,
+        ...deriveConversationStateArrays(nextConversations),
       };
     }),
-  markConversationRead: (id) =>
+  markConversationRead: (id) => {
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, unread: false } : c
+        c.id === id ? { ...c, unread: false, markedUnread: false } : c
       ),
-    })),
+    }));
+    // P0.7: Fire-and-forget read-receipt to the backend. Don't block the UI
+    // and don't surface errors — the next sync reconciles authoritative state.
+    void fetchJson<{ ok: true }>(
+      '/chat/conversations/' + encodeURIComponent(id) + '/read',
+      { method: 'POST' }
+    ).catch(() => {
+      /* best-effort: ignore — next sync reconciles */
+    });
+  },
   toggleConversationUnread: (id) =>
     set((state) => ({
       conversations: state.conversations.map((c) =>
@@ -1604,11 +1638,16 @@ export const useStore = create<StoreState>()(
   mutedConversationIds: [],
   toggleMutedConversation: (id) => {
     const wasMuted = get().mutedConversationIds.includes(id);
-    // Optimistic update — flip local state immediately for snappy UX.
+    // Optimistic update — flip local state immediately for snappy UX. Also
+    // mirror the flag onto the conversation object so the derived arrays
+    // (P0.12) stay consistent with the local toggle.
     set((state) => ({
       mutedConversationIds: wasMuted
         ? state.mutedConversationIds.filter((mid) => mid !== id)
         : [...state.mutedConversationIds, id],
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isMuted: !wasMuted } : c
+      ),
     }));
     return (wasMuted ? unmuteConversationOnApi(id) : muteConversationOnApi(id)).catch(
       (error) => {
@@ -1617,6 +1656,9 @@ export const useStore = create<StoreState>()(
           mutedConversationIds: wasMuted
             ? [...state.mutedConversationIds, id]
             : state.mutedConversationIds.filter((mid) => mid !== id),
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, isMuted: wasMuted } : c
+          ),
         }));
         throw error;
       }
@@ -1645,11 +1687,16 @@ export const useStore = create<StoreState>()(
   archivedConversationIds: [],
   toggleArchivedConversation: (id) => {
     const wasArchived = get().archivedConversationIds.includes(id);
-    // Optimistic update — flip local state immediately for snappy UX.
+    // Optimistic update — flip local state immediately for snappy UX. Also
+    // mirror the flag onto the conversation object so the derived arrays
+    // (P0.12) stay consistent with the local toggle.
     set((state) => ({
       archivedConversationIds: wasArchived
         ? state.archivedConversationIds.filter((aid) => aid !== id)
         : [...state.archivedConversationIds, id],
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isArchived: !wasArchived } : c
+      ),
     }));
     return (wasArchived ? unarchiveConversationOnApi(id) : archiveConversationOnApi(id)).catch(
       (error) => {
@@ -1658,6 +1705,9 @@ export const useStore = create<StoreState>()(
           archivedConversationIds: wasArchived
             ? [...state.archivedConversationIds, id]
             : state.archivedConversationIds.filter((aid) => aid !== id),
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, isArchived: wasArchived } : c
+          ),
         }));
         throw error;
       }
@@ -1668,9 +1718,14 @@ export const useStore = create<StoreState>()(
   acceptMessageRequest: (id) => {
     const wasRequest = get().messageRequests.includes(id);
     // Optimistic update — remove from the pending requests list immediately.
+    // Also mirror the status onto the conversation object so the derived
+    // arrays (P0.12) stay consistent.
     if (wasRequest) {
       set((state) => ({
         messageRequests: state.messageRequests.filter((rid) => rid !== id),
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, requestStatus: 'accepted' } : c
+        ),
       }));
     }
     return acceptMessageRequestOnApi(id).catch((error) => {
@@ -1678,6 +1733,9 @@ export const useStore = create<StoreState>()(
       if (wasRequest) {
         set((state) => ({
           messageRequests: [...state.messageRequests, id],
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, requestStatus: 'pending' } : c
+          ),
         }));
       }
       throw error;
@@ -1971,7 +2029,7 @@ export const useStore = create<StoreState>()(
     }
   },
 
-  addMessageReaction: (conversationId, messageId, reaction) =>
+  addMessageReaction: (conversationId, messageId, reaction) => {
     set((state) => ({
       conversations: state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
@@ -1993,8 +2051,15 @@ export const useStore = create<StoreState>()(
           }),
         };
       }),
-    })),
-  removeMessageReaction: (conversationId, messageId, reaction) =>
+    }));
+    // P0.9: Persist the reaction to the backend. Fire-and-forget — on error
+    // we log but do NOT roll back the optimistic mutation; the next sync
+    // reconciles authoritative state.
+    void addMessageReactionOnApi(conversationId, messageId, reaction).catch((error) => {
+      console.warn('[store] addMessageReaction API failed', { conversationId, messageId, reaction, error });
+    });
+  },
+  removeMessageReaction: (conversationId, messageId, reaction) => {
     set((state) => ({
       conversations: state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
@@ -2016,7 +2081,14 @@ export const useStore = create<StoreState>()(
           }),
         };
       }),
-    })),
+    }));
+    // P0.9: Persist the removal to the backend. Fire-and-forget — on error
+    // we log but do NOT roll back the optimistic mutation; the next sync
+    // reconciles authoritative state.
+    void removeMessageReactionOnApi(conversationId, messageId, reaction).catch((error) => {
+      console.warn('[store] removeMessageReaction API failed', { conversationId, messageId, reaction, error });
+    });
+  },
 
   userAvatar: null,
   userCover: null,

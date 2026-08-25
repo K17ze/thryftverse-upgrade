@@ -10,11 +10,13 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, EditorMaterial } from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
+import { BlurView } from 'expo-blur';
 import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
+import type { CaptureViewport } from './capture/CaptureViewport';
 import { PressScale, SheetContainer } from './CreatorAnimations';
 import { MediaBrowserSheet, type SelectedAsset } from './tools/MediaBrowser';
 import { CreatorDraftService, type DraftMeta } from './drafts';
@@ -93,6 +95,12 @@ export interface CreatorEntryScreenProps {
    * capture falls back to onMediaSelected.
    */
   onVisualSearchCapture?: (uri: string) => void;
+  /**
+   * Optional: receives the measured camera viewport so the parent can
+   * build the camera→editor transition snapshot with the source content
+   * transform (the guide frame rect in screen coordinates).
+   */
+  onViewportChange?: (viewport: CaptureViewport | null) => void;
 }
 
 export function CreatorEntryScreen({
@@ -103,6 +111,7 @@ export function CreatorEntryScreen({
   onBlankStart,
   onOpenDraft,
   onVisualSearchCapture,
+  onViewportChange,
 }: CreatorEntryScreenProps) {
   const insets = useSafeAreaInsets();
   const isPoster = documentType === 'poster';
@@ -239,6 +248,7 @@ export function CreatorEntryScreen({
         mode={mode}
         onCapture={handleCapture}
         onCaptureBatch={handleCaptureBatch}
+        onViewportChange={onViewportChange}
         onGallery={() => { haptic.selection(); setShowPhotos(true); }}
         onClose={onClose}
         renderBottomOverlay={() => (
@@ -257,15 +267,19 @@ export function CreatorEntryScreen({
             accessibilityHint="Starts a blank text poster"
             accessibilityRole="button"
           >
-            <Text style={styles.textModeBtnLabel}>Aa</Text>
+            {/* Glass plate — translucent blur + overlay for on-camera legibility */}
+            <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={[StyleSheet.absoluteFill, { borderRadius: Radius.full }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: Radius.full }]} />
+            <Text style={[styles.textModeBtnLabel, { color: colors.scrimTextPrimary }]}>Aa</Text>
           </Pressable>
         )}
       />
 
       {/* Drafts button — small affordance in the camera top bar, next to
           close (top-left). Only shown when draft resumption is supported
-          and drafts exist. Not a prominent section. A subtle brand-color
-          dot signals there is something to resume. */}
+          and drafts exist. Transparent 44pt target (AGENTS.md §4: ordinary
+          controls default to transparent) — the top scrim provides legibility
+          and the brand-color dot is the status signal. No glass plate. */}
       {hasDrafts && (
         <Pressable
           style={[styles.draftsBtn, { top: insets.top + 8, left: 60 }]}
@@ -277,11 +291,11 @@ export function CreatorEntryScreen({
         >
           <Ionicons name="documents-outline" size={IconGrammar.standard} color="#fff" />
           {drafts.length > 1 ? (
-            <View style={styles.draftsCountBadge}>
-              <Text style={styles.draftsCountText}>{drafts.length}</Text>
+            <View style={[styles.draftsCountBadge, { backgroundColor: colors.brand }]}>
+              <Text style={[styles.draftsCountText, { color: colors.textInverse }]}>{drafts.length}</Text>
             </View>
           ) : (
-            <View style={styles.draftsBadge} />
+            <View style={[styles.draftsBadge, { backgroundColor: colors.brand }]} />
           )}
         </Pressable>
       )}
@@ -323,7 +337,7 @@ export function CreatorEntryScreen({
           showsVerticalScrollIndicator={false}
         >
           {drafts.length === 0 ? (
-            <Text style={styles.draftsEmpty}>No drafts yet</Text>
+            <Text style={[styles.draftsEmpty, { color: colors.scrimTextSecondary }]}>No drafts yet</Text>
           ) : (
             <View style={styles.draftsGrid}>
               {drafts.map((draft) => (
@@ -349,11 +363,11 @@ export function CreatorEntryScreen({
                       />
                     </View>
                   )}
-                  <Text style={styles.draftTitle} numberOfLines={1}>
+                  <Text style={[styles.draftTitle, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
                     {draft.title}
                   </Text>
                   {draft.updatedAt ? (
-                    <Text style={styles.draftTimestamp} numberOfLines={1}>
+                    <Text style={[styles.draftTimestamp, { color: colors.scrimTextTertiary }]} numberOfLines={1}>
                       {formatRelativeTime(draft.updatedAt)}
                     </Text>
                   ) : null}
@@ -382,30 +396,26 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.4)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: EditorMaterial.plate.hairline,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   textModeBtnLabel: {
-    color: '#fff',
     fontSize: 17,
     fontFamily: Typography.family.semibold,
   },
 
-  // Drafts button — small affordance in the camera top bar.
-  // Same chrome treatment as the Aa button for consistent overlay controls.
+  // Drafts button — transparent 44pt target (AGENTS.md §4: ordinary controls
+  // default to transparent). No fill, no border — the top scrim provides
+  // legibility and the brand-color dot is the status signal.
   draftsBtn: {
     position: 'absolute',
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 20,
   },
   // Subtle brand-color dot — signals "there is something to resume".
@@ -416,7 +426,6 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: '#F4F0E8',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.4)',
   },
@@ -430,14 +439,12 @@ const styles = StyleSheet.create({
     height: 16,
     paddingHorizontal: 4,
     borderRadius: Radius.full,
-    backgroundColor: '#F4F0E8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   draftsCountText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: '#0A0A0A',
   },
 
   // Drafts sheet
@@ -490,13 +497,11 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.85)',
   },
   draftTimestamp: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.4)',
   },
   draftsEmpty: {
     textAlign: 'center',
@@ -504,7 +509,6 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.5)',
   },
 
   // ── In-camera mode switcher (Look / Poster / Search) ──

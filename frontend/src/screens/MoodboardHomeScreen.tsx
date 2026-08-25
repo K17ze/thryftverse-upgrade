@@ -477,7 +477,7 @@ export default function MoodboardHomeScreen() {
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
-          <Text style={styles.offlineBannerText}>Offline — showing cached moodboards</Text>
+          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing. Reconnect to load latest.</Text>
         </View>
       )}
 
@@ -486,7 +486,7 @@ export default function MoodboardHomeScreen() {
         <View style={styles.demoBanner}>
           <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are saved locally. Connect the backend to share publicly.
+            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
           </Text>
         </View>
       )}

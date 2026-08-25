@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { config } from '../config.js';
+import { validateCompositionDocument } from '../lib/compositionValidation.js';
 
 type LookRouteDependencies = {
   app: FastifyInstance;
@@ -242,12 +243,13 @@ type LookRow = {
   updated_at: string;
   creator_username: string | null;
   creator_avatar: string | null;
+  source_look_id: string | null;
 };
 
 const LOOK_SELECT_COLUMNS = `
   l.id, l.creator_id, l.title, l.caption, l.media_url, l.media_type,
   l.composition_document, l.status, l.visibility,
-  l.created_at, l.updated_at,
+  l.created_at, l.updated_at, l.source_look_id,
   u.username AS creator_username,
   u.avatar AS creator_avatar
 `;
@@ -339,6 +341,35 @@ async function enrichLooks(
     viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
   }
 
+  // Batch-fetch source look creator info for repost attribution.
+  const sourceLookIds = lookRows
+    .map((r) => r.source_look_id)
+    .filter((id): id is string => id !== null && id !== undefined);
+  const sourceLookMap = new Map<string, { creatorId: string; creatorUsername: string | null; creatorAvatar: string | null }>();
+  if (sourceLookIds.length) {
+    const sourceResult = await db.query<{
+      id: string;
+      creator_id: string;
+      creator_username: string | null;
+      creator_avatar: string | null;
+    }>(
+      `SELECT l.id, l.creator_id,
+              u.username AS creator_username,
+              u.avatar AS creator_avatar
+       FROM looks l
+       LEFT JOIN users u ON u.id = l.creator_id
+       WHERE l.id = ANY($1)`,
+      [sourceLookIds]
+    );
+    for (const r of sourceResult.rows) {
+      sourceLookMap.set(r.id, {
+        creatorId: r.creator_id,
+        creatorUsername: r.creator_username,
+        creatorAvatar: r.creator_avatar,
+      });
+    }
+  }
+
   return lookRows.map((row) => ({
     id: row.id,
     creatorId: row.creator_id,
@@ -356,6 +387,10 @@ async function enrichLooks(
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sourceLookId: row.source_look_id,
+    ...(row.source_look_id && sourceLookMap.has(row.source_look_id)
+      ? { sourceLook: sourceLookMap.get(row.source_look_id) }
+      : {}),
     tags: tagsByLook.get(row.id) ?? [],
     likeCount: likeCountMap.get(row.id) ?? 0,
     commentCount: commentCountMap.get(row.id) ?? 0,
@@ -406,6 +441,8 @@ async function getAccessibleLook(
  *   GET    /looks/:lookId                  — look detail
  *   PATCH  /looks/:lookId                  — update a look (owner/admin)
  *   DELETE /looks/:lookId                  — delete a look (owner/admin)
+ *   POST   /looks/:lookId/repost           — repost a look (attribution preserved)
+ *   GET    /looks/:lookId/related          — list related looks (tag overlap)
  *   POST   /looks/:lookId/like             — like a look
  *   DELETE /looks/:lookId/like             — unlike a look
  *   POST   /looks/:lookId/save             — save a look
@@ -479,6 +516,23 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           ...(mediaVerification.mediaStatus
             ? { mediaStatus: mediaVerification.mediaStatus }
             : {}),
+        };
+      }
+
+      // Validate the composition document envelope (version, type, id)
+      // before persisting. The body is stored as opaque JSONB for WYSIWYG
+      // rendering, but the envelope must match the publication context.
+      const compositionValidation = validateCompositionDocument(
+        payload.compositionDocument,
+        { type: 'look', id: payload.id },
+      );
+      if (!compositionValidation.ok) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: compositionValidation.error,
+          code: compositionValidation.code,
         };
       }
 
@@ -709,6 +763,20 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       }
       if (payload.mediaType !== undefined) { updates.push(`media_type = $${paramIdx++}`); values.push(payload.mediaType); }
       if (payload.compositionDocument !== undefined) {
+        // Validate the composition document envelope on update too.
+        if (payload.compositionDocument !== null) {
+          const compositionValidation = validateCompositionDocument(
+            payload.compositionDocument,
+            { type: 'look', id: lookId },
+          );
+          if (!compositionValidation.ok) {
+            await client.query('ROLLBACK');
+            return reply.code(422).send({
+              error: compositionValidation.error,
+              code: compositionValidation.code,
+            });
+          }
+        }
         updates.push(`composition_document = $${paramIdx++}::jsonb`);
         values.push(payload.compositionDocument === null ? null : JSON.stringify(payload.compositionDocument));
       }
@@ -790,6 +858,179 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
     } finally {
       client.release();
     }
+  });
+
+  // ── Look repost ────────────────────────────────────────────────────
+
+  app.post('/looks/:lookId/repost', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { lookId } = lookIdParamsSchema.parse(request.params);
+
+    // 1. Fetch the source look (must be published + public)
+    const accessRow = await getAccessibleLook(db, lookId, actorUserId);
+    if (!accessRow) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+
+    // 2. Fetch the full source look data
+    const sourceResult = await db.query<LookRow>(
+      `SELECT ${LOOK_SELECT_COLUMNS} FROM looks l LEFT JOIN users u ON u.id = l.creator_id WHERE l.id = $1 LIMIT 1`,
+      [lookId]
+    );
+    if (!sourceResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+    const source = sourceResult.rows[0];
+
+    // 3. Prevent self-repost
+    if (source.creator_id === actorUserId) {
+      reply.code(422);
+      return { ok: false, error: 'Cannot repost your own look' };
+    }
+
+    // 4. Generate a new look ID
+    const newLookId = `repost_${crypto.randomUUID()}`;
+
+    // 5. Create the repost — copies media, tags, composition, but NOT media verification
+    //    (the media is already verified from the original). Sets source_look_id for attribution.
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `INSERT INTO looks (
+          id, creator_id, title, caption, media_url, media_type,
+          composition_document, status, visibility,
+          source_look_id, reposted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'published', 'public', $8, NOW())`,
+        [
+          newLookId,
+          actorUserId,
+          source.title,
+          source.caption,
+          source.media_url,
+          source.media_type,
+          source.composition_document,
+          lookId,
+        ]
+      );
+
+      // Copy tags from the source look
+      const tagsResult = await client.query<{ id: string; listing_id: string | null; label: string; x: string; y: string }>(
+        `SELECT id, listing_id, label, x, y FROM look_tags WHERE look_id = $1`,
+        [lookId]
+      );
+      for (const tag of tagsResult.rows) {
+        const newTagId = `${newLookId}_${tag.id.replace(`${lookId}_`, '')}`;
+        await client.query(
+          `INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO NOTHING`,
+          [newTagId, newLookId, tag.listing_id, tag.label, Number(tag.x), Number(tag.y)]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    reply.code(201);
+    return { ok: true, lookId: newLookId };
+  });
+
+  // ── Related looks ──────────────────────────────────────────────────
+
+  app.get('/looks/:lookId/related', async (request) => {
+    const { lookId } = lookIdParamsSchema.parse(request.params);
+    const viewerUserId = request.authUser?.userId ?? null;
+    const query = z.object({
+      cursor: z.string().datetime().optional(),
+      limit: z.coerce.number().int().min(1).max(60).default(24),
+    }).parse(request.query ?? {});
+
+    // 1. Get the source look's tag listing_ids
+    const sourceTags = await db.query<{ listing_id: string | null }>(
+      `SELECT listing_id FROM look_tags WHERE look_id = $1 AND listing_id IS NOT NULL`,
+      [lookId]
+    );
+    const sourceListingIds = sourceTags.rows.map(r => r.listing_id).filter(Boolean) as string[];
+
+    // 2. Get the source look's creator (to exclude)
+    const sourceLook = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM looks WHERE id = $1 LIMIT 1`,
+      [lookId]
+    );
+    const sourceCreatorId = sourceLook.rows[0]?.creator_id;
+
+    const conditions: string[] = [
+      `l.status = 'published'`,
+      `l.id <> $1`,
+    ];
+    const args: unknown[] = [lookId];
+    let argIdx = 2;
+
+    if (sourceCreatorId) {
+      conditions.push(`l.creator_id <> $${argIdx++}`);
+      args.push(sourceCreatorId);
+    }
+
+    if (viewerUserId) {
+      conditions.push(`(l.visibility = 'public' OR l.creator_id = $${argIdx++})`);
+      args.push(viewerUserId);
+    } else {
+      conditions.push(`l.visibility = 'public'`);
+    }
+
+    if (query.cursor) {
+      conditions.push(`l.created_at < $${argIdx++}::timestamptz`);
+      args.push(query.cursor);
+    }
+
+    let orderBy = 'l.created_at DESC';
+    let relatedSelect = '';
+
+    if (sourceListingIds.length > 0) {
+      // Tag overlap ranking — looks sharing more tagged listings rank higher
+      relatedSelect = `
+        LEFT JOIN (
+          SELECT look_id, COUNT(*) AS overlap_count
+          FROM look_tags
+          WHERE listing_id = ANY($${argIdx}::text[])
+          GROUP BY look_id
+        ) overlap ON overlap.look_id = l.id
+      `;
+      args.push(sourceListingIds);
+      orderBy = 'COALESCE(overlap.overlap_count, 0) DESC, l.created_at DESC';
+    }
+
+    const looksResult = await db.query<LookRow>(
+      `
+      SELECT ${LOOK_SELECT_COLUMNS}
+      FROM looks l
+      LEFT JOIN users u ON u.id = l.creator_id
+      ${relatedSelect}
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ${orderBy}
+      LIMIT $${argIdx}
+      `,
+      [...args, query.limit + 1]
+    );
+
+    const hasMore = looksResult.rows.length > query.limit;
+    const pageRows = hasMore ? looksResult.rows.slice(0, query.limit) : looksResult.rows;
+    const items = await enrichLooks(db, pageRows, viewerUserId);
+    const nextCursor = hasMore
+      ? pageRows[pageRows.length - 1]?.created_at ?? null
+      : null;
+
+    return { items, nextCursor };
   });
 
   // ── Look likes ─────────────────────────────────────────────────────

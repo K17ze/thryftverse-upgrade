@@ -585,7 +585,7 @@ provider idempotency key propagation, explicit pending/unknown/reconciled states
 
 Source: [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests).
 
-### P0-BE-5 — refund and admin payment semantics are unsafe [RESOLVED]
+### P0-BE-5 — refund and admin payment semantics are unsafe
 
 Refund lacks a request idempotency key and remaining-refundable calculation; the
 provider call occurs inside a DB lock, and provider success followed by DB failure
@@ -593,7 +593,7 @@ has no reconciliation. Another admin refund path updates only local ledger/statu
 but returns `refunded: true`. An admin pay route can set paid without settlement
 evidence. Some early returns release a client with an open transaction.
 
-### P0-BE-6 — webhook dedup can discard valid settlement [RESOLVED]
+### P0-BE-6 — webhook dedup can discard valid settlement
 
 Stripe event ID is persisted before processing. If processing rolls back, the
 dedup row remains and later provider delivery receives `200 duplicate`. The retry
@@ -605,7 +605,7 @@ succeeded/failed state, scheduled recovery, and exactly-once ledger effects.
 
 Source: [Stripe webhooks](https://docs.stripe.com/webhooks?lang=node).
 
-### P0-BE-7 — BullMQ Redis may evict durable jobs [RESOLVED]
+### P0-BE-7 — BullMQ Redis may evict durable jobs
 
 Cache and BullMQ share Redis configured with `allkeys-lru`. BullMQ recommends
 `noeviction` for queue correctness.
@@ -615,7 +615,7 @@ use eviction independently.
 
 Source: [BullMQ production guidance](https://docs.bullmq.io/guide/going-to-production).
 
-### P0-BE-8 — backup workflow misses encrypted output [RESOLVED]
+### P0-BE-8 — backup workflow misses encrypted output
 
 The script creates `.dump.enc` and deletes `.dump`; the GitHub workflow uploads
 only `.dump` and can succeed with zero artifacts. The DR runbook claims WAL/PITR
@@ -624,7 +624,7 @@ and weekly restore verification without implementation.
 Action: managed PITR/WAL where possible; fail on zero artifacts; upload encrypted
 output; automated decrypt/restore/data verification; record RPO/RTO evidence.
 
-### P0-BE-9 — release approval and staged OTA are not real gates [RESOLVED]
+### P0-BE-9 — release approval and staged OTA are not real gates
 
 Production build/update jobs do not depend on the approval job, builds use
 `--no-wait`, and EAS CLI uses mutable `latest`. The OTA workflow republishes a
@@ -1085,21 +1085,14 @@ libraries, or redesigning 30 screens in parallel. It will come from:
 6. replacing counterfeit visual evidence with real native captures;
 7. iterating one bounded surface until a cold critic and human accept it.
 
-The implemented Looks/search fixes are a real step. **Release Integrity Closure 01
-is now complete** — all 9 backend P0 findings (P0-BE-1 through P0-BE-9) are
-resolved with passing typechecks, valid migrations, valid YAML, and verified
-infrastructure configuration. The next recommended active package is **Creator
-Truth Closure 01**, followed by the canonical renderer and discovery geometry.
+The implemented Looks/search fixes are a real step, but the flagship benchmark
+has not been reached. The next recommended active package is **Release Integrity
+Closure 01**, followed by **Creator Truth Closure 01** and the canonical renderer.
 
-**Final status:** `PARTIAL — RELEASE INTEGRITY CLOSED, CREATOR/DISCOVERY REMAIN`
+**Final status:** `PARTIAL — INTERACTION FAILURES REMAIN`
 
-**Resolved:** P0-BE-1 through P0-BE-9 (migration chain, media queue, moderation,
-payment idempotency, refund safety, webhook durable inbox, Redis split, encrypted
-backup, EAS approval gates + staged OTA rollout).
-
-**Remaining blockers:** creator tool truthfulness, editor/viewer/export renderer
-unification, discovery data geometry, live provider/worker proof, signed native
-visual evidence, and human visual acceptance.
+**Additional blockers:** backend deployment integrity, live provider/worker proof,
+signed native visual evidence, and human visual acceptance.
 
 ## 21. Screenshot-driven profile and creator-entry closure — 23 August 2026
 
@@ -1585,24 +1578,3 @@ Native validation for this pass must compare the exact audited routes at the sam
 viewport: rounded-container count, first useful media Y, useful objects above fold,
 duplicate search controls, group-photo propagation and bottom-navigation occlusion.
 Static TypeScript success does not override an inferior EAS render.
-
-### 22.5 Implementation and validation record
-
-The bounded corrective pass is implemented. Frontend TypeScript, the backend API
-build and targeted ESLint all pass. Five focused frontend suites pass 89/89 tests,
-and the backend group idempotency suite passes 10/10 with the repository's Node/tsx
-runner.
-
-Native inspection used the Android development build on `emulator-5554`. The revised
-Data & Privacy route renders deletion as one flat Account section without the outlined
-Danger Zone panel. Discover renders one search entry, a restrained underline mode
-selector, a category rail and heterogeneous listing geometry in the virtualised
-masonry feed. Group Info renders the canonical group identity and hides edit from the
-ordinary-member fixture. Local captures are retained outside the repository.
-
-Two native acceptance points remain open. The fixture returned no eligible non-demo
-Looks, Posters or Moodboards, so the new mixed-unit renderers were not exercised on
-device. The fixture user was not a group owner/admin, so the photo editor and confirmed
-cross-surface photo propagation were not reachable. A new EAS audit with representative
-published creator rows and an admin-owned group is required before claiming the visual
-target met.

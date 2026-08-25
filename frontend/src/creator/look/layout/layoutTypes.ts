@@ -51,4 +51,11 @@ export interface LayoutPreview {
   id: LayoutId;
   name: string;
   transforms: AssetTransform[];
+  /**
+   * Layout quality score (0–1, higher is better). Computed by
+   * `scoreLayout` based on aspect fit, overlap, negative space, and
+   * product-label safety. Used to rank alternative layouts so the
+   * best-fitting composition is presented first (§8.3).
+   */
+  score?: number;
 }

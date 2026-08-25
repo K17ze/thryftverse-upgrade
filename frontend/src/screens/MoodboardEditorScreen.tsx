@@ -67,6 +67,7 @@ import {
   removeItemFromMoodboard,
   updateItemPosition,
   reorderItem,
+  updateMoodboardTheme,
   getThemeById,
   MOODBOARD_DEMO_MODE,
   type Moodboard,
@@ -448,7 +449,7 @@ const SelectionControl = React.memo(function SelectionControl({
       accessibilityLabel={label}
       accessibilityHint={hint}
     >
-      <Ionicons name={icon} size={20} color={destructive ? colors.textInverse : colors.textInverse} />
+      <Ionicons name={icon} size={20} color={colors.scrimTextPrimary} />
     </AnimatedPressable>
   );
 });
@@ -589,11 +590,12 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             }
           : prev,
       );
-      // Persist to the (demo) service
+      // Persist to the backend service
       try {
         await updateItemPosition(moodboard.id, id, position);
-      } catch {
-        // Silent — demo mode is in-memory; surface only if a real backend fails
+      } catch (error) {
+        // Surface the error — position update failed
+        console.warn('Position update failed:', error);
       }
     },
     [moodboard],
@@ -713,12 +715,17 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
     (themeId: string) => {
       haptic.selection();
       setActiveThemeId(themeId);
-      // Optimistic — theme is a local canvas property in demo mode
+      // Optimistic local update — persisted via the moodboard API
       setMoodboard((prev) =>
         prev ? { ...prev, theme: themeId, updatedAt: new Date().toISOString() } : prev,
       );
+      if (moodboard) {
+        void updateMoodboardTheme(moodboard.id, themeId).catch((error) => {
+          console.warn('Theme update failed:', error);
+        });
+      }
     },
-    [haptic],
+    [haptic, moodboard],
   );
 
   const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
@@ -803,7 +810,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
 
       {/* Offline banner */}
       {isOffline && (
-        <OfflineBanner message="Offline — changes are saved locally" />
+        <OfflineBanner message="Offline — changes are not saved. Reconnect to persist your work." />
       )}
 
       {/* Demo mode banner — truthful per AGENTS.md §11 */}
@@ -811,7 +818,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         <View style={styles.demoBanner}>
           <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are saved locally. Connect the backend to share publicly.
+            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
           </Text>
         </View>
       )}
@@ -1325,12 +1332,12 @@ function useStyles() {
         multiSelectCountText: {
           fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
         },
         multiSelectCancelText: {
           fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
         },
         savingOverlay: {
           ...StyleSheet.absoluteFill,

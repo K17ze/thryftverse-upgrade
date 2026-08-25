@@ -335,11 +335,129 @@ function buildPreview(
   canvasHeight: number,
 ): LayoutPreview {
   const def = LAYOUT_DEFINITIONS[id];
+  const transforms = def.computeTransforms(assetCount, canvasWidth, canvasHeight);
   return {
     id,
     name: def.name,
-    transforms: def.computeTransforms(assetCount, canvasWidth, canvasHeight),
+    transforms,
+    score: scoreLayout(transforms, id, canvasWidth, canvasHeight),
   };
+}
+
+// ── Layout scoring ──────────────────────────────────────────────────
+// Per §8.3: score layouts using aspect, overlap, negative space, and
+// product-label safety. Salience and object category require a backend
+// vision model not yet installed — aspect ratio is used as a proxy.
+//
+// The score is a weighted sum of sub-scores, each normalised to 0–1:
+//   aspectFit (0.30) — how well each cell's aspect ratio matches a
+//                       typical 4:5 portrait media asset.
+//   overlap   (0.25) — penalise unintended overlap (lower for
+//                       intentionally overlapping layouts like scatter/stack).
+//   negativeSpace (0.20) — reward balanced canvas coverage (not too
+//                          sparse, not too crammed).
+//   productLabelSafety (0.25) — ensure cells leave room for product
+//                                tag overlays near the bottom edge.
+//
+// The score is informational — it ranks alternatives so the best-
+// fitting composition is presented first. The creator always has the
+// final say (§8.3: auto-layout is an editable starting proposal).
+
+/** Target aspect ratio for creator media (4:5 portrait, the dominant crop). */
+const TARGET_ASPECT = 0.8;
+
+/** Layouts that intentionally overlap — overlap is not penalised. */
+const OVERLAP_LAYOUTS: LayoutId[] = ['scatter', 'stack'];
+
+function scoreLayout(
+  transforms: AssetTransform[],
+  layoutId: LayoutId,
+  _canvasWidth: number,
+  _canvasHeight: number,
+): number {
+  if (transforms.length === 0) return 0;
+
+  // ── Aspect fit (0.30) ──
+  // Each cell's aspect ratio (w/h) should be close to the target 4:5.
+  // Square cells are acceptable; extreme aspect ratios are penalised.
+  let aspectScore = 0;
+  for (const t of transforms) {
+    const cellAspect = t.width / t.height;
+    const diff = Math.abs(cellAspect - TARGET_ASPECT);
+    // 0 diff = 1.0, 0.5 diff = 0.5, 1.0+ diff = 0
+    aspectScore += Math.max(0, 1 - diff * 2);
+  }
+  aspectScore /= transforms.length;
+
+  // ── Overlap (0.25) ──
+  // For non-overlap layouts, penalise any intersection between cells.
+  // For overlap layouts (scatter, stack), this sub-score is neutral (0.75).
+  let overlapScore: number;
+  if (OVERLAP_LAYOUTS.includes(layoutId)) {
+    overlapScore = 0.75; // neutral — overlap is intentional
+  } else {
+    let totalOverlap = 0;
+    let totalArea = 0;
+    for (let i = 0; i < transforms.length; i++) {
+      const a = transforms[i];
+      totalArea += a.width * a.height;
+      for (let j = i + 1; j < transforms.length; j++) {
+        const b = transforms[j];
+        const ox = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+        const oy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+        totalOverlap += ox * oy;
+      }
+    }
+    // Overlap ratio: 0 = no overlap (score 1), 0.3+ = heavy overlap (score 0).
+    const overlapRatio = totalArea > 0 ? totalOverlap / totalArea : 0;
+    overlapScore = Math.max(0, 1 - overlapRatio * 3);
+  }
+
+  // ── Negative space (0.20) ──
+  // Reward layouts that use 60–90% of the canvas area. Too sparse (<40%)
+  // or too crammed (>95%) are penalised.
+  let totalCoverage = 0;
+  for (const t of transforms) {
+    totalCoverage += t.width * t.height;
+  }
+  const coverage = Math.min(1, totalCoverage); // cap at 100%
+  let negativeSpaceScore: number;
+  if (coverage >= 0.6 && coverage <= 0.9) {
+    negativeSpaceScore = 1.0; // ideal range
+  } else if (coverage >= 0.4 && coverage < 0.6) {
+    negativeSpaceScore = 0.7; // slightly sparse
+  } else if (coverage > 0.9 && coverage <= 1.0) {
+    negativeSpaceScore = 0.6; // slightly crammed
+  } else if (coverage < 0.4) {
+    negativeSpaceScore = 0.4; // too sparse
+  } else {
+    negativeSpaceScore = 0.3; // overflow
+  }
+
+  // ── Product-label safety (0.25) ──
+  // Product tags are typically placed near the bottom-center of each
+  // media cell. Penalise cells where the bottom 15% of the cell is
+  // clipped by the canvas boundary (y + height > 0.95).
+  let labelSafetyScore = 0;
+  for (const t of transforms) {
+    const bottomEdge = t.y + t.height;
+    if (bottomEdge <= 0.95) {
+      labelSafetyScore += 1.0;
+    } else {
+      // Partial penalty based on how much is clipped.
+      const clipAmount = Math.min(1, (bottomEdge - 0.95) / 0.1);
+      labelSafetyScore += Math.max(0, 1 - clipAmount);
+    }
+  }
+  labelSafetyScore /= transforms.length;
+
+  // Weighted sum.
+  return (
+    aspectScore * 0.30 +
+    overlapScore * 0.25 +
+    negativeSpaceScore * 0.20 +
+    labelSafetyScore * 0.25
+  );
 }
 
 /**
@@ -391,6 +509,10 @@ export function autoCompose(
     if (!layoutFits(def, assetCount)) continue;
     alternatives.push(buildPreview(id, assetCount, canvasWidth, canvasHeight));
   }
+
+  // Sort alternatives by score (highest first) so the best-fitting
+  // compositions are presented first in the preview rail (§8.3).
+  alternatives.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   return { defaultLayout, alternatives };
 }

@@ -452,6 +452,13 @@ export type RootStackParamList = {
 
   // ── Seller Tools ── (sell, trade hub, seller hub, analytics, verification)
   Sell: undefined;
+  // Catalogue Import — concierge importer flow
+  CatalogImportStart: undefined;
+  CatalogImportConsent: { source: 'ebay' | 'seller_package' | 'depop' | 'vinted' };
+  CatalogImportProgress: { batchId: string };
+  CatalogImportReview: { batchId: string };
+  CatalogImportItem: { itemId: string; batchId: string };
+  CatalogImportSummary: { batchId: string };
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // GDPR — Account deletion & data export
   DeleteAccount: undefined;
@@ -539,6 +546,7 @@ export type ExploreTabParamList = {
   Filter: RootStackParamList['Filter'];
   SavedSearches: undefined;
   CollectionDetail: RootStackParamList['CollectionDetail'];
+  LookDetail: RootStackParamList['LookDetail'];
 };
 
 export type InboxTabParamList = {
@@ -547,6 +555,7 @@ export type InboxTabParamList = {
 
 export type ProfileTabParamList = {
   Profile: undefined;
+  LookDetail: RootStackParamList['LookDetail'];
 };
 
 // ── Main Tabs ──

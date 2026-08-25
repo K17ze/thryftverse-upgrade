@@ -22,6 +22,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
+import { fetchImportBatches, type BatchSummaryDTO, type CatalogSource } from '../services/catalogImportApi';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
@@ -48,6 +49,34 @@ interface ActivityItem {
   subtitle: string;
   imageUrl?: string | null;
   onPress: () => void;
+}
+
+// ── Catalogue import helpers (blueprint §5.1) ──
+// Maps a batch's source + status to the human-readable label shown in the
+// Seller Hub "Catalogue imports" section. Only batches that are in-progress
+// or recently finished are surfaced — stale completed batches fall away.
+const IMPORT_SOURCE_LABEL: Record<CatalogSource, string> = {
+  ebay: 'eBay import',
+  seller_package: 'Catalogue upload',
+  depop: 'Depop import',
+  vinted: 'Vinted import',
+};
+
+const IN_PROGRESS_STATES: ReadonlySet<string> = new Set([
+  'created', 'discovering', 'hydrating', 'ingesting_media', 'normalising',
+  'publishing', 'paused_rate_limit', 'paused_reauth', 'failed_recoverable',
+  'cancelling',
+]);
+
+function importBatchStatusText(batch: BatchSummaryDTO): string {
+  if (IN_PROGRESS_STATES.has(batch.status)) return 'In progress';
+  if (batch.status === 'awaiting_seller' || batch.status === 'awaiting_operator') {
+    return `${batch.readyCount} ready to review`;
+  }
+  if (batch.status === 'completed') return `${batch.publishedCount} live`;
+  if (batch.status === 'approved') return 'Approved · publishing';
+  if (batch.status === 'cancelled') return 'Cancelled';
+  return batch.status;
 }
 
 // ── Dashboard card primitive ──
@@ -107,6 +136,9 @@ export default function SellerHubScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  // Catalogue import batches — past and in-progress (blueprint §5.1).
+  const [importBatches, setImportBatches] = useState<BatchSummaryDTO[]>([]);
+
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
@@ -118,6 +150,11 @@ export default function SellerHubScreen() {
       // (AGENTS.md S11: truthful UI; S14: complete state coverage).
       setLoadError(true);
     }
+    // Fetch catalogue import batches in parallel — failures are non-fatal
+    // (the section simply omits itself when unavailable).
+    fetchImportBatches()
+      .then((batches) => { setImportBatches(batches); })
+      .catch(() => { /* non-fatal — section hides gracefully */ });
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -255,6 +292,25 @@ export default function SellerHubScreen() {
         };
       });
   }, [listings, colors, navigation]);
+
+  // ── Catalogue import batches visible in the Hub (blueprint §5.1) ──
+  // Show in-progress batches first, then recently completed/cancelled ones
+  // (within 30 days). Stale terminal batches are dropped to keep the section
+  // honest and uncluttered.
+  const visibleImportBatches = useMemo(() => {
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    return importBatches
+      .filter((b) => {
+        if (IN_PROGRESS_STATES.has(b.status) || b.status === 'awaiting_seller' || b.status === 'awaiting_operator' || b.status === 'approved') {
+          return true;
+        }
+        const updated = new Date(b.updatedAt).getTime();
+        return !Number.isNaN(updated) && updated > thirtyDaysAgo;
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 4);
+  }, [importBatches]);
 
   const isVerified = sellerTrust?.verified === true;
   const hasListings = metrics.total > 0;
@@ -433,6 +489,36 @@ export default function SellerHubScreen() {
                 You're all caught up
               </Text>
             </View>
+          )}
+        </FlagshipFormSection>
+
+        {/* ── Catalogue imports (blueprint §5.1) ──
+            Past and in-progress import batches. Flat rows matching the
+            existing FlagshipNavigationRow pattern — no card wrapping.
+            When no batches exist, a single restrained "Import a shop" row
+            serves as the entry point. */}
+        <FlagshipFormSection variant="flat" title="Catalogue imports">
+          {visibleImportBatches.length > 0 ? (
+            visibleImportBatches.map((batch) => (
+              <FlagshipNavigationRow
+                key={batch.id}
+                title={IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}
+                subtitle={importBatchStatusText(batch)}
+                icon="cube-outline"
+                onPress={() => navigation.navigate('CatalogImportProgress', { batchId: batch.id })}
+                accessibilityLabel={`${IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}, ${importBatchStatusText(batch)}`}
+                accessibilityHint="Opens the import progress screen"
+              />
+            ))
+          ) : (
+            <FlagshipNavigationRow
+              title="Import a shop"
+              subtitle="Bring your existing listings from eBay or a file"
+              icon="cube-outline"
+              onPress={() => navigation.navigate('CatalogImportStart')}
+              accessibilityLabel="Import a shop"
+              accessibilityHint="Start a catalogue import from eBay or a file"
+            />
           )}
         </FlagshipFormSection>
 

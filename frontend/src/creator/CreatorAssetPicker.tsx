@@ -34,7 +34,9 @@ import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { withAlpha } from '../components/poster/shared/colorUtils';
 import type { CreatorLayer } from './composition';
+import { isCapabilitySupported, getCapabilityForLayerType, isVisualLayer } from './capabilities/registry';
 import { Canvas, Path, Skia, DashPathEffect } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -977,7 +979,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       {showAlbumPicker && albums.length > 0 && (
         <View style={[styles.albumPickerDropdown, { borderColor: colors.border }]}>
           <Pressable
-            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: `${colors.brand}12` }]}
+            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: colors.brandSubtle }]}
             onPress={() => {
               haptic.selection();
               setActiveAlbumId(null);
@@ -996,7 +998,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           {albums.slice(0, 12).map((album) => (
             <Pressable
               key={album.id}
-              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: `${colors.brand}12` }]}
+              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: colors.brandSubtle }]}
               onPress={() => {
                 haptic.selection();
                 setActiveAlbumId(album.id);
@@ -3088,7 +3090,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                <Text style={[styles.timerChipText, isActive && { color: colors.scrimTextPrimary }]}>
                   {t.label}
                 </Text>
               </Pressable>
@@ -3628,17 +3630,17 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             {options.filter(o => o.trim().length > 0).length > 0 ? (
               options.map((opt, i) => (
                 opt.trim() ? (
-                  <View key={i} style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                  <View key={i} style={[styles.votePreviewOption, { backgroundColor: withAlpha(colors.brand, 0.13), borderColor: withAlpha(colors.brand, 0.33) }]}>
                     <Text style={styles.votePreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
                   </View>
                 ) : null
               ))
             ) : (
               <>
-                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                <View style={[styles.votePreviewOption, { backgroundColor: withAlpha(colors.brand, 0.13), borderColor: withAlpha(colors.brand, 0.33) }]}>
                   <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 1</Text>
                 </View>
-                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                <View style={[styles.votePreviewOption, { backgroundColor: withAlpha(colors.brand, 0.13), borderColor: withAlpha(colors.brand, 0.33) }]}>
                   <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 2</Text>
                 </View>
               </>
@@ -3716,7 +3718,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                <Text style={[styles.timerChipText, isActive && { color: colors.scrimTextPrimary }]}>
                   {t.label}
                 </Text>
               </Pressable>
@@ -3757,46 +3759,64 @@ interface StickerDef {
   description?: string;
 }
 
-const STICKER_CATEGORIES: StickerCategoryDef[] = [
-  {
-    key: 'interactive',
-    label: 'Interactive',
-    stickers: [
-      { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
-      { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
-      { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
-      { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
-      { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
-    ],
-  },
-  {
-    key: 'mentions',
-    label: 'Tags',
-    stickers: [
-      { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
-      { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
-      { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
-    ],
-  },
-  {
-    key: 'media',
-    label: 'Media',
-    stickers: [
-      { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
-      { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
-      { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
-    ],
-  },
-  {
-    key: 'utility',
-    label: 'Utility',
-    stickers: [
-      { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
-      { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
-      { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
-    ],
-  },
-];
+const STICKER_CATEGORIES: StickerCategoryDef[] = (
+  [
+    {
+      key: 'interactive',
+      label: 'Interactive',
+      stickers: [
+        { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
+        { key: 'product', label: 'Item', icon: 'pricetag-outline', mode: 'product', description: 'Tag a listing' },
+        { key: 'look', label: 'Look', icon: 'shirt-outline', mode: 'look', description: 'Tag a look' },
+        { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
+        { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
+        { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
+        { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
+      ],
+    },
+    {
+      key: 'mentions',
+      label: 'Tags',
+      stickers: [
+        { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
+        { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
+        { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
+      ],
+    },
+    {
+      key: 'media',
+      label: 'Media',
+      stickers: [
+        { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
+        { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
+        { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
+      ],
+    },
+    {
+      key: 'utility',
+      label: 'Utility',
+      stickers: [
+        { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
+        { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
+        { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
+      ],
+    },
+  ] as StickerCategoryDef[]
+).map((cat) => ({
+  ...cat,
+  // Filter stickers by the capability registry. Visual layers (gif,
+  // time, weather, shape) remain visible because they render from the
+  // composition document. Interactive stickers whose backend support
+  // is not verified are hidden — no tool may promise an interaction
+  // the backend cannot persist or serve.
+  stickers: cat.stickers.filter((s) => {
+    const layerType = s.mode;
+    if (isVisualLayer(layerType)) return true;
+    const capId = getCapabilityForLayerType(layerType);
+    if (!capId) return true;
+    return isCapabilitySupported(capId);
+  }),
+})).filter((cat) => cat.stickers.length > 0);
 
 function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
@@ -4651,7 +4671,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
   styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
-  styleOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
   styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
@@ -4660,7 +4680,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
   alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
-  alignmentOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
+  alignmentOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
   shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
@@ -4692,7 +4712,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
   brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
+  brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   brushSizeDot: { borderRadius: Radius.full },
   brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
   brushPreviewDot: { elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
@@ -4751,7 +4771,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
   stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
-  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
+  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: withAlpha(colors.brand, 0.08), justifyContent: 'center', alignItems: 'center' },
   stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
   stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
@@ -4790,13 +4810,13 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
-  effectChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
   effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
   effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
   animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
-  animChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
   animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
@@ -4826,7 +4846,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   quizPreviewEmoji: { fontSize: 22 },
   quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
   quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: `${colors.success}15` },
+  quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: withAlpha(colors.success, 0.08) },
   quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   // ── Question preview (improved) ──
   questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },

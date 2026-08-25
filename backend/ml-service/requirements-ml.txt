@@ -1,0 +1,10 @@
+# Training-only dependencies for the LightGBM ranking pipeline.
+# Install in addition to requirements.txt when running training scripts:
+#   pip install -r requirements.txt -r requirements-ml.txt
+#
+# The serving service does NOT require these — lightgbm is in requirements.txt
+# for shadow scoring, but scikit-learn and psycopg are only needed for
+# training and dataset building.
+
+scikit-learn==1.7.2
+psycopg[binary]==3.2.4

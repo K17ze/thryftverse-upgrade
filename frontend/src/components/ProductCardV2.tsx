@@ -272,7 +272,7 @@ function ProductCardV2Base({
               <Ionicons
                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
                 size={20}
-                color={isSaved ? colors.brand : colors.textInverse}
+                color={isSaved ? colors.brand : colors.scrimTextPrimary}
                 style={styles.actionGlyph}
               />
             </AnimatedPressable>
@@ -283,7 +283,7 @@ function ProductCardV2Base({
               onToggle={handleToggleFav}
               size={21}
               activeColor={colors.danger}
-              inactiveColor={colors.textInverse}
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -797,7 +797,7 @@ function ProductDiscoveryTileBase({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={18}
-              color={isSaved ? colors.brand : colors.textInverse}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
               style={[tileStyles.saveGlyph, { textShadowColor: colors.shadow }]}
             />
           </Pressable>

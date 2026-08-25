@@ -34,14 +34,14 @@ export interface FocusReticleProps {
 }
 
 /**
- * Tap-to-focus visual indicator (truthful — no AE/AF lock claim).
+ * Tap-to-focus visual indicator with real AE/AF/AWB metering.
  *
  * Springs in from scale 0→1 with a bouncy entrance, holds briefly to
  * confirm the tap was registered, then fades out after ~1.2s. The ring
- * stays a single neutral-white colour — it does NOT transition to green
- * or show "AE/AF LOCK" because Expo Camera's public surface does not
- * expose arbitrary point focus/lock. The native camera continues to use
- * its own continuous autofocus.
+ * stays a single neutral-white colour — the parent component calls
+ * CameraRef.focusTo() to perform real focus metering on supported
+ * devices. On unsupported devices the reticle shows as a tap indicator
+ * only.
  *
  * All spring configs come from `useMotionConfig` — no hardcoded values.
  * Respects reduced-motion (springs become critically damped, durations 0).

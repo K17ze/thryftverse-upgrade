@@ -46,6 +46,7 @@ import {
   CameraEffectBar,
   type CameraEffectId,
 } from './CameraEffectBar';
+import { isCapabilitySupported } from '../capabilities/registry';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -60,6 +61,11 @@ export interface CaptureToolsSheetProps {
   // ── Grid ──
   showGrid: boolean;
   onToggleGrid: () => void;
+  // ── Framing mode (brackets + crosshair) ──
+  // Per AGENTS.md §4: brackets/crosshair are opt-in for ordinary capture.
+  // Visual Search always shows framing guides regardless of this toggle.
+  framingMode: boolean;
+  onToggleFramingMode: () => void;
   // ── Live camera effects ──
   activeEffect: CameraEffectId;
   onEffectChange: (effect: CameraEffectId) => void;
@@ -115,6 +121,8 @@ export function CaptureToolsSheet({
   onTimerChange,
   showGrid,
   onToggleGrid,
+  framingMode,
+  onToggleFramingMode,
   activeEffect,
   onEffectChange,
   handsFreeMode,
@@ -151,6 +159,10 @@ export function CaptureToolsSheet({
     onToggleGrid();
   }, [onToggleGrid]);
 
+  const handleFramingModeToggle = useCallback(() => {
+    onToggleFramingMode();
+  }, [onToggleFramingMode]);
+
   const handleHandsFreeToggle = useCallback(() => {
     onToggleHandsFree();
   }, [onToggleHandsFree]);
@@ -173,11 +185,12 @@ export function CaptureToolsSheet({
   // Tools that are not applicable in visual-search mode
   const showMultiCapture = !isVisualSearch;
   const showHandsFree = !isVisualSearch && videoCaptureEnabled;
-  // The current native Video adapter does not yet render playback rate or
-  // chroma-key nodes. Keep these implementation hooks dormant until the
-  // editor, viewer, and export share a verified output path.
-  const showGreenScreen = false;
-  const showSpeed = false;
+  // Gate dormant tools by the capability registry — the registry is the
+  // single source of truth for which capabilities have verified edit,
+  // viewer, export, and backend support. Green screen and speed control
+  // are 'hidden' because their output paths are incomplete.
+  const showGreenScreen = isCapabilitySupported('greenScreen');
+  const showSpeed = isCapabilitySupported('speedControl');
   const activeEffectLabel = CAMERA_EFFECTS.find((effect) => effect.id === activeEffect)?.label ?? 'None';
 
   return (
@@ -252,6 +265,20 @@ export function CaptureToolsSheet({
           colors={colors}
           styles={styles}
         />
+
+        {/* ── Framing mode (brackets + crosshair) ──────────────────── */}
+        {/* Opt-in for ordinary Poster/Look capture. Visual Search always
+            shows framing guides, so the toggle is hidden in that mode. */}
+        {!isVisualSearch ? (
+          <ToggleRow
+            icon="crop-outline"
+            label="Framing guide"
+            active={framingMode}
+            onPress={handleFramingModeToggle}
+            colors={colors}
+            styles={styles}
+          />
+        ) : null}
 
         {/* Effects are powerful but secondary. Keeping the picker in Tools
             preserves a clean viewfinder and leaves the capture-mode selector

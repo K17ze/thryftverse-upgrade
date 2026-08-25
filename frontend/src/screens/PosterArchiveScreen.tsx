@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -109,9 +110,15 @@ export default function PosterArchiveScreen({ navigation }: Props) {
     }
   }, [show, currentUser]);
 
-  useEffect(() => {
-    loadArchive();
-  }, [loadArchive]);
+  // Refetch on focus so newly published/archived posters appear without
+  // requiring a manual pull-to-refresh. The poster AsyncStorage cache is
+  // invalidated by the API layer after publish/archive, so a focus refetch
+  // always hits the server for fresh data.
+  useFocusEffect(
+    useCallback(() => {
+      loadArchive();
+    }, [loadArchive]),
+  );
 
   const handleDelete = (storyId: string) => {
     haptic.medium();

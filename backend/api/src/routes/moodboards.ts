@@ -93,6 +93,19 @@ type MoodboardItemRow = {
   created_at: string;
 };
 
+// ── Theme catalog — canonical source of truth for canvas themes ──
+// The frontend mirrors these in LOCAL_THEME_FALLBACK for synchronous
+// getThemeById() lookups; this route is the source of truth for the
+// theme picker rail.
+const MOODBOARD_THEMES = [
+  { id: 'theme-linen', label: 'Linen', backgroundColor: '#F7F4EE', accentColor: '#8A6A3F', fontColor: '#2A2A2A' },
+  { id: 'theme-noir', label: 'Noir', backgroundColor: '#1A1A1A', accentColor: '#C9A46A', fontColor: '#F4F0E8' },
+  { id: 'theme-sage', label: 'Sage', backgroundColor: '#E8EDE6', accentColor: '#4A6741', fontColor: '#2A3A28' },
+  { id: 'theme-blush', label: 'Blush', backgroundColor: '#F5E6E4', accentColor: '#9A6B7A', fontColor: '#4A2A30' },
+  { id: 'theme-stone', label: 'Stone', backgroundColor: '#E5E2DC', accentColor: '#6B6B6B', fontColor: '#333333' },
+  { id: 'theme-midnight', label: 'Midnight', backgroundColor: '#0F1A2E', accentColor: '#4A7AC4', fontColor: '#E8EDF5' },
+];
+
 function mapItem(row: MoodboardItemRow) {
   return {
     id: row.id,
@@ -190,6 +203,89 @@ export function registerMoodboardRoutes({
       items: result.rows.map((row) =>
         mapMoodboard(row, itemsByMoodboard.get(row.id) ?? [])
       ),
+    };
+  });
+
+  // ── GET /moodboards/themes — canvas theme catalog ──
+  // Returns the canonical set of canvas themes. The frontend's
+  // LOCAL_THEME_FALLBACK is a synchronous lookup cache for getThemeById();
+  // this route is the source of truth for the theme picker rail.
+  app.get('/moodboards/themes', async () => {
+    return { items: MOODBOARD_THEMES };
+  });
+
+  // ── GET /moodboards/picker-items — listings the user can add to a board ──
+  // Sources the picker from the user's saved/wishlisted listings, falling
+  // back to recently viewed listings when the user has no saves. Requires
+  // authentication — the picker is personalised per user.
+  app.get('/moodboards/picker-items', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    await ensureUserExists(actorUserId);
+
+    type PickerRow = {
+      id: string;
+      listing_id: string;
+      image_url: string | null;
+      title: string;
+      price_gbp: string | number;
+      created_at: string;
+    };
+
+    // 1. Saved / wishlisted listings (strongest intent)
+    const savedResult = await db.query<PickerRow>(
+      `SELECT DISTINCT ON (l.id)
+              l.id, l.title, l.price_gbp, l.created_at,
+              COALESCE(
+                l.image_url,
+                (SELECT li.image_url FROM listing_images li
+                 WHERE li.listing_id = l.id ORDER BY li.sort_order LIMIT 1),
+                ''
+              ) AS image_url
+       FROM interactions i
+       JOIN listings l ON l.id = i.listing_id
+       WHERE i.user_id = $1
+         AND i.action IN ('wishlist', 'save')
+         AND l.id IS NOT NULL
+       ORDER BY l.id, i.created_at DESC
+       LIMIT 24`,
+      [actorUserId],
+    );
+
+    let rows = savedResult.rows;
+
+    // 2. Fall back to recently viewed listings when the user has no saves
+    if (rows.length === 0) {
+      const viewedResult = await db.query<PickerRow>(
+        `SELECT DISTINCT ON (l.id)
+                l.id, l.title, l.price_gbp, l.created_at,
+                COALESCE(
+                  l.image_url,
+                  (SELECT li.image_url FROM listing_images li
+                   WHERE li.listing_id = l.id ORDER BY li.sort_order LIMIT 1),
+                  ''
+                ) AS image_url
+         FROM interactions i
+         JOIN listings l ON l.id = i.listing_id
+         WHERE i.user_id = $1
+           AND i.action IN ('view', 'qualified_detail_view')
+           AND l.id IS NOT NULL
+         ORDER BY l.id, i.created_at DESC
+         LIMIT 24`,
+        [actorUserId],
+      );
+      rows = viewedResult.rows;
+    }
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        listingId: row.id,
+        imageUri: row.image_url ?? '',
+        title: row.title,
+        price: Number(row.price_gbp),
+        position: { x: 0.5, y: 0.5, scale: 1, rotation: 0 },
+        addedAt: row.created_at,
+      })),
     };
   });
 

@@ -33,10 +33,12 @@ import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
 import {
   fetchLookByIdFromApi,
   deleteLookOnApi,
-  fetchLooksFromApi,
+  fetchRelatedLooksFromApi,
+  repostLookOnApi,
   type LookApiItem,
   type LookTagApiItem,
 } from '../services/looksApi';
+import { LookMasonryGrid } from '../components/look/LookMasonryGrid';
 import {
   fetchPublicProfileAggregate,
   followUser,
@@ -127,15 +129,19 @@ export default function LookDetailScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
-  // More from creator — related looks rail (same creator, excluding this look).
-  const [moreLooks, setMoreLooks] = useState<LookApiItem[]>([]);
-  const [moreLooksLoading, setMoreLooksLoading] = useState(false);
+  // Related looks — Pinterest-style "More to explore" masonry grid below the
+  // look detail. Uses the backend /looks/:lookId/related endpoint with tag-
+  // overlap ranking and cursor pagination for infinite scroll. Replaces the
+  // former two horizontal rails (more-from-creator + similar-looks) with a
+  // single dense masonry grid that flows directly from the detail.
+  const [relatedLooks, setRelatedLooks] = useState<LookApiItem[]>([]);
+  const [relatedCursor, setRelatedCursor] = useState<string | null>(null);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedLoadingMore, setRelatedLoadingMore] = useState(false);
+  const [relatedHasMore, setRelatedHasMore] = useState(true);
 
-  // Similar looks — style-based recommendations (other creators, prioritised
-  // by shoppability / tag count). Quiet appearance: the rail only renders once
-  // results are available, with no loading spinner.
-  const [similarLooks, setSimilarLooks] = useState<LookApiItem[]>([]);
-  const [similarLooksLoading, setSimilarLooksLoading] = useState(false);
+  // Repost — lightweight re-publish with attribution to the original creator.
+  const [repostBusy, setRepostBusy] = useState(false);
 
   const isOwner = look?.creatorId === currentUser?.id;
 
@@ -174,8 +180,8 @@ export default function LookDetailScreen() {
     loadLook();
   }, [loadLook]);
 
-  // Fetch the creator's public profile (for follow state + provenance) and a
-  // small batch of their other published looks. These run after the look loads.
+  // Fetch the creator's public profile (for follow state + provenance) and
+  // the related-looks masonry grid. These run after the look loads.
   useEffect(() => {
     if (!look?.creator?.id) return;
     const creatorId = look.creator.id;
@@ -192,56 +198,60 @@ export default function LookDetailScreen() {
         // default resting state.
       });
 
-    setMoreLooksLoading(true);
-    fetchLooksFromApi({ creatorId, status: 'published', limit: 12 })
+    // Related looks — server-ranked by tag overlap, cursor-paginated for
+    // infinite scroll. Replaces the former two horizontal rails with a single
+    // Pinterest-style masonry grid that flows directly from the detail.
+    setRelatedLoading(true);
+    setRelatedLooks([]);
+    setRelatedCursor(null);
+    setRelatedHasMore(true);
+    fetchRelatedLooksFromApi(look.id, { limit: 24 })
       .then((res) => {
         if (cancelled) return;
-        setMoreLooks(res.items.filter((l) => l.id !== look.id).slice(0, 8));
+        setRelatedLooks(res.items);
+        setRelatedCursor(res.nextCursor ?? null);
+        setRelatedHasMore(!!res.nextCursor);
       })
       .catch(() => {
-        // Non-fatal — rail is simply hidden.
+        // Non-fatal — grid is simply hidden.
       })
       .finally(() => {
-        if (!cancelled) setMoreLooksLoading(false);
-      });
-
-    // Similar looks — published looks from other creators, prioritised by
-    // shoppability (tag count). Runs as an independent async call so a slow
-    // or failing similar-looks fetch never blocks the creator rail.
-    setSimilarLooksLoading(true);
-    fetchLooksFromApi({ status: 'published', limit: 20 })
-      .then((res) => {
-        if (cancelled) return;
-        const currentTagCount = look.tags.length;
-        const similar = res.items
-          .filter((l) => l.id !== look.id && l.creator.id !== creatorId)
-          .sort((a, b) => {
-            // Prefer shoppable looks (those with tags), then by tag-count
-            // proximity to the current look so the rail leans toward looks
-            // with a comparable composition density.
-            const aTags = a.tags.length;
-            const bTags = b.tags.length;
-            const aDelta = Math.abs(aTags - currentTagCount);
-            const bDelta = Math.abs(bTags - currentTagCount);
-            if (aTags === 0 && bTags > 0) return 1;
-            if (bTags === 0 && aTags > 0) return -1;
-            if (aDelta !== bDelta) return aDelta - bDelta;
-            return bTags - aTags;
-          })
-          .slice(0, 8);
-        setSimilarLooks(similar);
-      })
-      .catch(() => {
-        // Non-fatal — rail is simply hidden.
-      })
-      .finally(() => {
-        if (!cancelled) setSimilarLooksLoading(false);
+        if (!cancelled) setRelatedLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
   }, [look]);
+
+  // Infinite-scroll: load more related looks when the user nears the bottom.
+  const loadMoreRelated = useCallback(async () => {
+    if (relatedLoadingMore || relatedLoading || !relatedHasMore || !relatedCursor) return;
+    setRelatedLoadingMore(true);
+    try {
+      const res = await fetchRelatedLooksFromApi(look!.id, { cursor: relatedCursor, limit: 24 });
+      setRelatedLooks((prev) => [...prev, ...res.items]);
+      setRelatedCursor(res.nextCursor ?? null);
+      setRelatedHasMore(!!res.nextCursor);
+    } catch {
+      // Non-fatal — stop pagination on error.
+      setRelatedHasMore(false);
+    } finally {
+      setRelatedLoadingMore(false);
+    }
+  }, [relatedLoadingMore, relatedLoading, relatedHasMore, relatedCursor, look]);
+
+  // Detect when the user scrolls near the bottom to trigger pagination.
+  const handleScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
+      const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      if (distanceFromBottom < 600) {
+        loadMoreRelated();
+      }
+    },
+    [loadMoreRelated]
+  );
 
   const handleShare = useCallback(async () => {
     haptic.light();
@@ -279,6 +289,35 @@ export default function LookDetailScreen() {
       sourceMode: 'remix',
     });
   }, [look, navigation, haptic]);
+
+  // Repost — lightweight re-publish with attribution to the original creator.
+  // Creates a new look owned by the reposter that references the source via
+  // source_look_id. The media and tags are copied; attribution is preserved.
+  const handleRepost = useCallback(async () => {
+    if (!look) return;
+    if (!currentUser?.id) {
+      show('Sign in to repost looks', 'info');
+      navigation.navigate('Login');
+      return;
+    }
+    if (repostBusy) return;
+    if (isOwner) {
+      show('You can\'t repost your own look', 'info');
+      return;
+    }
+    haptic.medium();
+    setRepostBusy(true);
+    try {
+      const res = await repostLookOnApi(look.id);
+      if (res.ok) {
+        show('Reposted to your profile', 'success');
+      }
+    } catch {
+      show('Unable to repost this look', 'error');
+    } finally {
+      setRepostBusy(false);
+    }
+  }, [look, currentUser, isOwner, repostBusy, haptic, show, navigation]);
 
   const handleReport = useCallback(() => {
     if (!look?.creator?.id) return;
@@ -508,7 +547,12 @@ export default function LookDetailScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* Aspect-aware media pager — height follows the media's real aspect
             ratio (defaulting to 4:5 until the first frame loads), not a fixed
             value imposed by the screen. */}
@@ -660,7 +704,7 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Info — expandable caption, creator row with follow.
+        {/* Info — expandable caption, repost attribution, creator row with follow.
             Lives below the media so it never covers the creator's composition.
             No "Look" eyebrow — the media is the label. */}
         <View style={styles.infoSection}>
@@ -689,6 +733,23 @@ export default function LookDetailScreen() {
               )}
             </Pressable>
           ) : null}
+
+          {/* Repost attribution — when this look is a repost, show a quiet
+              "Reposted from @creator" line with a link to the source creator.
+              No decorative chrome; the attribution is the signal. */}
+          {look.sourceLookId && look.sourceLook && (
+            <Pressable
+              style={styles.repostAttribution}
+              onPress={() => look.sourceLook && navigation.navigate('UserProfile', { userId: look.sourceLook.creatorId })}
+              accessibilityRole="link"
+              accessibilityLabel={`Reposted from @${look.sourceLook.creatorUsername ?? 'creator'}`}
+            >
+              <Ionicons name="repeat-outline" size={14} color={colors.textMuted} aria-hidden={true} />
+              <Text style={styles.repostAttributionText}>
+                Reposted from @{look.sourceLook.creatorUsername ?? 'creator'}
+              </Text>
+            </Pressable>
+          )}
 
           <Pressable
             style={styles.creatorRow}
@@ -757,10 +818,34 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Object actions — Remix + Report, semantically labelled. Save and
-            Share live in the social row above; these are the look-level
-            actions that don't belong there. */}
+        {/* Object actions — Repost + Remix + Report, semantically labelled.
+            Repost is the primary distributive action (preserves attribution);
+            Remix is the derivative action (opens creator studio); Report is
+            the safety action. Save and Share live in the social row above. */}
         <View style={styles.actionRow}>
+          {!isOwner && (
+            <>
+              <AnimatedPressable
+                style={styles.actionBtn}
+                onPress={handleRepost}
+                activeOpacity={0.85}
+                disabled={repostBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Repost this look"
+                accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
+              >
+                {repostBusy ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                    <Text style={styles.actionBtnLabel}>Repost</Text>
+                  </>
+                )}
+              </AnimatedPressable>
+              <View style={styles.actionDivider} />
+            </>
+          )}
           <AnimatedPressable
             style={styles.actionBtn}
             onPress={handleRemix}
@@ -841,74 +926,29 @@ export default function LookDetailScreen() {
           </View>
         )}
 
-        {/* More from creator — related looks rail. Truthful: only the creator's
-            other published looks, fetched from the API. */}
-        {(moreLooks.length > 0 || moreLooksLoading) && (
-          <View style={styles.traySection}>
-            <View style={styles.trayHeader}>
-              <Text style={styles.trayTitle}>More from @{creatorHandle}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
-              {moreLooksLoading ? (
-                <View style={styles.moreLoading}>
-                  <ActivityIndicator size="small" color={colors.textMuted} />
-                </View>
-              ) : (
-                moreLooks.map((other) => (
-                  <AnimatedPressable
-                    key={other.id}
-                    style={styles.moreCard}
-                    onPress={() => handleMoreLookPress(other)}
-                    activeOpacity={0.9}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Look by @${other.creator.username ?? 'unknown'}${other.caption ? `, ${other.caption}` : ''}`}
-                  >
-                    <View style={styles.moreImgWrap}>
-                      <ExpoImage
-                        source={{ uri: other.mediaUrl }}
-                        style={styles.moreImg}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        recyclingKey={other.mediaUrl}
-                      />
-                    </View>
-                  </AnimatedPressable>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Similar looks — style-based recommendations from other creators.
-            Quiet appearance: nothing renders until results are ready, so there
-            is no loading spinner and no layout shift when the fetch is empty. */}
-        {similarLooks.length > 0 && !similarLooksLoading && (
-          <View style={styles.traySection}>
-            <View style={styles.trayHeader}>
-              <Text style={styles.trayTitle}>Similar looks</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
-              {similarLooks.map((other) => (
-                <AnimatedPressable
-                  key={other.id}
-                  style={styles.moreCard}
-                  onPress={() => handleMoreLookPress(other)}
-                  activeOpacity={0.9}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Similar look${other.caption ? `, ${other.caption}` : ''}`}
-                >
-                  <View style={styles.moreImgWrap}>
-                    <ExpoImage
-                      source={{ uri: other.mediaUrl }}
-                      style={styles.moreImg}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      recyclingKey={other.mediaUrl}
-                    />
-                  </View>
-                </AnimatedPressable>
-              ))}
-            </ScrollView>
+        {/* More to explore — Pinterest-style 2-column masonry grid of related
+            looks. Replaces the former two horizontal rails with a single dense
+            grid that flows directly from the detail. Server-ranked by tag
+            overlap with cursor pagination for infinite scroll. The grid emerges
+            from the detail with a quiet section header — no hard divider. */}
+        {(relatedLooks.length > 0 || relatedLoading) && (
+          <View style={styles.masonrySection}>
+            <Text style={styles.masonryHeader}>More to explore</Text>
+            {relatedLoading ? (
+              <View style={styles.masonryLoading}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : (
+              <LookMasonryGrid
+                looks={relatedLooks}
+                onPress={(lookId) => {
+                  haptic.light();
+                  navigation.push('LookDetail', { lookId });
+                }}
+                isLoadingMore={relatedLoadingMore}
+                testIDPrefix="look-related"
+              />
+            )}
           </View>
         )}
 
@@ -1198,6 +1238,17 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.lg,
       gap: Space.sm,
     },
+    repostAttribution: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    repostAttributionText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
     eyebrow: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
@@ -1363,24 +1414,23 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
 
-    // ── More from creator rail ──
-    moreLoading: {
-      width: Space.xxl * 5 + 8,
-      height: Space.xxl * 6,
+    // ── More to explore masonry ──
+    masonrySection: {
+      marginTop: Space.xl,
+    },
+    masonryHeader: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+      paddingHorizontal: Space.md,
+      marginBottom: Space.md,
+    },
+    masonryLoading: {
+      paddingVertical: Space.xl,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    moreCard: {
-      width: Space.xxl * 5 + 8,
-    },
-    moreImgWrap: {
-      width: Space.xxl * 5 + 8,
-      height: Space.xxl * 6,
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
-    moreImg: { width: '100%', height: '100%' },
 
     // ── Inspect sheet ──
     inspectBackdrop: {

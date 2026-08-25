@@ -9,6 +9,86 @@ type FeedRouteDependencies = {
   readDb: Pool;
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Heterogeneous discovery contract (§4.6)
+//
+// A single decision owner for the discovery surface. Unlike /feed/home which
+// merges listings/posters/looks chronologically with no composition owner,
+// /feed/discover ranks mixed content types through a deterministic,
+// inspectable composition pass. The contract is type-discriminated so the
+// client can size cells before media loads and render type-specific UIs.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Type-specific summary payloads the client needs to render a unit. */
+export type ListingSummary = {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  images: string[];
+  status: string;
+  category: string | null;
+  brand: string | null;
+  size: string | null;
+  condition: string | null;
+  originalPriceGbp: number | null;
+  createdAt: string;
+};
+
+export type LookSummary = {
+  id: string;
+  creatorId: string;
+  title: string;
+  mediaUrl: string;
+  createdAt: string;
+};
+
+export type PosterSummary = {
+  id: string;
+  creatorId: string;
+  mediaUrl: string;
+  caption: string;
+  createdAt: string;
+};
+
+export type MoodboardSummary = {
+  id: string;
+  creatorId: string;
+  title: string;
+  description: string;
+  coverImageUrl: string;
+  theme: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DiscoveryUnitType = 'listing' | 'look' | 'poster' | 'moodboard';
+
+export type DiscoveryUnit = {
+  type: DiscoveryUnitType;
+  id: string;
+  rank: number;
+  /** Intrinsic width / height — lets the client reserve cell space before media loads. */
+  mediaAspectRatio: number;
+  decision: {
+    /** Which candidate source produced this unit. */
+    source: string;
+    /** Composition score in [0, 1] — deterministic, not an ML confidence. */
+    score: number;
+    /** Inspectable reason codes explaining why the unit placed where it did. */
+    reasonCodes: string[];
+  };
+  data: ListingSummary | LookSummary | PosterSummary | MoodboardSummary;
+};
+
+export type DiscoverResponse = {
+  items: DiscoveryUnit[];
+  nextCursor: string | null;
+};
+
 const followingQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
@@ -25,12 +105,18 @@ const trendingQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+const discoverQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(60).default(20),
+  cursor: z.string().optional(),
+});
+
 /**
  * Register feed routes on the Fastify instance:
  *   GET /feed/looks      — published looks feed (public)
  *   GET /feed/home       — mixed listings/posters/looks home feed (public)
  *   GET /feed/trending   — trending listings by engagement velocity (public)
  *   GET /feed/following  — social activity feed from followed users (auth)
+ *   GET /feed/discover   — heterogeneous discovery feed with constrained composition (public)
  */
 export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): void => {
   app.get('/feed/looks', async () => {
@@ -422,5 +508,478 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     const nextCursor = items.length > limit ? sliced[sliced.length - 1]?.createdAt ?? null : null;
 
     return { ok: true, items: sliced, nextCursor };
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // GET /feed/discover — heterogeneous discovery feed with constrained
+  // composition (§4.6).
+  //
+  // This is the single decision owner for the discovery surface. It retrieves
+  // candidates from four content types (listings, looks, posters, moodboards),
+  // scores them on a deterministic freshness+quality curve, then applies
+  // inspectable composition constraints:
+  //   • Max 3 consecutive same-type units
+  //   • Max 30% same-seller listings within a page
+  //   • Freshness floor: at least 1 item from the last 24h in the first 10
+  //
+  // The cursor encodes (createdAt, type, id) so pagination is stable across
+  // heterogeneous types. Public endpoint — no auth required.
+  // ────────────────────────────────────────────────────────────────────────
+  app.get('/feed/discover', async (request) => {
+    const { limit, cursor } = discoverQuerySchema.parse(request.query ?? {});
+
+    // Decode cursor: base64-encoded "createdAt|type|id"
+    let cursorCreatedAt: string | null = null;
+    let cursorType: string | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+        const parts = decoded.split('|');
+        if (parts.length === 3) {
+          [cursorCreatedAt, cursorType, cursorId] = parts;
+        }
+      } catch {
+        // Invalid cursor — treat as first page
+      }
+    }
+
+    // Overfetch factor: we need headroom for composition constraints to work.
+    const overfetch = Math.max(limit * 3, 60);
+
+    // ── Candidate retrieval ──────────────────────────────────────────────
+    // Each source is queried independently with its own cursor condition so
+    // we can paginate across types without skewing one source over another.
+
+    const listingCursorCondition = cursorCreatedAt ? `AND l.created_at < $1` : '';
+    const listingParams: Array<string | number> = cursorCreatedAt
+      ? [cursorCreatedAt, overfetch]
+      : [overfetch];
+    const listingLimitSlot = `$${listingParams.length}`;
+
+    const listingsResult = await readDb.query<{
+      id: string;
+      seller_id: string;
+      title: string;
+      description: string;
+      price_gbp: number | string;
+      image_url: string | null;
+      status: string;
+      category: string | null;
+      brand: string | null;
+      size: string | null;
+      condition: string | null;
+      original_price_gbp: number | string | null;
+      created_at: string;
+    }>(
+      `
+        SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp,
+               l.image_url, l.status, l.category, l.brand, l.size,
+               l.condition, l.original_price_gbp, l.created_at
+        FROM listings l
+        WHERE l.status = 'active'
+          ${listingCursorCondition}
+        ORDER BY l.created_at DESC
+        LIMIT ${listingLimitSlot}
+      `,
+      listingParams
+    );
+
+    // Fetch listing images (for aspect ratio + image array)
+    const listingIds = listingsResult.rows.map((r) => r.id);
+    const listingImagesResult = listingIds.length
+      ? await readDb.query<{
+          listing_id: string;
+          image_url: string;
+          sort_order: number;
+          media_width: number | null;
+          media_height: number | null;
+        }>(
+          `SELECT listing_id, image_url, sort_order, media_width, media_height
+           FROM listing_images
+           WHERE listing_id = ANY($1)
+           ORDER BY sort_order`,
+          [listingIds]
+        )
+      : { rows: [] };
+
+    const imagesByListing = new Map<
+      string,
+      { urls: string[]; firstWidth: number | null; firstHeight: number | null }
+    >();
+    for (const img of listingImagesResult.rows) {
+      const entry = imagesByListing.get(img.listing_id) ?? {
+        urls: [] as string[],
+        firstWidth: null as number | null,
+        firstHeight: null as number | null,
+      };
+      if (entry.urls.length === 0) {
+        entry.firstWidth = img.media_width;
+        entry.firstHeight = img.media_height;
+      }
+      entry.urls.push(img.image_url);
+      imagesByListing.set(img.listing_id, entry);
+    }
+
+    const genericCursorCondition = cursorCreatedAt ? `AND created_at < $1` : '';
+
+    const looksParams: Array<string | number> = cursorCreatedAt
+      ? [cursorCreatedAt, overfetch]
+      : [overfetch];
+    const looksLimitSlot = `$${looksParams.length}`;
+
+    const looksResult = await readDb.query<{
+      id: string;
+      creator_id: string;
+      title: string;
+      media_url: string;
+      created_at: string;
+    }>(
+      `
+        SELECT id, creator_id, title, media_url, created_at
+        FROM looks
+        WHERE status = 'published'
+          ${genericCursorCondition}
+        ORDER BY created_at DESC
+        LIMIT ${looksLimitSlot}
+      `,
+      looksParams
+    );
+
+    const postersResult = await readDb.query<{
+      id: string;
+      creator_id: string;
+      media_url: string;
+      caption: string;
+      created_at: string;
+    }>(
+      `
+        SELECT id, creator_id, media_url, caption, created_at
+        FROM posters
+        WHERE status = 'published'
+          ${genericCursorCondition}
+        ORDER BY created_at DESC
+        LIMIT ${looksLimitSlot}
+      `,
+      looksParams
+    );
+
+    const moodboardsResult = await readDb.query<{
+      id: string;
+      creator_id: string;
+      title: string;
+      description: string;
+      cover_image_url: string;
+      theme: string;
+      created_at: string;
+      updated_at: string;
+      item_count: string;
+    }>(
+      `
+        SELECT m.id, m.creator_id, m.title, m.description,
+               m.cover_image_url, m.theme, m.created_at, m.updated_at,
+               COALESCE(mi_count.c, 0)::text AS item_count
+        FROM moodboards m
+        LEFT JOIN (
+          SELECT moodboard_id, COUNT(*) AS c
+          FROM moodboard_items
+          GROUP BY moodboard_id
+        ) mi_count ON mi_count.moodboard_id = m.id
+        WHERE m.visibility = 'public'
+          ${genericCursorCondition.replace('created_at', 'm.created_at')}
+        ORDER BY m.created_at DESC
+        LIMIT ${looksLimitSlot}
+      `,
+      looksParams
+    );
+
+    // ── Build candidate pool ─────────────────────────────────────────────
+    type Candidate = {
+      type: DiscoveryUnitType;
+      id: string;
+      createdAt: string;
+      sellerId: string | null;
+      mediaAspectRatio: number;
+      score: number;
+      reasonCodes: string[];
+      data: ListingSummary | LookSummary | PosterSummary | MoodboardSummary;
+    };
+
+    const now = Date.now();
+    const candidates: Candidate[] = [];
+
+    for (const row of listingsResult.rows) {
+      const imgEntry = imagesByListing.get(row.id);
+      const images = imgEntry?.urls ?? (row.image_url ? [row.image_url] : []);
+      const aspectRatio =
+        imgEntry?.firstWidth && imgEntry?.firstHeight
+          ? imgEntry.firstWidth / imgEntry.firstHeight
+          : 1.0;
+
+      const ageHours = Math.max(
+        0,
+        (now - new Date(row.created_at).getTime()) / (60 * 60 * 1000)
+      );
+      const freshness = Math.exp(-ageHours / 168); // 1-week half-life
+      const hasImages = images.length > 0 ? 0.15 : 0;
+      const hasBrand = row.brand ? 0.05 : 0;
+      const hasCategory = row.category ? 0.05 : 0;
+      const score = Math.min(1, 0.6 * freshness + hasImages + hasBrand + hasCategory);
+
+      candidates.push({
+        type: 'listing',
+        id: row.id,
+        createdAt: row.created_at,
+        sellerId: row.seller_id,
+        mediaAspectRatio: aspectRatio,
+        score,
+        reasonCodes: ['recent_listing', freshness > 0.5 ? 'fresh' : 'evergreen'],
+        data: {
+          id: row.id,
+          sellerId: row.seller_id,
+          title: row.title,
+          description: row.description,
+          priceGbp: Number(row.price_gbp),
+          imageUrl: row.image_url,
+          images,
+          status: row.status,
+          category: row.category,
+          brand: row.brand,
+          size: row.size,
+          condition: row.condition,
+          originalPriceGbp:
+            row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+          createdAt: row.created_at,
+        },
+      });
+    }
+
+    for (const row of looksResult.rows) {
+      const ageHours = Math.max(
+        0,
+        (now - new Date(row.created_at).getTime()) / (60 * 60 * 1000)
+      );
+      const freshness = Math.exp(-ageHours / 168);
+      const score = Math.min(1, 0.7 * freshness + 0.1);
+
+      candidates.push({
+        type: 'look',
+        id: row.id,
+        createdAt: row.created_at,
+        sellerId: row.creator_id,
+        mediaAspectRatio: 1.0,
+        score,
+        reasonCodes: ['published_look', freshness > 0.5 ? 'fresh' : 'evergreen'],
+        data: {
+          id: row.id,
+          creatorId: row.creator_id,
+          title: row.title,
+          mediaUrl: row.media_url,
+          createdAt: row.created_at,
+        },
+      });
+    }
+
+    for (const row of postersResult.rows) {
+      const ageHours = Math.max(
+        0,
+        (now - new Date(row.created_at).getTime()) / (60 * 60 * 1000)
+      );
+      const freshness = Math.exp(-ageHours / 48); // posters decay faster (2-day half-life)
+      const score = Math.min(1, 0.7 * freshness + 0.1);
+
+      candidates.push({
+        type: 'poster',
+        id: row.id,
+        createdAt: row.created_at,
+        sellerId: row.creator_id,
+        mediaAspectRatio: 1.0,
+        score,
+        reasonCodes: ['published_poster', freshness > 0.5 ? 'fresh' : 'decaying'],
+        data: {
+          id: row.id,
+          creatorId: row.creator_id,
+          mediaUrl: row.media_url,
+          caption: row.caption,
+          createdAt: row.created_at,
+        },
+      });
+    }
+
+    for (const row of moodboardsResult.rows) {
+      const ageHours = Math.max(
+        0,
+        (now - new Date(row.created_at).getTime()) / (60 * 60 * 1000)
+      );
+      const freshness = Math.exp(-ageHours / 336); // moodboards decay slower (2-week half-life)
+      const itemCount = Number(row.item_count);
+      const richness = Math.min(0.2, itemCount * 0.04);
+      const score = Math.min(1, 0.5 * freshness + richness + 0.1);
+
+      candidates.push({
+        type: 'moodboard',
+        id: row.id,
+        createdAt: row.created_at,
+        sellerId: row.creator_id,
+        mediaAspectRatio: 1.0,
+        score,
+        reasonCodes: ['public_moodboard', itemCount > 3 ? 'curated' : 'minimal'],
+        data: {
+          id: row.id,
+          creatorId: row.creator_id,
+          title: row.title,
+          description: row.description,
+          coverImageUrl: row.cover_image_url,
+          theme: row.theme,
+          itemCount,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        },
+      });
+    }
+
+    // ── Constrained composition ──────────────────────────────────────────
+    // Sort by score descending, then by createdAt descending as a tiebreaker.
+    // We then greedily pick from this ranked list while enforcing constraints.
+    candidates.sort(
+      (a, b) =>
+        b.score - a.score ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const MAX_CONSECUTIVE_SAME_TYPE = 3;
+    const MAX_SELLER_RATIO = 0.3;
+    const FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+    const FRESHNESS_FLOOR_FIRST_N = 10;
+
+    const placed: Candidate[] = [];
+    const remaining = [...candidates];
+    const sellerCounts = new Map<string, number>();
+    let consecutiveType: DiscoveryUnitType | null = null;
+    let consecutiveCount = 0;
+    let freshPlacedInFirstN = 0;
+
+    while (placed.length < limit && remaining.length > 0) {
+      let pickedIndex = -1;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const candidate = remaining[i];
+
+        // Constraint 1: max consecutive same-type
+        if (
+          candidate.type === consecutiveType &&
+          consecutiveCount >= MAX_CONSECUTIVE_SAME_TYPE
+        ) {
+          continue;
+        }
+
+        // Constraint 2: max 30% same-seller listings in the page
+        if (candidate.sellerId) {
+          const currentSellerCount = sellerCounts.get(candidate.sellerId) ?? 0;
+          const projectedListingCount = placed.length + 1;
+          if (currentSellerCount / projectedListingCount >= MAX_SELLER_RATIO) {
+            continue;
+          }
+        }
+
+        // Constraint 3: freshness floor — if we're in the first N and no fresh
+        // item has been placed yet, prefer a fresh candidate.
+        if (
+          placed.length < FRESHNESS_FLOOR_FIRST_N &&
+          freshPlacedInFirstN === 0
+        ) {
+          const isFresh =
+            now - new Date(candidate.createdAt).getTime() < FRESHNESS_WINDOW_MS;
+          if (!isFresh) {
+            // Skip non-fresh candidates only if there's still a fresh one available
+            const hasFreshRemaining = remaining.some(
+              (c) => now - new Date(c.createdAt).getTime() < FRESHNESS_WINDOW_MS
+            );
+            if (hasFreshRemaining) {
+              continue;
+            }
+          }
+        }
+
+        pickedIndex = i;
+        break;
+      }
+
+      // If no candidate satisfied all constraints, relax: pick the highest-scored
+      // remaining candidate to avoid starving the feed.
+      if (pickedIndex === -1) {
+        pickedIndex = 0;
+      }
+
+      const picked = remaining[pickedIndex];
+      remaining.splice(pickedIndex, 1);
+
+      // Track consecutive type
+      if (picked.type === consecutiveType) {
+        consecutiveCount++;
+      } else {
+        consecutiveType = picked.type;
+        consecutiveCount = 1;
+      }
+
+      // Track seller concentration
+      if (picked.sellerId) {
+        sellerCounts.set(picked.sellerId, (sellerCounts.get(picked.sellerId) ?? 0) + 1);
+      }
+
+      // Track freshness floor
+      if (
+        placed.length < FRESHNESS_FLOOR_FIRST_N &&
+        now - new Date(picked.createdAt).getTime() < FRESHNESS_WINDOW_MS
+      ) {
+        freshPlacedInFirstN++;
+      }
+
+      // Augment reason codes with composition context
+      const reasonCodes = [...picked.reasonCodes];
+      if (consecutiveCount === MAX_CONSECUTIVE_SAME_TYPE) {
+        reasonCodes.push('type_diversity_boundary');
+      }
+      if (picked.sellerId) {
+        const sellerPct = (sellerCounts.get(picked.sellerId) ?? 0) / (placed.length + 1);
+        if (sellerPct >= MAX_SELLER_RATIO * 0.8) {
+          reasonCodes.push('seller_concentration_near_cap');
+        }
+      }
+      if (placed.length < FRESHNESS_FLOOR_FIRST_N && freshPlacedInFirstN === 1) {
+        reasonCodes.push('freshness_floor_satisfied');
+      }
+
+      placed.push({
+        ...picked,
+        reasonCodes,
+      });
+    }
+
+    // ── Build response ───────────────────────────────────────────────────
+    const items: DiscoveryUnit[] = placed.map((candidate, idx) => ({
+      type: candidate.type,
+      id: candidate.id,
+      rank: idx + 1,
+      mediaAspectRatio: candidate.mediaAspectRatio,
+      decision: {
+        source: `${candidate.type}_recent_keyset`,
+        score: Number(candidate.score.toFixed(6)),
+        reasonCodes: candidate.reasonCodes,
+      },
+      data: candidate.data,
+    }));
+
+    // Cursor: encode the last item's (createdAt, type, id)
+    const lastPlaced = placed[placed.length - 1];
+    const nextCursor =
+      placed.length >= limit && lastPlaced
+        ? Buffer.from(
+            `${lastPlaced.createdAt}|${lastPlaced.type}|${lastPlaced.id}`,
+            'utf-8'
+          ).toString('base64')
+        : null;
+
+    return { items, nextCursor };
   });
 };

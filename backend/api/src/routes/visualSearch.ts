@@ -8,6 +8,7 @@ import {
   mapWithConcurrency,
   type ImageFeatures,
 } from '../lib/visualSimilarity.js';
+import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
 
 type VisualSearchRouteDependencies = {
   app: FastifyInstance;
@@ -297,6 +298,22 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
     const similarityMethod = hasImageScoring ? 'heuristic_color_features' : 'filter_only';
     const visualMatching = hasImageScoring;
 
+    // Honest retrieval metadata. Visual search never uses a vector embedder;
+    // the method is either the deterministic colour-and-layout heuristic or
+    // a filter-only fallback. The fallbackReason discloses why image
+    // scoring did not run so clients never imply visual matching happened.
+    const imageSupplied = Boolean(payload.imageBase64?.trim() || payload.imageUrl?.trim());
+    const visualFallbackReason: RetrievalFallbackReason | undefined = hasImageScoring
+      ? undefined
+      : imageSupplied
+        ? 'image_decode_failed'
+        : 'no_image_supplied';
+    const retrievalMeta: RetrievalMeta = {
+      method: similarityMethod,
+      fallbackReason: visualFallbackReason,
+      embedderConfigured: false,
+    };
+
     reply.code(200);
     return {
       ok: true,
@@ -304,6 +321,7 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
       // Truthful flag: true only when real visual feature scoring ran.
       visualMatching,
       similarityMethod,
+      retrievalMeta,
       note: hasImageScoring
         ? 'Results ranked by colour & layout similarity (heuristic, not AI).'
         : 'No usable image supplied — results are matched by category, brand, and description.',

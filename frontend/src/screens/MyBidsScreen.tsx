@@ -16,10 +16,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
-import { useCurrencyContext } from '../context/CurrencyContext';
-import { toIze, formatIzeAmount } from '../utils/currency';
 import { haptics } from '../utils/haptics';
 import { useBucketedServerClock } from '../hooks/useServerClock';
 
@@ -122,7 +120,6 @@ export default function MyBidsScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
-  const { goldRates, displayMode } = useCurrencyContext();
   const { isOffline } = useConnectivity();
   const { minuteClock } = useBucketedServerClock(null);
 
@@ -254,23 +251,17 @@ export default function MyBidsScreen() {
             {item.amountGbp > 0 && (
               <View>
                 <Meta style={styles.activityPriceLabel}>Your bid</Meta>
-                <Body style={styles.activityPriceValue}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
-                {displayMode !== 'ize' && (
-                  <Text style={styles.activityIzeText}>
-                    {formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))}
-                  </Text>
-                )}
+                <Body style={styles.activityPriceValue} numberOfLines={1}>
+                  {formatFromFiat(item.amountGbp, 'GBP', { izeFractionDigits: 3 })}
+                </Body>
               </View>
             )}
             {item.currentBidGbp > 0 && (
               <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
                 <Meta style={styles.activityPriceLabel}>Current</Meta>
-                <Body style={styles.activityPriceValue}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
-                {displayMode !== 'ize' && (
-                  <Text style={styles.activityIzeText}>
-                    {formatIzeAmount(toIze(item.currentBidGbp, 'GBP', goldRates))}
-                  </Text>
-                )}
+                <Body style={styles.activityPriceValue} numberOfLines={1}>
+                  {formatFromFiat(item.currentBidGbp, 'GBP', { izeFractionDigits: 3 })}
+                </Body>
               </View>
             )}
           </View>
@@ -316,8 +307,6 @@ export default function MyBidsScreen() {
     styles,
     navigation,
     formatFromFiat,
-    displayMode,
-    goldRates,
   ]);
 
   return (
@@ -329,29 +318,31 @@ export default function MyBidsScreen() {
       {/* State rail — separated bid filters and watching */}
       <ScrollView
         horizontal
+        style={styles.stateRail}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.stateRailContent}
       >
           {BID_FILTERS.map((opt) => (
             <Pressable
               key={opt.value}
-              style={({ pressed }) => [styles.stateRailChip, filter === opt.value && styles.stateRailChipActive, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [styles.stateRailTab, filter === opt.value && styles.stateRailTabActive, pressed && styles.stateRailTabPressed]}
               onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
+              accessibilityState={{ selected: filter === opt.value }}
             >
               <Text style={[styles.stateRailText, filter === opt.value && styles.stateRailTextActive]}>
                 {opt.label}
               </Text>
             </Pressable>
           ))}
-          <View style={styles.filterDivider} />
           <Pressable
             key={WATCHING_FILTER.value}
-            style={({ pressed }) => [styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.stateRailTab, filter === WATCHING_FILTER.value && styles.stateRailTabActive, pressed && styles.stateRailTabPressed]}
             onPress={() => { haptics.selection(); setFilter(WATCHING_FILTER.value); }}
             accessibilityRole="button"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
+            accessibilityState={{ selected: filter === WATCHING_FILTER.value }}
           >
             <Text style={[styles.stateRailText, filter === WATCHING_FILTER.value && styles.stateRailTextActive]}>
               {WATCHING_FILTER.label}
@@ -360,15 +351,14 @@ export default function MyBidsScreen() {
           {/* Ending-soonest sort toggle — integrated into filter rail */}
           {(filter === 'all' || filter === 'active' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
             <>
-              <View style={styles.filterDivider} />
               <Pressable
-                style={[styles.stateRailChip, styles.sortChip, endingSoonest && styles.sortToggleActive]}
+                style={[styles.stateRailTab, styles.sortChip, endingSoonest && styles.stateRailTabActive]}
                 onPress={() => { haptics.selection(); setEndingSoonest((v) => !v); }}
                 accessibilityRole="button"
                 accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
                 accessibilityState={{ checked: endingSoonest }}
               >
-                <Ionicons name="time-outline" size={14} color={endingSoonest ? colors.textInverse : colors.textMuted} />
+                <Ionicons name="time-outline" size={14} color={endingSoonest ? colors.textPrimary : colors.textMuted} />
                 <Text style={[styles.stateRailText, endingSoonest && styles.stateRailTextActive]}>
                   Ending soonest
                 </Text>
@@ -439,23 +429,31 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     backgroundColor: colors.background,
   },
+  stateRail: {
+    flexGrow: 0,
+    flexShrink: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   stateRailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-    paddingBottom: Space.sm,
+    alignItems: 'center',
+    minHeight: Control.hit,
+    gap: Space.md,
   },
-  stateRailChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    minHeight: Control.chrome,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+  stateRailTab: {
+    minHeight: Control.hit,
+    paddingHorizontal: Space.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  stateRailChipActive: {
-    backgroundColor: colors.brand,
-    borderColor: colors.brand,
+  stateRailTabActive: {
+    borderBottomColor: colors.brand,
+  },
+  stateRailTabPressed: {
+    opacity: 0.62,
   },
   stateRailText: {
     fontSize: Type.caption.size,
@@ -463,23 +461,13 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
   },
   stateRailTextActive: {
-    color: colors.textInverse,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-  },
-  filterDivider: {
-    width: Stroke.standard,
-    height: Space.md + 4,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
   },
   sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-  },
-  sortToggleActive: {
-    backgroundColor: colors.brand,
-    borderColor: colors.brand,
   },
   listContent: {
     paddingHorizontal: Space.md,
@@ -563,13 +551,6 @@ function createStyles(colors: ThemeColors) {
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  activityIzeText: {
-    fontSize: Type.meta.size,
-    color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
     fontVariant: ['tabular-nums'],
   },
   activityMetaRow: {

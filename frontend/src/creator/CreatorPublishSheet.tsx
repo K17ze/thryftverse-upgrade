@@ -44,6 +44,9 @@ import {
   serialiseToPosterPayload,
   PublishGuard,
 } from './compositionContract';
+import { queryClient, queryKeys } from '../platform/server';
+import { CreatorDraftService } from './drafts';
+import { useStore } from '../store/useStore';
 
 // ── Feature flag ───────────────────────────────────────────────────
 // When true, uploads flow through the durable UploadManager (resumable,
@@ -200,6 +203,32 @@ function isNetworkError(error: string | undefined): boolean {
   return lower.includes('network') || lower.includes('fetch') || lower.includes('abort') || lower.includes('timeout') || lower.includes('connection');
 }
 
+/**
+ * Invalidate all caches that depend on published creator content.
+ * After a successful publication, the following surfaces must not
+ * serve stale data:
+ *  - Profile (user looks, profile stats)
+ *  - Discovery feed
+ *  - Poster AsyncStorage cache (handled by invalidatePosterCache in the API layer)
+ *  - Local drafts (the published document is no longer a draft)
+ *
+ * React Query caches are invalidated (not removed) so background refetch
+ * keeps the current data visible while fresh data loads. The draft is
+ * deleted from AsyncStorage so the drafts list doesn't show published
+ * content.
+ */
+function invalidateCachesAfterPublish(documentId: string, creatorId: string | null): void {
+  // React Query — profile and discovery
+  if (creatorId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.user.looks(creatorId) }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: queryKeys.user.profile(creatorId) }).catch(() => {});
+  }
+  queryClient.invalidateQueries({ queryKey: queryKeys.discover.feed }).catch(() => {});
+
+  // Local draft — the document is now published, remove it from drafts
+  void CreatorDraftService.deleteDraft(documentId);
+}
+
 // ── Publish sheet ──────────────────────────────────────────────────
 // Per Phase G anti-AI polish: the former 4-step "Preparing → Uploading
 // → Processing → Publishing" progress theatre and confetti celebration
@@ -209,6 +238,7 @@ function isNetworkError(error: string | undefined): boolean {
 
 export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPreview }: CreatorPublishSheetProps) {
   const { document, saveDraft } = useCreator();
+  const currentUser = useStore((s) => s.currentUser);
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -268,7 +298,14 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   }, [visible, haptic]);
 
   const handleClose = useCallback(() => {
-    if (stage === 'publishing' || stage === 'uploading') return;
+    // During upload/publishing, allow dismissing to background — the upload
+    // continues and the user gets a toast on completion. This matches the
+    // flagship pattern (IG background posting with progress in feed header).
+    if (stage === 'uploading' || stage === 'publishing') {
+      haptic.selection();
+      onClose();
+      return;
+    }
     haptic.selection();
     setStage('review');
     setErrorMessage('');
@@ -423,6 +460,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             // actions (retry schedule or accept immediate publication).
             publishGuardRef.current.complete(workingDoc.id);
             setPublishedId(result.lookId);
+            invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
             setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
             progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
             setStage('scheduleFailed');
@@ -434,6 +472,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         // 7. Confirm server success
         publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.lookId);
+        // Invalidate caches so profile, discovery, and drafts reflect
+        // the newly published look.
+        invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
         // Animate progress to 100%
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setStage('success');
@@ -457,6 +498,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             // actions (retry schedule or accept immediate publication).
             publishGuardRef.current.complete(workingDoc.id);
             setPublishedId(result.storyId);
+            invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
             setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
             progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
             setStage('scheduleFailed');
@@ -468,6 +510,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         // 7. Confirm server success
         publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.storyId);
+        // Invalidate caches so profile, discovery, and drafts reflect
+        // the newly published poster.
+        invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
         // Animate progress to 100%
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setStage('success');
@@ -482,7 +527,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       setStage(publicationRequestStarted && isNetworkError(errorMessage) ? 'unknown' : 'error');
       CreatorAnalytics.publishError(document.type, err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager]);
+  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager, currentUser]);
 
   const handleRetry = useCallback(() => {
     haptic.medium();
@@ -508,6 +553,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       }
       publishGuardRef.current.complete(targetId);
       setPublishedId(targetId);
+      // Invalidate caches — the publication was confirmed via check-result.
+      invalidateCachesAfterPublish(targetId, currentUser?.id ?? null);
       progressWidth.value = 1;
       setStage('success');
       CreatorAnalytics.publishSuccess(document.type, targetId);
@@ -517,7 +564,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     } finally {
       setIsCheckingResult(false);
     }
-  }, [document.id, document.type, editingLookId, haptic, progressWidth]);
+  }, [document.id, document.type, editingLookId, haptic, progressWidth, currentUser]);
 
   // Retry only the scheduling step after a schedule failure. The content is
   // already published immediately; this attempts to attach the scheduled_for
@@ -1232,8 +1279,8 @@ function PublishReview({
                   <Switch
                     value={document.metadata.allowReplies}
                     onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReplies: v }); }}
-                    trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
-                    thumbColor={document.metadata.allowReplies ? colors.brand : colors.textMuted}
+                    trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+                    thumbColor={document.metadata.allowReplies ? colors.textInverse : colors.textMuted}
                     accessibilityLabel="Allow replies"
                     accessibilityHint="Toggles whether viewers can reply to this poster"
                   />
@@ -1243,8 +1290,8 @@ function PublishReview({
                   <Switch
                     value={document.metadata.allowReactions}
                     onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReactions: v }); }}
-                    trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
-                    thumbColor={document.metadata.allowReactions ? colors.brand : colors.textMuted}
+                    trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+                    thumbColor={document.metadata.allowReactions ? colors.textInverse : colors.textMuted}
                     accessibilityLabel="Allow reactions"
                     accessibilityHint="Toggles whether viewers can react to this poster"
                   />

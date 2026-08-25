@@ -174,8 +174,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: false,
-        quality: 0.85,
+        allowsEditing: true,
         aspect: [1, 1],
+        quality: 0.88,
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
 
@@ -476,7 +477,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             )}
             {isUploadingCover ? (
               <View style={styles.coverUploadingOverlay}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               </View>
             ) : null}
           </Pressable>
@@ -501,7 +502,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               />
               {isUploadingPhoto ? (
                 <View style={styles.avatarUploadingOverlay}>
-                  <ActivityIndicator size="small" color={colors.textInverse} />
+                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
                 </View>
               ) : (
                 <View style={styles.cameraBadge}>

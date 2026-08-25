@@ -26,3 +26,31 @@ export type { OnezeWithdrawalHandlerDeps } from './onezeWithdrawalHandler.js';
 
 export { processMediaIngestJob } from './mediaIngestHandler.js';
 export type { MediaIngestHandlerDeps } from './mediaIngestHandler.js';
+
+export { processMediaEmbeddingJob } from './mediaEmbeddingHandler.js';
+
+export { processModerationTriageJob } from './moderationTriageHandler.js';
+
+export { processImporterExtraction } from './importerExtractionHandler.js';
+export type { ImporterExtractionJobData } from './importerExtractionHandler.js';
+
+export { processCatalogImportDiscovery } from './catalogImportDiscoveryHandler.js';
+export type { CatalogImportDiscoveryJobData } from './catalogImportDiscoveryHandler.js';
+
+export { processCatalogImportHydration } from './catalogImportHydrationHandler.js';
+export type { CatalogImportHydrationJobData } from './catalogImportHydrationHandler.js';
+
+export { processCatalogImportMedia } from './catalogImportMediaHandler.js';
+export type { CatalogImportMediaJobData } from './catalogImportMediaHandler.js';
+
+export { processCatalogImportNormalisation } from './catalogImportNormalisationHandler.js';
+export type { CatalogImportNormalisationJobData } from './catalogImportNormalisationHandler.js';
+
+export { processCatalogImportPublication } from './catalogImportPublicationHandler.js';
+export type { CatalogImportPublicationJobData } from './catalogImportPublicationHandler.js';
+
+export { processCatalogImportRetention } from './catalogImportRetentionHandler.js';
+export type { CatalogImportRetentionJobData } from './catalogImportRetentionHandler.js';
+
+export { processCatalogImportReconcile } from './catalogImportReconcileHandler.js';
+export type { CatalogImportReconcileJobData } from './catalogImportReconcileHandler.js';

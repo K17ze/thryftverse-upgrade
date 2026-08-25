@@ -62,6 +62,12 @@ export type EffectNode = z.infer<typeof EffectNodeSchema>;
 
 // Mask ref — alpha mask for true cutout (Phase 8 segmentation).
 // Stored by ID in the document's asset registry; layers reference it via `maskRef`.
+//
+// Per §8.3: mask dimensions, source checksum, model/version, and manual
+// refinements are persisted so the cutout is reproducible and auditable.
+// The generated cutout is NOT a trustless permanent replacement for the
+// original — the source image URI is preserved on the layer and the mask
+// is applied non-destructively at render time.
 export type MaskRef = {
   type: 'alpha-mask';
   uri: string;            // local mask URI
@@ -69,6 +75,10 @@ export type MaskRef = {
   modelVersion?: string;  // segmentation model version
   featherPx?: number;     // edge feathering
   invert?: boolean;       // invert mask
+  maskWidth?: number;     // mask pixel width (persisted for reproducibility)
+  maskHeight?: number;    // mask pixel height (persisted for reproducibility)
+  sourceChecksum?: string; // checksum of the source image (detect drift)
+  strokeCount?: number;   // number of manual refinement strokes applied
 };
 
 const TextLayerPayloadSchema = z.object({
@@ -383,6 +393,12 @@ const BaseLayerSchema = z.object({
   locked: z.boolean().default(false),
   hidden: z.boolean().default(false),
   opacity: z.number().min(0).max(1).default(1),
+  // Per §8.3: auto-layout NEVER silently moves a manually positioned
+  // object after the creator has edited. This flag is set to true when
+  // the user manually drags, scales, or rotates a layer. Auto-layout
+  // skips layers with this flag set, preserving authored positions.
+  // Optional — absent (undefined) is treated as false (auto-arrangeable).
+  manuallyPositioned: z.boolean().optional(),
   // Timed overlay range for Poster timeline (Phase 8). When present, the layer
   // is only visible during this time window within the page's clip.
   timeRange: z.object({

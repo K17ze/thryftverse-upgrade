@@ -96,7 +96,7 @@ export default function MessageRequestsScreen() {
             setPendingId(id);
             setPendingAction('delete');
             try {
-              await deleteConversationOnApi(id);
+              await deleteConversationOnApi(id, 'me');
               declineMessageRequest(id);
               show('Request deleted', 'info');
             } catch {
@@ -131,7 +131,7 @@ export default function MessageRequestsScreen() {
                 await blockUser(counterpartyId);
                 toggleBlockedUser(counterpartyId);
               }
-              await deleteConversationOnApi(id);
+              await deleteConversationOnApi(id, 'me');
               declineMessageRequest(id);
               show(`${name} blocked`, 'info');
             } catch {

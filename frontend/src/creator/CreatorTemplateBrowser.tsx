@@ -26,6 +26,7 @@ import {
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { withAlpha } from '../components/poster/shared/colorUtils';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -474,7 +475,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
-    backgroundColor: `${colors.antiqueGold}F2`,
+    backgroundColor: withAlpha(colors.antiqueGold, 0.95),
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xxs,
     borderRadius: Radius.full,

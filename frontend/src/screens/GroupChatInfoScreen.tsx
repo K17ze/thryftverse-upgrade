@@ -17,7 +17,6 @@ import { useStore } from '../store/useStore';
 import { Control, Radius, Space, Type, TypeStyles, FontFamily } from '../theme/designTokens';
 import {
   deleteConversationOnApi,
-  leaveGroupOnApi,
   createGroupInviteLinkOnApi,
   archiveConversationOnApi,
   type GroupInviteLink,
@@ -118,7 +117,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             haptic.heavy();
             setIsLeaving(true);
             try {
-              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+              await deleteConversationOnApi(conversationId, 'leave');
               deleteConversation(conversationId);
               show('You left the group', 'info');
               navigation.navigate('MainTabs', { screen: 'Inbox' });
@@ -135,18 +134,18 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   const deleteForMe = () => {
     Alert.alert(
-      'Delete for me?',
+      'Remove from inbox?',
       'This removes the conversation from your inbox on all your devices.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete for me',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             haptic.heavy();
             setIsDeleting(true);
             try {
-              await deleteConversationOnApi(conversationId);
+              await deleteConversationOnApi(conversationId, 'me');
               deleteConversation(conversationId);
               show('Conversation removed from your inbox', 'info');
               navigation.navigate('MainTabs', { screen: 'Inbox' });
@@ -283,7 +282,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Change cover photo"
               >
-                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -306,7 +305,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Add cover photo"
               >
-                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -328,7 +327,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Add group photo"
               >
-                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -416,6 +415,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               onCopyInvite={handleCopyInviteLink}
               onShareInvite={handleShareInviteLink}
               onQuickReplies={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
+              onManageAgents={() => navigation.navigate('GroupBotManagement', { conversationId })}
+              connectedAgentCount={connectedAgentCount}
               onReportGroup={() => navigation.navigate('Report', { type: 'group', targetId: conversationId })}
               isLeaving={isLeaving}
               onLeaveGroup={leaveGroup}
@@ -644,6 +645,8 @@ function SettingsTab({
   onCopyInvite,
   onShareInvite,
   onQuickReplies,
+  onManageAgents,
+  connectedAgentCount,
   onReportGroup,
   isLeaving,
   onLeaveGroup,
@@ -661,6 +664,8 @@ function SettingsTab({
   onCopyInvite: () => void;
   onShareInvite: () => void;
   onQuickReplies: () => void;
+  onManageAgents: () => void;
+  connectedAgentCount: number;
   onReportGroup: () => void;
   isLeaving: boolean;
   onLeaveGroup: () => void;
@@ -685,6 +690,20 @@ function SettingsTab({
           label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
           onPress={onToggleMute}
           trailing={isTogglingMute ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+        />
+      </ChatInfoSection>
+
+      <ChatInfoSection title="AI agents">
+        <ChatInfoRow
+          icon="hardware-chip-outline"
+          label="Manage AI agents"
+          subtitle={
+            connectedAgentCount > 0
+              ? `${connectedAgentCount} agent${connectedAgentCount === 1 ? '' : 's'} connected`
+              : 'Deploy assistants for moderation, styling, or shopping help'
+          }
+          onPress={onManageAgents}
+          showChevron
         />
       </ChatInfoSection>
 

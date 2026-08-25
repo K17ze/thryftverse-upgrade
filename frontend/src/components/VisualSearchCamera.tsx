@@ -8,7 +8,7 @@ import {
   Image,
   GestureResponderEvent,
 } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
+import { Camera, type CameraRef, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +44,7 @@ export default function VisualSearchCamera({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [facing, setFacing] = React.useState<'back' | 'front'>('back');
   const device = useCameraDevice(facing);
+  const cameraRef = React.useRef<CameraRef>(null);
   const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced' });
   const { hasPermission, requestPermission } = useCameraPermission();
   const [flash, setFlash] = React.useState<'off' | 'on'>('off');
@@ -73,7 +74,12 @@ export default function VisualSearchCamera({
     let cancelled = false;
     async function loadRecent() {
       try {
-        const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
+        // Never ambush the user with a broad photo-library permission
+        // merely to decorate the gallery shortcut. If access already
+        // exists, show a recent thumbnail; otherwise the glyph remains
+        // truthful and the system picker asks only when the user chooses
+        // Gallery. (Consistent with CreatorCamera's non-ambush pattern.)
+        const mediaPermission = await MediaLibrary.getPermissionsAsync(false);
         if (!mediaPermission.granted || cancelled) return;
         const page = await MediaLibrary.getAssetsAsync({
           mediaType: 'photo',
@@ -130,6 +136,19 @@ export default function VisualSearchCamera({
       Animated.timing(focusAnim, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: false }),
       Animated.timing(focusAnim, { toValue: 0, duration: Motion.duration.normal, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
+    // Perform real AE/AF/AWB focus metering if the device supports it,
+    // matching the CreatorCamera pattern. The Camera view converts view
+    // coordinates to camera coordinates internally.
+    const cam = cameraRef.current;
+    if (cam && device?.supportsFocusMetering) {
+      void cam.focusTo(
+        { x: locationX, y: locationY },
+        { responsiveness: 'snappy', adaptiveness: 'continuous', autoResetAfter: 5 },
+      ).catch(() => {
+        // Focus request failed — the reticle still showed as a tap
+        // indicator; we don't surface an error toast for a focus failure.
+      });
+    }
   };
 
   const handleOpenSettings = () => Linking.openSettings();
@@ -170,6 +189,7 @@ export default function VisualSearchCamera({
       {/* Full-screen camera feed with tap-to-focus */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus} accessibilityRole="button" accessibilityLabel="Tap Focus">
         <Camera
+          ref={cameraRef}
           style={StyleSheet.absoluteFill}
           device={device}
           outputs={[photoOutput]}

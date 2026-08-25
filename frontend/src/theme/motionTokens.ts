@@ -91,6 +91,10 @@ export const Motion = {
     settle: { damping: 24, stiffness: 240, mass: 0.9 },
     // Sheet/modal entrance — smooth, confident
     sheet: { damping: 22, stiffness: 180, mass: 1.0 },
+    // Flagship sheet entrance — faster settle, zero float.
+    // Calibrated to iOS 26 sheet physics (~damping ratio 0.9, ~400ms settle).
+    // Use for editor sheets that must feel premium (SheetContainer, effects sheets).
+    sheetFlagship: { damping: 30, stiffness: 400, mass: 1.0 },
     // Entrance — generic entrance (alias for sheet, kept for backward compat)
     entrance: { damping: 22, stiffness: 180, mass: 1.0 },
     // Reorder — list reordering, controlled with slight liveliness

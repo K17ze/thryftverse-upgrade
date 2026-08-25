@@ -27,7 +27,7 @@ import { Space, FontFamily, Control, LetterSpacing, Type } from '../theme/design
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
-import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -97,13 +97,13 @@ export default function MyProfileScreen() {
   const t = {
     container: { backgroundColor: colors.background },
     coverWrap: { backgroundColor: colors.surfaceAlt },
-    coverFailureText: { color: colors.textInverse },
-    coverFailureActionText: { color: colors.textInverse },
+    coverFailureText: { color: colors.scrimTextPrimary },
+    coverFailureActionText: { color: colors.scrimTextPrimary },
     floatingHeader: { backgroundColor: colors.background, borderBottomColor: colors.border },
     floatingHeaderTitle: { color: colors.textPrimary },
     gridHeaderCount: { color: colors.textMuted },
     gridHeaderAction: { color: colors.brand },
-    soldText: { color: colors.textInverse },
+    soldText: { color: colors.scrimTextPrimary },
     gridPrice: { color: colors.textPrimary },
     gridBrand: { color: colors.textSecondary },
     gridMeta: { color: colors.textMuted },
@@ -263,9 +263,15 @@ export default function MyProfileScreen() {
     }
   }, [currentUser?.id]);
 
-  React.useEffect(() => {
-    void loadMyLooks();
-  }, [loadMyLooks]);
+  // Refetch looks on focus so newly published content appears without
+  // requiring a manual refresh. React Query cache invalidation after
+  // publish marks these queries stale, but the direct-fetch pattern
+  // here needs an explicit focus refetch.
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadMyLooks();
+    }, [loadMyLooks]),
+  );
 
   // Story highlights — fetched for the highlights rail between identity hero
   // and the utility rail. Renders nothing when empty (no fabricated content).
@@ -613,7 +619,7 @@ export default function MyProfileScreen() {
             accessibilityHint="Opens settings"
           >
             <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-              <Ionicons name="settings-outline" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="settings-outline" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
             </View>
           </AnimatedPressable>
 
@@ -626,19 +632,7 @@ export default function MyProfileScreen() {
               accessibilityHint="Opens the system share sheet to share your profile"
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="share-outline" size={18} color={colors.textInverse} aria-hidden={true} />
-              </View>
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              style={styles.topUtilityIconBtn}
-              onPress={() => { haptic.light(); navigation.navigate('EditProfile', {}); }}
-              accessibilityLabel="Edit profile"
-              accessibilityRole="button"
-              accessibilityHint="Opens profile editor"
-            >
-              <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="create-outline" size={20} color={colors.textInverse} aria-hidden={true} />
+                <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
               </View>
             </AnimatedPressable>
           </View>
@@ -647,7 +641,7 @@ export default function MyProfileScreen() {
         {coverState.status === 'failed' ? (
           <View style={[styles.coverFailure, t.coverFailure]}>
             <View style={styles.coverFailureCopy}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
               <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
                 {coverState.error || 'Cover upload failed'}
               </Text>
@@ -687,9 +681,9 @@ export default function MyProfileScreen() {
           >
             <View style={[styles.coverEditVisible, t.coverEditVisible]}>
               {coverState.status === 'uploading' ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               ) : (
-                <Ionicons name="image-outline" size={16} color={colors.textInverse} aria-hidden={true} />
+                <Ionicons name="image-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
               )}
             </View>
           </AnimatedPressable>
@@ -819,6 +813,18 @@ export default function MyProfileScreen() {
                   hitSlop={1}
                 >
                   <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>Start selling</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.listingsEmptyImportLink}
+                  onPress={() => navigation.navigate('CatalogImportStart')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Bring over your existing listings"
+                  accessibilityHint="Start a catalogue import from eBay or a file"
+                  hitSlop={8}
+                >
+                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
+                    Bring over your existing listings
+                  </Text>
                 </AnimatedPressable>
               </View>
             ) : (
@@ -1499,6 +1505,18 @@ const styles = StyleSheet.create({
   listingsEmptyCtaText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
+  },
+  listingsEmptyImportLink: {
+    marginTop: Space.sm,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm,
+  },
+  listingsEmptyImportText: {
+    fontSize: Type.body.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
   },
 
   // About — flat editorial rows, flagship elevated

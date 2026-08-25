@@ -313,11 +313,11 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
           style={styles.topBtn}
           accessibilityLabel="Close preview"
         >
-          <Ionicons name="close" size={IconGrammar.hero} color={colors.textInverse} />
+          <Ionicons name="close" size={IconGrammar.hero} color={colors.scrimTextPrimary} />
         </PressScale>
 
         <View style={styles.topCenter}>
-          <Text style={[styles.topLabel, { color: colors.textInverse }]}>Preview</Text>
+          <Text style={[styles.topLabel, { color: colors.scrimTextPrimary }]}>Preview</Text>
           {pageCount > 1 && (
             <Text style={[styles.pageIndicator, { color: colors.scrimTextSecondary }]}>
               {pageIndex + 1} / {pageCount}
@@ -348,7 +348,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       {/* Empty composition hint — pages exist but nothing on them yet. */}
       {isEmptyComposition && (
         <View pointerEvents="none" style={styles.emptyHint}>
-          <Text style={[styles.emptyHintText, { color: colors.textInverse }]}>
+          <Text style={[styles.emptyHintText, { color: colors.scrimTextPrimary }]}>
             Add content to see a preview.
           </Text>
         </View>

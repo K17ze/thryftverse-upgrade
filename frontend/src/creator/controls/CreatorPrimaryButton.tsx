@@ -130,7 +130,7 @@ export function CreatorPrimaryButton({
       <Reanimated.View
         style={[
           styles.button,
-          { backgroundColor: colors.brand, borderRadius: Radius.lg },
+          { backgroundColor: colors.brand, borderRadius: Radius.full },
           animatedStyle,
         ]}
       >

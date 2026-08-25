@@ -7,6 +7,7 @@ import {
   syncListingsToSearchIndex,
 } from '../lib/searchSync.js';
 import { semanticSearch } from '../lib/vectorSearch.js';
+import type { RetrievalMeta } from '../lib/retrievalMeta.js';
 
 type ApiError = Error & { code: string; statusCode?: number };
 
@@ -85,10 +86,17 @@ export function registerSearchRoutes({
     try {
       const adapter = createSearchAdapter();
       const results = await adapter.search(query);
+      const info = adapter.retrievalInfo();
+      const retrievalMeta: RetrievalMeta = {
+        method: 'lexical',
+        embedderConfigured: info.embedderConfigured,
+        searchEngineVersion: info.searchEngineVersion,
+      };
       return {
         ok: true,
         query: q,
         total: results.length,
+        retrievalMeta,
         items: results.map((result) => ({
           score: result.score,
           ...result.document,
@@ -143,11 +151,12 @@ export function registerSearchRoutes({
     const { query, limit, filters } = parsed.data;
 
     try {
-      const results = await semanticSearch(query, { limit, filters });
+      const { results, retrievalMeta } = await semanticSearch(query, { limit, filters });
       return {
         ok: true,
         query,
         total: results.length,
+        retrievalMeta,
         items: results.map((result) => ({
           score: result.score,
           ...result.document,

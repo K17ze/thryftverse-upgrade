@@ -573,7 +573,7 @@ export default function GalleriaScreen() {
       {/* Offline banner */}
       {isOffline && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
           <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
         </View>
       )}
@@ -824,12 +824,12 @@ function useStyles() {
           width: Space.xs + 2,
           height: Space.xs + 2,
           borderRadius: Radius.full,
-          backgroundColor: colors.textInverse,
+          backgroundColor: colors.scrimTextPrimary,
         },
         heroEyebrow: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: Type.label.letterSpacing,
           opacity: 0.9,
         },
@@ -837,13 +837,13 @@ function useStyles() {
           fontSize: Type.priceList.size,
           lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: -0.5,
         },
         heroMeta: {
           fontSize: Type.body.size,
           fontFamily: Typography.family.medium,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.75,
         },
         // ── Section wrappers ──
@@ -903,7 +903,7 @@ function useStyles() {
         featuredCollectionTheme: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: Type.label.letterSpacing,
           opacity: 0.85,
         },
@@ -911,7 +911,7 @@ function useStyles() {
           fontSize: Type.priceList.size,
           lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: -0.5,
         },
         featuredCollectionCuratorRow: {
@@ -928,7 +928,7 @@ function useStyles() {
         featuredCollectionCurator: {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.medium,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.8,
         },
         collectionCard: {
@@ -962,7 +962,7 @@ function useStyles() {
         collectionTheme: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           opacity: 0.85,
           letterSpacing: Type.label.letterSpacing - 0.1,
         },
@@ -970,7 +970,7 @@ function useStyles() {
           fontSize: Type.subtitle.size,
           lineHeight: Type.subtitle.lineHeight,
           fontFamily: Typography.family.bold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: Type.subtitle.letterSpacing,
         },
         collectionMeta: {
@@ -1069,7 +1069,7 @@ function useStyles() {
         editorialReadTime: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
+          color: colors.scrimTextPrimary,
           letterSpacing: Type.label.letterSpacing - 0.2,
           backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,

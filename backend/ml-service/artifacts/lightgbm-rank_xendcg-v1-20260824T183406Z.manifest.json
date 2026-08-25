@@ -1,0 +1,25 @@
+{
+  "artifact_sha256": "b71f6dd552cda8b21303e0dd182d45b4ba0659ea69b31cc351f6607426a5b247",
+  "created_at": "20260824T183406Z",
+  "evaluation_metrics": {
+    "mrr": 1.0,
+    "n_groups": 20,
+    "ndcg_at_k": 0.8142970778428907,
+    "recall_at_k": 0.5911384111674359
+  },
+  "feature_names": [
+    "affinity",
+    "sequence",
+    "price_alignment",
+    "freshness",
+    "quality",
+    "popularity",
+    "seller_trust"
+  ],
+  "feature_schema_version": "recommendation-features-v2",
+  "model_id": "lightgbm-rank_xendcg",
+  "model_version": "v1-20260824T183406Z",
+  "objective": "rank_xendcg",
+  "training_code_commit": null,
+  "training_data_hash": "6768ca1902e79bb91f48ba49bb3cc54bece552c79bf51f5e8e498a389e9ea4be"
+}

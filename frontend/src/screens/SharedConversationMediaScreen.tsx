@@ -53,16 +53,10 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     [conversations, conversationId]
   );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => setLoading(false), 400);
-    return () => clearTimeout(t);
-  }, [conversationId]);
 
   const allMedia = useMemo<MediaItem[]>(() => {
     if (!conversation?.messages?.length) return [];
@@ -210,7 +204,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         )}
         {item.isVideo && !selectionMode && (
           <View style={styles.videoBadge}>
-            <Ionicons name="play" size={12} color={colors.textInverse} />
+            <Ionicons name="play" size={12} color={colors.scrimTextPrimary} />
           </View>
         )}
         {selectionMode && (
@@ -433,7 +427,7 @@ function createStyles(colors: ThemeColors) {
     },
     checkCircleEmpty: {
       backgroundColor: colors.overlay,
-      borderColor: colors.textInverse,
+      borderColor: colors.scrimTextPrimary,
     },
     checkCircleFilled: {
       backgroundColor: colors.brand,

@@ -59,10 +59,18 @@ import { useCameraEffectProcessor } from './camera/useCameraEffectProcessor';
 import type { CameraEffectId } from './camera/CameraEffectBar';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
+import { useCreatorCapturePermissions } from './capture/useCreatorCapturePermissions';
+import {
+  useCaptureViewport,
+  viewPointToViewportNormalized,
+  type CaptureViewport,
+} from './capture/CaptureViewport';
+import { isCapabilitySupported } from './capabilities/registry';
 
 // ── CreatorCamera ────────────────────────────────────────────────────
 // Camera component with:
-//   - tap-to-focus visual indicator (no fake AE/AF lock claim)
+//   - real tap-to-focus via VisionCamera focusTo() (AE/AF/AWB metering)
+//   - microphone permission ownership with muted-video fallback
 //   - corner brackets (mode-specific aspect ratio guide, refined 2pt)
 //   - center crosshair
 //   - large shutter button with tap=photo / press-and-hold=video
@@ -82,9 +90,10 @@ import type { CreatorInitialMedia } from '../navigation/types';
 // Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
 const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
-// vision-camera supports first-class video recording with codec selection,
-// speed control, and audio. Video capture is enabled.
-const CAMERA_VIDEO_CAPTURE_ENABLED = true;
+// Video capture is gated by the capability registry — the single source
+// of truth for which creator capabilities have verified edit, viewer,
+// export, and backend support.
+const CAMERA_VIDEO_CAPTURE_ENABLED = isCapabilitySupported('videoCapture');
 // Zoom is a numeric value passed to vision-camera's zoom prop. UI labels
 // (1×, 2×, 3×) map to device zoom multipliers.
 const ZOOM_STEPS = [
@@ -94,8 +103,9 @@ const ZOOM_STEPS = [
 ] as const;
 const FOCUS_RETICLE_SIZE = 70;
 const RECORDING_MAX_DURATION = 15000; // 15s max for video
-// Press-and-hold threshold for video recording (ms)
-const HOLD_THRESHOLD_MS = 350;
+// Press-and-hold threshold for video recording is 250ms, set in
+// ShutterButton.tsx via delayLongPress. A quick tap lands as a photo;
+// a hold beyond that threshold starts video recording.
 
 // ── Hands-free capture (Snapchat hands-free pattern) ──
 // When enabled, a 3-second countdown runs, then recording begins
@@ -159,6 +169,12 @@ export interface CreatorCameraProps {
   renderBottomOverlay?: () => React.ReactNode;
   /** Optional control rendered beside the canonical flash control. */
   renderTopRightAccessory?: () => React.ReactNode;
+  /** Called whenever the measured capture viewport changes. The parent
+   *  uses this to build the camera→editor transition snapshot with the
+   *  source content transform (the guide frame rect in screen coordinates)
+   *  so the destination can calculate its crop/focal point from the
+   *  source content transform. */
+  onViewportChange?: (viewport: CaptureViewport | null) => void;
 }
 
 export default function CreatorCamera({
@@ -169,6 +185,7 @@ export default function CreatorCamera({
   onClose,
   renderBottomOverlay,
   renderTopRightAccessory,
+  onViewportChange,
 }: CreatorCameraProps) {
   const { show } = useToast();
   const haptic = useHaptic();
@@ -180,8 +197,13 @@ export default function CreatorCamera({
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const device = useCameraDevice(facing);
   const { hasPermission, requestPermission, canRequestPermission } = useCameraPermission();
+  const capturePermissions = useCreatorCapturePermissions();
   const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced', quality: 0.92 });
-  const videoOutput = useVideoOutput({ enableAudio: true });
+  // Gate audio on microphone permission — if mic is denied or not yet
+  // requested, record muted video. The mic permission is requested
+  // lazily on the first video recording attempt (see beginVideoRecording).
+  // VisionCamera v5: "Enabling Audio requires microphone permission."
+  const videoOutput = useVideoOutput({ enableAudio: capturePermissions.shouldRecordAudio });
   const [cameraReady, setCameraReady] = useState(false);
   // Deactivate the camera on unmount to release the native CameraSession
   // promptly. Without this, the native session can linger until GC, causing
@@ -199,6 +221,12 @@ export default function CreatorCamera({
   const effectFrameProcessor = useCameraEffectProcessor(cameraEffect);
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
+  // ── Explicit framing mode ──
+  // Per AGENTS.md §4: brackets and crosshair are NOT shown for ordinary
+  // capture — only for Visual Search or when the user explicitly enables
+  // framing mode via Tools. This keeps the preview as the dominant object
+  // without decorative chrome for everyday Poster/Look capture.
+  const [framingMode, setFramingMode] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
   const [recentImages, setRecentImages] = useState<string[]>([]);
@@ -243,7 +271,7 @@ export default function CreatorCamera({
   const [showGreenScreenSheet, setShowGreenScreenSheet] = useState(false);
   const [greenScreenSettings, setGreenScreenSettings] = useState<GreenScreenSettings | null>(null);
 
-  // ── Flagship upgrade shared values ──
+  // ── Shared animation values ──
   // Flip animation (double-tap to switch camera)
   const flipRotation = useSharedValue(0);
   // Zoom indicator spring appearance
@@ -256,12 +284,15 @@ export default function CreatorCamera({
   // Recording state + ring progress
   const [isRecording, setIsRecording] = useState(false);
   const [recordingElapsed, setRecordingElapsed] = useState(0);
+  // Muted recording indicator — true when recording video without audio
+  // because microphone permission was denied or not granted.
+  const [isMutedRecording, setIsMutedRecording] = useState(false);
   const recordingProgress = useSharedValue(0);
   const recordingRingScale = useSharedValue(1);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // ── Native recording recorder ref (P0.1 — one recording lifecycle) ──
   // recorderRef is declared in beginVideoRecording scope above.
-  // Countdown Reanimated values (flagship spring)
+  // Countdown Reanimated values
   const countdownScale = useSharedValue(1.5);
   const countdownOpacity = useSharedValue(0);
   // ── Tools sheet (secondary tools behind a Tools button in the top bar) ──
@@ -275,6 +306,28 @@ export default function CreatorCamera({
   const isVisualSearch = mode === 'visual-search';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
   const zoomValue = ZOOM_STEPS[zoomIndex].value;
+
+  // ── Measured capture viewport ──────────────────────────────────────
+  // The guide frame adapts to real device dimensions via onLayout instead
+  // of hardcoded offsets. Brackets/crosshair are shown ONLY for Visual
+  // Search or explicit framing mode (AGENTS.md §4 — no decorative chrome
+  // for ordinary capture). The authored aspect ratio insets the guide
+  // frame within the available area so brackets describe the actual
+  // capture crop.
+  const showFramingGuides = isVisualSearch || framingMode;
+  const authoredAspectRatio = isPoster ? 3 / 4 : isVisualSearch ? undefined : 9 / 16;
+  const { viewport, onViewportLayout } = useCaptureViewport({
+    authoredAspectRatio,
+    showFramingGuides,
+  });
+
+  // Notify the parent of viewport changes so the camera→editor transition
+  // snapshot can include the source content transform (the guide frame rect
+  // in screen coordinates). The destination calculates its crop/focal point
+  // from this transform, preserving content continuity across the transition.
+  useEffect(() => {
+    onViewportChange?.(viewport);
+  }, [viewport, onViewportChange]);
 
   // Visual search must analyse the unstyled source. If the user changes from
   // a creation mode with an active effect, fail closed to the identity matrix.
@@ -470,6 +523,30 @@ export default function CreatorCamera({
 
   const beginVideoRecording = useCallback(async (customMaxDuration?: number) => {
     if (!cameraReady || isRecording || !videoOutput) return;
+
+    // ── P0: Microphone permission ownership ────────────────────────
+    // On the first transition from shutter press to video intent,
+    // request microphone permission before recording. If denied,
+    // record muted video and show a visible "muted" indicator.
+    //
+    // VisionCamera v5: "Enabling Audio requires microphone permission."
+    // The videoOutput's enableAudio flag is baked in at creation time
+    // by useVideoOutput (useMemo on enableAudio). If mic was NOT granted
+    // at the last render, the videoOutput in this closure has
+    // enableAudio: false. Even if requestMic() grants permission during
+    // this call, the current videoOutput still records muted — React
+    // hasn't re-rendered yet to create a new videoOutput with
+    // enableAudio: true. The NEXT recording will have audio after
+    // re-render. We set isMutedRecording truthfully so the user sees
+    // the mic-off indicator on this first recording.
+    let willRecordMuted = !capturePermissions.shouldRecordAudio;
+    if (!capturePermissions.micGranted && capturePermissions.micState !== 'blocked') {
+      // Request mic permission on first video attempt — this updates
+      // micState so the next render creates a videoOutput with audio.
+      await capturePermissions.requestMic();
+    }
+    setIsMutedRecording(willRecordMuted);
+
     haptic.medium(); // medium on recording start
     setIsRecording(true);
     setRecordingElapsed(0);
@@ -549,6 +626,7 @@ export default function CreatorCamera({
           CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
           // Cleanup UI state
           setIsRecording(false);
+          setIsMutedRecording(false);
           if (recordingTimerRef.current) {
             clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = null;
@@ -560,6 +638,7 @@ export default function CreatorCamera({
           // onRecordingError
           show('Failed to record video', 'error');
           setIsRecording(false);
+          setIsMutedRecording(false);
           if (recordingTimerRef.current) {
             clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = null;
@@ -571,13 +650,14 @@ export default function CreatorCamera({
     } catch {
       show('Failed to start recording', 'error');
       setIsRecording(false);
+      setIsMutedRecording(false);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
       recordingProgress.value = withSpring(0, spring.entrance);
     }
-  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, cameraEffect, videoOutput]);
+  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, cameraEffect, videoOutput, capturePermissions]);
 
   // ── Hands-free countdown → auto-record ──
   // Starts a 3-second countdown with haptic ticks, then begins recording.
@@ -615,6 +695,15 @@ export default function CreatorCamera({
   const toggleGrid = useCallback(() => {
     haptic.selection();
     setShowGrid((p) => !p);
+  }, [haptic]);
+
+  // ── Framing mode toggle ──
+  // Explicit framing shows brackets + crosshair for ordinary Poster/Look
+  // capture. Visual Search always shows framing guides regardless of this
+  // toggle. Per AGENTS.md §4, framing chrome is opt-in, not default.
+  const toggleFramingMode = useCallback(() => {
+    haptic.selection();
+    setFramingMode((p) => !p);
   }, [haptic]);
 
   // ── Pinch-to-zoom ──
@@ -731,11 +820,11 @@ export default function CreatorCamera({
         setCapturedKind('image');
         setCapturedMetadata(photoMetadata);
         // ── Multi-capture: accumulate directly to the staging tray ──
-        // In multi-capture mode (the default), photo captures pile up
-        // silently like Snapchat Multi Snap — no per-capture review
-        // overlay. The user finishes via the Done button in the staging
-        // tray. Visual search is excluded (different intent — single
-        // capture with a confirm step).
+        // When multi-capture is explicitly enabled (single capture is the
+        // default), photo captures pile up silently like Snapchat Multi
+        // Snap — no per-capture review overlay. The user finishes via the
+        // Done button in the staging tray. Visual search is excluded
+        // (different intent — single capture with a confirm step).
         if (multiCaptureMode && !isVisualSearch) {
           // Photo media is constructed inline because buildCaptureMedia is
           // declared below and would otherwise be used before declaration.
@@ -830,8 +919,9 @@ export default function CreatorCamera({
   }, []);
 
   // ── Shutter: tap=photo, press-and-hold=video (Snapchat 2026 pattern) ──
-  // Quick tap takes a photo. Press-and-hold (beyond HOLD_THRESHOLD_MS) starts
-  // video recording; releasing stops it. This eliminates the need for
+  // Quick tap takes a photo. Press-and-hold (beyond 250ms — see
+  // ShutterButton.tsx delayLongPress) starts video recording; releasing
+  // stops it. This eliminates the need for
   // permanent Photo/Video/Boomerang mode tabs.
   //
   // In hands-free mode, a tap starts the 3-second countdown then auto-records.
@@ -997,17 +1087,42 @@ export default function CreatorCamera({
     }
   }, [capturedUri, haptic, show]);
 
-  // ── P0.4: Truthful tap-to-focus visual indicator ──────────────────
-  // Expo Camera's public surface exposes focus mode rather than arbitrary
-  // point focus. We keep a visual tap indicator (FocusReticle) so the user
-  // gets feedback that their tap was registered, but we do NOT claim AE/AF
-  // lock or simulate a camera capability with UI-only animation. The native
-  // camera continues to use its own continuous autofocus.
+  // ── P0: Real tap-to-focus via VisionCamera focusTo() ──────────────
+  // VisionCamera v5 exposes CameraRef.focusTo(viewPoint, options?) which
+  // performs real AE/AF/AWB metering at the tapped point. The Camera/
+  // PreviewView converts view coordinates to camera sensor coordinates
+  // internally via convertViewPointToCameraPoint(...).
+  //
+  // The tap point is routed through the measured viewport so the reticle
+  // and any guide-relative overlays position themselves within the
+  // authored crop. focusTo still receives raw view coordinates (relative
+  // to the Camera view) because the native PreviewView handles the
+  // sensor conversion — the viewport is used for guide-relative math,
+  // not for the native focus call.
   const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
     const { locationX, locationY } = evt.nativeEvent;
     setFocusPoint({ x: locationX, y: locationY });
-    // FocusReticle component handles its own spring animation + haptic + auto-dismiss
-  }, []);
+    // FocusReticle handles its own spring animation + haptic + auto-dismiss
+
+    // Perform real focus metering if the device supports it.
+    // focusTo takes view coordinates (relative to the Camera view) and
+    // converts them to camera coordinates internally.
+    const cam = cameraRef.current;
+    if (cam && device?.supportsFocusMetering) {
+      void cam.focusTo(
+        { x: locationX, y: locationY },
+        {
+          responsiveness: isRecording ? 'steady' : 'snappy',
+          adaptiveness: 'continuous',
+          autoResetAfter: 5,
+        },
+      ).catch(() => {
+        // Focus request failed — the reticle still showed as a tap
+        // indicator, but we don't surface an error toast for a focus
+        // failure. The camera continues with its own autofocus.
+      });
+    }
+  }, [device, isRecording]);
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
@@ -1046,7 +1161,7 @@ export default function CreatorCamera({
               onPress={handleTapFocus}
               accessibilityRole="button"
               accessibilityLabel="Camera viewfinder"
-              accessibilityHint="Tap to show the focus point"
+              accessibilityHint="Tap to focus at that point"
             >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
                 {cameraEffect !== 'none' ? (
@@ -1106,7 +1221,7 @@ export default function CreatorCamera({
         pointerEvents="none"
       />
 
-      {/* Refined gradient overlays — 0.25 top, 0.35 bottom (less heavy, more premium) */}
+      {/* Gradient overlays — 0.25 top, 0.35 bottom */}
       <LinearGradient
         colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']}
         style={styles.topGradient}
@@ -1119,8 +1234,12 @@ export default function CreatorCamera({
       />
 
       {/* One unobscured capture viewport owns every composition guide. The
-          guide frame reacts to safe areas and bottom chrome instead of using
-          full-screen percentages that drift beneath controls. */}
+          guide frame is measured via onLayout so it adapts to real device
+          dimensions instead of hardcoded offsets. Brackets and crosshair
+          are shown ONLY for Visual Search or explicit framing mode
+          (AGENTS.md §4 — no decorative chrome for ordinary capture). For
+          ordinary Poster/Look capture, only an optional rule-of-thirds
+          grid is shown. */}
       <View
         style={[
           styles.captureGuideViewport,
@@ -1131,8 +1250,11 @@ export default function CreatorCamera({
             right: isVisualSearch ? 52 : isPoster ? 24 : 36,
           },
         ]}
+        onLayout={onViewportLayout}
         pointerEvents="none"
       >
+        {/* Rule-of-thirds grid — available in all modes via Tools toggle.
+            For ordinary capture this is the only guide (no brackets). */}
         {showGrid ? (
           <View style={styles.gridOverlay}>
             <View style={styles.gridLineV1} />
@@ -1141,17 +1263,36 @@ export default function CreatorCamera({
             <View style={styles.gridLineH2} />
           </View>
         ) : null}
-        <View style={styles.bracketTL} />
-        <View style={styles.bracketTR} />
-        <View style={styles.bracketBL} />
-        <View style={styles.bracketBR} />
-        <View style={styles.crosshair}>
-          <View style={styles.crosshairH} />
-          <View style={styles.crosshairV} />
-        </View>
+        {/* Corner brackets + crosshair — Visual Search or explicit framing
+            mode only. The guide frame is inset within the measured viewport
+            to match the authored aspect ratio so brackets describe the
+            actual capture crop. */}
+        {showFramingGuides && viewport ? (
+          <View
+            style={[
+              styles.framingFrame,
+              {
+                left: viewport.viewRect.x,
+                top: viewport.viewRect.y,
+                width: viewport.viewRect.width,
+                height: viewport.viewRect.height,
+              },
+            ]}
+          >
+            <View style={styles.bracketTL} />
+            <View style={styles.bracketTR} />
+            <View style={styles.bracketBL} />
+            <View style={styles.bracketBR} />
+            <View style={styles.crosshair}>
+              <View style={styles.crosshairH} />
+              <View style={styles.crosshairV} />
+            </View>
+          </View>
+        ) : null}
       </View>
 
-      {/* Focus reticle — visual tap indicator only (P0.4: no AE/AF lock claim) */}
+      {/* Focus reticle — real AE/AF/AWB metering via focusTo() on
+          supported devices; visual tap indicator on unsupported ones. */}
       <FocusReticle
         focusPoint={focusPoint}
         size={FOCUS_RETICLE_SIZE}
@@ -1305,7 +1446,9 @@ export default function CreatorCamera({
           videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
         />
 
-        {/* Flip camera — prominent circular button, bottom-right */}
+        {/* Flip camera — transparent 44pt target (AGENTS.md §4: ordinary
+            controls default to transparent). The bottom scrim provides
+            legibility; no persistent dark plate. */}
         <Pressable
           style={({ pressed }) => [styles.flipBtn, pressed && styles.btnPressed]}
           onPress={toggleFacing}
@@ -1318,14 +1461,24 @@ export default function CreatorCamera({
       </View>
 
       {/* Recording timer badge — shown while recording.
-          Includes speed indicator when a non-1× speed mode is active. */}
+          Includes speed indicator when a non-1× speed mode is active.
+          Includes muted indicator when recording without microphone.
+          Wrapped in a full-width container so the badge stays centered
+          regardless of whether the muted indicator adds width. */}
       {isRecording && (
-        <View style={[styles.recordingBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
-          <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
-          <Text style={styles.recordingTimerText}>
-            {Math.floor(recordingElapsed / 1000)}s
-            {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
-          </Text>
+        <View style={[styles.recordingBadgeWrap, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
+          <View style={styles.recordingBadge}>
+            <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
+            <Text style={styles.recordingTimerText}>
+              {Math.floor(recordingElapsed / 1000)}s
+              {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
+            </Text>
+            {isMutedRecording && (
+              <View style={styles.mutedIndicator}>
+                <Ionicons name="mic-off" size={12} color="#fff" />
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -1359,6 +1512,8 @@ export default function CreatorCamera({
         onTimerChange={handleTimerChange}
         showGrid={showGrid}
         onToggleGrid={toggleGrid}
+        framingMode={framingMode}
+        onToggleFramingMode={toggleFramingMode}
         activeEffect={cameraEffect}
         onEffectChange={handleEffectChange}
         handsFreeMode={handsFreeMode}
@@ -1385,9 +1540,11 @@ export default function CreatorCamera({
       />
 
       {/* Green screen active indicator — shows the selected background
-          thumbnail when green screen is armed */}
-      {greenScreenSettings && !showGreenScreenSheet && (
-        <View style={[styles.greenScreenBadge, { top: Math.max(insets.top, 16) + (handsFreeMode ? 100 : 60) }]} pointerEvents="none">
+          thumbnail when green screen is armed. Suppressed while recording
+          or hands-free is armed: only one status chip may occupy a region
+          at a time (recording > hands-free > zoom > effect metadata). */}
+      {greenScreenSettings && !showGreenScreenSheet && !isRecording && !handsFreeMode && (
+        <View style={[styles.greenScreenBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
           <Image
             source={{ uri: greenScreenSettings.backgroundUri }}
             style={styles.greenScreenThumb}
@@ -1417,12 +1574,11 @@ export default function CreatorCamera({
             pointerEvents="none"
           />
 
-          {/* Review actions — single-capture mode only. In multi-capture
-              mode (the default), captures accumulate silently to the
+          {/* Review actions — single-capture mode only. When multi-capture
+              is explicitly enabled, captures accumulate silently to the
               staging tray and the review overlay never appears. This
-              overlay is reached only when the user has explicitly toggled
-              multi-capture OFF in Tools, or in visual search mode (which
-              always uses a confirm step). */}
+              overlay is reached only in the default single-capture mode,
+              or in visual search mode (which always uses a confirm step). */}
           <View style={[styles.reviewActions, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
             {/* Retake */}
             <Pressable
@@ -1523,6 +1679,12 @@ const styles = StyleSheet.create({
   },
   // One geometry owner for rule-of-thirds, framing corners and crosshair.
   captureGuideViewport: {
+    position: 'absolute',
+  },
+  // Framing frame — the aspect-ratio-fitted guide rect inside the measured
+  // viewport. Brackets and crosshair are positioned relative to this frame
+  // so they describe the actual capture crop, not the available space.
+  framingFrame: {
     position: 'absolute',
   },
   // Grid overlay (rule-of-thirds)
@@ -1784,22 +1946,25 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     minHeight: 100,
   },
-  // Flip camera — prominent circular button matching the shutter's
-  // visual weight on the opposite side. 48pt touch target with a
-  // subtle dark backdrop for legibility over bright previews.
+  // Flip camera — transparent 44pt target (AGENTS.md §4: ordinary controls
+  // default to transparent). No persistent dark plate; the bottom scrim
+  // provides legibility over bright previews.
   flipBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Recording badge — timer + red dot at top
-  recordingBadge: {
+  // Recording badge — timer + red dot at top.
+  // A full-width wrapper centers the badge so it stays centered
+  // whether or not the muted indicator adds width.
+  recordingBadgeWrap: {
     position: 'absolute',
-    left: '50%',
-    marginLeft: -40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  recordingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1818,6 +1983,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
     color: '#fff',
+  },
+  // Muted recording indicator — mic-off icon shown when recording without audio
+  mutedIndicator: {
+    marginLeft: 2,
+    opacity: 0.8,
   },
   // Quick-review overlay
   reviewOverlay: {

@@ -37,6 +37,7 @@ export function ExploreStack() {
       <Stack.Screen name="Filter" getComponent={() => require('../../screens/FilterScreen').default} options={filterScreenOptions} />
       <Stack.Screen name="SavedSearches" getComponent={() => require('../../screens/SavedSearchesScreen').default} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../../screens/CollectionDetailScreen').default} />
+      <Stack.Screen name="LookDetail" getComponent={() => require('../../screens/LookDetailScreen').default} />
     </Stack.Navigator>
   );
 }

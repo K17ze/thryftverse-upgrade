@@ -134,6 +134,25 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
     }
   }
 
+  // 9. Unsupported interactive layer validation
+  // Interactive layer types that have no backend sticker projection must be
+  // rejected at publish time rather than silently dropped or coerced.
+  // Decorative/visual layers (decorative, draw, gif, time, weather, adjustment)
+  // are permitted — they simply produce no sticker rows and live only in the
+  // compositionDocument.
+  const UNSUPPORTED_INTERACTIVE_TYPES = new Set([
+    'quiz', 'question', 'emojiSlider', 'countdown', 'link', 'location', 'hashtag', 'music',
+  ]);
+  for (const page of validated.pages) {
+    for (const layer of page.layers) {
+      if (UNSUPPORTED_INTERACTIVE_TYPES.has(layer.type)) {
+        errors.push(
+          `Layer ${layer.id}: type '${layer.type}' is not supported for publication. Remove this layer or use a supported alternative.`,
+        );
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,
@@ -282,16 +301,21 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       sortOrder: i,
       stickers: page.layers
         .filter((l) => l.type !== 'media' && !(l.type === 'text' && l.id.startsWith('caption_')))
-        .map((l, si) => ({
-          id: l.id,
-          type: mapLayerTypeToStickerType(l.type),
-          x: l.x,
-          y: l.y,
-          scale: l.scale,
-          rotation: l.rotation,
-          payload: extractStickerPayload(l),
-          sortOrder: si,
-        })),
+        .map((l, si) => {
+          const stickerType = mapLayerTypeToStickerType(l.type);
+          if (stickerType === null) return null; // no backend projection — lives only in compositionDocument
+          return {
+            id: l.id,
+            type: stickerType,
+            x: l.x,
+            y: l.y,
+            scale: l.scale,
+            rotation: l.rotation,
+            payload: extractStickerPayload(l),
+            sortOrder: si,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null),
     };
   });
 
@@ -324,57 +348,30 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
 // ── Helpers ───────────────────────────────────────────────────────
 function mapLayerTypeToStickerType(
   type: string,
-): PosterStickerType {
+): PosterStickerType | null {
   switch (type) {
     case 'text': return 'text';
     case 'mention': return 'mention';
     case 'product': return 'listing';
     case 'look': return 'look';
     case 'vote': return 'style_vote';
-    case 'quiz': return 'quiz';
-    case 'question': return 'question';
-    case 'emojiSlider': return 'poll';
-    case 'countdown': return 'countdown';
-    // Decorative/non-interactive layers that don't have a backend sticker type
-    // are serialised as 'text' so the backend accepts them. The full
-    // compositionDocument preserves the original type for WYSIWYG rendering.
-    default: return 'text';
+    // Layer types with no backend sticker projection return null. They
+    // fall into two categories:
+    //  1. Decorative/visual (decorative, draw, gif, time, weather,
+    //     adjustment) — permitted at publish, live only in
+    //     compositionDocument for WYSIWYG rendering.
+    //  2. Interactive but unsupported (music, link, location, hashtag,
+    //     quiz, question, emojiSlider, countdown) — REJECTED by
+    //     validateForPublish before reaching this function. Listed here
+    //     for documentation; they must NOT be coerced to a different
+    //     semantic sticker type.
+    default: return null;
   }
 }
 
 function extractStickerPayload(layer: CreatorLayer): Record<string, unknown> {
   const p = layer.payload as Record<string, unknown>;
   switch (layer.type) {
-    case 'question': {
-      // Creator uses `prompt`; backend expects `question`
-      return { question: p.prompt ?? p.question };
-    }
-    case 'countdown': {
-      // Creator uses `endDateTime`; backend expects `targetDate`
-      return {
-        label: p.label,
-        targetDate: p.endDateTime ?? p.targetDate,
-        endLabel: p.endLabel,
-      };
-    }
-    case 'emojiSlider': {
-      // Emoji slider maps to poll — synthesize two options from the slider
-      return {
-        question: p.question,
-        options: [
-          { id: 'low', label: '😐' },
-          { id: 'high', label: p.emoji ?? '😍' },
-        ],
-      };
-    }
-    case 'quiz': {
-      // Only send fields the backend contract accepts
-      return {
-        question: p.question,
-        options: p.options,
-        correctOptionId: p.correctOptionId,
-      };
-    }
     case 'vote': {
       return {
         question: p.question,

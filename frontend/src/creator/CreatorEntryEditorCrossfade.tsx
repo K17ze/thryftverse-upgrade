@@ -48,6 +48,29 @@ export interface CreatorTransitionFrame {
   height: number;
 }
 
+/**
+ * Content transform snapshot for the camera→editor transition.
+ *
+ * The source content transform describes how the captured media was framed
+ * in the camera viewport (the guide frame rect in screen coordinates + the
+ * authored aspect ratio). The destination content transform describes how
+ * the media should be framed in the editor canvas.
+ *
+ * During the transition, the pinned media layer animates from the source
+ * transform to the destination transform so the content reads as staying
+ * in place while editor chrome fades in around it. Without this, a flat
+ * opacity crossfade between two full screens produces a visible jump because
+ * the viewfinder and editor canvas are different elements at different
+ * positions with different crops.
+ */
+export interface CreatorContentTransform {
+  /** The frame rect in screen coordinates where the media is displayed. */
+  frame: CreatorTransitionFrame;
+  /** The authored aspect ratio (width / height) of the capture crop.
+   *  Used to preserve the focal point across the transition. */
+  aspectRatio?: number;
+}
+
 export interface CreatorEntryEditorCrossfadeProps {
   /** When true, the entry (camera) is the active surface. When it flips to
    *  false, the editor crossfades in while the entry crossfades out. */
@@ -70,6 +93,16 @@ export interface CreatorEntryEditorCrossfadeProps {
    *  animates from the full viewfinder into this exact editor frame instead
    *  of jumping between two unrelated crops. */
   pinnedMediaDestination?: CreatorTransitionFrame | null;
+  /** Source content transform — how the media was framed in the camera
+   *  viewport. When provided, the pinned media starts at this frame
+   *  (instead of full-screen) and animates to the destination. This
+   *  preserves the focal point across the transition. */
+  sourceContentTransform?: CreatorContentTransform | null;
+  /** Destination content transform — how the media should be framed in
+   *  the editor. When provided, this takes precedence over
+   *  pinnedMediaDestination for the animation target, and carries the
+   *  authored aspect ratio so the destination can calculate its crop. */
+  destinationContentTransform?: CreatorContentTransform | null;
 }
 
 export function CreatorEntryEditorCrossfade({
@@ -79,6 +112,8 @@ export function CreatorEntryEditorCrossfade({
   pinnedMediaUri,
   pinnedMediaKind = 'image',
   pinnedMediaDestination,
+  sourceContentTransform,
+  destinationContentTransform,
 }: CreatorEntryEditorCrossfadeProps) {
   const reducedMotion = useReducedMotion();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
@@ -95,6 +130,11 @@ export function CreatorEntryEditorCrossfade({
   const [mountedPinnedUri, setMountedPinnedUri] = useState<string | null>(null);
   const [mountedPinnedKind, setMountedPinnedKind] = useState<'image' | 'video'>('image');
   const [mountedDestination, setMountedDestination] = useState<CreatorTransitionFrame | null>(null);
+  // Source/destination content transforms captured at transition start so
+  // the pinned media animates from the source frame to the destination
+  // frame, preserving the focal point across the screen change.
+  const [mountedSourceTransform, setMountedSourceTransform] = useState<CreatorContentTransform | null>(null);
+  const [mountedDestinationTransform, setMountedDestinationTransform] = useState<CreatorContentTransform | null>(null);
 
   // The parent stops producing `entryElement` as soon as showEntry flips.
   // Retain the last live camera tree until its exit animation completes;
@@ -128,6 +168,11 @@ export function CreatorEntryEditorCrossfade({
         setMountedPinnedUri(pinUri);
         setMountedPinnedKind(pinnedMediaKind);
         setMountedDestination(pinnedMediaDestination ?? null);
+        // Capture content transforms at transition start so the pinned
+        // media animates from the source frame (camera viewport) to the
+        // destination frame (editor canvas), preserving the focal point.
+        setMountedSourceTransform(sourceContentTransform ?? null);
+        setMountedDestinationTransform(destinationContentTransform ?? null);
       }
       cancelAnimation(entryOpacity);
       cancelAnimation(editorOpacity);
@@ -218,6 +263,8 @@ export function CreatorEntryEditorCrossfade({
     pinnedMediaUri,
     pinnedMediaKind,
     pinnedMediaDestination,
+    sourceContentTransform,
+    destinationContentTransform,
   ]);
 
   const entryStyle = useAnimatedStyle(() => ({
@@ -226,29 +273,35 @@ export function CreatorEntryEditorCrossfade({
   const editorStyle = useAnimatedStyle(() => ({
     opacity: editorOpacity.value,
   }));
+  // Source frame: the camera viewport guide rect (or full-screen fallback).
+  // Destination frame: the editor canvas frame (from content transform or
+  // pinnedMediaDestination fallback). The pinned media animates from source
+  // to destination so the content reads as staying in place.
+  const sourceFrame = mountedSourceTransform?.frame;
+  const destFrame = mountedDestinationTransform?.frame ?? mountedDestination;
   const pinnedStyle = useAnimatedStyle(() => ({
     opacity: pinnedOpacity.value,
     left: interpolate(
       pinnedProgress.value,
       [0, 1],
-      [0, mountedDestination?.left ?? 0],
+      [sourceFrame?.left ?? 0, destFrame?.left ?? 0],
     ),
     top: interpolate(
       pinnedProgress.value,
       [0, 1],
-      [0, mountedDestination?.top ?? 0],
+      [sourceFrame?.top ?? 0, destFrame?.top ?? 0],
     ),
     width: interpolate(
       pinnedProgress.value,
       [0, 1],
-      [viewportWidth, mountedDestination?.width ?? viewportWidth],
+      [sourceFrame?.width ?? viewportWidth, destFrame?.width ?? viewportWidth],
     ),
     height: interpolate(
       pinnedProgress.value,
       [0, 1],
-      [viewportHeight, mountedDestination?.height ?? viewportHeight],
+      [sourceFrame?.height ?? viewportHeight, destFrame?.height ?? viewportHeight],
     ),
-  }), [mountedDestination, viewportHeight, viewportWidth]);
+  }), [mountedDestination, mountedSourceTransform, mountedDestinationTransform, viewportHeight, viewportWidth]);
 
   return (
     <Reanimated.View style={styles.container} pointerEvents="box-none">

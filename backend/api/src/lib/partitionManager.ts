@@ -3,11 +3,12 @@ import { logger } from './logger.js';
 
 // Only tables that are actually created as partitioned parents in the
 // migration chain belong here.  `admin_audit_logs` is created with
-// `PARTITION BY RANGE (created_at)` in migration 124.  Other time-series
-// tables (analytics_events, notifications) do not exist in the schema; if
-// they are added as partitioned parents in a future migration, add them
-// here at that time.
-const PARTITIONED_TABLES = ['admin_audit_logs'] as const;
+// `PARTITION BY RANGE (created_at)` in migration 124.
+// `analytics_events` is created with `PARTITION BY RANGE (created_at)`
+// in migration 140.  Other time-series tables (notifications) do not
+// exist in the schema; if they are added as partitioned parents in a
+// future migration, add them here at that time.
+const PARTITIONED_TABLES = ['admin_audit_logs', 'analytics_events'] as const;
 
 /**
  * Ensure monthly RANGE partitions exist for `tableName` for the current

@@ -261,7 +261,7 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadge}>
-                    <Ionicons name="lock-closed" size={10} color={colors.textInverse} />
+                    <Ionicons name="lock-closed" size={10} color={colors.scrimTextPrimary} />
                     <Text style={styles.privacyText}>Private</Text>
                   </View>
                 )}
@@ -679,7 +679,7 @@ function createStyles(colors: ThemeColors) {
   privacyText: {
     fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
   },
   privacyBadgeOutline: {
     flexDirection: 'row',

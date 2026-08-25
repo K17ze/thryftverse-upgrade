@@ -45,8 +45,6 @@ interface MessageBubbleProps {
    *  Historical messages pass `false` so they do not re-animate on scroll or
    *  initial load (AGENTS.md §16). */
   isNew?: boolean;
-  /** When true, shows a "Translated" badge above the message text */
-  isTranslated?: boolean;
   /** When true, renders a subtle AI visual distinction (neutral icon, tinted bubble, AI badge). */
   isAgent?: boolean;
   /** Ionicon name for the agent avatar glyph — used when isAgent is true. */
@@ -83,7 +81,6 @@ function MessageBubbleBase({
   isLastInCluster = true,
   showAvatar = false,
   isNew = false,
-  isTranslated = false,
   isAgent = false,
   agentAvatar,
   isDraft = false,
@@ -268,12 +265,6 @@ function MessageBubbleBase({
 
           {text ? (
             <>
-              {isTranslated ? (
-                <View style={styles.translatedBadge}>
-                  <Ionicons name="language" size={10} color={metaColor} />
-                  <Text style={[styles.translatedLabel, { color: metaColor }]}>Translated</Text>
-                </View>
-              ) : null}
               {isDraft ? (
                 <View style={styles.draftBadge}>
                   <Ionicons name="create-outline" size={10} color={colors.textMuted} />
@@ -516,16 +507,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
-  },
-  translatedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: Space.xs,
-  },
-  translatedLabel: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
   },
   metaRow: {
     flexDirection: 'row',

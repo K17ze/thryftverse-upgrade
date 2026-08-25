@@ -35,6 +35,16 @@ export const CHAT_MESSAGE_EVENT = 'chat.message.created';
  *  even if the server isn't emitting it yet. */
 export const CHAT_TYPING_EVENT = 'chat.typing.update';
 
+/** P0.5: Message deleted (for-me or for-everyone). */
+export const CHAT_MESSAGE_DELETED_EVENT = 'chat.message.deleted';
+
+/** P0.9: Reaction added/removed. */
+export const CHAT_REACTION_ADDED_EVENT = 'chat.reaction.added';
+export const CHAT_REACTION_REMOVED_EVENT = 'chat.reaction.removed';
+
+/** P0.7: Read receipt. */
+export const CHAT_MESSAGE_READ_EVENT = 'chat.message.read';
+
 // ── Typed payloads ──────────────────────────────────────────────────
 
 /** Payload shape for `chat.message.created`, mirroring the backend. */
@@ -47,6 +57,31 @@ export interface ChatMessageCreatedPayload {
   body: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  clientMessageId?: string | null;
+  replyToMessageId?: string | null;
+}
+
+/** Payload shape for `chat.message.deleted`. */
+export interface ChatMessageDeletedPayload {
+  conversationId: string;
+  messageId: string;
+  scope: 'me' | 'everyone';
+  actorUserId: string;
+}
+
+/** Payload shape for `chat.reaction.added` / `chat.reaction.removed`. */
+export interface ChatReactionPayload {
+  conversationId: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+}
+
+/** Payload shape for `chat.message.read`. */
+export interface ChatMessageReadPayload {
+  conversationId: string;
+  userId: string;
+  readAt: string;
 }
 
 /** Payload shape for `chat.typing.update`. */
@@ -113,6 +148,7 @@ export function realtimePayloadToMessage(
       meta.mediaType === 'image' || meta.mediaType === 'video'
         ? (meta.mediaType as 'image' | 'video')
         : undefined,
+    replyToMessageId: payload.replyToMessageId ?? undefined,
   };
 }
 
@@ -258,4 +294,42 @@ export function useInboxMessageEvent(
       for (const unsubscribe of unsubscribers) unsubscribe();
     };
   }, [client, conversations]);
+}
+
+// ── Read receipt event hook ─────────────────────────────────────────
+
+/**
+ * useChatReadReceiptEvent — subscribe to read receipt events for a single
+ * conversation. The handler is invoked for each `chat.message.read` event
+ * on the conversation's topic, signaling that another participant has read
+ * the conversation up to the current cursor.
+ *
+ * P0.7: This closes the gap where read receipts were "decorative" — the
+ * client now subscribes to the canonical read event and can update the
+ * delivered/read status of outgoing messages.
+ */
+export function useChatReadReceiptEvent(
+  conversationId: string | undefined,
+  handler: (payload: ChatMessageReadPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const { client } = useRealtime();
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatMessageReadPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_MESSAGE_READ_EVENT) return;
+      handlerRef.current(envelope.payload);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
 }

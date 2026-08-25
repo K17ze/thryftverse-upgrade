@@ -97,6 +97,17 @@ type ListingRouteDependencies = {
     route?: Record<string, unknown>;
     idempotencyKey?: string;
   }) => Promise<string | null>;
+  fraudShadowService?: {
+    scoreShadow(input: unknown): Promise<unknown>;
+    logScoreComparison(
+      eventId: string,
+      eventType: string,
+      userId: string | null,
+      ruleEngineResult: unknown,
+      shadowResult: unknown,
+      input: unknown,
+    ): Promise<void>;
+  } | null;
 };
 
 export const registerListingRoutes = ({
@@ -113,6 +124,7 @@ export const registerListingRoutes = ({
   sendCommerceOrderSmsNotifications,
   optionalAuthenticate,
   queueUserNotification,
+  fraudShadowService,
 }: ListingRouteDependencies) => {
 app.get('/listings', async (request) => {
   const querySchema = z.object({
@@ -2630,11 +2642,11 @@ app.post('/listings', {
       }
     }
 
-    // Fraud check â€” non-blocking: score and log, don't reject unless high risk.
+    // Fraud check — non-blocking: score and log, don't reject unless high risk.
     // Catches bulk listing creation (counterfeit/non-existent goods) and
-    // new-account listing velocity (AGENTS.md Â§11 â€” truthful signals).
+    // new-account listing velocity (AGENTS.md §11 — truthful signals).
     try {
-      await checkFraudNonBlocking(
+      const fraudResult = await checkFraudNonBlocking(
         redis,
         {
           eventType: 'listing',
@@ -2645,9 +2657,19 @@ app.post('/listings', {
         },
         undefined,
         request.log,
+        fraudShadowService,
       );
+      // Listing events map to `allow_low_risk_flow` when the fraud service
+      // is unavailable — listing creation continues and can be reviewed
+      // post-hoc.
+      if (fraudResult.evaluationStatus === 'unavailable') {
+        request.log.warn(
+          { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
+          'Listing fraud check unavailable — continuing with failover policy'
+        );
+      }
     } catch {
-      // Fraud check failures must never break listing creation (AGENTS.md Â§6).
+      // Fraud check failures must never break listing creation (AGENTS.md §6).
     }
 
     reply.code(201);

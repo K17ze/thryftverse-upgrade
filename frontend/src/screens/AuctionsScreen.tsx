@@ -439,7 +439,12 @@ export default function AuctionsScreen() {
 
   const renderSortBar = () => (
     <View style={styles.sortBar}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScrollContent}>
+      <ScrollView
+        horizontal
+        style={styles.sortScroll}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.sortScrollContent}
+      >
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt.value}
@@ -975,9 +980,14 @@ function createStyles(colors: ThemeColors) {
   sortBar: {
     marginBottom: Space.sm,
   },
+  sortScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   sortScrollContent: {
     paddingHorizontal: Space.md,
     gap: Space.xs + 2,
+    alignItems: 'center',
   },
   sortChip: {
     borderRadius: Radius.full,

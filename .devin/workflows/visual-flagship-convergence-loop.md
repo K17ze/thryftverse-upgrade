@@ -1,194 +1,135 @@
+---
+auto_execution_mode: 0
+description: Upgrade one native surface through authored composition, complete states, comparative captures, accessibility, and independent critique
+---
+
 # Visual Flagship Convergence Loop
 
-> **Authority:** This is the canonical execution workflow for every UI/UX change in ThryftVerse. It overrides the former department-wide "research then mass implementation" method. AGENTS.md §31 makes this binding.
->
-> **One-line summary:** One visually coherent surface at a time → one exact visual comparison → one ruthless critique → one redesign → another screenshot → repeat. Propagate the grammar only after one screen proves the pattern.
+Use this workflow for a rendered screen, modal, sheet, transition, or shared visual
+primitive. The implementation unit is one coherent surface and its directly coupled
+states—not a department-wide token pass.
 
----
+## Required inputs
 
-## 0. Why this exists
+- route, presentation style, and user goal;
+- exact states and data needed to reproduce the surface;
+- current native capture and 3–5 relevant benchmarks at comparable viewport/state;
+- platform/device matrix available to the task;
+- functional contract status and any live-data blockers.
 
-The former workflow was research-rich and iteration-poor. It produced technically impressive commits without the proportional visual jump because it rewarded **number of problems fixed** instead of **magnitude of visible improvement**. A 300-line change converting 20 sheets from pills to underlines can produce a smaller visual gain than moving one image 28px upward, deleting one competing panel, and changing one media crop.
+If the surface is backed by fabricated or broken data, run the live-signs workflow
+first. Do not decorate a false contract.
 
-Past a certain point, more research does not produce proportionally better visual design. The research library remains a reference corpus. The **implementation unit** is now one visually coherent surface at a time.
+## 1. Establish the visual truth
 
----
+Capture repository identity and dirty state, locate the canonical navigator/screen,
+and trace route → layout → orchestration → state → service. Preserve every working
+capability before deleting JSX. Record the baseline at the same viewport, theme,
+content, font scale, and state used for comparison.
 
-## 1. The loop
-
-```
-For one surface:
-  1. ESTABLISH CONTEXT   → small, visual, current-state
-  2. DEFINE OUTCOMES      → observable visual deltas, not adjectives
-  3. DESIGN COMPOSITION   → silhouette + interaction hierarchy before tokens
-  4. IMPLEMENT            → one primary screen + directly coupled primitives
-  5. CAPTURE              → native artifact at 320 / 390 / 430 + representative Android
-  6. COMPARE              → reference and ThryftVerse side-by-side at equal scale
-  7. CRITIQUE             → cold critic (reference + result + goal only)
-  8. REWORK               → reject and rework the same screen until it clears the bar
-  9. SIGN OFF             → screenshot artifact + visual score + human acceptance
-  10. PROPAGATE           → extract/generalize the pattern only after one screen proves it
-```
-
-A surface is not done until step 9. A pattern is not generalized until one screen has passed step 9.
-
----
-
-## 2. Active visual context budget
-
-Do not give an implementation agent the entire research pack. Reduce active visual context to:
-
-```
-1 department north-star document      (max ~3–5 pages)
-1 current surface contract            (max ~1–2 pages, see §3)
-3–5 benchmark reference screenshots    (per state)
-1 current native screenshot            (same viewport as benchmark)
-1 explicit before→after visual delta   (see §4)
-```
-
-The 86-file research pack is the knowledge base. It is **not** the implementation unit. Surface contracts live in `.devin/surfaces/<surface>.md`.
-
----
-
-## 3. Surface contract
-
-Every surface worked on gets a contract at `.devin/surfaces/<surface>.md` containing:
-
-- **Surface name** and route.
-- **User goal** — what the user is trying to accomplish on this surface (one sentence).
-- **Current state** — what the screen looks like now (the structural problem, not a token inventory).
-- **Observable visual outcomes** — the testable targets (§5). Not "make it flagship."
-- **Before→after delta** — the explicit, measurable visual change (§4).
-- **Benchmarks** — 3–5 reference screenshots per state, with the specific design thinking to study (not surfaces to photocopy).
-- **Feed-unit / data model** — if the surface is a feed/list, the unit model and span grammar.
-- **States to cover** — loading, empty, error, offline, populated, partial.
-- **Out of scope** — what this iteration does not touch.
-
----
-
-## 4. Before→after visual delta
-
-State the change as an observable, measurable delta, not a quality adjective. Example for Discovery:
+Measure:
 
 ```text
-Current: 2-column catalogue. Every unit is a listing. span = 1. Variable heights only.
-Target:  visual-discovery canvas where listings are one feed-unit type among several.
-         First viewport contains ≥2 strong media objects and no catalogue-card silhouette.
-         Mixed feed-unit schema: listing, look, editorial, board, creator cluster, auction/live moment.
-         1×1 and 2×1 spans used deliberately. Context breaks (eyebrows) rhythm the feed.
-         FlashList owns scrolling (no enclosing ScrollView).
+dominant object / reading order / first useful content Y
+useful objects above fold / rounded-container count / type-size count
+largest visible non-media control / touch target vs visible glyph
+media crop / sticky-nav occlusion / loading-to-final geometry shift
 ```
 
-A delta like "make the grid more Pinterest flagship" is not acceptable. It is not testable.
+## 2. Write the composition brief
 
----
+Before editing tokens, answer:
 
-## 5. Observable visual outcomes (replace "flagship")
+- What is the user's one job in this moment?
+- What should dominate at thumbnail scale?
+- What is read second and third?
+- Which action must be identifiable without reading?
+- What can be removed, flattened, or deferred without hiding capability?
+- What must remain stable across loading, keyboard, offline, and large text?
 
-"Flagship" is a judgement, not a CSS property. Agents translate vague quality adjectives into familiar patterns (premium → larger radius + shadows; modern → pills + blur; minimal → remove content; Instagram → underline tabs; Pinterest → 2-column masonry; Snapchat → black chrome). That is how AI-slop appears.
+Translate quality into observable outcomes. “Premium,” “modern,” and “like app X”
+are rejected unless converted to geometry, density, hierarchy, crop, feedback, and
+state criteria.
 
-Prompts and contracts must define **observable visual outcomes** instead:
+## 3. Apply the anti-AI composition gate
+
+The `AGENTS.md` anti-AI policy is binding. In particular:
+
+- one dominant object and intentional asymmetry, not equal cards;
+- flat canvas, spacing, media, and hairlines before decorative containment;
+- no card-on-card grouping without a distinct state or interaction boundary;
+- no duplicated headings, explanatory filler, or label-everything chrome;
+- one radius, stroke, icon, press, and motion grammar per surface;
+- real media owns color on media-led surfaces; art-direct crops;
+- transparent practical hit targets for ordinary navigation glyphs;
+- motion only for continuity, causality, feedback, or state change;
+- identical hierarchy and density in light/dark themes.
+
+Psychology must remain testable:
+
+| Human need | Mechanic | Evidence |
+|---|---|---|
+| orientation | stable reading order and geometry | thumbnail/squint pass |
+| low decision cost | one dominant primary action | task identifiable without reading |
+| confidence | immediate, truthful feedback | state change is perceivable and reversible |
+| continuity | preserve object position/context | no unexplained jump across transition |
+| agency | escape, undo, reduced motion | recovery works without hidden gesture |
+
+## 4. Implement the whole surface state machine
+
+Modify canonical production files and directly coupled primitives only. Preserve
+navigation, virtualization, keyboard behavior, media behavior, accessibility, and
+handlers. Design relevant loading, cached/refreshing, populated, empty,
+filtered-empty, partial, offline, error/retry, disabled, submitting, permission
+denied, missing-media, and reduced-motion states. Skeleton geometry should converge
+to final geometry; generic centered spinners are exceptional.
+
+Every visible control must act truthfully, expose enabled/disabled/loading/selected
+state, use a practical touch target, provide pressed feedback, have an accessible
+label/role, and use appropriate haptics only when meaningful.
+
+## 5. Engineering and accessibility gates
+
+Run the smallest relevant checks, then the authoritative frontend gates:
 
 ```text
-- At 25% screenshot scale the media must dominate.
-- The user must identify the main action without reading.
-- The first viewport must show ≥2 strong media objects.
-- Exactly one visual region may use persistent containment.
-- This photograph must retain the full shoe silhouette.
-- The next item must peek 80–140pt into the viewport.
-- Navigation must disappear in the squint test.
-- Selection may increase chrome; idle mode may not.
-- The editor must expose no more than four immediately relevant actions before More.
-- No catalogue-card silhouette may dominate the first viewport.
+npm run frontend:typecheck
+npm run frontend:test
+npm --prefix frontend run lint
+npm --prefix frontend run lint:design-tokens
+npm --prefix frontend run check:visual-gates
 ```
 
-These are testable. "Make it flagship" is not.
+Verify VoiceOver/TalkBack order and state, large text, contrast, non-color status,
+reduced motion, keyboard/focus, gesture alternatives, dynamic announcements, and
+error recovery. Keep the visible shape separate from the target: approximately
+44pt iOS and 48dp Android targets where applicable.
 
----
+## 6. Native convergence loop
 
-## 6. The cold critic
-
-The same agent must not research → spec → implement → test → evaluate its own work. That creates confirmation bias: it already knows why every decision was "correct."
-
-The visual reviewer is a **cold critic** that receives only:
-
-```
-reference screenshots + resulting screenshots + user goal
-```
-
-— not commit messages, not implementation explanations, not "all requirements completed."
-
-It answers only:
-
-- What looks weaker?
-- What feels templated?
-- What visually dominates incorrectly?
-- Where does density differ from the reference?
-- Where does crop / art direction fail?
-- What would a senior designer reject immediately?
-
-Then the coding agent gets that criticism and reworks. This separation is mandatory for every surface that claims visual completion.
-
----
-
-## 7. Definition of done
-
-Engineering-ready is not visually done.
+Use a development or release build, not web rendering, for proof:
 
 ```text
-TypeScript 0 errors + tests pass + tokens compliant + no banned patterns
-  = engineering-ready for visual review. NOT completion.
-
-Visual completion requires:
-  - a native artifact (screenshot). No screenshot = not visually reviewed.
-  - a side-by-side at equal scale vs the benchmark. No side-by-side = not reference-validated.
-  - at least one rework iteration after the first capture. No second iteration = almost certainly not flagship.
-  - human acceptance. No human sign-off = not signed off.
+capture baseline → implement → capture same state → equal-scale compare
+→ independent cold critique → rework same surface → capture again → human review
 ```
 
-This matches Apple's guidance that craft requires prototyping, discarding, and refinement — not a single correct implementation pass.
+Use representative compact, standard, and large phones plus a mid-range Android
+when available; test both themes only when theme is in scope. Capture keyboard,
+permission, offline/error, long-content, and large-text states relevant to the
+change. A transition needs a recording; a static frame cannot prove motion.
 
----
+The critic receives only the user goal, benchmark, resulting capture, and measurable
+outcomes. It reports hierarchy, templated composition, density, crop, chrome,
+state, and accessibility defects. If no independent reviewer, device, or human
+acceptance is available, use the native-validation-pending status and do not sign
+off visually.
 
-## 8. Surface priority order
+Do not commit captures unless requested. Record their local paths, device/OS,
+viewport, build ID, state, timestamp, and rework decision.
 
-Work surfaces in this order, where the code proves the largest structural gap:
-
-```
-1. Discover / Explore        ← feed-unit model is structurally catalogue-only; first
-2. Creator media selection   ← interaction model needs art direction
-3. Poster camera / editor    ← too much system complexity visible to the user
-4. Looks Explore
-5. Product Detail
-6. Co-Own
-7. Profile
-8. Inbox / Chat
-9. Settings
-10. remaining utility surfaces
-```
-
-Discovery is first because the current implementation is structurally incapable of the authored feed described by the research while it remains a span-1 listing-only grid. Creator/Poster follows because it has the opposite problem: too much implementation is visible to the user instead of disappearing behind a simple creative experience.
-
----
-
-## 9. Anti-patterns (process failures)
-
-- Department-wide "research then mass implementation" across dozens of files/screens at once.
-- Using "flagship" / "premium" / "Pinterest-quality" as an implementation instruction.
-- Treating hygiene rules (no card-on-card, fewer pills, restrained radii) as the objective function instead of floor constraints.
-- Repeating one recipe (flatten → remove pill → remove shadow → underline → shrink label → reduce radius) across every screen. That is a different kind of machine-generated sameness.
-- Claiming completion after TypeScript passes without a native artifact and a side-by-side.
-- The same agent researching, specifying, implementing, and approving its own visual work.
-- Generalizing a pattern to the whole codebase before one screen has passed sign-off.
-- Producing research/audit documentation instead of visible product improvement.
-
----
-
-## 10. Relationship to existing rules
-
-- AGENTS.md §4 (anti-AI design, thumbnail/squint tests) — remains the quality bar. This loop is **how** that bar is reached and enforced, one surface at a time.
-- AGENTS.md §25 (research-to-implementation protocol) — the research stages remain, but the **implementation unit** is now one surface, not one department. The research pack is reference material, not the prompt.
-- AGENTS.md §28 (research pack routing) — reinforced: the pack is a corpus, never loaded wholesale into an implementation task.
-- AGENTS.md §31 (visual flagship convergence — binding) — the charter section that makes this loop authoritative.
-- AGENTS.md §37 + `.devin/workflows/live-signs-convergence-loop.md` — the **functional counterpart**. This loop governs how the app *looks*; the live-signs loop governs how the app *functions* (real endpoints, real data, propagation, fail-closed trust, idempotency, state honesty). A surface is complete only when it has passed **both** loops. A flagship-looking screen backed by mock data is not done — it is a prototype with flagship makeup. When a visual pass reveals that the screen is rendering mock/hardcoded data, halt the visual loop and run the live-signs loop first; visual polish over a non-live surface is decoration over a prototype.
-- `.devin/visual-qa-gates.md` and `.devin/release-gates.md` — remain the gate definitions. The visual release gate is now **enforced** (fails on P0 by default).
+Research basis, reviewed 25 August 2026: [Apple design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles),
+[Apple feedback](https://developer.apple.com/design/human-interface-guidelines/feedback),
+[Apple motion](https://developer.apple.com/design/human-interface-guidelines/motion),
+[Android core app quality](https://developer.android.com/docs/quality-guidelines/core-app-quality),
+and [WCAG 2.2](https://www.w3.org/TR/WCAG22/).

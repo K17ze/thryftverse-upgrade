@@ -307,6 +307,16 @@ interface ApiConversationalSearchResponse {
   ok: boolean;
   query: string;
   method: string;
+  /**
+   * Structured retrieval capability metadata. `method: 'keyword_parser'`
+   * discloses that results come from keyword-rule parsing, not AI/ML.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured: boolean;
+    searchEngineVersion?: string;
+  };
   parsedFilters: Omit<SearchFilters, 'isDemo'>;
   total: number;
   items: Array<Record<string, unknown>>;

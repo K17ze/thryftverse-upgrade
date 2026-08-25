@@ -16,6 +16,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { withAlpha } from '../components/poster/shared/colorUtils';
 
 // Decorative palette — intentionally hardcoded.
 // These are user-facing canvas background swatches (solid colors and
@@ -348,7 +349,7 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
       onPress={() => onSelect(ratio)}
       style={[
         styles.ratioBtn,
-        { borderColor: isActive ? colors.brand : colors.border, borderWidth: isActive ? Stroke.emphasis : Stroke.standard, backgroundColor: isActive ? `${colors.brand}10` : 'transparent' },
+        { borderColor: isActive ? colors.brand : colors.border, borderWidth: isActive ? Stroke.emphasis : Stroke.standard, backgroundColor: isActive ? withAlpha(colors.brand, 0.06) : 'transparent' },
       ]}
       accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
       accessibilityRole="button"

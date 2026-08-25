@@ -10,6 +10,7 @@ import {
   type SearchQueryParams,
   type CachedSearchResult,
 } from '../lib/searchCache.js';
+import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
 
 type SearchExtendedRouteDependencies = {
   app: FastifyInstance;
@@ -151,6 +152,11 @@ async function computeSearchResults(
   );
 
   if (result.rowCount && result.rowCount > 0) {
+    const retrievalMeta: RetrievalMeta = {
+      method: 'lexical',
+      embedderConfigured: false,
+      searchEngineVersion: searchPolicyVersion,
+    };
     return {
       ok: true,
       query: q,
@@ -159,6 +165,7 @@ async function computeSearchResults(
         capabilityLevel: 'postgres_lexical',
         fallback: false,
       },
+      retrievalMeta,
       items: result.rows.map((row) => ({
         id: row.id,
         sellerId: row.seller_id,
@@ -226,6 +233,13 @@ async function computeSearchResults(
     [q, ...filterArgs, limit, offset]
   );
 
+  const fallbackReason: RetrievalFallbackReason = 'fts_no_matches_ilike_fallback';
+  const retrievalMeta: RetrievalMeta = {
+    method: 'lexical',
+    fallbackReason,
+    embedderConfigured: false,
+    searchEngineVersion: searchPolicyVersion,
+  };
   return {
     ok: true,
     query: q,
@@ -235,6 +249,7 @@ async function computeSearchResults(
       capabilityLevel: 'postgres_lexical',
       fallback: true,
     },
+    retrievalMeta,
     items: fallback.rows.map((row) => ({
       id: row.id,
       sellerId: row.seller_id,

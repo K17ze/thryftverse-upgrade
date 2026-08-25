@@ -536,9 +536,20 @@ type AuthRouteDependencies = {
   app: FastifyInstance;
   db: Pool;
   redis: Redis;
+  fraudShadowService?: {
+    scoreShadow(input: unknown): Promise<unknown>;
+    logScoreComparison(
+      eventId: string,
+      eventType: string,
+      userId: string | null,
+      ruleEngineResult: unknown,
+      shadowResult: unknown,
+      input: unknown,
+    ): Promise<void>;
+  } | null;
 };
 
-export const registerAuthRoutes = ({ app, db, redis }: AuthRouteDependencies) => {
+export const registerAuthRoutes = ({ app, db, redis, fraudShadowService }: AuthRouteDependencies) => {
   // ── POST /auth/signup ──────────────────────────────────────────────
   app.post(
     '/auth/signup',
@@ -616,7 +627,7 @@ export const registerAuthRoutes = ({ app, db, redis }: AuthRouteDependencies) =>
       );
 
       try {
-        await checkFraudNonBlocking(
+        const fraudResult = await checkFraudNonBlocking(
           redis,
           {
             eventType: 'signup',
@@ -627,7 +638,19 @@ export const registerAuthRoutes = ({ app, db, redis }: AuthRouteDependencies) =>
           },
           undefined,
           request.log,
+          fraudShadowService,
         );
+        // When the fraud service is unavailable, signup maps to `step_up`.
+        // The account is created but should be flagged for additional
+        // verification. We log the policy action; enforcement (e.g.
+        // requiring email verification before full access) is handled
+        // downstream.
+        if (fraudResult.evaluationStatus === 'unavailable' && fraudResult.policyAction === 'step_up') {
+          request.log.warn(
+            { userId: user.id, reasonCode: fraudResult.reasonCode },
+            'Signup fraud check unavailable — step-up verification recommended'
+          );
+        }
       } catch {
         // Fraud check failures must never break signup
       }

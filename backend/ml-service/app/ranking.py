@@ -25,6 +25,19 @@ TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 ACTION_WEIGHTS = {"view": 1.0, "wishlist": 2.8, "purchase": 4.5}
 ACTION_HALF_LIFE_DAYS = {"view": 7.0, "wishlist": 21.0, "purchase": 60.0}
 
+# Ordered feature names matching the component scores produced by the heuristic
+# ranker.  The LightGBM challenger consumes exactly these features so that
+# champion and shadow use the same interpretable feature space.
+RANKING_FEATURES: tuple[str, ...] = (
+    "affinity",
+    "sequence",
+    "price_alignment",
+    "freshness",
+    "quality",
+    "popularity",
+    "seller_trust",
+)
+
 
 def _utc(value: datetime | None, fallback: datetime) -> datetime:
     if value is None:
@@ -145,6 +158,101 @@ def _dedupe_candidates(candidates: list[CandidateItem]) -> tuple[list[CandidateI
         if candidate_completeness > incumbent_completeness:
             by_id[candidate.listing_id] = candidate
     return list(by_id.values()), len(candidates) - len(by_id)
+
+
+def extract_candidate_features(
+    payload: RecommendationRequest,
+) -> list[dict[str, object]]:
+    """Compute the interpretable component scores for every eligible candidate.
+
+    Returns one row per eligible candidate with ``listing_id``, ``components``
+    (the seven ranking features), ``utility``, and ``cold_start``.  This is the
+    shared feature path used by both the heuristic champion and the LightGBM
+    shadow challenger so that champion and challenger operate on identical
+    features.
+    """
+    as_of = _utc(payload.as_of, datetime.now(timezone.utc))
+    input_candidates = payload.candidates or [
+        CandidateItem(listing_id=listing_id) for listing_id in payload.candidate_listing_ids
+    ]
+    candidates, _ = _dedupe_candidates(input_candidates)
+    explicitly_excluded = set(payload.exclude_listing_ids)
+    purchased = {
+        event.listing_id for event in payload.recent_interactions if event.action == "purchase"
+    }
+    eligible = [
+        item
+        for item in candidates
+        if item.available
+        and item.listing_id not in explicitly_excluded
+        and item.listing_id not in purchased
+    ]
+
+    profile_weights: Counter[str] = Counter()
+    sequence_weights: Counter[str] = Counter()
+    interacted_prices: list[float] = []
+    ordered_events = sorted(
+        payload.recent_interactions,
+        key=lambda event: _utc(event.created_at, as_of),
+        reverse=True,
+    )
+    for sequence_index, event in enumerate(ordered_events):
+        weight = _event_weight(event, as_of)
+        tokens = _interaction_tokens(event)
+        for token in tokens:
+            profile_weights[token] += weight
+            sequence_weights[token] += weight * math.exp(-sequence_index / 6.0)
+        if event.price_gbp and event.price_gbp > 0:
+            interacted_prices.append(event.price_gbp)
+
+    median_price = float(np.median(interacted_prices)) if interacted_prices else None
+    meaningful_events = sum(_event_weight(event, as_of) >= 0.15 for event in ordered_events)
+    cold_start = meaningful_events < 3 or not profile_weights
+
+    rows: list[dict[str, object]] = []
+    for candidate in eligible:
+        tokens = _candidate_tokens(candidate)
+        affinity = _normalize_affinity(
+            sum(profile_weights[token] for token in tokens) / math.sqrt(max(1, len(tokens)))
+        )
+        sequence = _normalize_affinity(
+            sum(sequence_weights[token] for token in tokens) / math.sqrt(max(1, len(tokens)))
+        )
+        components = {
+            "affinity": affinity,
+            "sequence": sequence,
+            "price_alignment": _price_alignment(candidate.price_gbp, median_price),
+            "freshness": _freshness(candidate, as_of),
+            "quality": candidate.quality_score,
+            "popularity": candidate.popularity_score,
+            "seller_trust": candidate.seller_trust_score,
+        }
+        if cold_start:
+            utility = (
+                0.32 * components["quality"]
+                + 0.27 * components["popularity"]
+                + 0.23 * components["freshness"]
+                + 0.18 * components["seller_trust"]
+            )
+        else:
+            utility = (
+                0.34 * components["affinity"]
+                + 0.18 * components["sequence"]
+                + 0.14 * components["price_alignment"]
+                + 0.12 * components["quality"]
+                + 0.09 * components["popularity"]
+                + 0.07 * components["freshness"]
+                + 0.06 * components["seller_trust"]
+            )
+        rows.append(
+            {
+                "listing_id": candidate.listing_id,
+                "components": components,
+                "utility": min(1.0, max(0.0, utility)),
+                "cold_start": cold_start,
+            }
+        )
+    return rows
 
 
 def rank_recommendations(payload: RecommendationRequest) -> RecommendationResponse:

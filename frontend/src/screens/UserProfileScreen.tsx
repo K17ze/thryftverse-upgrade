@@ -125,6 +125,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const SURFACE_ALT = colors.surfaceAlt;
   const BRAND = colors.brand;
   const TEXT_INVERSE = colors.textInverse;
+  // On-cover icons: always white regardless of theme. colors.textInverse flips
+  // to #000000 in dark mode, making icons invisible on the dark overlay.
+  const SCRIM_PRIMARY = colors.scrimTextPrimary;
 
   // Themed color proxy - supplements module-level `styles` with color properties
   // that cannot live in StyleSheet.create (they depend on the active theme).
@@ -666,7 +669,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color={TEXT_INVERSE} />
+            <Ionicons name="arrow-back" size={18} color={SCRIM_PRIMARY} />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
@@ -677,7 +680,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color={TEXT_INVERSE} />
+              <Ionicons name="share-outline" size={18} color={SCRIM_PRIMARY} />
             </AnimatedPressable>
             <AnimatedPressable
               style={[styles.topUtilityIconBtn, { backgroundColor: colors.overlay }]}
@@ -687,7 +690,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
+              <Ionicons name="ellipsis-horizontal" size={18} color={SCRIM_PRIMARY} />
             </AnimatedPressable>
           </View>
         </Reanimated.View>

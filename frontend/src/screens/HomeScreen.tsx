@@ -32,7 +32,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
 import { fetchLooksFromApi } from '../services/looksApi';
-import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore, useIsGuest } from '../store/useStore';
@@ -449,7 +449,7 @@ export default function HomeScreen() {
   // surfacing an error (looks are not core to the commerce feed).
   const [feedLooks, setFeedLooks] = React.useState<LookFeedMarker['looks']>([]);
 
-  React.useEffect(() => {
+  const loadPostersAndLooks = React.useCallback(() => {
     let mounted = true;
     setPostersLoading(true);
     fetchPosterStories({ active: true, limit: 20 })
@@ -475,6 +475,19 @@ export default function HomeScreen() {
       .catch(() => { /* silent fail — looks are optional enrichment */ });
     return () => { mounted = false; };
   }, []);
+
+  React.useEffect(() => {
+    const cleanup = loadPostersAndLooks();
+    return cleanup;
+  }, [loadPostersAndLooks]);
+
+  // Refetch posters and looks on focus so newly published content appears
+  // in the feed without requiring a manual pull-to-refresh.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPostersAndLooks();
+    }, [loadPostersAndLooks]),
+  );
 
   const feedStatus = React.useMemo(
     () =>
@@ -707,7 +720,7 @@ export default function HomeScreen() {
 
                     {story.totalFrameCount > 1 && (
                       <View style={styles.frameCountBadge} accessible={false}>
-                        <Ionicons name="layers" size={10} color={colors.textInverse} />
+                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                         <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                       </View>
                     )}
@@ -736,7 +749,7 @@ export default function HomeScreen() {
 
                   {story.totalFrameCount > 1 && (
                     <View style={styles.frameCountBadge} accessible={false}>
-                      <Ionicons name="layers" size={10} color={colors.textInverse} />
+                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                       <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                     </View>
                   )}
@@ -1507,7 +1520,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   posterTextArtworkCopy: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.bold,
@@ -1527,7 +1540,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: colors.textInverse,
+    borderColor: colors.scrimTextPrimary,
     ...Elevation.floating,
   },
   posterAvatarOverlayWrap: {
@@ -1571,7 +1584,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
   },
   posterOwnerName: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 8,
     fontFamily: FontFamily.medium,
     flex: 1,
@@ -1586,7 +1599,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 3,
   },
   posterExpiryText: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     fontFamily: FontFamily.bold,
   },
@@ -1600,7 +1613,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
   },
   posterCaption: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: FontFamily.medium,
@@ -1620,7 +1633,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterCreatorName: {
     flex: 1,
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: FontFamily.semibold,
@@ -1638,7 +1651,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 2,
   },
   frameCountBadgeText: {
-    color: colors.textInverse,
+    color: colors.scrimTextPrimary,
     fontSize: 9,
     fontFamily: FontFamily.bold,
   },

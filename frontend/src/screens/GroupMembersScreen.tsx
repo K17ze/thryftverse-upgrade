@@ -47,9 +47,6 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
-  const participantNameLookup = useStore(
-    (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
-  );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -70,6 +67,19 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     () => conversations.find((c) => c.id === conversationId),
     [conversations, conversationId]
   );
+
+  // Build a participant name lookup from the conversation's participant profiles,
+  // same pattern used by InboxScreen. Avoids unsafe store type casts.
+  const participantNameLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    if (currentUser?.id) {
+      map.set(currentUser.id, currentUser.displayName ?? currentUser.username ?? 'you');
+    }
+    for (const profile of conversation?.participantProfiles ?? []) {
+      map.set(profile.id, profile.displayName ?? profile.username ?? `User ${profile.id.slice(-6)}`);
+    }
+    return map;
+  }, [conversation?.participantProfiles, currentUser]);
 
   const currentRole: MemberRole | undefined = useMemo(() => {
     if (!currentUser?.id) return undefined;

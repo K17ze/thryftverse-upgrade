@@ -1,29 +1,27 @@
 /**
- * CutoutPreviewSheet — before/after preview for true subject cutout.
+ * CutoutPreviewSheet — brush-based cutout mask editor with real-time
+ * Skia preview.
  *
- * Per spec 07_MEDIA_TOOLCHAIN §7, the cutout pipeline is:
- *   1. segmentation
- *   2. mask preview  ← this sheet
- *   3. edge refinement
- *   4. store alpha mask
- *   5. GPU compose
- *   6. only flatten at export/share preview
+ * Per §8.3, the cutout workflow is:
+ *   1. Create a brush mask (fully opaque — everything kept)
+ *   2. Real-time Skia preview over a checkerboard  ← this sheet
+ *   3. Brush refinement (Erase background / Keep subject / Restore)
+ *   4. Edge feather + optional invert
+ *   5. Export mask as PNG, build MaskRef with dimensions + checksum
+ *   6. The original image is NEVER replaced — the mask is applied
+ *      non-destructively at render time.
  *
- * This sheet shows a before/after preview of the segmentation result
- * rendered over a checkerboard so transparency is visible. It has:
- *   - a loading state during processing
- *   - a confirm/cancel button pair
- *   - an honest "Cutout is not available on this device" message when
- *     the native segmentation module is not available (AGENTS.md §11)
- *   - a Refine mode with Keep Person / Keep Object / Erase / Restore
- *     brush modes for manual mask refinement
- *   - a "Hold to compare" gesture to flash the original image
- *   - an Edge Softness slider (featherPx) and an Invert toggle
+ * This sheet uses the CutoutService brush API (Skia-based) for real
+ * pixel-level mask rasterization, and the MaskedPreview component for
+ * 60fps GPU compositing preview. The cutout never blocks the whole
+ * canvas — it's a sheet that leaves the top of the canvas visible.
  *
- * Per AGENTS.md §11: the Refine brush renders a visible stroke overlay
- * so the user's refinement intent is honestly represented. True
- * pixel-level mask rasterization requires a native module not yet
- * wired in this build (see CutoutService.refineMask).
+ * Per AGENTS.md §11: brush refinement is honestly represented — the
+ * Skia MaskedPreview shows the actual alpha-masked result, not a fake
+ * overlay. When Skia is unavailable, an honest message is shown.
+ *
+ * Per §8.3: mask dimensions, source checksum, model/version, and
+ * manual refinements are persisted in the MaskRef.
  *
  * Uses the shared SheetContainer from CreatorAnimations for consistent
  * motion and chrome.
@@ -60,11 +58,14 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
 import {
-  removeBackground,
-  isCutoutSupportedAsync,
+  cutoutService,
+  sourceChecksum,
   type CutoutResult,
-  type BrushStroke,
+  type CutoutMask,
+  type CutoutCapability,
 } from '../core/cutout/CutoutService';
+import { MaskedPreview } from '../core/cutout/MaskCompositor';
+import type { MaskStroke } from '../core/cutout/MaskRenderer';
 
 
 
@@ -148,38 +149,6 @@ function Checkerboard({ size }: { size: { width: number; height: number } }) {
   return <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>{squares}</View>;
 }
 
-// ── Stroke overlay (renders a brush stroke as semi-transparent dots) ──
-function StrokeOverlay({
-  stroke,
-  color,
-  opacity,
-}: {
-  stroke: { points: { x: number; y: number }[] };
-  color: string;
-  opacity: number;
-}) {
-  if (stroke.points.length === 0) return null;
-  return (
-    <>
-      {stroke.points.map((p, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: p.x - BRUSH_RADIUS,
-            top: p.y - BRUSH_RADIUS,
-            width: BRUSH_RADIUS * 2,
-            height: BRUSH_RADIUS * 2,
-            borderRadius: BRUSH_RADIUS,
-            backgroundColor: color,
-            opacity,
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
 export interface CutoutPreviewSheetProps {
   visible: boolean;
   imageUri: string;
@@ -188,18 +157,20 @@ export interface CutoutPreviewSheetProps {
 }
 
 /**
- * Shows a before/after preview of a true cutout (subject segmentation).
+ * Shows a real-time Skia preview of the brush-based cutout mask.
  *
  * On open, the sheet:
- *   1. Checks if native segmentation is available.
- *   2. If available, runs `removeBackground()` and shows the result
- *      over a checkerboard so transparency is visible.
+ *   1. Checks if Skia brush refinement is available (cutoutService).
+ *   2. If available, creates a brush mask (fully opaque) and shows the
+ *      image over a checkerboard with real-time alpha-masked preview.
  *   3. If not available, shows an honest "not available" message.
  *
- * The user can refine the mask with brush modes (Keep Person / Keep
- * Object / Erase / Restore), hold to compare the original, adjust edge
- * softness, and invert the mask. Confirming applies the cutout (caller
- * stores the alpha mask and updates the layer), or cancels.
+ * The user erases the background with brush modes (Keep / Erase /
+ * Restore), holds Compare to see the original, adjusts edge softness,
+ * and inverts the mask. Confirming exports the mask PNG and builds a
+ * MaskRef with dimensions, source checksum, and stroke count (§8.3).
+ * The original image is NEVER replaced — the mask is applied
+ * non-destructively at render time.
  */
 export function CutoutPreviewSheet({
   visible,
@@ -212,16 +183,17 @@ export function CutoutPreviewSheet({
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
 
-  const [supported, setSupported] = useState<boolean | null>(null);
+  const [capability, setCapability] = useState<CutoutCapability | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<CutoutResult | null>(null);
+  const [mask, setMask] = useState<CutoutMask | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
 
   // ── Refine state ──────────────────────────────────────────────────
-  const [refineMode, setRefineMode] = useState(false);
+  // strokes are MaskStroke[] (keep/erase) for the Skia MaskedPreview.
+  const [refineMode, setRefineMode] = useState(true);
   const [brushMode, setBrushMode] = useState<BrushMode | null>(null);
-  const [strokes, setStrokes] = useState<BrushStroke[]>([]);
+  const [strokes, setStrokes] = useState<MaskStroke[]>([]);
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
 
   // ── Compare / feather / invert state ──────────────────────────────
@@ -236,13 +208,16 @@ export function CutoutPreviewSheet({
   const modeUnderlineOpacitySV = useSharedValue(0);
 
   // ── Reset state when the sheet opens ──────────────────────────────
+  // Probe Skia capability and create a brush mask. The mask starts
+  // fully opaque (everything kept). The user erases background regions
+  // with the Erase brush and restores with the Keep brush.
   useEffect(() => {
     if (!visible) return;
-    setSupported(null);
+    setCapability(null);
     setProcessing(false);
-    setResult(null);
+    setMask(null);
     setError(null);
-    setRefineMode(false);
+    setRefineMode(true);
     setBrushMode(null);
     setStrokes([]);
     setCurrentPoints([]);
@@ -250,48 +225,97 @@ export function CutoutPreviewSheet({
     setFeatherPx(0);
     setInvert(false);
 
-    // Probe capability and run segmentation.
+    // Probe capability and create a brush mask.
     let cancelled = false;
     (async () => {
-      const isSupported = await isCutoutSupportedAsync();
+      const cap = cutoutService.getCapability();
       if (cancelled) return;
-      setSupported(isSupported);
-      if (!isSupported) return;
+      setCapability(cap);
+      if (!cap.brushRefinement) return;
 
+      // Need display dimensions to create the mask surface. We'll use
+      // the image's natural dimensions, capped to a reasonable mask
+      // resolution for performance.
       setProcessing(true);
-      const res = await removeBackground(imageUri);
-      if (cancelled) return;
-      if (!res) {
-        setError('Could not remove the background. Try a different photo.');
+      try {
+        const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+          RNImage.getSize(
+            imageUri,
+            (w, h) => resolve({ w, h }),
+            () => resolve({ w: 512, h: 512 }),
+          );
+        });
+        if (cancelled) return;
+        // Cap mask resolution to 1024px on the longest side for perf.
+        const maxDim = 1024;
+        const scale = Math.min(1, maxDim / Math.max(dims.w, dims.h));
+        const maskW = Math.round(dims.w * scale);
+        const maskH = Math.round(dims.h * scale);
+        const brushMask = await cutoutService.createBrushMask(
+          imageUri,
+          maskW,
+          maskH,
+        );
+        if (cancelled) {
+          cutoutService.disposeMask(brushMask);
+          return;
+        }
+        setMask(brushMask);
         setProcessing(false);
-        return;
+        haptic.medium();
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Could not initialise the brush mask.',
+        );
+        setProcessing(false);
       }
-      setResult(res);
-      setProcessing(false);
-      haptic.medium();
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible, imageUri, haptic]);
 
-  // ── Retry segmentation after a failure ──────────────────────────────
-  // Re-runs removeBackground with the same image URI. Clears the error
-  // state and shows the processing skeleton while the operation runs.
+  // ── Retry mask creation after a failure ──────────────────────────────
   const handleRetry = useCallback(async () => {
     if (processing) return;
     haptic.light();
     setError(null);
     setProcessing(true);
-    const res = await removeBackground(imageUri);
-    if (!res) {
-      setError('Could not remove the background. Try a different photo.');
+    try {
+      const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+        RNImage.getSize(
+          imageUri,
+          (w, h) => resolve({ w, h }),
+          () => resolve({ w: 512, h: 512 }),
+        );
+      });
+      const maxDim = 1024;
+      const scale = Math.min(1, maxDim / Math.max(dims.w, dims.h));
+      const maskW = Math.round(dims.w * scale);
+      const maskH = Math.round(dims.h * scale);
+      const brushMask = await cutoutService.createBrushMask(imageUri, maskW, maskH);
+      setMask(brushMask);
       setProcessing(false);
-      return;
+      haptic.medium();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not initialise the brush mask.',
+      );
+      setProcessing(false);
     }
-    setResult(res);
-    setProcessing(false);
-    haptic.medium();
   }, [processing, imageUri, haptic]);
+
+  // ── Dispose mask on unmount/close ───────────────────────────────────
+  useEffect(() => {
+    if (!visible && mask) {
+      cutoutService.disposeMask(mask);
+      setMask(null);
+    }
+  }, [visible, mask]);
 
   // ── Load image dimensions for display fitting ─────────────────────
   useEffect(() => {
@@ -311,6 +335,9 @@ export function CutoutPreviewSheet({
   }, [visible, imageUri]);
 
   // ── Brush stroke handlers (called from the gesture worklet via runOnJS) ──
+  // Strokes are rasterized into the CutoutService mask surface AND added
+  // to the strokes array for the Skia MaskedPreview. The mask coordinates
+  // are in the preview's local space (scaled to match the mask resolution).
   const startStroke = useCallback((x: number, y: number) => {
     if (!brushMode) return;
     setCurrentPoints([{ x, y }]);
@@ -325,18 +352,30 @@ export function CutoutPreviewSheet({
     if (!brushMode) return;
     setCurrentPoints((curr) => {
       if (curr.length > 0) {
-        setStrokes((prev) => [
-          ...prev,
-          {
-            mode: brushMode === 'erase' ? 'erase' : 'keep',
-            points: curr,
-          },
-        ]);
+        const mode: 'keep' | 'erase' = brushMode === 'erase' ? 'erase' : 'keep';
+        const stroke: MaskStroke = {
+          mode,
+          points: curr,
+          brushSize: BRUSH_RADIUS * 2,
+        };
+        setStrokes((prev) => [...prev, stroke]);
+        // Rasterize into the CutoutService mask surface for export.
+        if (mask) {
+          const scaledPoints = curr.map((p) => ({
+            x: (p.x / displaySize.width) * mask.width,
+            y: (p.y / displaySize.height) * mask.height,
+          }));
+          if (mode === 'erase') {
+            cutoutService.eraseStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
+          } else {
+            cutoutService.keepStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
+          }
+        }
       }
       return [];
     });
     haptic.light();
-  }, [brushMode, haptic]);
+  }, [brushMode, haptic, mask, displaySize]);
 
   // ── Drawing gesture ───────────────────────────────────────────────
   // Recreated each render so the worklet captures the latest brushMode.
@@ -355,9 +394,30 @@ export function CutoutPreviewSheet({
   const handleModeSelect = useCallback((mode: ModeId) => {
     if (mode === 'restore') {
       // Restore = undo the last refine stroke (action, not a persistent mode).
+      // The mask is rebuilt from the remaining strokes on export.
       if (strokes.length === 0) return;
       haptic.selection();
       setStrokes((prev) => prev.slice(0, -1));
+      // Rebuild the mask from scratch with remaining strokes.
+      if (mask) {
+        // Recreate the mask surface and re-apply all remaining strokes.
+        cutoutService.disposeMask(mask);
+        cutoutService.createBrushMask(mask.mediaAssetId, mask.width, mask.height).then((newMask) => {
+          setMask(newMask);
+          strokes.slice(0, -1).forEach((s) => {
+            const scaledPoints = s.points.map((p) => ({
+              x: (p.x / displaySize.width) * newMask.width,
+              y: (p.y / displaySize.height) * newMask.height,
+            }));
+            const scaledBrush = s.brushSize * (newMask.width / displaySize.width);
+            if (s.mode === 'erase') {
+              cutoutService.eraseStroke(newMask, scaledPoints, scaledBrush);
+            } else {
+              cutoutService.keepStroke(newMask, scaledPoints, scaledBrush);
+            }
+          });
+        });
+      }
       return;
     }
     haptic.selection();
@@ -378,20 +438,22 @@ export function CutoutPreviewSheet({
     });
   }, [strokes.length, haptic, modeUnderlineXSV, modeUnderlineWSV, modeUnderlineOpacitySV]);
 
-  // ── Refine toggle ─────────────────────────────────────────────────
-  const handleRefineToggle = useCallback(() => {
+  // ── Reset mask — clears all strokes and recreates the mask ────────
+  const handleResetMask = useCallback(() => {
+    if (!mask) return;
     haptic.selection();
-    setRefineMode((prev) => {
-      const next = !prev;
-      if (!next) {
-        // Leaving refine mode — clear in-progress drawing state.
-        setBrushMode(null);
-        setCurrentPoints([]);
-        modeUnderlineOpacitySV.value = withSpring(0, Motion.spring.indicator);
-      }
-      return next;
-    });
-  }, [haptic, modeUnderlineOpacitySV]);
+    setStrokes([]);
+    setCurrentPoints([]);
+    setBrushMode(null);
+    modeUnderlineOpacitySV.value = withSpring(0, Motion.spring.indicator);
+    // Recreate the mask surface (fully opaque — everything kept).
+    const mediaAssetId = mask.mediaAssetId;
+    const w = mask.width;
+    const h = mask.height;
+    cutoutService.disposeMask(mask);
+    setMask(null);
+    cutoutService.createBrushMask(mediaAssetId, w, h).then(setMask);
+  }, [mask, haptic, modeUnderlineOpacitySV]);
 
   // ── Invert toggle ─────────────────────────────────────────────────
   const handleInvertToggle = useCallback(() => {
@@ -400,19 +462,40 @@ export function CutoutPreviewSheet({
   }, [haptic]);
 
   // ── Confirm ───────────────────────────────────────────────────────
-  const handleConfirm = useCallback(() => {
-    if (!result) return;
+  // Export the mask as a PNG, apply feather/invert, and build a MaskRef
+  // with dimensions, source checksum, model version, and stroke count.
+  // The original image URI is preserved — the mask is applied
+  // non-destructively at render time (§8.3).
+  const handleConfirm = useCallback(async () => {
+    if (!mask) return;
     haptic.medium();
-    const refined: CutoutResult = {
-      ...result,
-      featherPx,
-      invert,
-      maskRef: result.maskRef
-        ? { ...result.maskRef, featherPx, invert }
-        : undefined,
-    };
-    onConfirm(refined);
-  }, [result, haptic, onConfirm, featherPx, invert]);
+    try {
+      // Apply feather and invert to the mask surface before export.
+      if (featherPx > 0) {
+        await cutoutService.featherEdge(mask, featherPx);
+      }
+      if (invert) {
+        await cutoutService.invertMask(mask);
+      }
+      const maskUri = await cutoutService.exportMask(mask);
+      const maskRef = cutoutService.buildMaskRef(mask, featherPx, invert, {
+        sourceChecksum: sourceChecksum(imageUri),
+        strokeCount: strokes.length,
+      });
+      const result: CutoutResult = {
+        uri: imageUri, // original image — NOT replaced
+        maskUri,
+        maskRef,
+        featherPx,
+        invert,
+      };
+      onConfirm(result);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not export the mask.',
+      );
+    }
+  }, [mask, haptic, featherPx, invert, imageUri, strokes.length, onConfirm]);
 
   const previewSize = displaySize.width > 0
     ? displaySize
@@ -430,7 +513,7 @@ export function CutoutPreviewSheet({
     { id: 'restore', label: 'Restore', icon: 'return-up-back-outline' },
   ];
 
-  const canRefine = supported === true && !processing && !!result;
+  const canRefine = !!capability?.brushRefinement && !processing && !!mask;
 
   // Mode tab underline animated style.
   const modeUnderlineStyle = useAnimatedStyle(() => ({
@@ -458,28 +541,29 @@ export function CutoutPreviewSheet({
         </View>
 
         {/* ── Body ── */}
-        {supported === false && (
+        {capability && !capability.brushRefinement && (
           <View style={styles.messageContainer}>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
               Cutout is not available on this device
             </Text>
             <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              True subject segmentation requires iOS 17+ or a supported
-              Android device. You can still crop your photo manually.
+              Brush-based cutout requires the Skia rendering engine, which
+              is not linked in this build. You can still crop your photo
+              manually.
             </Text>
           </View>
         )}
 
-        {supported === true && processing && (
+        {capability?.brushRefinement && processing && (
           <View style={styles.previewContainer}>
             <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
           </View>
         )}
 
-        {supported === true && !processing && error && (
+        {capability?.brushRefinement && !processing && error && (
           <View style={styles.messageContainer}>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
-              Could not complete the cutout
+              Could not initialise the cutout
             </Text>
             <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
               {error}
@@ -488,7 +572,7 @@ export function CutoutPreviewSheet({
               onPress={handleRetry}
               style={[styles.retryBtn, { backgroundColor: colors.brand }]}
               accessibilityLabel="Retry cutout"
-              accessibilityHint="Attempts the background removal again"
+              accessibilityHint="Attempts to create the brush mask again"
               accessibilityRole="button"
             >
               <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>
@@ -498,23 +582,12 @@ export function CutoutPreviewSheet({
           </View>
         )}
 
-        {supported === true && !processing && result && (
+        {capability?.brushRefinement && !processing && mask && (
           <View style={styles.previewContainer}>
-            {/* Before / After labels — text-only (hidden in refine mode) */}
-            {!refineMode && !comparing && (
-              <View style={styles.labelRow}>
-                <Text style={[styles.labelText, { color: colors.textSecondary }]}>
-                  Before
-                </Text>
-                <Text style={[styles.labelText, { color: colors.textSecondary }]}>
-                  After
-                </Text>
-              </View>
-            )}
-
             {/* ── Preview area ── */}
             {comparing ? (
               // Hold-to-compare: show the original image full-width.
+              // Reduce Motion-safe: no animation, just an instant swap.
               <View style={[styles.previewRow, { height: previewSize.height + Space.sm * 2 }]}>
                 <View style={styles.previewCell}>
                   <View style={[styles.previewFrame, { width: previewSize.width, height: previewSize.height, borderColor: colors.border }]}>
@@ -526,8 +599,9 @@ export function CutoutPreviewSheet({
                   </View>
                 </View>
               </View>
-            ) : refineMode ? (
-              // Refine mode: single cutout preview with drawing canvas.
+            ) : (
+              // Real-time Skia MaskedPreview with brush drawing.
+              // The checkerboard shows through erased regions.
               <View style={[styles.previewRow, { height: previewSize.height + Space.sm * 2 }]}>
                 <View style={styles.previewCell}>
                   <GestureHandlerRootView style={styles.gestureRoot}>
@@ -543,110 +617,59 @@ export function CutoutPreviewSheet({
                         ]}
                       >
                         <Checkerboard size={{ width: previewSize.width, height: previewSize.height }} />
-                        <Image
-                          source={{ uri: result.uri }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="contain"
+                        {/* Skia MaskedPreview — real-time alpha-masked cutout */}
+                        <MaskedPreview
+                          imageUri={imageUri}
+                          width={previewSize.width}
+                          height={previewSize.height}
+                          strokes={strokes}
+                          livePoints={currentPoints}
+                          liveMode={brushMode === 'erase' ? 'erase' : brushMode ? 'keep' : null}
+                          brushSize={BRUSH_RADIUS * 2}
+                          showLiveOverlay={!!brushMode}
                         />
-                        {/* Committed stroke overlays */}
-                        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                          {strokes.map((s, i) => (
-                            <StrokeOverlay
-                              key={i}
-                              stroke={s}
-                              color={s.mode === 'erase' ? ERASE_BRUSH : KEEP_BRUSH}
-                              opacity={s.mode === 'erase' ? 0.35 : 0.3}
-                            />
-                          ))}
-                        </View>
-                        {/* In-progress stroke overlay (coloured) */}
-                        {currentPoints.length > 0 && brushMode && (
-                          <View
-                            style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
-                          >
-                            {currentPoints.map((p, i) => (
-                              <View
-                                key={i}
-                                style={{
-                                  position: 'absolute',
-                                  left: p.x - BRUSH_RADIUS,
-                                  top: p.y - BRUSH_RADIUS,
-                                  width: BRUSH_RADIUS * 2,
-                                  height: BRUSH_RADIUS * 2,
-                                  borderRadius: BRUSH_RADIUS,
-                                  backgroundColor: currentBrushColor,
-                                  opacity: 0.5,
-                                }}
-                              />
-                            ))}
-                          </View>
-                        )}
                       </View>
                     </GestureDetector>
                   </GestureHandlerRootView>
                 </View>
               </View>
-            ) : (
-              // Default: side-by-side before/after preview.
-              <View style={[styles.previewRow, { height: previewSize.height + Space.sm * 2 }]}>
-                {/* Original */}
-                <View style={styles.previewCell}>
-                  <View style={[styles.previewFrame, { width: previewSize.width / 2 - Space.xs, height: previewSize.height }]}>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
-                    />
-                  </View>
-                </View>
-                {/* Cutout over checkerboard */}
-                <View style={styles.previewCell}>
-                  <View style={[styles.previewFrame, { width: previewSize.width / 2 - Space.xs, height: previewSize.height, borderColor: colors.border }]}>
-                    <Checkerboard size={{ width: previewSize.width / 2 - Space.xs, height: previewSize.height }} />
-                    <Image
-                      source={{ uri: result.uri }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="contain"
-                    />
-                  </View>
-                </View>
-              </View>
             )}
 
-            {/* ── Refine / compare controls ── */}
+            {/* ── Compare / reset / invert controls ── */}
             <View style={styles.controlRow}>
-              {/* Refine toggle */}
+              {/* Reset — clears all strokes and recreates the mask */}
               <PressScale
-                onPress={handleRefineToggle}
-                disabled={!canRefine}
+                onPress={handleResetMask}
+                disabled={!canRefine || strokes.length === 0}
                 style={[
                   styles.controlBtn,
                   {
-                    backgroundColor: refineMode ? colors.brand : colors.surfaceAlt,
-                    borderColor: refineMode ? colors.brand : colors.border,
-                    opacity: canRefine ? 1 : 0.4,
+                    backgroundColor: 'transparent',
+                    borderColor: colors.border,
+                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4,
                   },
                 ]}
-                accessibilityLabel="Toggle refine mode"
+                accessibilityLabel="Reset mask"
+                accessibilityHint="Clears all brush strokes and starts over"
                 accessibilityRole="button"
-                accessibilityState={{ selected: refineMode }}
               >
                 <Ionicons
-                  name="brush-outline"
+                  name="refresh-outline"
                   size={IconGrammar.metadata}
-                  color={refineMode ? colors.textInverse : colors.textSecondary}
+                  color={colors.textSecondary}
                 />
                 <Text
                   style={[
                     styles.controlBtnLabel,
-                    { color: refineMode ? colors.textInverse : colors.textSecondary },
+                    { color: colors.textSecondary },
                   ]}
                 >
-                  Refine
+                  Reset
                 </Text>
               </PressScale>
 
-              {/* Hold to compare */}
+              {/* Hold to compare — shows the original image. Reduce Motion-safe:
+                  instant swap, no animation. */}
               <Pressable
                 onPressIn={() => { haptic.light(); setComparing(true); }}
                 onPressOut={() => setComparing(false)}
@@ -664,7 +687,7 @@ export function CutoutPreviewSheet({
               >
                 <Ionicons name="eye-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.controlBtnLabel, { color: colors.textSecondary }]}>
-                  Hold to Compare
+                  Compare
                 </Text>
               </Pressable>
 
@@ -709,7 +732,7 @@ export function CutoutPreviewSheet({
                   <PressScale
                     key={btn.id}
                     onPress={() => handleModeSelect(btn.id)}
-                    disabled={!refineMode || !canRefine}
+                    disabled={!canRefine}
                     onLayout={!isRestore ? (e) => {
                       modeTabLayouts.current.set(btn.id as BrushMode, {
                         x: e.nativeEvent.layout.x,
@@ -731,7 +754,7 @@ export function CutoutPreviewSheet({
                         styles.modeTabText,
                         {
                           color: selected ? colors.brand : colors.textSecondary,
-                          opacity: !refineMode || !canRefine ? 0.4 : 1,
+                          opacity: !canRefine ? 0.4 : 1,
                         },
                       ]}
                       numberOfLines={1}
@@ -771,17 +794,15 @@ export function CutoutPreviewSheet({
 
             {/* ── Hint ── */}
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              {refineMode
-                ? brushMode
-                  ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'} — strokes refine the mask.`
-                  : 'Select a brush mode, then draw to refine the mask.'
-                : 'The checkerboard shows transparent areas. Tap Refine to manually adjust the mask.'}
+              {brushMode
+                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'} — strokes refine the mask in real time.`
+                : 'Select a brush mode, then draw to erase the background. Hold Compare to see the original.'}
             </Text>
           </View>
         )}
 
-        {/* Spacer when probing capability (supported === null) */}
-        {supported === null && (
+        {/* Spacer when probing capability (capability === null) */}
+        {capability === null && (
           <View style={styles.previewContainer}>
             <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
             <Text style={[styles.messageBody, { color: colors.textSecondary, textAlign: 'center', marginTop: Space.md }]}>
@@ -804,13 +825,13 @@ export function CutoutPreviewSheet({
           </PressScale>
           <PressScale
             onPress={handleConfirm}
-            disabled={!result || processing}
+            disabled={!mask || processing}
             style={[
               styles.footerBtn,
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: !result || processing ? 0.4 : 1,
+                opacity: !mask || processing ? 0.4 : 1,
               },
             ]}
             accessibilityLabel="Apply cutout"
@@ -954,16 +975,6 @@ const styles = StyleSheet.create({
   previewContainer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.xs,
-  },
-  labelText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
   },
   previewRow: {
     flexDirection: 'row',

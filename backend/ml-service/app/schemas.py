@@ -57,11 +57,44 @@ class RecommendationRequest(BaseModel):
 class RecommendationItem(BaseModel):
     listing_id: str
     score: float = Field(ge=0, le=1)
-    model: Literal["heuristic_ranker_v2", "novelty_exploration_v2"]
+    model: Literal[
+        "heuristic_ranker_v2",
+        "novelty_exploration_v2",
+        "lightgbm_lambdarank_v1",
+        "lightgbm_xendcg_v1",
+    ]
     policy: Literal["exploit", "explore"]
     position: int = Field(ge=1)
     reason_codes: list[str]
     component_scores: dict[str, float]
+
+
+class ShadowScoreEntry(BaseModel):
+    """Per-candidate comparison between champion and shadow challenger.
+
+    Shadow scores never affect the user-facing ranking. They are emitted in
+    diagnostics so champion and challenger can be compared offline.
+    """
+
+    listing_id: str
+    champion_score: float = Field(ge=0, le=1)
+    challenger_score: float
+    score_delta: float
+    champion_rank: int = Field(ge=1)
+    challenger_rank: int = Field(ge=1)
+
+
+class ShadowScoring(BaseModel):
+    """Aggregate shadow-challenger telemetry attached to diagnostics."""
+
+    shadow_model_id: str
+    shadow_model_version: str
+    shadow_objective: str
+    scored_count: int = Field(ge=0)
+    latency_ms: float = Field(ge=0)
+    feature_missingness: float = Field(ge=0, le=1)
+    rank_overlap_at_k: float = Field(ge=0, le=1)
+    scores: list[ShadowScoreEntry] = Field(default_factory=list)
 
 
 class RecommendationDiagnostics(BaseModel):
@@ -70,14 +103,15 @@ class RecommendationDiagnostics(BaseModel):
     explicitly_excluded_candidates: int
     purchased_candidates_removed: int
     constraints_relaxed: bool
+    shadow_scoring: ShadowScoring | None = None
 
 
 class RecommendationMetadata(BaseModel):
     request_id: str
     policy_version: str
     feature_schema_version: str
-    capability_level: Literal["heuristic_baseline"]
-    trained_model: Literal[False]
+    capability_level: Literal["heuristic_baseline", "trained_model"]
+    trained_model: bool
     generated_at: datetime
     candidate_count: int
     eligible_count: int

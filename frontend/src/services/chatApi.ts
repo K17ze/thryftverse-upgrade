@@ -27,6 +27,16 @@ interface ApiConversationPayload {
   lastMessageTime: string;
   unread: boolean;
   memberRoles?: Record<string, string>;
+  isMuted?: boolean;
+  isArchived?: boolean;
+  requestStatus?: 'pending' | 'accepted' | 'declined';
+  pinnedRank?: number;
+  markedUnread?: boolean;
+}
+
+interface ApiMessageReaction {
+  emoji: string;
+  userIds: string[];
 }
 
 interface ApiMessagePayload {
@@ -37,6 +47,12 @@ interface ApiMessagePayload {
   body: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  clientMessageId?: string;
+  replyToMessageId?: string;
+  deletedForEveryoneAt?: string;
+  editVersion?: number;
+  editedAt?: string;
+  reactions?: ApiMessageReaction[];
 }
 
 interface ApiBotPayload {
@@ -117,6 +133,8 @@ function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message
     sender: payload.senderType === 'system' ? 'system' : 'other',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    replyToMessageId: payload.replyToMessageId,
+    reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
   };
 }
 
@@ -160,6 +178,11 @@ function mapApiConversationToApp(
     unread: payload.unread,
     messages: resolvedMessages,
     memberRoles: normalizeMemberRoles(payload.memberRoles),
+    isMuted: payload.isMuted ?? false,
+    isArchived: payload.isArchived ?? false,
+    requestStatus: payload.requestStatus ?? 'accepted',
+    isPinned: (payload.pinnedRank ?? 0) > 0,
+    markedUnread: payload.markedUnread ?? false,
   };
 }
 
@@ -251,7 +274,7 @@ export async function sendConversationMessageOnApi(
   text: string,
   metadata?: Record<string, unknown>,
   clientMessageId?: string,
-  options?: { type?: 'text' | 'image' | 'video'; mediaUri?: string },
+  options?: { type?: 'text' | 'image' | 'video'; mediaUri?: string; replyToMessageId?: string },
 ): Promise<Message> {
   // P0-MSG-1: Discriminated message payload. The backend accepts a
   // `type` field — 'text' (or absent) requires text; 'image'/'video'
@@ -273,6 +296,9 @@ export async function sendConversationMessageOnApi(
   if (clientMessageId) {
     body.clientMessageId = clientMessageId;
   }
+  if (options?.replyToMessageId) {
+    body.replyToMessageId = options.replyToMessageId;
+  }
   const payload = await fetchJson<{
     ok: true;
     message: ApiMessagePayload;
@@ -289,18 +315,64 @@ export async function sendConversationMessageOnApi(
 
 export async function deleteConversationMessageOnApi(
   conversationId: string,
-  messageId: string
-): Promise<void> {
-  await fetchJson<{ ok: true }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+  messageId: string,
+  scope: 'me' | 'everyone' = 'me'
+): Promise<{ ok: true; deleted: boolean; scope: 'me' | 'everyone' }> {
+  return fetchJson<{ ok: true; deleted: boolean; scope: 'me' | 'everyone' }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}?scope=${scope}`,
     { method: 'DELETE' }
   );
 }
 
-export async function deleteConversationOnApi(conversationId: string): Promise<void> {
+export async function deleteConversationOnApi(
+  conversationId: string,
+  scope: 'me' | 'leave' = 'me'
+): Promise<void> {
   await fetchJson<{ ok: true }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}`,
+    `/chat/conversations/${encodeURIComponent(conversationId)}?scope=${scope}`,
     { method: 'DELETE' }
+  );
+}
+
+export async function addMessageReactionOnApi(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<{ ok: true; reacted: boolean; emoji: string }> {
+  return fetchJson<{ ok: true; reacted: boolean; emoji: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji }),
+    }
+  );
+}
+
+export async function removeMessageReactionOnApi(
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<{ ok: true; removed: boolean; emoji: string }> {
+  return fetchJson<{ ok: true; removed: boolean; emoji: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions?emoji=${encodeURIComponent(emoji)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function reportConversationOnApi(
+  conversationId: string,
+  reason: string,
+  details?: string,
+  messageId?: string
+): Promise<{ ok: true; reportId: string; status: string }> {
+  return fetchJson<{ ok: true; reportId: string; status: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, details, messageId }),
+    }
   );
 }
 
@@ -796,22 +868,6 @@ export async function declineMessageRequestOnApi(conversationId: string): Promis
     `/chat/conversations/${encodeURIComponent(conversationId)}/decline`,
     { method: 'POST' }
   );
-}
-
-export async function reportConversationOnApi(
-  conversationId: string,
-  reason: string,
-  details?: string,
-): Promise<{ reportId: string }> {
-  const response = await fetchJson<{ ok: boolean; reportId: string }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/report`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, details: details ?? undefined }),
-    },
-  );
-  return { reportId: response.reportId };
 }
 
 // ---------------------------------------------------------------------------

@@ -19,10 +19,8 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Modal,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,12 +60,11 @@ import {
   type SuggestedReply,
 } from '../services/chatAgentsApi';
 import {
-  deleteConversationOnApi,
-  leaveGroupOnApi,
   sendConversationMessageOnApi,
   fetchConversationMessagesFromApi,
   setTypingStatus,
   deleteConversationMessageOnApi,
+  reportConversationOnApi,
 } from '../services/chatApi';
 import { useChatMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import type { Message as ConversationMessage } from '../domain';
@@ -111,7 +108,6 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
-  const deleteConversation = useStore((state) => state.deleteConversation);
   const addMessageReaction = useStore((state) => state.addMessageReaction);
   const removeMessageReaction = useStore((state) => state.removeMessageReaction);
 
@@ -124,11 +120,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [infoVisible, setInfoVisible] = useState(false);
   const [agentPickerVisible, setAgentPickerVisible] = useState(false);
   const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
-  const [isLeaving, setIsLeaving] = useState(false);
 
   // Long-press context menu, emoji reactions, and reply-to state — mirror
   // the ChatScreen wiring so group messages behave like DMs.
@@ -474,9 +468,18 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         show('Message deleted', 'info');
         break;
       }
-      case 'report':
-        show('Reported for review', 'info');
+      case 'report': {
+        const reportMessageId = selectedMessage.id;
+        const reportConversationId = conversation?.id ?? groupId;
+        reportConversationOnApi(reportConversationId, 'other', undefined, reportMessageId)
+          .then(() => {
+            show('Report submitted. Thank you.', 'success');
+          })
+          .catch(() => {
+            show('Failed to submit report. Please try again.', 'error');
+          });
         break;
+      }
       default:
         break;
     }
@@ -542,7 +545,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             timestamp={item.timestamp}
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
-            showAvatar={!item.isMe && isLastInCluster}
+            showAvatar={!item.isMe && isFirstInCluster}
             reactions={item.reactions}
             replyTo={
               replyParent
@@ -749,192 +752,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           messageText={selectedMessage?.text}
           isOwnMessage={selectedMessage?.isMe}
         />
-
-        {/* GroupInfoModal retired — group info now lives in the dedicated
-            GroupChatInfoScreen (tabbed Members / Media / Settings surface).
-            The modal component is retained below for reference but no longer rendered. */}
-        {/*
-        <GroupInfoModal
-          visible={infoVisible}
-          onClose={() => setInfoVisible(false)}
-          groupName={groupName}
-          memberProfiles={memberProfiles}
-          memberCount={memberCount}
-          deployedAgents={deployedAgents}
-          isLeaving={isLeaving}
-          onLeaveGroup={() => {
-            Alert.alert(
-              'Leave group?',
-              "You'll no longer receive messages from this group.",
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Leave group',
-                  style: 'destructive',
-                  onPress: async () => {
-                    if (!currentUser?.id) {
-                      show('Could not leave group. Try again.', 'error');
-                      return;
-                    }
-                    haptic.warning();
-                    setIsLeaving(true);
-                    try {
-                      await leaveGroupOnApi(groupId, currentUser.id);
-                      deleteConversation(groupId);
-                      setInfoVisible(false);
-                      show('Left group', 'info');
-                      navigation.goBack();
-                    } catch {
-                      show('Could not leave group. Try again.', 'error');
-                    } finally {
-                      setIsLeaving(false);
-                    }
-                  },
-                },
-              ],
-            );
-          }}
-          onManageAgents={() => {
-            setInfoVisible(false);
-            setAgentPickerVisible(true);
-          }}
-        />
-        */}
       </View>
     </SafeAreaView>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Group info modal — members, settings, leave group
-// ---------------------------------------------------------------------------
-function GroupInfoModal({
-  visible,
-  onClose,
-  groupName,
-  memberProfiles,
-  memberCount,
-  deployedAgents,
-  isLeaving,
-  onLeaveGroup,
-  onManageAgents,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  groupName: string;
-  memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
-  memberCount: number;
-  deployedAgents: ChatAgent[];
-  isLeaving: boolean;
-  onLeaveGroup: () => void;
-  onManageAgents: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View
-          style={[styles.sheet, { backgroundColor: colors.surface }]}
-          accessibilityLabel="Group info sheet"
-        >
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              {groupName}
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              {memberCount} member{memberCount === 1 ? '' : 's'}
-            </Text>
-          </View>
-
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-            {deployedAgents.length > 0 && (
-              <View style={styles.modalSection}>
-                <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                  AI AGENTS
-                </Meta>
-                {deployedAgents.map((agent) => (
-                  <View key={agent.id} style={[styles.memberRow, { backgroundColor: colors.surfaceAlt }]}>
-                    <View style={[styles.memberIcon, { backgroundColor: `${colors.brand}14` }]}>
-                      <Ionicons name={agent.avatar as keyof typeof Ionicons.glyphMap} size={18} color={colors.brand} />
-                    </View>
-                    <View style={styles.memberText}>
-                      <BodyEmphasis numberOfLines={1}>{agent.name}</BodyEmphasis>
-                      <Caption color={colors.textMuted} numberOfLines={1}>{agent.description}</Caption>
-                    </View>
-                  </View>
-                ))}
-                <AnimatedPressable
-                  style={[styles.manageAgentsBtn, { borderColor: colors.border }]}
-                  onPress={onManageAgents}
-                  activeOpacity={0.7}
-                  scaleValue={0.97}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityLabel="Manage AI agents"
-                >
-                  <Text style={[styles.manageAgentsText, { color: colors.textPrimary }]}>Manage AI agents</Text>
-                </AnimatedPressable>
-              </View>
-            )}
-
-            <View style={styles.modalSection}>
-              <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                MEMBERS
-              </Meta>
-              {memberProfiles.length === 0 ? (
-                <Caption color={colors.textMuted} style={styles.emptyMembers}>
-                  Member list unavailable
-                </Caption>
-              ) : (
-                memberProfiles.map((member) => (
-                  <View key={member.id} style={[styles.memberRow, { backgroundColor: colors.surfaceAlt }]}>
-                    <View style={[styles.memberIcon, { backgroundColor: colors.surface }]}>
-                      <Ionicons name="person" size={16} color={colors.textSecondary} />
-                    </View>
-                    <View style={styles.memberText}>
-                      <BodyEmphasis numberOfLines={1}>
-                        {member.displayName ?? member.username}
-                      </BodyEmphasis>
-                      <Caption color={colors.textMuted} numberOfLines={1}>@{member.username}</Caption>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
-
-          <Pressable
-            style={[styles.leaveBtn, { borderColor: colors.danger }, isLeaving && styles.leaveBtnDisabled]}
-            onPress={onLeaveGroup}
-            disabled={isLeaving}
-            accessibilityRole="button"
-            accessibilityLabel="Leave group"
-            accessibilityHint="Removes you from this group conversation"
-            accessibilityState={{ disabled: isLeaving }}
-          >
-            {isLeaving ? (
-              <ActivityIndicator size="small" color={colors.danger} />
-            ) : (
-              <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close group info"
-          >
-            <Text style={[styles.cancelText, { color: colors.textPrimary }]}>Close</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -1045,117 +864,5 @@ const createStyles = (colors: ThemeColors) =>
       textAlign: 'center',
       marginTop: Space.xs,
       paddingHorizontal: Space.lg,
-    },
-    overlay: {
-      flex: 1,
-      backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
-    sheet: {
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-      gap: Space.md,
-      maxHeight: '85%',
-    },
-    handle: {
-      width: Control.chrome,
-      height: Space.xs,
-      borderRadius: Radius.full,
-      alignSelf: 'center',
-      marginBottom: Space.sm,
-    },
-    modalHeader: {
-      marginBottom: Space.xs,
-    },
-    modalTitle: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    modalSubtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.xs / 2,
-    },
-    modalScroll: {
-      flexGrow: 0,
-    },
-    modalScrollContent: {
-      gap: Space.md,
-    },
-    modalSection: {
-      gap: Space.sm,
-    },
-    sectionLabel: {
-      letterSpacing: Type.label.letterSpacing,
-    },
-    memberRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.sm + 2,
-      borderRadius: Radius.lg,
-    },
-    memberIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    memberText: {
-      flex: 1,
-      gap: Space.xs / 4,
-    },
-    emptyMembers: {
-      paddingVertical: Space.sm,
-    },
-    manageAgentsBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.sm + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    manageAgentsText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-    leaveBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.md + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    leaveBtnDisabled: {
-      opacity: 0.6,
-    },
-    leaveBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-    cancelBtn: {
-      borderRadius: Radius.lg,
-      paddingVertical: Space.md + 2,
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-    },
-    cancelText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     },
   });

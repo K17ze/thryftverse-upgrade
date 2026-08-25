@@ -36,6 +36,14 @@ export interface LookApiItem {
   /** Versioned composition document for collage looks. When present, the
    * viewer should render this canonical composition instead of only mediaUrl. */
   compositionDocument?: unknown;
+  /** When non-null, this look is a repost of the referenced source look. */
+  sourceLookId?: string | null;
+  /** Source look attribution info (present when sourceLookId is non-null). */
+  sourceLook?: {
+    creatorId: string;
+    creatorUsername: string | null;
+    creatorAvatar: string | null;
+  } | null;
 }
 
 export interface LookApiResponse {
@@ -71,6 +79,7 @@ export interface LookCreateBody {
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
   compositionDocument?: unknown;
+  sourceLookId?: string;
 }
 
 export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boolean; lookId: string }> {
@@ -109,6 +118,28 @@ export async function fetchLookByIdFromApi(lookId: string): Promise<LookSingleRe
 
 export async function deleteLookOnApi(lookId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/looks/${lookId}`, { method: 'DELETE' });
+}
+
+export async function repostLookOnApi(lookId: string): Promise<{ ok: boolean; lookId: string }> {
+  return fetchJson<{ ok: boolean; lookId: string }>(`/looks/${lookId}/repost`, {
+    method: 'POST',
+  });
+}
+
+export interface LookRelatedResponse {
+  items: LookApiItem[];
+  nextCursor?: string | null;
+}
+
+export async function fetchRelatedLooksFromApi(
+  lookId: string,
+  options?: { cursor?: string; limit?: number }
+): Promise<LookRelatedResponse> {
+  const params = new URLSearchParams();
+  if (options?.cursor) params.set('cursor', options.cursor);
+  if (options?.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  return fetchJson<LookRelatedResponse>(`/looks/${lookId}/related${qs ? `?${qs}` : ''}`);
 }
 
 // ── Like ──

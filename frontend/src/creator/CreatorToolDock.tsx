@@ -18,6 +18,7 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { withAlpha } from '../components/poster/shared/colorUtils';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { ToolButton, type RailTool } from './dock/ToolButton';
 import type { CreatorLayer } from './composition';
@@ -364,7 +365,7 @@ export function CreatorToolDock({
           {/* Subtle right-edge gradient fade indicating horizontal overflow */}
           <LinearGradient
             pointerEvents="none"
-            colors={[`${colors.surface}00`, colors.surface]}
+            colors={[withAlpha(colors.surface, 0), colors.surface]}
             style={styles.fadeRight}
           />
         </View>

@@ -72,9 +72,11 @@ Tertiary layer:  grouped overflow (Accessibility, Advanced editing, Project)
 - editor empty (blank start) / single-photo / multi-frame / video / publishing / failure
 - viewer loading / playing / paused / ended / error
 
-## Upload-department observable outcomes (per `.devin/workflows/upload-department-convergence-loop.md` §5)
+## Creator-media observable outcomes
 
-These outcomes govern the camera → gallery → editor-seeding flow specifically:
+These retained outcomes govern the camera → gallery → editor-seeding flow. Execute
+them through `.devin/workflows/visual-flagship-convergence-loop.md` and, wherever
+media persists or publishes, `.devin/workflows/live-signs-convergence-loop.md`.
 
 - **Continuity:** the captured/selected media's position does not jump between camera and editor. The same pixels stay in place while chrome fades in (220–280ms ease-in-out). No black/white flash, no spinner. Reduced motion: instant swap, same landing position.
 - **Camera chrome restraint:** the gallery thumbnail has no text label (the thumbnail IS the label). The gallery placeholder is a transparent 44pt hit target + 22–24pt glyph, not a bordered box. ≤6 immediate actions on the camera surface at idle.

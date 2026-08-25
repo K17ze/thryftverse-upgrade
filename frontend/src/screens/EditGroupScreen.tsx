@@ -406,9 +406,9 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             {/* Camera badge */}
             <View style={styles.coverCameraBadge}>
               {isUploadingCover ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               ) : (
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+                <Ionicons name="camera" size={16} color={colors.scrimTextPrimary} />
               )}
             </View>
           </AnimatedPressable>

@@ -1,3 +1,17 @@
+/**
+ * 1ze Token Pricing Engine — Authoritative Non-ML Commerce Logic
+ *
+ * This module is the authoritative source for 1ze token buy/sell/cross-border
+ * pricing. All calculations are deterministic: prices are derived from
+ * operator-set anchor values, FX rates, and bounded markup/markdown/PPP
+ * parameters. No ML model participates in price determination.
+ *
+ * Per the authoritative boundaries policy (docs/AUTHORITATIVE_BOUNDARIES.md),
+ * 1ze pricing is a High-tier system: the model may provide evidence only;
+ * authoritative policy and deterministic code own the action. Parameter
+ * bounds are enforced by validatePricingProfileInput(), and arbitrage is
+ * detected deterministically by findPricingArbitrageViolations().
+ */
 type Queryable = {
   query: <T = Record<string, unknown>>(
     text: string,

@@ -47,7 +47,7 @@ export interface CreatorContextValue {
    *  entries. Callers are responsible for committing via updateLayer or
    *  reverting when the preview ends. */
   updateLayerLive: (id: string, updates: Partial<CreatorLayer>) => void;
-  commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string) => void;
+  commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string, isAutoLayout?: boolean) => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   reorderLayer: (id: string, direction: 'front' | 'forward' | 'backward' | 'back') => void;
@@ -517,9 +517,18 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     });
   }, [activePageIndex]);
 
-  const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
+  const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string, isAutoLayout?: boolean) => {
+    // Per §8.3: auto-layout NEVER silently moves a manually positioned
+    // object. When a user manually edits a layer (isAutoLayout is not
+    // true), mark it as manuallyPositioned so future auto-layout passes
+    // skip it. Auto-layout calls pass isAutoLayout: true to avoid
+    // setting the flag (the layer remains auto-arrangeable until the
+    // user manually touches it).
+    const finalUpdates = isAutoLayout
+      ? updates
+      : { ...updates, manuallyPositioned: true };
     setDocumentState((prev) => {
-      const doc = updateLayerInPage(prev, activePageIndex, id, updates);
+      const doc = updateLayerInPage(prev, activePageIndex, id, finalUpdates);
       doc.updatedAt = new Date().toISOString();
       historyRef.current.push(doc, label);
       setIsDirty(true);

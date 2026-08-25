@@ -182,6 +182,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Add photo',
         accessibilityHint: 'Opens the media picker to add a photo to the canvas',
         hapticFeedback: 'light',
+        capabilityId: 'photoCapture',
       },
       {
         id: 'look-items',
@@ -192,6 +193,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Items',
         accessibilityHint: 'Opens the items drawer to add products from your closet, listings, or search',
         hapticFeedback: 'light',
+        capabilityId: 'stickerProduct',
       },
       {
         id: 'look-text',
@@ -202,6 +204,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Add text',
         accessibilityHint: 'Opens the text picker to add a text layer',
         hapticFeedback: 'light',
+        capabilityId: 'stickerText',
       },
       {
         id: 'look-layout',
@@ -323,6 +326,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Effects',
         accessibilityHint: 'Opens the effects panel for the selected media',
         hapticFeedback: 'medium',
+        capabilityId: 'imageFilter',
       },
       {
         id: 'look-media-cutout',
@@ -481,6 +485,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Change item',
         accessibilityHint: 'Opens the product picker to link a different listing',
         hapticFeedback: 'light',
+        capabilityId: 'stickerProduct',
       },
       {
         id: 'look-product-price',

@@ -85,7 +85,7 @@ export interface Message {
 
   uploadStatus?: "uploading" | "failed" | "sent";
 
-  status?: "sending" | "sent" | "failed" | "draft";
+  status?: "sending" | "sent" | "failed" | "draft" | "reconciling";
 
   readStatus?: "sending" | "sent" | "delivered" | "read";
 

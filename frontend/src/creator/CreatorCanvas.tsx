@@ -24,7 +24,10 @@ import {
   ColorMatrix as SkiaColorMatrix,
   Mask as SkiaMask,
   useImage as useSkiaImage,
+  useVideo as useSkiaVideo,
   Fit as SkiaFit,
+  fitbox as skiaFitbox,
+  rect as skiaRect,
 } from '@shopify/react-native-skia';
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -35,6 +38,20 @@ import { Motion } from '../theme/motionTokens';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted, hasFullBleedMedia, isDefaultBackground } from './composition';
+// Scene evaluator + render profiles — the single pure owner of scene state
+// (AGENTS.md §6.3). The canvas evaluates the scene once per render and
+// passes resolved per-layer data (effect graph, Skia-video-frame gating)
+// down to the layer renderers.
+import {
+  evaluateScene,
+  type ResolvedLayer,
+  type ResolvedScene,
+} from './engine/evaluateScene';
+import {
+  getRenderProfile,
+  type RenderProfile,
+  type RenderProfileId,
+} from './engine/renderProfiles';
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
@@ -181,6 +198,42 @@ export function CreatorCanvas({
   const visibleLayers = getVisibleLayersSorted(page);
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
+
+  // ── Scene evaluation pipeline (AGENTS.md §6.3) ───────────────────
+  // The canvas evaluates the scene once per render through the pure
+  // evaluateScene function. The resolved scene carries per-layer effect
+  // graphs, transforms, and the Skia-video-frame gating decision. Layer
+  // renderers consume the resolved data instead of re-deriving it, so
+  // edit / preview / viewer / thumbnail / export all share one evaluator.
+  //
+  // The render profile is derived from `mode`: edit/preview use the editor
+  // column, view uses the viewer column. The profile gates capabilities —
+  // e.g. skiaVideoFrames is only live when the registry says so for the
+  // active column AND the platform meets Android API 26+.
+  const renderProfileId: RenderProfileId = mode === 'view' ? 'viewer' : mode;
+  const renderProfile: RenderProfile = useMemo(
+    () => getRenderProfile(renderProfileId),
+    [renderProfileId],
+  );
+  const resolvedScene: ResolvedScene = useMemo(
+    () =>
+      evaluateScene({
+        document,
+        page,
+        timeMs: currentTimeMs,
+        viewport: { width: canvasWidth, height: canvasHeight },
+        profile: renderProfile,
+        compareOriginal,
+      }),
+    [document, page, currentTimeMs, canvasWidth, canvasHeight, renderProfile, compareOriginal],
+  );
+  // Lookup: layerId → resolved layer, so LayerRenderer/MediaLayerContent
+  // can read their effect graph and Skia-video gating without re-evaluating.
+  const resolvedByLayerId = useMemo(() => {
+    const map = new Map<string, ResolvedLayer>();
+    for (const rl of resolvedScene.layers) map.set(rl.layer.id, rl);
+    return map;
+  }, [resolvedScene]);
 
   // Track whether a compare-to-original long-press is active so onPressOut
   // only fires the end callback when a compare was actually in progress
@@ -346,6 +399,7 @@ export function CreatorCanvas({
           key={layer.id}
           layer={layer}
           siblingLayers={visibleLayers.filter((l) => l.id !== layer.id)}
+          resolvedLayer={resolvedByLayerId.get(layer.id)}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
@@ -465,6 +519,11 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 interface LayerRendererProps {
   layer: CreatorLayer;
   siblingLayers: CreatorLayer[];
+  /** Resolved scene data for this layer from evaluateScene. Carries the
+   *  effect graph and Skia-video-frame gating decision so the renderer
+   *  does not re-derive them. Optional — absent when the layer was filtered
+   *  out by the evaluator (e.g. temporally invisible in a static context). */
+  resolvedLayer?: ResolvedLayer;
   canvasWidth: number;
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
@@ -510,6 +569,7 @@ const TRASH_ZONE_THRESHOLD = 0.85;
 const LayerRenderer = React.memo(function LayerRenderer({
   layer,
   siblingLayers,
+  resolvedLayer,
   canvasWidth,
   canvasHeight,
   mode,
@@ -927,7 +987,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return opacity;
   }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers, compareOriginal);
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers, compareOriginal, resolvedLayer);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -1155,10 +1215,11 @@ function renderLayerContent(
   currentTimeMs?: number,
   siblingLayers?: CreatorLayer[],
   compareOriginal?: boolean,
+  resolvedLayer?: ResolvedLayer,
 ): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} compareOriginal={compareOriginal} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -1200,6 +1261,175 @@ function renderLayerContent(
   }
 }
 
+// ── Skia video frame layer ──────────────────────────────────────────
+// Renders a video through Skia's useVideo hook so the current frame is a
+// SkImage inside a Canvas — enabling the same ColorMatrix / Mask / shader
+// pipeline used for images. This path is gated by the render profile's
+// skiaVideoFrames + videoEffects capabilities (both hidden in the registry
+// today). useVideo is a React hook, so this must be its own component —
+// it cannot be called conditionally inside MediaLayerContent.
+//
+// API (react-native-skia 2.6.2+, stable):
+//   const { currentFrame, currentTime, duration, framerate, rotation, size }
+//     = useVideo(uri, { paused, seek, looping, volume });
+//   currentFrame is a SharedValue<SkImage | null> — render via <SkiaImage>.
+function SkiaVideoLayerContent({
+  layer,
+  width,
+  height,
+  effectGraph,
+  shouldPlay,
+  isMuted,
+  isLooping,
+  volume,
+  onError,
+  colors,
+}: {
+  layer: Extract<CreatorLayer, { type: 'media' }>;
+  width: number;
+  height: number;
+  effectGraph?: import('./engine/evaluateScene').ResolvedEffectGraph;
+  shouldPlay: boolean;
+  isMuted: boolean;
+  isLooping: boolean;
+  volume: number;
+  onError: () => void;
+  colors: ThemeColors;
+}) {
+  const { payload } = layer;
+  const paused = useSharedValue(!shouldPlay);
+  const looping = useSharedValue(isLooping);
+
+  // Keep the paused shared value in sync with the shouldPlay prop. useVideo
+  // reads `paused` as a shared value so changes do not re-instantiate the
+  // video decoder.
+  useEffect(() => {
+    paused.value = !shouldPlay;
+  }, [shouldPlay, paused]);
+  useEffect(() => {
+    looping.value = isLooping;
+  }, [isLooping, looping]);
+
+  // useVideo is the stable Skia video decode hook. It returns the current
+  // frame as a SharedValue<SkImage | null>. When the URI is invalid or the
+  // platform cannot decode, currentFrame stays null and we fall back to
+  // the thumbnail / error state.
+  const { currentFrame, rotation, size } = useSkiaVideo(payload.mediaUri, {
+    paused,
+    looping,
+    volume,
+  });
+
+  const contentFitMap: Record<string, SkiaFit> = {
+    cover: 'cover',
+    contain: 'contain',
+    fill: 'fill',
+  };
+  const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
+  const hasColorMatrix = !!effectGraph?.colorMatrix && effectGraph.colorMatrix.length === 20;
+  const maskUri = effectGraph?.maskUri ?? layer.maskRef ?? null;
+  const skiaMaskImage = useSkiaImage(maskUri);
+  const hasMask = !!skiaMaskImage;
+
+  // Rotation + scale correction via Skia's fitbox (per the official Skia
+  // video docs). useVideo returns a rotation of 0/90/180/270 and the source
+  // dimensions; fitbox computes the matrix that maps the source rect into
+  // the destination rect with the correct rotation and aspect-fit.
+  const videoTransform = useMemo(() => {
+    if (!rotation || (size.width === 0 && size.height === 0)) return undefined;
+    const src = skiaRect(0, 0, size.width, size.height);
+    const dst = skiaRect(0, 0, width, height);
+    return skiaFitbox(fit === 'cover' ? 'cover' : 'contain', src, dst, rotation);
+  }, [rotation, size.width, size.height, width, height, fit]);
+
+  // Thumbnail fallback while the first frame decodes (or when the platform
+  // cannot decode the video through Skia).
+  const [showThumbnail, setShowThumbnail] = useState(true);
+  useAnimatedReaction(
+    () => currentFrame.value,
+    (frame) => {
+      if (frame !== null && showThumbnail) runOnJS(setShowThumbnail)(false);
+    },
+    [showThumbnail],
+  );
+
+  // If after a reasonable delay no frame has decoded, surface the error so
+  // the parent can fall back to the native VideoView.
+  useEffect(() => {
+    if (showThumbnail) {
+      const t = setTimeout(() => {
+        // If we still have no frame, treat as a decode error so the caller
+        // can fall back. This is conservative — Skia video decode failing
+        // should not leave a blank surface.
+        onError();
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [showThumbnail, onError]);
+
+  return (
+    <>
+      {showThumbnail && payload.thumbnailUri && (
+        <CachedImage
+          uri={payload.thumbnailUri}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      )}
+      <SkiaCanvas style={{ width, height }} accessibilityLabel="Video media layer with effects" accessibilityRole="image">
+        {hasMask && skiaMaskImage ? (
+          <SkiaMask
+            mode="alpha"
+            mask={
+              <SkiaImage
+                image={skiaMaskImage}
+                x={0}
+                y={0}
+                width={width}
+                height={height}
+                fit={fit}
+              />
+            }
+          >
+            <SkiaImage
+              image={currentFrame}
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fit={fit}
+              transform={videoTransform}
+            >
+              {hasColorMatrix && (
+                <SkiaColorMatrix matrix={effectGraph!.colorMatrix!} />
+              )}
+            </SkiaImage>
+          </SkiaMask>
+        ) : (
+          <SkiaImage
+            image={currentFrame}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit={fit}
+            transform={videoTransform}
+          >
+            {hasColorMatrix && (
+              <SkiaColorMatrix matrix={effectGraph!.colorMatrix!} />
+            )}
+          </SkiaImage>
+        )}
+      </SkiaCanvas>
+      <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
+        <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
+      </View>
+    </>
+  );
+}
+
 function MediaLayerContent({
   layer,
   width,
@@ -1208,6 +1438,7 @@ function MediaLayerContent({
   currentTimeMs,
   siblingLayers,
   compareOriginal,
+  resolvedLayer,
 }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
@@ -1216,12 +1447,24 @@ function MediaLayerContent({
   currentTimeMs?: number;
   siblingLayers?: CreatorLayer[];
   compareOriginal?: boolean;
+  resolvedLayer?: ResolvedLayer;
 }) {
   const { colors } = useAppTheme();
   const { payload } = layer;
   const [videoError, setVideoError] = React.useState(false);
   const hasPlaybackClock = !!playbackClock;
   const timeMs = currentTimeMs ?? 0;
+
+  // ── Scene-evaluator gating (AGENTS.md §6.3) ─────────────────────
+  // The resolved scene carries the authoritative decision on whether this
+  // video layer should render through Skia video frames (useVideo) with
+  // per-pixel effects, or fall back to the native VideoView without
+  // effects. This is gated by the render profile's skiaVideoFrames +
+  // videoEffects capabilities — both hidden in the registry today, so the
+  // native path is preserved. When the capabilities flip to supported,
+  // the Skia video path activates automatically.
+  const useSkiaVideoFrames = resolvedLayer?.useSkiaVideoFrames ?? false;
+  const resolvedEffectGraph = resolvedLayer?.effectGraph;
 
   // ── Effect evaluation ───────────────────────────────────────────
   // Evaluate the clip's own effect stack, then merge any active adjustment
@@ -1335,6 +1578,29 @@ function MediaLayerContent({
   // playback state as props.
 
   if (payload.mediaType === 'video' && !videoError) {
+    // Skia video frame path: when the render profile supports
+    // skiaVideoFrames, decode the video via useVideo and render the
+    // current frame as a Skia image inside a Canvas — the same
+    // ColorMatrix / Mask / shader pipeline used for images. This is
+    // gated by the capability registry (skiaVideoFrames + videoEffect
+    // both hidden today), so the native VideoView path below remains
+    // the live path until the capabilities are flipped to supported.
+    if (useSkiaVideoFrames) {
+      return (
+        <SkiaVideoLayerContent
+          layer={layer}
+          width={width}
+          height={height}
+          effectGraph={resolvedEffectGraph}
+          shouldPlay={shouldPlay}
+          isMuted={isMuted}
+          isLooping={isLooping}
+          volume={volume}
+          onError={() => setVideoError(true)}
+          colors={colors}
+        />
+      );
+    }
     return (
       <>
         {payload.thumbnailUri && !hasPlaybackClock && (
@@ -1354,18 +1620,14 @@ function MediaLayerContent({
           isLooping={isLooping}
           onError={() => setVideoError(true)}
         />
-        {/* Video effects: documented as needing Skia video integration.
-            The current expo-video VideoView renders natively and cannot
-            be wrapped in a Skia Canvas. For now, video effects are
-            applied via a CSS filter fallback (opacity/blur) or deferred
-            to the export pipeline. Image effects are fully rendered
-            via Skia below. */}
-        {evaluatedEffect?.blurRadius && evaluatedEffect.blurRadius > 0 && (
-          <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
-            pointerEvents="none"
-          />
-        )}
+        {/* Video effects: the native expo-video VideoView renders natively
+            and cannot be wrapped in a Skia Canvas, so per-pixel effects
+            (color matrix, mask, shader) are NOT applied on this path.
+            The scene evaluator returns no effect graph for video layers
+            when the videoEffect capability is hidden (§6.4 — no
+            metadata-only effect is advertised as a visible result). The
+            Skia video frame path above renders the full effect graph
+            when the capability is supported. */}
         <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
           <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
         </View>

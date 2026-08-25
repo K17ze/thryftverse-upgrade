@@ -18,9 +18,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { BlurView } from 'expo-blur';
 import { makeStableId } from '../../utils/createStableId';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
@@ -34,19 +35,20 @@ import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker'
 import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
-import { CreatorEntryEditorCrossfade } from '../CreatorEntryEditorCrossfade';
+import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
 import { CreatorCropSheet } from '../CreatorCropSheet';
 import { CreatorCutoutSheet } from '../CreatorCutoutSheet';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
 import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
-import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/CutoutService';
+import { cutoutService, type CutoutResult } from '../core/cutout/CutoutService';
 import { PressScale } from '../CreatorAnimations';
+import type { CaptureViewport } from '../capture/CaptureViewport';
 import { InlineTextEditor } from '../tools/text/InlineTextEditor';
 import { TrashZone } from '../surfaces/TrashZone';
 import { BackgroundSheet } from './BackgroundSheet';
 import type { CreatorBackground } from '../composition';
-import { LookSourceTray } from './LookSourceTray';
+import { LookSourceTray, SourceTrayPeek } from './LookSourceTray';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
 import {
@@ -66,6 +68,7 @@ import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
 import type { CreatorTemplate } from '../templates';
 import { useLookEffects } from './useLookEffects';
+import { useBackendData } from '../../context/BackendDataContext';
 import { useLookMultiSelect } from './useLookMultiSelect';
 import { deriveLookToolContext, buildLookToolGroups } from './lookToolRailConfig';
 
@@ -211,12 +214,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const [cutoutPreviewTarget, setCutoutPreviewTarget] = useState<CreatorLayer | null>(null);
   const [cutoutSupported, setCutoutSupported] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supported = await isCutoutSupportedAsync();
-      if (!cancelled) setCutoutSupported(supported);
-    })();
-    return () => { cancelled = true; };
+    // Check if the Skia-based brush cutout is available. This is an
+    // honest capability check — brushRefinement is true when Skia is
+    // linked (AGENTS.md §11: never fake a capability).
+    const cap = cutoutService.getCapability();
+    setCutoutSupported(cap.brushRefinement);
   }, []);
   const [editingLookId, setEditingLookId] = useState<string | null>(null);
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
@@ -553,6 +555,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     width: number;
     height: number;
   } | null>(null);
+  // Source content transform — the camera viewport guide rect captured at
+  // the moment of capture. The transition animates the pinned media from
+  // this frame to the editor canvas frame, preserving the focal point.
+  const [entrySourceTransform, setEntrySourceTransform] = useState<CreatorContentTransform | null>(null);
+  const cameraViewportRef = useRef<CaptureViewport | null>(null);
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
     const mediaLayers: CreatorLayer[] = media.map((asset, i) => ({
       id: makeStableId(`media_${i}`),
@@ -586,6 +593,22 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     const firstMedia = arranged.find((layer) => layer.type === 'media');
     setEntryPinnedUri(media[0]?.uri ?? null);
     setEntryPinnedKind(media[0]?.kind ?? 'image');
+    // Build the source content transform from the measured camera viewport
+    // so the transition animates from the guide frame, not full-screen.
+    const vp = cameraViewportRef.current;
+    if (vp) {
+      setEntrySourceTransform({
+        frame: {
+          left: vp.viewRect.x,
+          top: vp.viewRect.y,
+          width: vp.viewRect.width,
+          height: vp.viewRect.height,
+        },
+        aspectRatio: vp.authoredAspectRatio,
+      });
+    } else {
+      setEntrySourceTransform(null);
+    }
     setEntryPinnedDestination(firstMedia ? {
       left: (firstMedia.x - firstMedia.width / 2) * canvasWidth,
       top: canvasVerticalOffset + (firstMedia.y - firstMedia.height / 2) * canvasHeight,
@@ -605,6 +628,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setEntryPinnedUri(null);
     setEntryPinnedKind('image');
     setEntryPinnedDestination(null);
+    setEntrySourceTransform(null);
     setEntryComplete(true);
   }, []);
 
@@ -961,6 +985,32 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     [page],
   );
 
+  // ── Canvas listing IDs for source tray dedup (§8.3) ────────────────
+  // The set of listing IDs already on the canvas as product layers.
+  // Passed to LookSourceTray so items already on canvas show a dedup
+  // indicator and offer "Add again" instead of silent duplication.
+  const onCanvasListingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const layer of page?.layers ?? []) {
+      if (layer.type === 'product' && layer.payload?.listingId) {
+        ids.add(layer.payload.listingId);
+      }
+    }
+    return ids;
+  }, [page]);
+
+  // ── Source tray peek thumbnails (§8.3: source tray peeking from bottom) ──
+  // A few recent listing thumbnails shown as a thin peek strip above the
+  // tool rail, making the source tray always visible as "creative supply."
+  const { listings: backendListings } = useBackendData();
+  const sourcePeekThumbs = useMemo(() => {
+    return backendListings
+      .filter((l) => l.status !== 'sold' && l.images?.[0])
+      .slice(0, 8)
+      .map((l) => l.images[0])
+      .filter((uri): uri is string => !!uri);
+  }, [backendListings]);
+
   // ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────────
   // When a layout is selected from the LookAutoLayoutBar, call autoLayout
   // with the current media layers and canvas size, then commit the new
@@ -971,6 +1021,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     if (mediaLayers.length === 0) return;
     const arranged = autoLayout(mediaLayers, { width: canvasWidth, height: canvasHeight }, layoutId);
     arranged.forEach((layer) => {
+      // Pass isAutoLayout: true so commitLayerTransform does NOT set
+      // manuallyPositioned. Auto-layout is an editable starting proposal,
+      // not a manual edit (§8.3). Layers the user has already manually
+      // positioned are skipped by autoLayout itself.
       commitLayerTransform(layer.id, {
         x: layer.x,
         y: layer.y,
@@ -979,7 +1033,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         rotation: layer.rotation,
         zIndex: layer.zIndex,
         scale: layer.scale,
-      }, `Apply ${layoutId} layout`);
+      }, `Apply ${layoutId} layout`, true);
     });
     setAutoLayoutId(layoutId);
   }, [mediaLayers, canvasWidth, canvasHeight, commitLayerTransform]);
@@ -1026,7 +1080,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     mediaLayers.forEach((layer, i) => {
       const t = updates[i];
       if (!t) return;
-      commitLayerTransform(layer.id, transformToLayerUpdate(t), `Apply ${layout.name} layout`);
+      commitLayerTransform(layer.id, transformToLayerUpdate(t), `Apply ${layout.name} layout`, true);
     });
     setSelectedLayoutId(id);
     haptic.selection();
@@ -1070,6 +1124,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       onClose={handleEntryClose}
       onMediaSelected={handleEntryMediaSelected}
       onBlankStart={handleEntryBlankStart}
+      onViewportChange={(vp) => { cameraViewportRef.current = vp; }}
       onVisualSearchCapture={(uri: string) => {
         navigation.navigate('VisualSearch', { initialImageUri: uri });
       }}
@@ -1077,22 +1132,22 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   ) : null;
 
   const editorContent = (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Crash recovery banner ────────────────────────────────────── */}
       {/* When a pending crash journal entry is detected, show a recovery
           prompt at the top of the composer. The user can recover the
           last saved project or dismiss the prompt. */}
       {hasPendingRecovery && (
-        <View style={styles.recoveryBanner}>
+        <View style={[styles.recoveryBanner, { borderLeftColor: colors.antiqueGold }]}>
           <Ionicons name="alert-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
-          <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
+          <Text style={[styles.recoveryText, { color: colors.scrimTextPrimary }]}>Recover your last unsaved project?</Text>
           <PressScale
             onPress={() => { void recoverCrashedProject(); }}
             style={styles.recoveryBtn}
             accessibilityLabel="Recover project"
             accessibilityRole="button"
           >
-            <Text style={styles.recoveryBtnText}>Recover</Text>
+            <Text style={[styles.recoveryBtnText, { color: colors.antiqueGold }]}>Recover</Text>
           </PressScale>
           <PressScale
             onPress={dismissRecovery}
@@ -1192,8 +1247,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         {(isLoadingSourceLook || isLoadingDraft) && (
           <View style={styles.canvasLoadingOverlay} pointerEvents="none">
             <View style={styles.canvasLoadingPill}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.canvasLoadingText}>Loading…</Text>
+              {/* Glass plate material — translucent blur over media canvas */}
+              <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={[StyleSheet.absoluteFill, { borderRadius: RadiusRoleValue.pillAvatar }]} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: RadiusRoleValue.pillAvatar }]} />
+              <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+              <Text style={[styles.canvasLoadingText, { color: colors.scrimTextPrimary }]}>Loading…</Text>
             </View>
           </View>
         )}
@@ -1209,8 +1267,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               accessibilityRole="button"
               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
             >
-              <Ionicons name="images-outline" size={IconGrammar.hero} color="rgba(255,255,255,0.5)" />
-              <Text style={styles.canvasEmptyHintTitle}>Add photos to start</Text>
+              <Ionicons name="images-outline" size={IconGrammar.hero} color={colors.scrimTextSecondary} />
+              <Text style={[styles.canvasEmptyHintTitle, { color: colors.scrimTextTertiary }]}>Add photos to start</Text>
             </PressScale>
           </View>
         )}
@@ -1227,7 +1285,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           During selection: Done · object label · More. */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
         <LinearGradient
-          colors={['rgba(10,10,10,0.6)', 'transparent']}
+          colors={Scrim.top.colors}
+          locations={Scrim.top.locations}
           style={styles.topBarScrim}
           pointerEvents="none"
         />
@@ -1379,11 +1438,23 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       {bottomSurface === 'tools' && (
         <Reanimated.View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
           <LinearGradient
-            colors={['transparent', 'rgba(10,10,10,0.8)']}
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
             style={styles.bottomBarScrim}
             pointerEvents="none"
           />
           <View style={styles.bottomBar}>
+            {/* ── Source tray peek strip (§8.3: source tray peeking from bottom) ── */}
+            {/* A thin strip of item thumbnails above the tool rail, making
+                the source tray always visible as "creative supply." Tapping
+                opens the full items surface. Only shown when no layer is
+                selected so it doesn't compete with selection-specific tools. */}
+            {sourcePeekThumbs.length > 0 && !selectedLayerId && (
+              <SourceTrayPeek
+                thumbnailUris={sourcePeekThumbs}
+                onPress={handleOpenItems}
+              />
+            )}
             <ContextToolRail
               context={activeToolContext}
               groups={toolGroups}
@@ -1408,6 +1479,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 onToggle={handleCloseSurface}
                 onAddItem={handleSourceTrayAddItem}
                 onDropProduct={handleDropProduct}
+                onCanvasListingIds={onCanvasListingIds}
               />
             </View>
           </View>
@@ -1463,8 +1535,15 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       {bottomSurface === 'effects' && selectedMediaLayer && (
         <SlideUpSurface>
           <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-            <View style={[styles.effectsSurface, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Space.sm }]}>
-              <View style={[styles.effectsSheetHeader, { borderBottomColor: colors.border }]}>
+            <View style={[styles.effectsSurface, { paddingBottom: insets.bottom + Space.sm }]}>
+              {/* Glass material — translucent blur over media canvas */}
+              <BlurView
+                intensity={EditorMaterial.sheet.blurIntensity}
+                tint={EditorMaterial.sheet.tint}
+                style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]}
+              />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
+              <View style={[styles.effectsSheetHeader, { borderBottomColor: EditorMaterial.sheet.hairline }]}>
                 <Text style={[styles.effectsSheetTitle, { color: colors.textPrimary }]}>
                   Effects
                 </Text>
@@ -1532,7 +1611,14 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       {/* ── Overflow menu (compact) ───────────────────────────────────── */}
       {showOverflow && (
         <View style={[styles.overflowContainer, { top: insets.top + 52 }]}>
-          <View style={[styles.overflowMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.overflowMenu, { borderColor: EditorMaterial.plate.hairline }]}>
+            {/* Glass material — compact plate treatment */}
+            <BlurView
+              intensity={EditorMaterial.plate.blurIntensity}
+              tint={EditorMaterial.plate.tint}
+              style={[StyleSheet.absoluteFill, { borderRadius: EditorRadius.plate }]}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: EditorRadius.plate }]} />
             <OverflowItem
               icon="layers-outline"
               label="Layers"
@@ -1787,6 +1873,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       pinnedMediaUri={entryPinnedUri}
       pinnedMediaKind={entryPinnedKind}
       pinnedMediaDestination={entryPinnedDestination}
+      sourceContentTransform={entrySourceTransform}
+      destinationContentTransform={entryPinnedDestination ? {
+        frame: entryPinnedDestination,
+      } : null}
     />
   );
 }
@@ -1857,64 +1947,6 @@ const OverflowItem = React.memo(function OverflowItem({
   );
 });
 
-// ── Opacity bar — drag-based slider for object opacity ───────────────
-const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {
-  const widthSV = useSharedValue(0);
-  const haptic = useHaptic();
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    widthSV.value = e.nativeEvent.layout.width;
-  }, [widthSV]);
-
-  const panGesture = useMemo(() =>
-    Gesture.Pan()
-      .onBegin((e) => {
-        'worklet';
-        const w = widthSV.value;
-        if (w <= 0) return;
-        const ratio = Math.max(0, Math.min(1, e.x / w));
-        const snapped = Math.round(ratio * 20) / 20;
-        runOnJS(haptic.selection)();
-        runOnJS(onChange)(snapped);
-      })
-      .onChange((e) => {
-        'worklet';
-        const w = widthSV.value;
-        if (w <= 0) return;
-        const ratio = Math.max(0, Math.min(1, e.x / w));
-        const snapped = Math.round(ratio * 20) / 20;
-        runOnJS(haptic.selection)();
-        runOnJS(onChange)(snapped);
-      })
-      .onEnd(() => {
-        'worklet';
-        runOnJS(onCommit)(value);
-      })
-      .onFinalize(() => {
-        'worklet';
-        runOnJS(onCommit)(value);
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [value, onChange, onCommit]
-  );
-
-  const pct = Math.round(value * 100);
-
-  return (
-    <View style={styles.opacityBar}>
-      <Ionicons name="contrast-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" />
-      <GestureDetector gesture={panGesture}>
-        <View style={styles.opacitySliderTrack} onLayout={handleLayout}>
-          <View style={styles.opacitySliderTrackBg} />
-          <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
-          <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
-        </View>
-      </GestureDetector>
-      <Text style={styles.opacityLabel}>{pct}%</Text>
-    </View>
-  );
-});
-
 // ── Screen wrapper — wraps in CreatorProvider (shared state) ─────────
 export function LookComposerScreen(props: {
   draftId?: string;
@@ -1980,7 +2012,6 @@ const styles = StyleSheet.create({
   },
   recoveryText: {
     flex: 1,
-    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     marginLeft: 8,
   },
@@ -2047,10 +2078,12 @@ const styles = StyleSheet.create({
   titleText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyStrong.size,
+    ...GlyphShadow.title,
   },
   doneText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyStrong.size,
+    ...GlyphShadow.glyph,
   },
   topRight: {
     flexDirection: 'row',
@@ -2105,13 +2138,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: EditorRadius.plate,
+    borderWidth: 1,
+    borderColor: EditorMaterial.plate.hairline,
+    overflow: 'hidden',
   },
   canvasLoadingText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.85)',
   },
   // ── Empty canvas hint ──
   canvasEmptyHint: {
@@ -2128,7 +2162,6 @@ const styles = StyleSheet.create({
   canvasEmptyHintTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyStrong.size,
-    color: 'rgba(255,255,255,0.4)',
   },
   // ── AI Effects button (inline button, not a card) ──
   // Premium button: subtle tinted fill + refined hairline border + radius.
@@ -2190,9 +2223,10 @@ const styles = StyleSheet.create({
   },
   // ── Effects surface ──
   effectsSurface: {
-    borderTopLeftRadius: Radius.md,
-    borderTopRightRadius: Radius.md,
+    borderTopLeftRadius: EditorRadius.sheet,
+    borderTopRightRadius: EditorRadius.sheet,
     maxHeight: '85%',
+    overflow: 'hidden',
   },
   // ── Overflow menu ──
   overflowContainer: {
@@ -2201,10 +2235,11 @@ const styles = StyleSheet.create({
     zIndex: 120,
   },
   overflowMenu: {
-    borderRadius: Radius.md,
+    borderRadius: EditorRadius.plate,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
     minWidth: 180,
+    overflow: 'hidden',
   },
   overflowItem: {
     flexDirection: 'row',
@@ -2220,47 +2255,6 @@ const styles = StyleSheet.create({
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
     zIndex: -1,
-  },
-  // ── Opacity bar ──
-  opacityBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.xs,
-  },
-  opacitySliderTrack: {
-    flex: 1,
-    height: 28,
-    justifyContent: 'center',
-  },
-  opacitySliderTrackBg: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 4,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  opacitySliderFill: {
-    height: 4,
-    borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: '#C9A46A',
-  },
-  opacitySliderThumb: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: '#fff',
-    marginLeft: -9,
-  },
-  opacityLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.8)',
-    minWidth: 36,
-    textAlign: 'right',
   },
   // ── Effects surface (shared header styles) ──
   effectsSheetHeader: {
