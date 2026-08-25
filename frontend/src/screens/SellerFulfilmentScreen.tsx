@@ -13,8 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, shipOrder, assertHandoff, type CommerceOrder } from '../services/commerceApi';
@@ -31,13 +30,11 @@ import {
   classifyShippingError,
   SHIPPING_ERROR_RECOVERY,
   getDropOffUrl,
-  getProviderMetadata,
   type ShippingProviderErrorCode,
 } from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { haptics } from '../utils/haptics';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -85,7 +82,6 @@ export default function SellerFulfilmentScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<SellerFulfilmentRoute>();
-  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
@@ -164,7 +160,6 @@ export default function SellerFulfilmentScreen() {
   const deliveryMode: 'integrated' | 'manual' | 'local' | 'unknown' =
     snapshot?.deliveryMode ?? 'unknown';
   const isIntegrated = deliveryMode === 'integrated';
-  const isManualMode = deliveryMode === 'manual' || (!isIntegrated && deliveryMode === 'unknown');
   const labelGenerationUnavailable =
     isIntegrated && labelErrorCode === 'LABEL_GENERATION_UNAVAILABLE' && !generatedLabelUrl;
 
@@ -224,21 +219,6 @@ export default function SellerFulfilmentScreen() {
     });
   }, [generatedLabelUrl, navigation]);
 
-  const handlePrintLabel = useCallback(async () => {
-    if (!generatedLabelUrl) return;
-    haptics.tap();
-    try {
-      const supported = await Linking.canOpenURL(generatedLabelUrl);
-      if (!supported) {
-        show('Unable to open label for printing', 'error');
-        return;
-      }
-      await Linking.openURL(generatedLabelUrl);
-    } catch {
-      show('Unable to open label for printing', 'error');
-    }
-  }, [generatedLabelUrl, show]);
-
   const handleFindDropOff = useCallback(() => {
     const carrierId = snapshot?.carrierId ?? shippingProvider ?? null;
     const url = getDropOffUrl(carrierId);
@@ -251,16 +231,6 @@ export default function SellerFulfilmentScreen() {
       show('Unable to open drop-off finder', 'error');
     });
   }, [snapshot, shippingProvider, show]);
-
-  const handleMessageBuyer = useCallback(() => {
-    if (!order) return;
-    haptics.tap();
-    navigation.navigate('Chat', {
-      conversationId: `${order.buyerId}_${order.listingId}`,
-      partnerUserId: order.buyerId,
-      itemId: order.listingId,
-    });
-  }, [order, navigation]);
 
   // Manual dispatch: seller enters tracking and confirms.
   const handleManualDispatch = useCallback(async () => {

@@ -163,6 +163,50 @@ export async function exportForDsaDatabase(
   return result.rows.map(mapDsaStatementRow);
 }
 
+// ── Fetch specific statements by their database IDs ──────────────────────
+//
+// Used by the DSA submission flow to load exactly the statements selected by
+// an operator for submission to the DSA Transparency Database. Returns the
+// same {@link DsaStatementRecord} shape as {@link exportForDsaDatabase} so the
+// caller can pass the records directly to the submission client.
+
+export async function getDsaStatementsByIds(
+  db: Pool,
+  statementIds: string[],
+): Promise<DsaStatementRecord[]> {
+  if (statementIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = statementIds.map((_, i) => `$${i + 1}`).join(', ');
+  const result = await db.query(
+    `
+      SELECT
+        sor.id,
+        sor.puid,
+        sor.decision_visibility,
+        sor.decision_monetary,
+        sor.decision_provision,
+        sor.decision_account,
+        sor.decision_ground,
+        sor.content_type,
+        sor.territorial_scope,
+        sor.content_language,
+        sor.facts,
+        sor.automated_means,
+        sor.source,
+        sor.dsa_category,
+        sor.created_at
+      FROM statements_of_reasons sor
+      WHERE sor.id IN (${placeholders})
+      ORDER BY sor.created_at ASC
+    `,
+    statementIds,
+  );
+
+  return result.rows.map(mapDsaStatementRow);
+}
+
 // ── Mark statements as submitted to the DSA Transparency Database ────────
 
 export async function markSubmittedToDsaDb(

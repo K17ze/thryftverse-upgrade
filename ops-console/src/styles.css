@@ -256,6 +256,11 @@ body {
   background: var(--bg-hover);
 }
 
+.filter-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Data table ───────────────────────────────────────────────────────── */
 
 .data-table {
@@ -295,6 +300,14 @@ body {
 }
 
 .data-table__row--selected {
+  background: var(--bg-active);
+}
+
+.data-table__row--checked {
+  background: var(--bg-hover);
+}
+
+.data-table__row--selected.data-table__row--checked {
   background: var(--bg-active);
 }
 

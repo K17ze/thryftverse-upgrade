@@ -50,6 +50,7 @@ import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
+import { t } from '../i18n';
 import { CachedImage } from '../components/CachedImage';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
@@ -109,16 +110,16 @@ function InspectionBanner({
         </View>
         <View style={styles.inspectionHeaderText}>
           <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>
-            Check your item
+            {t('orderDetail.inspection.title')}
           </Text>
           <Text style={[styles.inspectionSub, { color: colors.textSecondary }]}>
             {expired
-              ? 'Your inspection window has passed. Confirm receipt or report an issue.'
+              ? t('orderDetail.inspection.expired')
               : daysLeft === 0
-                ? 'Last day to report an issue — confirm receipt or open a case today.'
+                ? t('orderDetail.inspection.lastDay')
                 : daysLeft === 1
-                  ? '1 day left to report an issue if something is wrong.'
-                  : `${daysLeft} days left to report an issue if something is wrong.`}
+                  ? t('orderDetail.inspection.oneDayLeft')
+                  : t('orderDetail.inspection.daysLeft', { days: daysLeft ?? 0 })}
           </Text>
         </View>
       </View>
@@ -128,11 +129,11 @@ function InspectionBanner({
           style={[styles.inspectionPrimaryBtn, { backgroundColor: colors.brand }]}
           onPress={onConfirmReceipt}
           accessibilityRole="button"
-          accessibilityLabel="Confirm receipt — everything is OK"
+          accessibilityLabel={t('orderDetail.inspection.confirmA11yLabel')}
         >
           <Ionicons name="checkmark-circle-outline" size={22} color={colors.textInverse} aria-hidden={true} />
           <Text style={[styles.inspectionPrimaryBtnText, { color: colors.textInverse }]}>
-            Everything is OK
+            {t('orderDetail.inspection.everythingOk')}
           </Text>
         </Pressable>
 
@@ -140,17 +141,17 @@ function InspectionBanner({
           style={[styles.inspectionSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
           onPress={onReportIssue}
           accessibilityRole="button"
-          accessibilityLabel="Report an issue with this order"
+          accessibilityLabel={t('orderDetail.inspection.reportA11yLabel')}
         >
           <Ionicons name="alert-circle-outline" size={22} color={colors.danger} aria-hidden={true} />
           <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
-            Report an issue
+            {t('orderDetail.inspection.reportIssue')}
           </Text>
         </Pressable>
       </View>
 
       <Text style={[styles.inspectionFootnote, { color: colors.textMuted }]}>
-        Funds are held in escrow until you confirm. Reporting an issue pauses the auto-release.
+        {t('orderDetail.inspection.footnote')}
       </Text>
     </View>
   );
@@ -203,7 +204,7 @@ function PackageContents({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`View item: ${title}`}
+        accessibilityLabel={t('orderDetail.package.viewItemA11y', { title })}
       >
         {content}
       </Pressable>
@@ -226,12 +227,12 @@ type IssueCategory = {
 };
 
 const ISSUE_CATEGORIES: IssueCategory[] = [
-  { id: 'not_as_described', label: 'Not as described', description: 'Condition, size, or details do not match the listing.' },
-  { id: 'damaged', label: 'Damaged', description: 'The item arrived damaged or broken.' },
-  { id: 'wrong_item', label: 'Wrong item', description: 'A different item was sent than what was ordered.' },
-  { id: 'counterfeit', label: 'Authenticity issue', description: 'The item may not be authentic.' },
-  { id: 'parcel_issue', label: 'Parcel issue', description: 'The parcel was damaged, opened, or tampered with.' },
-  { id: 'missing_contents', label: 'Missing contents', description: 'Parts or items are missing from the parcel.' },
+  { id: 'not_as_described', label: t('orderDetail.issue.notAsDescribed.label'), description: t('orderDetail.issue.notAsDescribed.desc') },
+  { id: 'damaged', label: t('orderDetail.issue.damaged.label'), description: t('orderDetail.issue.damaged.desc') },
+  { id: 'wrong_item', label: t('orderDetail.issue.wrongItem.label'), description: t('orderDetail.issue.wrongItem.desc') },
+  { id: 'counterfeit', label: t('orderDetail.issue.counterfeit.label'), description: t('orderDetail.issue.counterfeit.desc') },
+  { id: 'parcel_issue', label: t('orderDetail.issue.parcelIssue.label'), description: t('orderDetail.issue.parcelIssue.desc') },
+  { id: 'missing_contents', label: t('orderDetail.issue.missingContents.label'), description: t('orderDetail.issue.missingContents.desc') },
 ];
 
 function IssueCategorySelector({
@@ -262,15 +263,15 @@ function IssueCategorySelector({
     <View style={styles.issueSheetBackdrop} accessibilityRole="alert">
       <Pressable style={[styles.issueSheetBackdropPress, themed.sheetBackdrop]} onPress={onClose} accessibilityLabel="Close issue category selector" />
       <View style={[styles.issueSheet, themed.sheet]}>
-        <Text style={[styles.issueSheetTitle, themed.title]}>What is the issue?</Text>
+        <Text style={[styles.issueSheetTitle, themed.title]}>{t('orderDetail.issueSelector.title')}</Text>
         <Text style={[styles.issueSheetSub, themed.sub]}>
-          Select the type of problem so we can direct your case correctly.
+          {t('orderDetail.issueSelector.subtitle')}
         </Text>
 
         {/* Contextual issues — specific to the current order state, shown first */}
         {hasContextual ? (
           <>
-            <Text style={[styles.issueContextHeader, themed.contextHeader]}>FOR THIS SITUATION</Text>
+            <Text style={[styles.issueContextHeader, themed.contextHeader]}>{t('orderDetail.issueSelector.contextHeader')}</Text>
             {contextualIssues!.map((category) => (
               <Pressable
                 key={category.id}
@@ -286,7 +287,7 @@ function IssueCategorySelector({
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
               </Pressable>
             ))}
-            <Text style={[styles.issueContextHeader, themed.contextHeader]}>OTHER ISSUES</Text>
+            <Text style={[styles.issueContextHeader, themed.contextHeader]}>{t('orderDetail.issueSelector.otherHeader')}</Text>
           </>
         ) : null}
 
@@ -309,9 +310,9 @@ function IssueCategorySelector({
           style={({ pressed }) => [styles.issueCancelBtn, pressed && styles.issueCancelBtnPressed]}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('orderDetail.issueSelector.cancelA11y')}
         >
-          <Text style={[styles.issueCancelBtnText, themed.cancelBtn]}>Cancel</Text>
+          <Text style={[styles.issueCancelBtnText, themed.cancelBtn]}>{t('orderDetail.issueSelector.cancel')}</Text>
         </Pressable>
       </View>
     </View>
@@ -346,19 +347,19 @@ function CompletedOrderSummary({
 
   return (
     <View style={styles.completedSection}>
-      <Text style={[styles.sectionLabel, themed.label]}>Order complete</Text>
+      <Text style={[styles.sectionLabel, themed.label]}>{t('orderDetail.completed.label')}</Text>
       <Text style={[styles.completedTitle, themed.title]}>
-        This order is complete
+        {t('orderDetail.completed.title')}
       </Text>
 
       <Pressable
         style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onViewReceipt(); }}
         accessibilityRole="button"
-        accessibilityLabel="View receipt"
+        accessibilityLabel={t('orderDetail.completed.viewReceiptA11y')}
       >
         <Ionicons name="receipt-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>View receipt</Text>
+        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.viewReceipt')}</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
 
@@ -367,10 +368,10 @@ function CompletedOrderSummary({
           style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
           onPress={() => { haptics.tap(); onLeaveReview(); }}
           accessibilityRole="button"
-          accessibilityLabel="Leave a review"
+          accessibilityLabel={t('orderDetail.completed.leaveReviewA11y')}
         >
           <Ionicons name="star-outline" size={22} color={colors.brand} aria-hidden={true} />
-          <Text style={[styles.completedActionText, themed.actionText]}>Leave a review</Text>
+          <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.leaveReview')}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
       ) : null}
@@ -379,10 +380,10 @@ function CompletedOrderSummary({
         style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onBuyAgain(); }}
         accessibilityRole="button"
-        accessibilityLabel="Buy again from this seller"
+        accessibilityLabel={t('orderDetail.completed.buyAgainA11y')}
       >
         <Ionicons name="bag-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>Buy again from this seller</Text>
+        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.buyAgain')}</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
 
@@ -390,10 +391,10 @@ function CompletedOrderSummary({
         style={({ pressed }) => [styles.completedActionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onViewSupportHistory(); }}
         accessibilityRole="button"
-        accessibilityLabel="View support history"
+        accessibilityLabel={t('orderDetail.completed.supportHistoryA11y')}
       >
         <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>Support history</Text>
+        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.supportHistory')}</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
       </Pressable>
     </View>
@@ -413,7 +414,7 @@ export default function OrderDetailScreen() {
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
   // via this themed proxy so the screen is fully dark-mode compatible.
-  const t = useMemo(() => ({
+  const themed = useMemo(() => ({
     container: { backgroundColor: colors.background },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
@@ -493,9 +494,9 @@ export default function OrderDetailScreen() {
     } catch (error) {
       if (!isMountedRef.current) return;
       if (!backendOrder) {
-        setLoadError('Order could not be loaded. Check your connection and try again.');
+        setLoadError(t('orderDetail.error.loadFailed'));
       } else {
-        setLoadError('Order could not be refreshed. Showing the last loaded state.');
+        setLoadError(t('orderDetail.error.refreshFailed'));
       }
       return null;
     }
@@ -510,7 +511,7 @@ export default function OrderDetailScreen() {
       setParcelError(null);
     } catch {
       if (!isMountedRef.current) return;
-      setParcelError('Carrier tracking events are unavailable right now.');
+      setParcelError(t('orderDetail.error.trackingUnavailable'));
     }
   }, [orderId]);
 
@@ -661,7 +662,7 @@ export default function OrderDetailScreen() {
   const orderTitle =
     backendOrder?.listingTitle
     || existingListing?.title
-    || 'Ordered item';
+    || t('orderDetail.orderedItem');
 
   const orderImage =
     backendOrder?.listingImageUrl
@@ -691,7 +692,7 @@ export default function OrderDetailScreen() {
       return {
         role: 'Seller' as const,
         id: seller.id,
-        username: seller.username ?? `Seller ${seller.id.slice(0, 8)}`,
+        username: seller.username ?? t('orderDetail.role.sellerFallback', { id: seller.id.slice(0, 8) }),
         avatar: seller.avatar,
       };
     }
@@ -704,7 +705,7 @@ export default function OrderDetailScreen() {
       return {
         role: 'Buyer' as const,
         id: buyer.id,
-        username: buyer.username ?? `Buyer ${buyer.id.slice(0, 8)}`,
+        username: buyer.username ?? t('orderDetail.role.buyerFallback', { id: buyer.id.slice(0, 8) }),
         avatar: buyer.avatar,
       };
     }
@@ -761,14 +762,14 @@ export default function OrderDetailScreen() {
       if (diffMs < 0) {
         // future-dated event — just show absolute
       } else if (diffMs < 60 * 1000) {
-        parts.push('just now');
+        parts.push(t('orderDetail.tracking.justNow'));
       } else if (diffMs < 60 * 60 * 1000) {
-        parts.push(`${Math.floor(diffMs / (60 * 1000))}m ago`);
+        parts.push(t('orderDetail.tracking.minutesAgo', { minutes: Math.floor(diffMs / (60 * 1000)) }));
       } else if (diffMs < 24 * 60 * 60 * 1000) {
-        parts.push(`${Math.floor(diffMs / (60 * 60 * 1000))}h ago`);
+        parts.push(t('orderDetail.tracking.hoursAgo', { hours: Math.floor(diffMs / (60 * 60 * 1000)) }));
       } else {
         const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-        parts.push(`${days}d ago`);
+        parts.push(t('orderDetail.tracking.daysAgo', { days }));
       }
     }
     return parts.join(' · ');
@@ -831,8 +832,8 @@ export default function OrderDetailScreen() {
       return [
         {
           id: 'carrier_not_scanned',
-          label: "Carrier hasn't scanned it",
-          description: 'Seller says it was dropped off, but the carrier has not scanned it.',
+          label: t('orderDetail.issue.carrierNotScanned.label'),
+          description: t('orderDetail.issue.carrierNotScanned.desc'),
         },
       ];
     }
@@ -842,8 +843,8 @@ export default function OrderDetailScreen() {
       return [
         {
           id: 'delivery_delayed',
-          label: 'Delivery is taking longer than expected',
-          description: 'Tracking has not updated in over 48 hours. Open a case if the parcel is overdue.',
+          label: t('orderDetail.issue.deliveryDelayed.label'),
+          description: t('orderDetail.issue.deliveryDelayed.desc'),
         },
       ];
     }
@@ -853,13 +854,13 @@ export default function OrderDetailScreen() {
       return [
         {
           id: 'parcel_not_found',
-          label: "I can't find the parcel",
-          description: 'The carrier says delivered but you have not received it.',
+          label: t('orderDetail.issue.parcelNotFound.label'),
+          description: t('orderDetail.issue.parcelNotFound.desc'),
         },
         {
           id: 'item_problem',
-          label: 'Something is wrong with the item',
-          description: 'The item is damaged, wrong, or not as described.',
+          label: t('orderDetail.issue.itemProblem.label'),
+          description: t('orderDetail.issue.itemProblem.desc'),
         },
       ];
     }
@@ -869,8 +870,8 @@ export default function OrderDetailScreen() {
       return [
         {
           id: 'track_return',
-          label: 'Track my return',
-          description: 'Follow the status of your return parcel.',
+          label: t('orderDetail.issue.trackReturn.label'),
+          description: t('orderDetail.issue.trackReturn.desc'),
         },
       ];
     }
@@ -911,7 +912,7 @@ export default function OrderDetailScreen() {
     setOrderMutation('cancel');
     try {
       await cancelOrder(orderId);
-      show('Order cancelled', 'info');
+      show(t('orderDetail.toast.cancelled'), 'info');
       await refreshOrder(false);
     } catch (error) {
       show(parseApiError(error).message, 'error');
@@ -930,7 +931,7 @@ export default function OrderDetailScreen() {
     setOrderMutation('deliver');
     try {
       await deliverOrder(orderId);
-      show('Delivery confirmed', 'success');
+      show(t('orderDetail.toast.deliveryConfirmed'), 'success');
       await refreshOrder(false);
     } catch (error) {
       show(parseApiError(error).message, 'error');
@@ -953,12 +954,12 @@ export default function OrderDetailScreen() {
     try {
       const supported = await Linking.canOpenURL(carrierTrackingUrl);
       if (!supported) {
-        show('Unable to open carrier tracking page', 'error');
+        show(t('orderDetail.toast.unableOpenCarrier'), 'error');
         return;
       }
       await Linking.openURL(carrierTrackingUrl);
     } catch {
-      show('Unable to open carrier tracking page', 'error');
+      show(t('orderDetail.toast.unableOpenCarrier'), 'error');
     }
   }, [carrierTrackingUrl, show]);
 
@@ -1009,22 +1010,22 @@ export default function OrderDetailScreen() {
       switch (action) {
         case 'pay':
           return {
-            label: 'Complete payment',
+            label: t('orderDetail.action.completePayment'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('Checkout', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: 'Complete payment for this order',
+            accessibilityLabel: t('orderDetail.action.completePaymentA11y'),
           };
         case 'dispatch':
           // Seller paid → guided fulfilment. NEVER a direct generic mark-shipped.
           return {
-            label: 'Ship item',
+            label: t('orderDetail.action.shipItem'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('SellerFulfilment', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: 'Start guided dispatch for this order',
+            accessibilityLabel: t('orderDetail.action.shipItemA11y'),
           };
         case 'track_order':
           return {
-            label: 'Track parcel',
+            label: t('orderDetail.action.trackParcel'),
             onPress: () => {
               haptics.tap();
               if (carrierTrackingUrl) {
@@ -1035,42 +1036,42 @@ export default function OrderDetailScreen() {
               }
             },
             variant: 'primary',
-            accessibilityLabel: 'Track your parcel',
+            accessibilityLabel: t('orderDetail.action.trackParcelA11y'),
           };
         case 'inspect':
           // Buyer delivered → check your item before confirming/reviewing.
           return {
-            label: 'Check your item',
+            label: t('orderDetail.action.checkItem'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: 'Inspect your item and confirm everything is OK',
+            accessibilityLabel: t('orderDetail.action.checkItemA11y'),
           };
         case 'leave_review':
           return {
-            label: 'Leave a review',
+            label: t('orderDetail.action.leaveReview'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: 'Write a review for this order',
+            accessibilityLabel: t('orderDetail.action.leaveReviewA11y'),
           };
         case 'view_review':
           return {
-            label: 'View your review',
+            label: t('orderDetail.action.viewReview'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: 'View your submitted review',
+            accessibilityLabel: t('orderDetail.action.viewReviewA11y'),
           };
         case 'confirm_delivery':
           // Demoted secondary — releases escrowed funds (high-consequence).
           return {
-            label: 'Confirm receipt',
+            label: t('orderDetail.action.confirmReceipt'),
             onPress: () => {
               haptics.heavyPress();
               Alert.alert(
-                'Confirm receipt?',
-                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
+                t('orderDetail.action.confirmReceiptTitle'),
+                t('orderDetail.action.confirmReceiptBody'),
                 [
-                  { text: 'Not yet', style: 'cancel' },
-                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+                  { text: t('orderDetail.action.notYet'), style: 'cancel' },
+                  { text: t('orderDetail.action.confirmReceipt'), style: 'default', onPress: handleDeliver },
                 ]
               );
             },
@@ -1081,43 +1082,43 @@ export default function OrderDetailScreen() {
           };
         case 'cancel':
           return {
-            label: 'Cancel order',
+            label: t('orderDetail.action.cancelOrder'),
             onPress: () => {
               haptics.heavyPress();
               Alert.alert(
-                'Cancel this order?',
+                t('orderDetail.action.cancelOrderTitle'),
                 isBuyer
-                  ? 'This will cancel the order and notify the seller. This action cannot be undone.'
-                  : 'This will cancel the order and notify the buyer. This action cannot be undone.',
+                  ? t('orderDetail.action.cancelOrderBodyBuyer')
+                  : t('orderDetail.action.cancelOrderBodySeller'),
                 [
-                  { text: 'Keep order', style: 'cancel' },
-                  { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
+                  { text: t('orderDetail.action.keepOrder'), style: 'cancel' },
+                  { text: t('orderDetail.action.cancelOrder'), style: 'destructive', onPress: handleCancel },
                 ]
               );
             },
             variant: 'destructive',
             loading: orderMutation === 'cancel',
             disabled: mutationLocked && orderMutation !== 'cancel',
-            accessibilityLabel: 'Cancel order',
+            accessibilityLabel: t('orderDetail.action.cancelOrder'),
           };
         case 'report_issue':
           return {
-            label: 'Report an issue',
+            label: t('orderDetail.action.reportIssue'),
             onPress: () => { haptics.tap(); setIssueSelectorVisible(true); },
             variant: 'secondary',
-            accessibilityLabel: 'Report an issue with this order',
+            accessibilityLabel: t('orderDetail.action.reportIssueA11y'),
           };
         case 'view_resolution':
           return {
-            label: 'View open request',
+            label: t('orderDetail.action.viewResolution'),
             onPress: () => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket?.id ?? '' }); },
             variant: 'secondary',
-            accessibilityLabel: 'View open support request',
+            accessibilityLabel: t('orderDetail.action.viewResolutionA11y'),
           };
         case 'contact':
           if (!counterparty) return undefined;
           return {
-            label: `Message ${counterparty.role.toLowerCase()}`,
+            label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
             onPress: () => {
               haptics.tap();
               navigation.navigate('Chat', {
@@ -1128,14 +1129,14 @@ export default function OrderDetailScreen() {
               });
             },
             variant: 'secondary',
-            accessibilityLabel: `Message ${counterparty.role.toLowerCase()}`,
+            accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
           };
         case 'view_receipt':
           return {
-            label: 'View receipt',
+            label: t('orderDetail.action.viewReceipt'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: 'View order receipt',
+            accessibilityLabel: t('orderDetail.action.viewReceiptA11y'),
           };
         default:
           return undefined;
@@ -1153,9 +1154,9 @@ export default function OrderDetailScreen() {
     haptics.tap();
     try {
       await Clipboard.setStringAsync(trackingNumber);
-      show('Tracking number copied', 'success');
+      show(t('orderDetail.toast.trackingCopied'), 'success');
     } catch {
-      show('Could not copy tracking number', 'error');
+      show(t('orderDetail.toast.trackingCopyFailed'), 'error');
     }
   }, [show]);
 
@@ -1165,12 +1166,12 @@ export default function OrderDetailScreen() {
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
-        show('Unable to open shipping label URL', 'error');
+        show(t('orderDetail.toast.unableOpenShippingLabelUrl'), 'error');
         return;
       }
       await Linking.openURL(url);
     } catch {
-      show('Unable to open shipping label', 'error');
+      show(t('orderDetail.toast.unableOpenShippingLabel'), 'error');
     }
   }, [show]);
 
@@ -1190,7 +1191,7 @@ export default function OrderDetailScreen() {
 
     actions.push({
       key: 'receipt',
-      label: 'View receipt',
+      label: t('orderDetail.action.viewReceipt'),
       icon: 'receipt-outline',
       onPress: () => navigation.navigate('OrderReceipt', { orderId }),
     });
@@ -1201,7 +1202,7 @@ export default function OrderDetailScreen() {
     if (counterparty) {
       actions.push({
         key: 'contact',
-        label: `Message ${counterparty.role.toLowerCase()}`,
+        label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
         icon: 'chatbubble-outline',
         onPress: () => navigation.navigate('Chat', {
           conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
@@ -1214,7 +1215,7 @@ export default function OrderDetailScreen() {
 
     actions.push({
       key: 'support',
-      label: 'Get help with this order',
+      label: t('orderDetail.overflow.getHelp'),
       icon: 'help-circle-outline',
       onPress: () => navigation.navigate('OrderSupport', { orderId }),
     });
@@ -1222,7 +1223,7 @@ export default function OrderDetailScreen() {
     if (isBuyer) {
       actions.push({
         key: 'buyer_protection',
-        label: 'Buyer protection',
+        label: t('orderDetail.overflow.buyerProtection'),
         icon: 'shield-checkmark-outline',
         onPress: () => navigation.navigate('BuyerProtection', { orderId }),
       });
@@ -1232,7 +1233,7 @@ export default function OrderDetailScreen() {
     if (openTicket) {
       actions.push({
         key: 'view_resolution',
-        label: 'View open request',
+        label: t('orderDetail.action.viewResolution'),
         icon: 'folder-open-outline',
         onPress: () => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id }),
         variant: 'primary',
@@ -1242,7 +1243,7 @@ export default function OrderDetailScreen() {
     if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
       actions.push({
         key: 'review',
-        label: 'Write a review',
+        label: t('orderDetail.overflow.writeReview'),
         icon: 'star-outline',
         onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
         variant: 'primary',
@@ -1256,7 +1257,7 @@ export default function OrderDetailScreen() {
 
   if (isInitialLoading) {
     return (
-      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <SafeAreaView style={[styles.container, themed.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Order"
@@ -1276,7 +1277,7 @@ export default function OrderDetailScreen() {
 
   if (!backendOrder && loadError) {
     return (
-      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <SafeAreaView style={[styles.container, themed.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Order"
@@ -1291,15 +1292,15 @@ export default function OrderDetailScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>Order could not be loaded</Text>
-          <Text style={[styles.errorBody, t.errorBody]}>Check your connection and try again.</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>Order could not be loaded</Text>
+          <Text style={[styles.errorBody, themed.errorBody]}>Check your connection and try again.</Text>
           <Pressable
-            style={({ pressed }) => [styles.retryBtn, t.retryBtn, pressed && styles.retryBtnPressed]}
+            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]}
             onPress={() => { haptics.tap(); void refreshOrder(false); }}
             accessibilityRole="button"
             accessibilityLabel="Retry loading order"
           >
-            <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1308,7 +1309,7 @@ export default function OrderDetailScreen() {
 
   if (!backendOrder) {
     return (
-      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <SafeAreaView style={[styles.container, themed.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Order"
@@ -1323,7 +1324,7 @@ export default function OrderDetailScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="document-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>Order not found</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>Order not found</Text>
         </View>
       </SafeAreaView>
     );
@@ -1332,7 +1333,7 @@ export default function OrderDetailScreen() {
   const fiatOpts = { displayMode: 'fiat' as const };
 
   return (
-    <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+    <SafeAreaView style={[styles.container, themed.container]} edges={['top']}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact navigation header */}
@@ -1385,7 +1386,7 @@ export default function OrderDetailScreen() {
 
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
-          <Text style={[styles.orderNumber, t.orderNumber]}>ORDER #{shortOrderId}</Text>
+          <Text style={[styles.orderNumber, themed.orderNumber]}>ORDER #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
             <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -1394,9 +1395,9 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
           </View>
-          <Text style={[styles.statusExplanation, t.statusExplanation]}>{statusExplanation}</Text>
+          <Text style={[styles.statusExplanation, themed.statusExplanation]}>{statusExplanation}</Text>
           {backendOrder.updatedAt ? (
-            <Text style={[styles.lastUpdated, t.lastUpdated]}>
+            <Text style={[styles.lastUpdated, themed.lastUpdated]}>
               Last updated {formatTimelineDate(backendOrder.updatedAt)}
             </Text>
           ) : null}
@@ -1414,19 +1415,19 @@ export default function OrderDetailScreen() {
         {loadError && backendOrder ? (
           <View style={styles.refreshErrorRow}>
             <Ionicons name="alert-circle-outline" size={16} color={colors.textMuted} aria-hidden={true} />
-            <Text style={[styles.refreshErrorText, t.refreshErrorText]}>{loadError}</Text>
+            <Text style={[styles.refreshErrorText, themed.refreshErrorText]}>{loadError}</Text>
             <Pressable
               onPress={() => { haptics.tap(); void refreshOrder(false); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel="Retry refresh"
             >
-              <Text style={[styles.retryLink, t.retryLink]}>Retry</Text>
+              <Text style={[styles.retryLink, themed.retryLink]}>Retry</Text>
             </Pressable>
           </View>
         ) : null}
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 3. Historical item summary */}
         <OrderDetailSummary
@@ -1441,12 +1442,12 @@ export default function OrderDetailScreen() {
           } : undefined}
         />
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 4. Role-aware counterparty */}
         {counterparty ? (
           <View style={styles.counterpartySection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>{counterparty.role}</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>{counterparty.role}</Text>
             <View style={styles.counterpartyRow}>
               <Pressable
                 style={styles.counterpartyIdentity}
@@ -1459,13 +1460,13 @@ export default function OrderDetailScreen() {
                   style={styles.counterpartyAvatar}
                   contentFit="cover"
                 />
-                <Text style={[styles.counterpartyName, t.counterpartyName]} numberOfLines={1}>
+                <Text style={[styles.counterpartyName, themed.counterpartyName]} numberOfLines={1}>
                   @{counterparty.username}
                 </Text>
               </Pressable>
               <View style={styles.counterpartyActions}>
                 <Pressable
-                  style={({ pressed }) => [styles.counterpartyBtn, t.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
+                  style={({ pressed }) => [styles.counterpartyBtn, themed.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
                   onPress={() => {
                     haptics.tap();
                     navigation.navigate('Chat', {
@@ -1478,30 +1479,30 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Message ${counterparty.role.toLowerCase()}`}
                 >
-                  <Text style={[styles.counterpartyBtnText, t.counterpartyBtnText]}>Message</Text>
+                  <Text style={[styles.counterpartyBtnText, themed.counterpartyBtnText]}>Message</Text>
                 </Pressable>
                 <Pressable
-                  style={({ pressed }) => [styles.counterpartyBtn, t.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
+                  style={({ pressed }) => [styles.counterpartyBtn, themed.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
                   onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${counterparty.role.toLowerCase()} profile`}
                 >
-                  <Text style={[styles.counterpartyBtnText, t.counterpartyBtnText]}>View profile</Text>
+                  <Text style={[styles.counterpartyBtnText, themed.counterpartyBtnText]}>View profile</Text>
                 </Pressable>
               </View>
             </View>
           </View>
         ) : null}
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
-          <View style={[styles.escrowBanner, t.escrowBanner]}>
+          <View style={[styles.escrowBanner, themed.escrowBanner]}>
             <Ionicons name="lock-closed" size={16} color={colors.success} aria-hidden={true} />
             <View style={styles.escrowTextWrap}>
-              <Text style={[styles.escrowTitle, t.escrowTitle]}>Funds held in escrow</Text>
-              <Text style={[styles.escrowSub, t.escrowSub]}>
+              <Text style={[styles.escrowTitle, themed.escrowTitle]}>Funds held in escrow</Text>
+              <Text style={[styles.escrowSub, themed.escrowSub]}>
                 {normalisedStatus === 'paid'
                   ? 'Payment confirmed. Funds are held until the seller dispatches.'
                   : 'Funds are held. Confirm receipt to release funds to the seller.'}
@@ -1518,7 +1519,7 @@ export default function OrderDetailScreen() {
                 if (now >= releaseTime) return null;
                 const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));
                 return (
-                  <Text style={[styles.escrowCountdown, t.escrowCountdown]}>
+                  <Text style={[styles.escrowCountdown, themed.escrowCountdown]}>
                     Auto-releases to seller in {daysLeft} day{daysLeft === 1 ? '' : 's'} if not confirmed
                   </Text>
                 );
@@ -1568,7 +1569,7 @@ export default function OrderDetailScreen() {
         ) : null}
 
         {!isCompleted ? (
-          <View style={[styles.sectionDivider, t.sectionDivider]} />
+          <View style={[styles.sectionDivider, themed.sectionDivider]} />
         ) : null}
 
         {/* 5. Tracking or order timeline — hidden when completed */}
@@ -1577,11 +1578,11 @@ export default function OrderDetailScreen() {
             style={styles.timelineSection}
             onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
           >
-          <Text style={[styles.sectionLabel, t.sectionLabel]}>Timeline</Text>
+          <Text style={[styles.sectionLabel, themed.sectionLabel]}>Timeline</Text>
 
           {/* Package contents — compact row so buyer can see WHAT is in the parcel */}
           <View style={styles.packageContentsWrap}>
-            <Text style={[styles.packageContentsLabel, t.detailLabel]}>Package contents</Text>
+            <Text style={[styles.packageContentsLabel, themed.detailLabel]}>Package contents</Text>
             <PackageContents
               title={orderTitle}
               imageUrl={orderImage}
@@ -1598,17 +1599,17 @@ export default function OrderDetailScreen() {
               buyer is never shown a false delivery promise. The stale
               tracking warning below covers the overdue case. */}
           {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') && (!estimatedDeliveryDate || estimatedDeliveryDate.getTime() >= Date.now()) ? (
-            <View style={[styles.etaBanner, t.etaBanner]}>
-              <View style={[styles.etaIconWrap, t.etaIconWrap]}>
+            <View style={[styles.etaBanner, themed.etaBanner]}>
+              <View style={[styles.etaIconWrap, themed.etaIconWrap]}>
                 <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
               </View>
               <View style={styles.etaContent}>
-                <Text style={[styles.etaLabel, t.etaLabel]}>ESTIMATED DELIVERY</Text>
-                <Text style={[styles.etaValue, t.etaValue]}>
+                <Text style={[styles.etaLabel, themed.etaLabel]}>ESTIMATED DELIVERY</Text>
+                <Text style={[styles.etaValue, themed.etaValue]}>
                   {estimatedDeliveryLabel ? `By ${estimatedDeliveryLabel}` : etaWindow}
                 </Text>
                 {snapshot?.serviceName ? (
-                  <Text style={[styles.etaService, t.etaService]}>{snapshot.serviceName}</Text>
+                  <Text style={[styles.etaService, themed.etaService]}>{snapshot.serviceName}</Text>
                 ) : null}
               </View>
             </View>
@@ -1616,9 +1617,9 @@ export default function OrderDetailScreen() {
 
           {/* Stale tracking warning — last event > 48h old while in transit */}
           {isStaleTracking ? (
-            <View style={[styles.staleBanner, t.staleBanner]}>
+            <View style={[styles.staleBanner, themed.staleBanner]}>
               <Ionicons name="time-outline" size={16} color={colors.warning} aria-hidden={true} />
-              <Text style={[styles.staleText, t.staleText]}>
+              <Text style={[styles.staleText, themed.staleText]}>
                 Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
               </Text>
             </View>
@@ -1629,7 +1630,7 @@ export default function OrderDetailScreen() {
               glance. One text line, not a card. Only when there are parcel
               events and the order is not completed. */}
           {latestEventSummary ? (
-            <Text style={[styles.latestEventLine, t.lastUpdated]} numberOfLines={1}>
+            <Text style={[styles.latestEventLine, themed.lastUpdated]} numberOfLines={1}>
               {latestEventSummary}
             </Text>
           ) : null}
@@ -1644,22 +1645,22 @@ export default function OrderDetailScreen() {
         {/* 6. Shipment details — hidden when completed */}
         {!isCompleted && showShipmentDetails ? (
           <>
-            <View style={[styles.sectionDivider, t.sectionDivider]} />
+            <View style={[styles.sectionDivider, themed.sectionDivider]} />
             <View style={styles.shipmentSection}>
-              <Text style={[styles.sectionLabel, t.sectionLabel]}>Shipment details</Text>
+              <Text style={[styles.sectionLabel, themed.sectionLabel]}>Shipment details</Text>
               {backendOrder.shippingProvider ? (
                 <DetailRow label="Carrier" value={backendOrder.shippingProvider} />
               ) : null}
               {backendOrder.trackingNumber ? (
                 <View style={styles.detailRow}>
-                  <Text style={[styles.detailLabel, t.detailLabel]}>Tracking number</Text>
+                  <Text style={[styles.detailLabel, themed.detailLabel]}>Tracking number</Text>
                   <Pressable
                     onPress={() => handleCopyTracking(backendOrder.trackingNumber!)}
                     style={styles.copyRow}
                     accessibilityRole="button"
                     accessibilityLabel={`Copy tracking number ${backendOrder.trackingNumber}`}
                   >
-                    <Text style={[styles.detailValueLink, t.detailValueLink]}>{backendOrder.trackingNumber}</Text>
+                    <Text style={[styles.detailValueLink, themed.detailValueLink]}>{backendOrder.trackingNumber}</Text>
                     <Ionicons name="copy-outline" size={16} color={colors.brand} aria-hidden={true} />
                   </Pressable>
                 </View>
@@ -1671,7 +1672,7 @@ export default function OrderDetailScreen() {
                   accessibilityRole="link"
                   accessibilityLabel="Track on carrier website"
                 >
-                  <Text style={[styles.textLink, t.detailValueLink]}>Track on carrier site</Text>
+                  <Text style={[styles.textLink, themed.detailValueLink]}>Track on carrier site</Text>
                   <Ionicons name="open-outline" size={14} color={colors.brand} aria-hidden={true} />
                 </Pressable>
               ) : null}
@@ -1692,18 +1693,18 @@ export default function OrderDetailScreen() {
                   accessibilityLabel="Open shipping label"
                 >
                   <Ionicons name="open-outline" size={16} color={colors.brand} aria-hidden={true} />
-                  <Text style={[styles.shippingLabelBtnText, t.shippingLabelBtnText]}>Open shipping label</Text>
+                  <Text style={[styles.shippingLabelBtnText, themed.shippingLabelBtnText]}>Open shipping label</Text>
                 </Pressable>
               ) : null}
             </View>
           </>
         ) : null}
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 7. Transaction breakdown */}
         <View style={styles.transactionSection}>
-          <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction</Text>
+          <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction</Text>
           <TxRow label="Item" value={formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, fiatOpts)} />
           <TxRow label="Platform charge" value={formatFromFiat(platformCharge, DEFAULT_CURRENCY_CODE, fiatOpts)} />
           {buyerProtectionFee != null && buyerProtectionFee !== 0 && buyerProtectionFee !== platformCharge ? (
@@ -1713,11 +1714,11 @@ export default function OrderDetailScreen() {
             label="Delivery"
             value={postageFee != null ? formatFromFiat(postageFee, DEFAULT_CURRENCY_CODE, fiatOpts) : 'Not recorded'}
           />
-          <View style={[styles.txDivider, t.txDivider]} />
+          <View style={[styles.txDivider, themed.txDivider]} />
           <TxRow label="Total" value={formatFromFiat(totalPaid, DEFAULT_CURRENCY_CODE, fiatOpts)} bold />
         </View>
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 8. Support state */}
         <View style={styles.supportSection}>
@@ -1730,8 +1731,8 @@ export default function OrderDetailScreen() {
             >
               <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
               <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, t.supportLabel]}>Support request open</Text>
-                <Text style={[styles.supportSub, t.supportSub]}>{openTicket.topicLabel}</Text>
+                <Text style={[styles.supportLabel, themed.supportLabel]}>Support request open</Text>
+                <Text style={[styles.supportSub, themed.supportSub]}>{openTicket.topicLabel}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
@@ -1744,7 +1745,7 @@ export default function OrderDetailScreen() {
             >
               <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
               <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, t.supportLabel]}>Get support</Text>
+                <Text style={[styles.supportLabel, themed.supportLabel]}>Get support</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>

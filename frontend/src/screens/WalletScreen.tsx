@@ -43,6 +43,7 @@ import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
@@ -144,7 +145,7 @@ export default function WalletScreen({ navigation }: Props) {
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load wallet');
+        const parsed = parseApiError(err, t('commerce.wallet.error.unableToLoad'));
         show(parsed.message, 'error');
         setIsError(true);
       })
@@ -193,8 +194,8 @@ export default function WalletScreen({ navigation }: Props) {
 
   // ── Pending attention summary text (spec 17 viewport 1) ──
   const pendingAttentionTitle = [
-    balance.pendingDeposit > 0 ? `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending` : null,
-    balance.unsettledSaleProceeds > 0 ? `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled` : null,
+    balance.pendingDeposit > 0 ? t('commerce.wallet.depositPending', { amount: formatBalance(balance.pendingDeposit) }) : null,
+    balance.unsettledSaleProceeds > 0 ? t('commerce.wallet.proceedsUnsettled', { amount: formatBalance(balance.unsettledSaleProceeds) }) : null,
   ].filter(Boolean).join(' · ');
 
   // ── Local-fiat indication for spendable hero ──
@@ -236,7 +237,7 @@ export default function WalletScreen({ navigation }: Props) {
   // Auto-prompt biometric once availability is confirmed.
   React.useEffect(() => {
     if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
-      void biometricGate.authenticate('Authenticate to view your wallet');
+      void biometricGate.authenticate(t('commerce.wallet.authenticateToView'));
     }
   }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
 
@@ -246,7 +247,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -254,7 +255,7 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <BiometricGatePrompt
           gate={biometricGate}
-          reason="Authenticate to view your wallet"
+          reason={t('commerce.wallet.authenticateToView')}
           onBack={handleBack}
         />
       </FlagshipScreen>
@@ -267,7 +268,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -314,7 +315,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -323,7 +324,7 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <CoOwnStateCanvas
           variant="error"
-          actionLabel="Try again"
+          actionLabel={t('commerce.wallet.action.tryAgain')}
           onAction={loadBalance}
         />
       </FlagshipScreen>
@@ -336,7 +337,7 @@ export default function WalletScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Wallet"
+            title={t('commerce.wallet.title')}
             onBack={handleBack}
           />
         }
@@ -345,9 +346,9 @@ export default function WalletScreen({ navigation }: Props) {
       >
         <CoOwnStateCanvas
           variant="empty"
-          title="No 1ZE yet"
-          subtitle="Add money to start trading Co-Own units."
-          actionLabel="Add money"
+          title={t('commerce.wallet.noBalanceYet')}
+          subtitle={t('commerce.wallet.addMoneyToStart')}
+          actionLabel={t('commerce.wallet.addMoney')}
           onAction={handleAddMoney}
           emptyGraphicVariant="bag"
         />
@@ -367,7 +368,7 @@ export default function WalletScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Wallet"
+          title={t('commerce.wallet.title')}
           onBack={handleBack}
           rightAction={
             <AnimatedPressable
@@ -375,8 +376,8 @@ export default function WalletScreen({ navigation }: Props) {
               scaleValue={0.9}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="Activity"
-              accessibilityHint="View all wallet activity"
+              accessibilityLabel={t('commerce.wallet.activity')}
+              accessibilityHint={t('commerce.wallet.a11y.viewAllWalletActivity')}
             >
               <Ionicons name="receipt-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             </AnimatedPressable>
@@ -409,13 +410,13 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Balance hero — flat, largest text on screen (spec 17 viewport 1) ── */}
         <View style={styles.balanceHero}>
           <View style={styles.balanceHeader}>
-            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Spendable now</Text>
+            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>{t('commerce.wallet.spendableNow')}</Text>
             <Pressable
               onPress={() => { haptics.tap(); handleTogglePrivacy(); }}
               style={styles.eyeToggle}
               accessibilityRole="button"
-              accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
-              accessibilityHint="Toggles privacy for your wallet balance"
+              accessibilityLabel={balanceHidden ? t('commerce.wallet.showBalance') : t('commerce.wallet.hideBalance')}
+              accessibilityHint={t('commerce.wallet.a11y.togglesPrivacy')}
             >
               <Ionicons
                 name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
@@ -427,8 +428,8 @@ export default function WalletScreen({ navigation }: Props) {
           {balanceHidden ? (
             <Text
               style={[styles.balanceMasked, { color: colors.textMuted }]}
-              accessibilityLabel="Balance hidden"
-              accessibilityHint="Activate the eye control to reveal your spendable balance"
+              accessibilityLabel={t('commerce.wallet.balanceHidden')}
+              accessibilityHint={t('commerce.wallet.a11y.activateEyeToReveal')}
             >
               ••••••
             </Text>
@@ -465,11 +466,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleAddMoney}
             disabled={!isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Add money to your wallet"
-            accessibilityHint="Opens the add money flow"
+            accessibilityLabel={t('commerce.wallet.a11y.addMoneyToWallet')}
+            accessibilityHint={t('commerce.wallet.a11y.opensAddMoneyFlow')}
           >
             <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.background} />
-            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>Add money</Text>
+            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>{t('commerce.wallet.addMoney')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -482,11 +483,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleWithdraw}
             disabled={!isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Withdraw from your wallet"
-            accessibilityHint="Opens the withdraw flow"
+            accessibilityLabel={t('commerce.wallet.a11y.withdrawFromWallet')}
+            accessibilityHint={t('commerce.wallet.a11y.opensWithdrawFlow')}
           >
             <Ionicons name="arrow-down-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
-            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Withdraw</Text>
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.withdraw')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -499,11 +500,11 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={handleConvert}
             disabled={balance.available <= 0 || !isWalletOperational}
             accessibilityRole="button"
-            accessibilityLabel="Convert 1ZE to fiat"
-            accessibilityHint="Opens the convert screen"
+            accessibilityLabel={t('commerce.wallet.a11y.convert1zeToFiat')}
+            accessibilityHint={t('commerce.wallet.a11y.opensConvertScreen')}
           >
             <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
-            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Convert</Text>
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.convert')}</Text>
           </Pressable>
         </View>
 
@@ -515,8 +516,8 @@ export default function WalletScreen({ navigation }: Props) {
             title={pendingAttentionTitle}
             onPress={handleViewEarnings}
             style={{ marginTop: Space.md }}
-            accessibilityLabel={`Pending attention: ${formatBalance(balance.pendingDeposit)} 1ZE deposit, ${formatBalance(balance.unsettledSaleProceeds)} 1ZE unsettled proceeds`}
-            accessibilityHint="View seller earnings and release schedule"
+            accessibilityLabel={t('commerce.wallet.a11y.pendingAttention', { deposit: `${formatBalance(balance.pendingDeposit)} 1ZE`, unsettled: `${formatBalance(balance.unsettledSaleProceeds)} 1ZE` })}
+            accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}
 
@@ -525,11 +526,11 @@ export default function WalletScreen({ navigation }: Props) {
           <FlagshipNavigationRow
             icon="pricetag-outline"
             iconColor={colors.brand}
-            title="Seller earnings"
-            subtitle={`${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available · ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
+            title={t('commerce.wallet.sellerEarnings')}
+            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
             onPress={handleViewEarnings}
-            accessibilityLabel={`Seller earnings, ${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available, ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
-            accessibilityHint="View seller earnings and release schedule"
+            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}
 
@@ -537,21 +538,21 @@ export default function WalletScreen({ navigation }: Props) {
         {(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0 || balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
           <View style={[styles.breakdownSection, { borderTopColor: colors.border }]}>
             {balance.reservedForOrders > 0 && (
-              <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
+              <SubBalanceRow label={t('commerce.wallet.reservedForOrders')} value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
             )}
             {balance.redemptionInProgress > 0 && (
-              <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
+              <SubBalanceRow label={t('commerce.wallet.redemptionPending')} value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
             )}
             {balance.otherHolds > 0 && (
-              <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
+              <SubBalanceRow label={t('commerce.wallet.otherHolds')} value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
             )}
             {balance.pendingDeposit > 0 && (
-              <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
+              <SubBalanceRow label={t('commerce.wallet.pendingDeposit')} value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
             )}
             {balance.unsettledSaleProceeds > 0 && (
-              <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+              <SubBalanceRow label={t('commerce.wallet.unsettledSaleProceeds')} value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
             )}
-            <SubBalanceRow label="Withdrawable" value={withdrawable} formatBalance={formatBalance} colors={colors} emphasize />
+            <SubBalanceRow label={t('commerce.wallet.withdrawable')} value={withdrawable} formatBalance={formatBalance} colors={colors} emphasize />
           </View>
         )}
 
@@ -560,7 +561,7 @@ export default function WalletScreen({ navigation }: Props) {
           <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
             <View style={styles.withdrawableLeft}>
               <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
-              <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>Withdrawable</Text>
+              <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>{t('commerce.wallet.withdrawable')}</Text>
             </View>
             <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
               {formatBalance(withdrawable)}
@@ -572,14 +573,14 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
           <View style={styles.txHistoryHeader}>
-            <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>Recent activity</Text>
+            <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>{t('commerce.wallet.recentActivity')}</Text>
             <Pressable
               onPress={handleViewActivity}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="View all activity"
+              accessibilityLabel={t('commerce.wallet.a11y.viewAllActivity')}
             >
-              <Text style={[styles.txHistorySeeAll, { color: colors.brand }]}>See all</Text>
+              <Text style={[styles.txHistorySeeAll, { color: colors.brand }]}>{t('commerce.wallet.seeAll')}</Text>
             </Pressable>
           </View>
           <WalletTransactionHistory limit={20} />
@@ -591,14 +592,16 @@ export default function WalletScreen({ navigation }: Props) {
             <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>
               {balance.safeguarded
-                ? `Safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}`
-                : 'Safeguarding pending'}
+                ? balance.safeguardingPartner
+                  ? t('commerce.wallet.safeguardedAt', { partner: balance.safeguardingPartner })
+                  : t('commerce.wallet.safeguarded')
+                : t('commerce.wallet.safeguardingPending')}
             </Text>
           </View>
           <Text style={[styles.infoBody, { color: colors.textMuted }]}>
             {balance.safeguarded
-              ? `Customer 1ZE is held under safeguarding. Redemption to ${currencyCode} is confirmed at each request.`
-              : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once confirmed.`}
+              ? t('commerce.wallet.safeguardedBody', { currency: currencyCode })
+              : t('commerce.wallet.safeguardingPendingBody', { currency: currencyCode })}
           </Text>
           {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
           {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
@@ -608,10 +611,10 @@ export default function WalletScreen({ navigation }: Props) {
                   onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
-                  accessibilityLabel="View safeguarding evidence"
-                  accessibilityHint="Opens in external browser"
+                  accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingEvidence')}
+                  accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.evidence')}</Text>
                 </Pressable>
               ) : null}
               {balance.safeguardingTermsUrl ? (
@@ -619,10 +622,10 @@ export default function WalletScreen({ navigation }: Props) {
                   onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
-                  accessibilityLabel="View safeguarding terms"
-                  accessibilityHint="Opens in external browser"
+                  accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingTerms')}
+                  accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.terms')}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -631,7 +634,7 @@ export default function WalletScreen({ navigation }: Props) {
           <View style={[styles.infoDivider, { borderColor: colors.border }]} />
 
           <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            1ZE is the platform's settlement unit for Co-Own, maintained at a £1.00 reference par before disclosed fees.
+            {t('commerce.wallet.1zeDisclosure')}
           </Text>
         </View>
 

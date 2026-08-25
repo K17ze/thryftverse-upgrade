@@ -32,6 +32,56 @@ export interface CapabilityCarrier {
   tracking: boolean;
 }
 
+export type CapabilityTaxType = 'vat' | 'gst' | 'sales_tax' | 'none';
+export type CapabilityTaxBasis = 'destination' | 'origin';
+
+export interface CapabilityTaxRule {
+  type: CapabilityTaxType;
+  basis: CapabilityTaxBasis;
+  standardRate: number;
+  reducedRate: number | null;
+  zeroRatedCategories: string[];
+  registrationThresholdGbp: number | null;
+  digitalServicesRate: number | null;
+}
+
+export type CapabilityRestrictedItemCategory =
+  | 'weapons'
+  | 'firearms'
+  | 'knives'
+  | 'alcohol'
+  | 'tobacco'
+  | 'pharmaceuticals'
+  | 'cosmetics_restricted'
+  | 'electronics_uncertified'
+  | 'ivory_wildlife'
+  | 'counterfeit'
+  | 'hazardous_materials'
+  | 'adult_content'
+  | 'precious_metals_bulk';
+
+export interface CapabilityRestrictedItem {
+  category: CapabilityRestrictedItemCategory;
+  reason: string;
+  severity: 'prohibited' | 'restricted';
+  requiresLicense: boolean;
+}
+
+export interface CapabilityAgeRestriction {
+  minimumAge: number;
+  categories: string[];
+  verificationRequired: boolean;
+}
+
+export type CapabilityShippingZone =
+  | 'domestic'
+  | 'regional'
+  | 'europe'
+  | 'north_america'
+  | 'asia_pacific'
+  | 'middle_east'
+  | 'global';
+
 interface CapabilityTemplate {
   defaultCurrency: string;
   supportedCurrencies: string[];
@@ -42,6 +92,10 @@ interface CapabilityTemplate {
   payoutSupportedCurrencies: string[];
   payoutGatewayPriority: CapabilityPaymentGatewayId[];
   postageCarriers: CapabilityCarrier[];
+  tax: CapabilityTaxRule;
+  restrictedItems: CapabilityRestrictedItem[];
+  ageRestrictions: CapabilityAgeRestriction[];
+  shippingZones: CapabilityShippingZone[];
 }
 
 type GatewayFallbackContext = {
@@ -74,6 +128,10 @@ export interface UserCountryCapabilities {
   postage: {
     carriers: CapabilityCarrier[];
   };
+  tax: CapabilityTaxRule;
+  restrictedItems: CapabilityRestrictedItem[];
+  ageRestrictions: CapabilityAgeRestriction[];
+  shippingZones: CapabilityShippingZone[];
 }
 
 export interface ResolveCountryCapabilitiesInput {
@@ -124,6 +182,26 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'bluedart', label: 'Blue Dart', priceFromGbp: 2.2, etaMinDays: 1, etaMaxDays: 3, tracking: true },
       { id: 'india_post', label: 'India Post', priceFromGbp: 1.35, etaMinDays: 3, etaMaxDays: 6, tracking: true },
     ],
+    tax: {
+      type: 'gst',
+      basis: 'destination',
+      standardRate: 18,
+      reducedRate: 5,
+      zeroRatedCategories: ['books', 'unbranded_food', 'healthcare'],
+      registrationThresholdGbp: 40000,
+      digitalServicesRate: 18,
+    },
+    restrictedItems: [
+      { category: 'electronics_uncertified', reason: 'BIS certification required for electronics', severity: 'restricted', requiresLicense: true },
+      { category: 'cosmetics_restricted', reason: 'CDSCO registration required for cosmetics containing restricted substances', severity: 'restricted', requiresLicense: true },
+      { category: 'weapons', reason: 'Prohibited under Arms Act', severity: 'prohibited', requiresLicense: false },
+      { category: 'counterfeit', reason: 'Prohibited under IP law', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 18, categories: ['knives', 'alcohol', 'tobacco', 'adult_content'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'asia_pacific', 'global'],
   },
   US: {
     defaultCurrency: 'USD',
@@ -144,6 +222,28 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'ups', label: 'UPS', priceFromGbp: 3.1, etaMinDays: 1, etaMaxDays: 3, tracking: true },
       { id: 'fedex', label: 'FedEx', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 2, tracking: true },
     ],
+    tax: {
+      type: 'sales_tax',
+      basis: 'destination',
+      standardRate: 7.25,
+      reducedRate: null,
+      zeroRatedCategories: ['groceries', 'prescription_drugs', 'clothing_under_110'],
+      registrationThresholdGbp: 80000,
+      digitalServicesRate: null,
+    },
+    restrictedItems: [
+      { category: 'firearms', reason: 'FFL license required for firearms transactions', severity: 'restricted', requiresLicense: true },
+      { category: 'pharmaceuticals', reason: 'FDA approval required for prescription drugs', severity: 'restricted', requiresLicense: true },
+      { category: 'cosmetics_restricted', reason: 'FDA registration required for cosmetics', severity: 'restricted', requiresLicense: true },
+      { category: 'ivory_wildlife', reason: 'Endangered Species Act prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'counterfeit', reason: 'Prohibited under Lanham Act', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 21, categories: ['alcohol', 'tobacco', 'firearms'], verificationRequired: true },
+      { minimumAge: 18, categories: ['knives', 'adult_content'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'north_america', 'global'],
   },
   UK: {
     defaultCurrency: 'GBP',
@@ -164,6 +264,27 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'royal_mail', label: 'Royal Mail', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 3, tracking: true },
       { id: 'dpd', label: 'DPD', priceFromGbp: 4.5, etaMinDays: 1, etaMaxDays: 2, tracking: true },
     ],
+    tax: {
+      type: 'vat',
+      basis: 'destination',
+      standardRate: 20,
+      reducedRate: 5,
+      zeroRatedCategories: ['books', 'childrens_clothing', 'most_food'],
+      registrationThresholdGbp: 85000,
+      digitalServicesRate: 20,
+    },
+    restrictedItems: [
+      { category: 'knives', reason: 'Offensive Weapons Act restricts certain knives', severity: 'restricted', requiresLicense: true },
+      { category: 'electronics_uncertified', reason: 'UKCA/CE marking required', severity: 'restricted', requiresLicense: false },
+      { category: 'cosmetics_restricted', reason: 'UKCPNP registration required', severity: 'restricted', requiresLicense: true },
+      { category: 'ivory_wildlife', reason: 'Ivory Act 2018 prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'counterfeit', reason: 'Prohibited under Trade Marks Act', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 18, categories: ['knives', 'alcohol', 'tobacco', 'adult_content', 'firearms'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'europe', 'global'],
   },
   EUROPE: {
     defaultCurrency: 'EUR',
@@ -184,6 +305,27 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'gls', label: 'GLS', priceFromGbp: 2.95, etaMinDays: 2, etaMaxDays: 4, tracking: true },
       { id: 'dpd_eu', label: 'DPD EU', priceFromGbp: 3.35, etaMinDays: 1, etaMaxDays: 3, tracking: true },
     ],
+    tax: {
+      type: 'vat',
+      basis: 'destination',
+      standardRate: 21,
+      reducedRate: 7,
+      zeroRatedCategories: ['books', 'intra_eu_exports', 'medical_equipment'],
+      registrationThresholdGbp: 85000,
+      digitalServicesRate: 21,
+    },
+    restrictedItems: [
+      { category: 'electronics_uncertified', reason: 'CE marking required for electronics', severity: 'restricted', requiresLicense: false },
+      { category: 'cosmetics_restricted', reason: 'CPNP registration required for cosmetics', severity: 'restricted', requiresLicense: true },
+      { category: 'ivory_wildlife', reason: 'CITES prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'hazardous_materials', reason: 'REACH compliance required', severity: 'restricted', requiresLicense: true },
+      { category: 'counterfeit', reason: 'Prohibited under EU IP enforcement directive', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 18, categories: ['alcohol', 'tobacco', 'knives', 'adult_content'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'europe', 'global'],
   },
   MIDDLE_EAST: {
     defaultCurrency: 'AED',
@@ -204,6 +346,29 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'dhl_express_me', label: 'DHL Express', priceFromGbp: 3.6, etaMinDays: 1, etaMaxDays: 2, tracking: true },
       { id: 'fetchr', label: 'Fetchr', priceFromGbp: 2.3, etaMinDays: 2, etaMaxDays: 4, tracking: true },
     ],
+    tax: {
+      type: 'vat',
+      basis: 'destination',
+      standardRate: 5,
+      reducedRate: null,
+      zeroRatedCategories: ['exports', 'basic_food', 'healthcare', 'education'],
+      registrationThresholdGbp: 15000,
+      digitalServicesRate: 5,
+    },
+    restrictedItems: [
+      { category: 'alcohol', reason: 'Alcohol sales restricted in several Gulf states', severity: 'restricted', requiresLicense: true },
+      { category: 'adult_content', reason: 'Prohibited under regional content laws', severity: 'prohibited', requiresLicense: false },
+      { category: 'pharmaceuticals', reason: 'Ministry of Health approval required', severity: 'restricted', requiresLicense: true },
+      { category: 'cosmetics_restricted', reason: 'SFDA registration required', severity: 'restricted', requiresLicense: true },
+      { category: 'ivory_wildlife', reason: 'CITES prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'counterfeit', reason: 'Prohibited under regional IP laws', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 21, categories: ['alcohol', 'tobacco'], verificationRequired: true },
+      { minimumAge: 18, categories: ['knives', 'adult_content'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'middle_east', 'global'],
   },
   CHINA_NEARBY: {
     defaultCurrency: 'USD',
@@ -224,6 +389,28 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { id: 'cainiao', label: 'Cainiao', priceFromGbp: 1.95, etaMinDays: 2, etaMaxDays: 5, tracking: true },
       { id: 'dhl_asia', label: 'DHL eCommerce Asia', priceFromGbp: 3.2, etaMinDays: 2, etaMaxDays: 4, tracking: true },
     ],
+    tax: {
+      type: 'vat',
+      basis: 'destination',
+      standardRate: 13,
+      reducedRate: 9,
+      zeroRatedCategories: ['exports', 'agricultural_products', 'books'],
+      registrationThresholdGbp: 50000,
+      digitalServicesRate: 13,
+    },
+    restrictedItems: [
+      { category: 'electronics_uncertified', reason: 'CCC certification required for electronics', severity: 'restricted', requiresLicense: true },
+      { category: 'cosmetics_restricted', reason: 'NMPA registration required for cosmetics', severity: 'restricted', requiresLicense: true },
+      { category: 'pharmaceuticals', reason: 'NMPA approval required', severity: 'restricted', requiresLicense: true },
+      { category: 'ivory_wildlife', reason: 'CITES prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'adult_content', reason: 'Prohibited under regional content laws', severity: 'prohibited', requiresLicense: false },
+      { category: 'counterfeit', reason: 'Prohibited under IP laws', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 18, categories: ['alcohol', 'tobacco', 'knives', 'adult_content'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['domestic', 'asia_pacific', 'global'],
   },
   GLOBAL: {
     defaultCurrency: 'USD',
@@ -242,6 +429,25 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     // GLOBAL fallback intentionally has no default carriers.
     // Unsupported countries should show an explicit shipping-unavailable state.
     postageCarriers: [],
+    tax: {
+      type: 'none',
+      basis: 'destination',
+      standardRate: 0,
+      reducedRate: null,
+      zeroRatedCategories: [],
+      registrationThresholdGbp: null,
+      digitalServicesRate: null,
+    },
+    restrictedItems: [
+      { category: 'counterfeit', reason: 'Prohibited under international IP law', severity: 'prohibited', requiresLicense: false },
+      { category: 'ivory_wildlife', reason: 'CITES prohibits ivory sales', severity: 'prohibited', requiresLicense: false },
+      { category: 'weapons', reason: 'Prohibited under international arms treaties', severity: 'prohibited', requiresLicense: false },
+    ],
+    ageRestrictions: [
+      { minimumAge: 18, categories: ['alcohol', 'tobacco', 'knives', 'adult_content', 'firearms'], verificationRequired: true },
+      { minimumAge: 16, categories: ['general'], verificationRequired: false },
+    ],
+    shippingZones: ['global'],
   },
 };
 
@@ -278,6 +484,10 @@ function cloneTemplate(template: CapabilityTemplate): CapabilityTemplate {
     payoutSupportedCurrencies: [...template.payoutSupportedCurrencies],
     payoutGatewayPriority: [...template.payoutGatewayPriority],
     postageCarriers: template.postageCarriers.map((carrier) => ({ ...carrier })),
+    tax: { ...template.tax, zeroRatedCategories: [...template.tax.zeroRatedCategories] },
+    restrictedItems: template.restrictedItems.map((item) => ({ ...item })),
+    ageRestrictions: template.ageRestrictions.map((ar) => ({ ...ar, categories: [...ar.categories] })),
+    shippingZones: [...template.shippingZones],
   };
 }
 
@@ -484,5 +694,9 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
     postage: {
       carriers: template.postageCarriers,
     },
+    tax: template.tax,
+    restrictedItems: template.restrictedItems,
+    ageRestrictions: template.ageRestrictions,
+    shippingZones: template.shippingZones,
   };
 }

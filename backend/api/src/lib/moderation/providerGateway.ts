@@ -46,6 +46,8 @@ import type {
   ResolvedModel,
 } from './modelRegistry.js';
 import { resolveModel } from './modelRegistry.js';
+import { determineAction } from './confidenceCalibration.js';
+import type { ModerationAction } from './confidenceCalibration.js';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -89,6 +91,31 @@ export interface NormalizedLabel {
   confidence: number;
   /** Original provider label, retained for auditability. */
   source_label: string;
+  /**
+   * Calibrated probability derived from the per-provider, per-category
+   * calibration curve. Populated by the gateway after normalisation; absent
+   * on labels returned directly from {@link normalizeLabels}.
+   */
+  calibrated_confidence?: number;
+  /**
+   * Calibration-derived action band for this label. Populated by the gateway
+   * alongside {@link calibrated_confidence}.
+   */
+  calibration_action?: ModerationAction;
+}
+
+/**
+ * Per-label calibration verdict recorded on the gateway result so downstream
+ * consumers (triage queue, dashboards, auditors) can see the raw and
+ * calibrated scores and the threshold band that drove the decision.
+ */
+export interface LabelCalibrationVerdict {
+  reason_code: string;
+  raw_confidence: number;
+  calibrated_confidence: number;
+  action: ModerationAction;
+  auto_approve_threshold: number | null;
+  auto_reject_threshold: number | null;
 }
 
 export interface ModerationGatewayResult {
@@ -103,6 +130,12 @@ export interface ModerationGatewayResult {
   raw_provider_response_hash: string;
   is_shadow: boolean;
   created_at: string;
+  /**
+   * Per-label calibration verdicts. Present when calibration was applied
+   * (i.e. the provider returned a usable result); absent for `unavailable`
+   * outcomes where no labels were produced.
+   */
+  calibration?: LabelCalibrationVerdict[];
 }
 
 export interface DateRange {
@@ -462,17 +495,111 @@ async function withTimeout<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Modality routing helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a poster/thumbnail frame reference from a video content ref.
+ *
+ * Video content refs may carry a poster frame alongside the asset id so the
+ * gateway can moderate a representative still without an ffmpeg dependency.
+ * Two encodings are accepted:
+ *   - `video_id:poster_url` — the poster URL follows the first colon.
+ *   - a bare URL ending in an image extension — treated as the poster itself.
+ *
+ * Returns `null` when no still frame can be derived, signalling the gateway to
+ * fail closed rather than silently approving unmoderated video.
+ */
+function extractPosterRef(contentRef: string): string | null {
+  if (contentRef.includes(':')) {
+    const posterUrl = contentRef.slice(contentRef.indexOf(':') + 1);
+    return posterUrl.length > 0 ? posterUrl : null;
+  }
+  if (contentRef.match(/\.(jpg|jpeg|png|webp)$/i)) {
+    return contentRef;
+  }
+  return null;
+}
+
+/**
+ * Moderate a video by routing through the provider's native video adapter when
+ * one exists, or by moderating a representative poster frame as an image.
+ *
+ * In production, keyframe extraction would use ffmpeg to sample frames across
+ * the timeline (first, 25%, middle, 75%, last) and aggregate per-frame
+ * verdicts — any rejected frame rejects the video, and the highest confidence
+ * wins. Without an ffmpeg/sharp dependency the gateway moderates the poster
+ * frame supplied by the caller and fails closed when no frame is available.
+ * The content is never silently approved.
+ */
+async function moderateVideoContent(
+  provider: ModerationProvider,
+  contentRef: string,
+  resolved: ResolvedModel,
+): Promise<ModerationResult> {
+  if (provider.moderateVideo) {
+    return provider.moderateVideo(contentRef);
+  }
+
+  const posterRef = extractPosterRef(contentRef);
+  if (posterRef !== null) {
+    return provider.moderateImage(posterRef);
+  }
+
+  // No native video adapter and no derivable poster frame: fail closed.
+  return {
+    status: 'failed',
+    confidence: 0,
+    labels: [],
+    provider: resolved.provider,
+    modelVersion: resolved.model_version,
+    processingTimeMs: 0,
+    error:
+      'Video moderation requested but no poster frame could be extracted and the provider has no native video adapter',
+  };
+}
+
+/**
+ * Moderate an audio clip by routing through the provider's native audio adapter
+ * when one exists. Audio cannot be reduced to an image frame, so providers
+ * without a native adapter fail closed — the content is never silently
+ * approved.
+ */
+async function moderateAudioContent(
+  provider: ModerationProvider,
+  contentRef: string,
+  resolved: ResolvedModel,
+): Promise<ModerationResult> {
+  if (provider.moderateAudio) {
+    return provider.moderateAudio(contentRef);
+  }
+
+  return {
+    status: 'failed',
+    confidence: 0,
+    labels: [],
+    provider: resolved.provider,
+    modelVersion: resolved.model_version,
+    processingTimeMs: 0,
+    error: 'Audio moderation requested but the provider has no native audio adapter',
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Provider invocation
 // ---------------------------------------------------------------------------
 
 /**
- * Invoke the provider adapter for a resolved model. Returns the provider
- * result or a synthesised `failed` result if the modality is unsupported for
- * the provider (e.g. Rekognition text), the provider is circuit-broken, or
- * the call times out. Never throws: every failure mode — including
- * {@link ModerationProviderError} from the circuit breaker, the
- * not-yet-implemented `openai_omni` adapter, and timeouts — is mapped to a
- * `failed` result so the gateway's `unavailable` contract holds.
+ * Invoke the provider adapter for a resolved model. Routes the call by content
+ * modality: image and text use their dedicated adapter methods; video falls
+ * back to a poster-frame image scan (or a native video adapter when present);
+ * audio uses a native adapter or fails closed. Returns the provider result or
+ * a synthesised `failed` result if the modality is unsupported for the
+ * provider, the provider is circuit-broken, or the call times out. Never
+ * throws: every failure mode — including {@link ModerationProviderError} from
+ * the circuit breaker, the not-yet-implemented `openai_omni` adapter, and
+ * timeouts — is mapped to a `failed` result so the gateway's `unavailable`
+ * contract holds.
  */
 async function callProvider(
   resolved: ResolvedModel,
@@ -489,27 +616,49 @@ async function callProvider(
     const provider = getProvider(resolved.provider);
 
     let providerCall: Promise<ModerationResult>;
-    if (request.content_modality === 'text') {
-      if (request.content_text === undefined) {
-        return {
-          status: 'failed',
-          confidence: 0,
-          labels: [],
-          provider: resolved.provider,
-          modelVersion: resolved.model_version,
-          processingTimeMs: 0,
-          error: 'Text moderation requested but content_text is missing',
-        };
+    switch (request.content_modality) {
+      case 'text': {
+        if (request.content_text === undefined) {
+          return {
+            status: 'failed',
+            confidence: 0,
+            labels: [],
+            provider: resolved.provider,
+            modelVersion: resolved.model_version,
+            processingTimeMs: 0,
+            error: 'Text moderation requested but content_text is missing',
+          };
+        }
+        providerCall = provider.moderateText(request.content_text);
+        break;
       }
-      providerCall = provider.moderateText(request.content_text);
-    } else {
-      // Image / video / audio all flow through moderateImage for now. The
-      // provider adapters currently expose only image + text; video/audio
-      // adapters will plug in behind the same gateway contract. Providers
-      // take a URL today; for byte payloads we pass the content_ref as the
-      // locator (a real deployment would upload to S3 and pass a pre-signed
-      // URL). This keeps the contract honest without fabricating a URL.
-      providerCall = provider.moderateImage(request.content_ref);
+      case 'video':
+        providerCall = moderateVideoContent(
+          provider,
+          request.content_ref,
+          resolved,
+        );
+        break;
+      case 'audio':
+        providerCall = moderateAudioContent(
+          provider,
+          request.content_ref,
+          resolved,
+        );
+        break;
+      case 'image':
+        // Providers take a URL today; for byte payloads we pass the content_ref
+        // as the locator (a real deployment would upload to S3 and pass a
+        // pre-signed URL). This keeps the contract honest without fabricating
+        // a URL.
+        providerCall = provider.moderateImage(request.content_ref);
+        break;
+      default:
+        // live_stream and any future modality: route through the image adapter
+        // until a dedicated adapter is implemented, preserving existing
+        // behaviour. Dedicated adapters will plug in behind the same switch.
+        providerCall = provider.moderateImage(request.content_ref);
+        break;
     }
 
     const result = await withTimeout(
@@ -587,8 +736,11 @@ export async function storeModerationResult(
 
     const categoryScores: Record<string, number> = {};
     for (const label of result.normalized_labels) {
+      // Prefer the calibrated probability when present so triage category
+      // scores are comparable across providers.
+      const score = label.calibrated_confidence ?? label.confidence;
       const prev = categoryScores[label.reason_code] ?? 0;
-      categoryScores[label.reason_code] = Math.max(prev, label.confidence);
+      categoryScores[label.reason_code] = Math.max(prev, score);
     }
 
     const insertResult = await db.query<StoredResultRow>(
@@ -700,6 +852,88 @@ async function storeEvidence(
 }
 
 // ---------------------------------------------------------------------------
+// Confidence calibration
+// ---------------------------------------------------------------------------
+
+/**
+ * Severity ordering for non-failure gateway statuses. Used to fuse the
+ * provider's own status with the calibration-derived status without ever
+ * downgrading a provider `reject` or `review` — fail-closed is preserved.
+ */
+const STATUS_SEVERITY: ReadonlyMap<'approved' | 'review' | 'reject', number> = new Map([
+  ['approved', 0],
+  ['review', 1],
+  ['reject', 2],
+]);
+
+function worseStatus(
+  a: 'approved' | 'review' | 'reject',
+  b: 'approved' | 'review' | 'reject',
+): 'approved' | 'review' | 'reject' {
+  return (STATUS_SEVERITY.get(a)! >= STATUS_SEVERITY.get(b)!) ? a : b;
+}
+
+/**
+ * Apply per-provider, per-category calibration to the normalised labels and
+ * derive the gateway status from the resulting action bands.
+ *
+ * Each label is mapped through {@link determineAction} to one of
+ * `auto_approve`, `auto_reject`, or `human_review`. The overall status is the
+ * worst band across all labels:
+ *   - any `auto_reject`  -> `reject`
+ *   - any `human_review` -> `review`
+ *   - otherwise (all `auto_approve`, or no labels) -> `approved`
+ *
+ * The returned status is the *calibration* view only; the caller fuses it with
+ * the provider's own status via {@link worseStatus} so a provider `reject` is
+ * never downgraded by calibration. Labels are enriched in place with their
+ * calibrated confidence and action band, and a full per-label verdict list is
+ * returned for result metadata.
+ */
+function applyCalibration(
+  providerName: string,
+  labels: NormalizedLabel[],
+): {
+  labels: NormalizedLabel[];
+  status: 'approved' | 'review' | 'reject';
+  calibration: LabelCalibrationVerdict[];
+} {
+  const verdicts: LabelCalibrationVerdict[] = [];
+  let hasHumanReview = false;
+  let hasAutoReject = false;
+
+  const enriched = labels.map((label) => {
+    const verdict = determineAction(providerName, label.reason_code, label.confidence);
+    if (verdict.action === 'auto_reject') {
+      hasAutoReject = true;
+    } else if (verdict.action === 'human_review') {
+      hasHumanReview = true;
+    }
+    verdicts.push({
+      reason_code: label.reason_code,
+      raw_confidence: label.confidence,
+      calibrated_confidence: verdict.calibratedScore,
+      action: verdict.action,
+      auto_approve_threshold: verdict.threshold?.autoApproveThreshold ?? null,
+      auto_reject_threshold: verdict.threshold?.autoRejectThreshold ?? null,
+    });
+    return {
+      ...label,
+      calibrated_confidence: verdict.calibratedScore,
+      calibration_action: verdict.action,
+    };
+  });
+
+  const status: 'approved' | 'review' | 'reject' = hasAutoReject
+    ? 'reject'
+    : hasHumanReview
+      ? 'review'
+      : 'approved';
+
+  return { labels: enriched, status, calibration: verdicts };
+}
+
+// ---------------------------------------------------------------------------
 // Gateway entry point
 // ---------------------------------------------------------------------------
 
@@ -711,9 +945,13 @@ async function storeEvidence(
  * 2. Select the provider adapter for the resolved provider.
  * 3. Call the adapter; on any failure return `unavailable` (never `approved`).
  * 4. Normalise provider labels to ThryftVerse reason codes.
- * 5. Store the result with full provenance (content hash, raw response hash,
- *    model/taxonomy version).
- * 6. If the model is in shadow mode, log the result but do not let it affect
+ * 5. Apply per-provider, per-category confidence calibration and thresholds
+ *    to derive the auto-approve / auto-reject / human-review bands. The
+ *    calibrated status is fused with the provider's own status (worse wins)
+ *    so a provider `reject` is never downgraded.
+ * 6. Store the result with full provenance (content hash, raw response hash,
+ *    model/taxonomy version) and per-label calibration verdicts.
+ * 7. If the model is in shadow mode, log the result but do not let it affect
  *    asset status — the returned `is_shadow` flag tells the caller to skip
  *    lifecycle transitions.
  *
@@ -766,21 +1004,38 @@ export async function moderate(
   const normalizedLabels = normalizeLabels(resolved.provider, providerResult.labels);
 
   // 5. Build the gateway result. Provider failure is never approval.
-  const status = gatewayStatus(providerResult);
+  const providerStatus = gatewayStatus(providerResult);
   const rawResponseJson = JSON.stringify(providerResult);
   const rawResponseHash = sha256(rawResponseJson);
+
+  // 5a. When the provider returned a usable result, apply per-category
+  //     calibration curves and thresholds to derive the auto-approve /
+  //     auto-reject / human-review bands. The calibrated status is fused with
+  //     the provider's own status (worse wins) so a provider `reject` is never
+  //     downgraded by calibration — fail-closed is preserved. Provider failure
+  //     (`unavailable`) is never overridden by calibration.
+  let finalStatus: ModerationGatewayResult['status'] = providerStatus;
+  let calibratedLabels = normalizedLabels;
+  let calibration: LabelCalibrationVerdict[] | undefined;
+  if (providerStatus !== 'unavailable') {
+    const applied = applyCalibration(resolved.provider, normalizedLabels);
+    finalStatus = worseStatus(providerStatus, applied.status);
+    calibratedLabels = applied.labels;
+    calibration = applied.calibration;
+  }
 
   const result: ModerationGatewayResult = {
     request_id: requestId,
     model_id: resolved.model_id,
     model_version: resolved.model_version,
     provider: resolved.provider,
-    status,
+    status: finalStatus,
     confidence: providerResult.confidence,
-    normalized_labels: normalizedLabels,
+    normalized_labels: calibratedLabels,
     raw_provider_response_hash: rawResponseHash,
     is_shadow: resolved.is_shadow,
     created_at: createdAt,
+    calibration,
   };
 
   // 6. Store with full provenance. Storage failures are logged but do not
@@ -799,7 +1054,7 @@ export async function moderate(
     );
   }
 
-  if (status === 'unavailable') {
+  if (finalStatus === 'unavailable') {
     logger.warn(
       {
         requestId,
@@ -816,7 +1071,7 @@ export async function moderate(
         requestId,
         content_ref: request.content_ref,
         model_id: resolved.model_id,
-        status,
+        status: finalStatus,
         confidence: result.confidence,
       },
       'moderationGateway.shadow_result',
@@ -827,7 +1082,7 @@ export async function moderate(
         requestId,
         content_ref: request.content_ref,
         model_id: resolved.model_id,
-        status,
+        status: finalStatus,
         confidence: result.confidence,
       },
       'moderationGateway.result',

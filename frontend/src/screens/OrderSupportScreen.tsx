@@ -23,7 +23,6 @@ import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -80,12 +79,11 @@ const OUTCOME_PREVIEW: Record<string, string> = {
 };
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
-  const { orderId, categoryId, categoryLabel } = route.params;
+  const { orderId, categoryId } = route.params;
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
 
   const [selectedTopic, setSelectedTopic] = useState<string | null>(categoryId ?? null);
   const [details, setDetails] = useState('');

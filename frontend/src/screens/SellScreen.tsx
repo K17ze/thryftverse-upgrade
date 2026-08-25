@@ -72,6 +72,7 @@ import {
   type ListingFieldValues,
   type ListingFieldKey,
 } from '../contracts/listingCategoryPolicy';
+import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -102,7 +103,7 @@ export default function SellScreen() {
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
   // via this themed proxy so the screen is fully dark-mode compatible.
-  const t = useMemo(() => ({
+  const themed = useMemo(() => ({
     root: { backgroundColor: colors.background },
     navHeader: { borderBottomColor: colors.border, backgroundColor: colors.background },
     navTitle: { color: colors.textPrimary },
@@ -1021,9 +1022,9 @@ export default function SellScreen() {
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
-    <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
+    <SafeAreaView style={[styles.root, themed.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
-        <View style={[styles.navHeader, t.navHeader, { paddingTop: 0 }]}>
+        <View style={[styles.navHeader, themed.navHeader, { paddingTop: 0 }]}>
           <Pressable
             style={({ pressed }) => [styles.navCloseBtn, pressed && { opacity: 0.5 }]}
             onPress={() => navigation.goBack()}
@@ -1032,7 +1033,7 @@ export default function SellScreen() {
           >
             <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
           </Pressable>
-          <Text style={[styles.navTitle, t.navTitle]}>Sell</Text>
+          <Text style={[styles.navTitle, themed.navTitle]}>{t('listing.create.title')}</Text>
           {/* Transient "Saved" indicator — per audit 04: "visible 'Saved'
               only briefly; never spam toasts on every field." A subtle
               checkmark that fades after 1.5s. Not a permanent label. */}
@@ -1044,7 +1045,7 @@ export default function SellScreen() {
                 style={styles.navDraftSavedRow}
               >
                 <Ionicons name="checkmark" size={12} color={colors.success} aria-hidden={true} />
-                <Text style={[styles.navDraftText, { color: colors.success }]}>Saved</Text>
+                <Text style={[styles.navDraftText, { color: colors.success }]}>{t('listing.create.saved')}</Text>
               </Reanimated.View>
             ) : null}
           </View>
@@ -1065,7 +1066,7 @@ export default function SellScreen() {
             <View style={styles.draftHintRow}>
               <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={[styles.draftHintText, { color: colors.textSecondary }]}>
-                Draft restored — pick up where you left off
+                {t('listing.create.draftRestored')}
               </Text>
             </View>
           )}
@@ -1085,7 +1086,7 @@ export default function SellScreen() {
                 accessibilityHint="Opens the bulk listing tool"
               >
                 <Ionicons name="layers-outline" size={22} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Bulk list</Text>
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.bulkList')}</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
@@ -1095,7 +1096,7 @@ export default function SellScreen() {
                 accessibilityHint="Opens the inventory management screen"
               >
                 <Ionicons name="grid-outline" size={22} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Inventory</Text>
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.inventory')}</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
@@ -1105,7 +1106,7 @@ export default function SellScreen() {
                 accessibilityHint="Opens the seller hub dashboard"
               >
                 <Ionicons name="storefront-outline" size={22} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>Hub</Text>
+                <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.hub')}</Text>
               </Pressable>
             </View>
           )}
@@ -1129,10 +1130,10 @@ export default function SellScreen() {
                 <Ionicons name="cube-outline" size={22} color={colors.brand} aria-hidden={true} />
                 <View style={styles.importShopText}>
                   <Text style={[styles.importShopTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    Import a shop
+                    {t('listing.create.importShop')}
                   </Text>
                   <Text style={[styles.importShopSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                    Bring your existing listings from eBay or a file
+                    {t('listing.create.importShopSubtitle')}
                   </Text>
                 </View>
               </View>
@@ -1148,7 +1149,7 @@ export default function SellScreen() {
               <View style={styles.sellerTipsHeader}>
                 <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.sellerTipsTitle, { color: colors.textPrimary }]}>
-                  Selling tips
+                  {t('listing.create.sellingTips')}
                 </Text>
                 <Pressable
                   hitSlop={8}
@@ -1164,19 +1165,19 @@ export default function SellScreen() {
                 <View style={styles.sellerTipRow}>
                   <Ionicons name="camera-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    Use natural light and capture all angles
+                    {t('listing.create.sellingTipLighting')}
                   </Text>
                 </View>
                 <View style={styles.sellerTipRow}>
                   <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    Price using recent sold comparables
+                    {t('listing.create.sellingTipPricing')}
                   </Text>
                 </View>
                 <View style={styles.sellerTipRow}>
                   <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    Respond quickly to buyer questions
+                    {t('listing.create.sellingTipRespond')}
                   </Text>
                 </View>
               </View>
@@ -1186,11 +1187,11 @@ export default function SellScreen() {
           {mediaDraftItems.length === 0 ? (
             <EmptyState
               icon="camera-outline"
-              title="Add photos to get started"
-              subtitle="Well-lit photos from multiple angles sell faster."
-              ctaLabel="Upload from library"
+              title={t('listing.create.addPhotosTitle')}
+              subtitle={t('listing.create.addPhotosSubtitle')}
+              ctaLabel={t('listing.create.uploadFromLibrary')}
               onCtaPress={handlePickFromLibrary}
-              secondaryCtaLabel="Take photo"
+              secondaryCtaLabel={t('listing.create.takePhoto')}
               onSecondaryCtaPress={handlePickFromCamera}
             />
           ) : (
@@ -1216,8 +1217,8 @@ export default function SellScreen() {
               <Ionicons name="camera-outline" size={16} color={colors.brand} aria-hidden={true} />
               <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                 {mediaDraftItems.length === 0
-                  ? 'Add at least 1 photo to publish'
-                  : `Add ${3 - mediaDraftItems.length} more photo${3 - mediaDraftItems.length > 1 ? 's' : ''} for more views`}
+                  ? t('listing.create.addAtLeastOnePhoto')
+                  : t('listing.create.addMorePhotos', { count: 3 - mediaDraftItems.length, plural: 3 - mediaDraftItems.length > 1 ? 's' : '' })}
               </Text>
             </View>
           )}
@@ -1230,23 +1231,23 @@ export default function SellScreen() {
             accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
           >
             <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-            <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
-            <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
+            <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
+            <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
             <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
           </Pressable>
           {!photoGuideCollapsed && (
             <View style={styles.photoGuideTips}>
               <View style={styles.photoGuideTipRow}>
                 <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
+                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
               </View>
               <View style={styles.photoGuideTipRow}>
                 <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
+                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
               </View>
               <View style={styles.photoGuideTipRow}>
                 <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
+                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
               </View>
             </View>
           )}
@@ -1286,26 +1287,26 @@ export default function SellScreen() {
           <View style={styles.sectionGroup}>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
                 {title.trim().length > 0 ? (
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <TextInput
-                style={[styles.fieldInput, t.fieldInput]}
+                style={[styles.fieldInput, themed.fieldInput]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
-                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholder={t('listing.create.titlePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
               />
-              {errors.title ? <Text style={[styles.fieldError, t.fieldError]}>{errors.title}</Text> : null}
+              {errors.title ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.title}</Text> : null}
               {title.trim().length > 0 && title.trim().length < 10 && (
-                <Text style={[styles.fieldHelper, t.fieldHelper]}>Add more detail to help buyers find this item</Text>
+                <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.descriptionHelper')}</Text>
               )}
-              <View style={[styles.hairline, t.hairline]} />
+              <View style={[styles.hairline, themed.hairline]} />
             </View>
           </View>
 
@@ -1313,12 +1314,12 @@ export default function SellScreen() {
           {/* Additive banner — only shown when ai_listing_assist is enabled.
               When the flag is off, the current autofill-only behaviour runs. */}
           {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
-            <View style={[styles.autofillCard, t.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
+            <View style={[styles.autofillCard, themed.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
               <Ionicons name="sparkles" size={18} color={colors.brand} aria-hidden={true} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.autofillTitle, t.autofillTitle]}>AI Listing Assist</Text>
-                <Text style={[t.autofillDesc, { marginTop: 2 }]}>
-                  Smart suggestions from your photos — titles, brands, and fair pricing.
+                <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.aiAssist')}</Text>
+                <Text style={[themed.autofillDesc, { marginTop: 2 }]}>
+                  {t('listing.create.aiAssistDesc')}
                 </Text>
               </View>
             </View>
@@ -1328,10 +1329,10 @@ export default function SellScreen() {
           {/* Inline suggestion — subtle tint, no heavy card chrome (§4 surface budget).
               Reads as a helpful nudge, not a separate panel. */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
-            <View style={[styles.autofillCard, t.autofillCard]}>
+            <View style={[styles.autofillCard, themed.autofillCard]}>
               <View style={styles.autofillHeader}>
                 <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.autofillTitle, t.autofillTitle]}>Suggested details</Text>
+                <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.suggestedDetails')}</Text>
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
@@ -1345,30 +1346,30 @@ export default function SellScreen() {
               {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
               {autofillSuggestion.title && (
                 <View style={styles.autofillRow}>
-                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Title</Text>
-                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
+                  <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.listingTitle')}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
                 </View>
               )}
               {autofillSuggestion.brand && (
                 <View style={styles.autofillRow}>
-                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Brand</Text>
-                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
+                  <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.brand')}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
                 </View>
               )}
               {autofillSuggestion.category && (
                 <View style={styles.autofillRow}>
-                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Category</Text>
-                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
+                  <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.category')}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
                 </View>
               )}
               <Pressable
-                style={({ pressed }) => [styles.autofillApplyBtn, t.autofillApplyBtn, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.autofillApplyBtn, themed.autofillApplyBtn, pressed && { opacity: 0.6 }]}
                 onPress={handleApplyAutofill}
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
                 <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.autofillApplyText, t.autofillApplyText]}>Apply to empty fields</Text>
+                <Text style={[styles.autofillApplyText, themed.autofillApplyText]}>{t('listing.create.applyToEmptyFields')}</Text>
               </Pressable>
             </View>
           )}
@@ -1386,7 +1387,7 @@ export default function SellScreen() {
 
           {/* -- 4. PRODUCT DETAILS (classification — what the item is) -- */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1396,21 +1397,21 @@ export default function SellScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
                   {category ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !category && styles.pickerPlaceholder, !category && t.pickerPlaceholder]}>
-                  {category || 'Select category'}
+                <Text style={[styles.pickerValue, themed.pickerValue, !category && styles.pickerPlaceholder, !category && themed.pickerPlaceholder]}>
+                  {category || t('listing.create.selectCategory')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            {errors.category ? <Text style={[styles.fieldError, t.fieldError]}>{errors.category}</Text> : null}
-            <View style={[styles.hairline, t.hairline]} />
+            {errors.category ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.category}</Text> : null}
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1420,29 +1421,29 @@ export default function SellScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
                   {brand ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : completeness.policy.brandlessValid ? (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !brand && styles.pickerPlaceholder, !brand && t.pickerPlaceholder]}>
-                  {brand || 'Select brand'}
+                <Text style={[styles.pickerValue, themed.pickerValue, !brand && styles.pickerPlaceholder, !brand && themed.pickerPlaceholder]}>
+                  {brand || t('listing.create.selectBrand')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {!brand && (
-              <Text style={[styles.fieldHelper, t.fieldHelper]}>
+              <Text style={[styles.fieldHelper, themed.fieldHelper]}>
                 {completeness.policy.brandlessValid
-                  ? 'Add brand for better search discoverability'
-                  : 'Brand is required for this category'}
+                  ? t('listing.create.brandHelperOptional')
+                  : t('listing.create.brandHelperRequired')}
               </Text>
             )}
-            <View style={[styles.hairline, t.hairline]} />
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1452,23 +1453,23 @@ export default function SellScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
                   {size ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : completeness.policy.sizelessValid ? (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !size && styles.pickerPlaceholder, !size && t.pickerPlaceholder]}>
-                  {size || 'Select size'}
+                <Text style={[styles.pickerValue, themed.pickerValue, !size && styles.pickerPlaceholder, !size && themed.pickerPlaceholder]}>
+                  {size || t('listing.create.selectSize')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            {errors.size ? <Text style={[styles.fieldError, t.fieldError]}>{errors.size}</Text> : null}
-            <View style={[styles.hairline, t.hairline]} />
+            {errors.size ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.size}</Text> : null}
+            <View style={[styles.hairline, themed.hairline]} />
           </View>
 
           {/* -- 5. PRICE & CONDITION (deal terms — the two fields buyers decide on) -- */}
@@ -1476,7 +1477,7 @@ export default function SellScreen() {
               user sets their commercial position in one grouped section, rather
               than burying condition among classification details. */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Price & condition</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.priceAndCondition')}</Text>
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1486,30 +1487,30 @@ export default function SellScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
                   {condition ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !condition && styles.pickerPlaceholder, !condition && t.pickerPlaceholder]}>
-                  {condition || 'Select condition'}
+                <Text style={[styles.pickerValue, themed.pickerValue, !condition && styles.pickerPlaceholder, !condition && themed.pickerPlaceholder]}>
+                  {condition || t('listing.create.selectCondition')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            {errors.condition ? <Text style={[styles.fieldError, t.fieldError]}>{errors.condition}</Text> : null}
-            <View style={[styles.hairline, t.hairline]} />
+            {errors.condition ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.condition}</Text> : null}
+            <View style={[styles.hairline, themed.hairline]} />
 
             {listingMode === 'sell_now' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Price</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.price')}</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1518,14 +1519,14 @@ export default function SellScreen() {
                       maxLength={8}
                     />
                   </View>
-                  {errors.price ? <Text style={[styles.fieldError, t.fieldError]}>{errors.price}</Text> : null}
+                  {errors.price ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.price}</Text> : null}
 
                   {/* Sold comparables hint -- truthful pricing guidance from real data */}
                   {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                     <View style={styles.priceSuggestionBlock}>
                       <View style={styles.soldCompsHint}>
                         <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                        <Text style={[styles.soldCompsText, t.soldCompsText]}>
+                        <Text style={[styles.soldCompsText, themed.soldCompsText]}>
                           Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
                           {' '}({soldComps.sampleSize} sold)
                         </Text>
@@ -1543,18 +1544,18 @@ export default function SellScreen() {
                           accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
                         >
                           <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
-                          <Text style={[styles.soldCompsText, t.priceSuggestion]}>
+                          <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
                             Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
                           </Text>
                           {!price && (
-                            <Text style={[styles.soldCompsAction, t.soldCompsAction]}>Tap to set</Text>
+                            <Text style={[styles.soldCompsAction, themed.soldCompsAction]}>Tap to set</Text>
                           )}
                         </Pressable>
                       )}
                       {priceVsMarket === 'above' && (
                         <View style={styles.soldCompsHint}>
                           <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
-                          <Text style={[styles.soldCompsText, t.priceMarketHigh]}>
+                          <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
                             Priced above recent sold range
                           </Text>
                         </View>
@@ -1562,7 +1563,7 @@ export default function SellScreen() {
                       {priceVsMarket === 'below' && (
                         <View style={styles.soldCompsHint}>
                           <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                          <Text style={[styles.soldCompsText, t.priceMarketLow]}>
+                          <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
                             Priced below recent sold range
                           </Text>
                         </View>
@@ -1570,7 +1571,7 @@ export default function SellScreen() {
                       {priceVsMarket === 'in_range' && (
                         <View style={styles.soldCompsHint}>
                           <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                          <Text style={[styles.soldCompsText, t.priceMarketGood]}>
+                          <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
                             Within recent sold range
                           </Text>
                         </View>
@@ -1579,7 +1580,7 @@ export default function SellScreen() {
                   ) : (
                     <View style={styles.soldCompsHint}>
                       <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                      <Text style={[styles.soldCompsText, t.priceNoCompsHint]}>
+                      <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
                         Price competitively for faster sales
                       </Text>
                     </View>
@@ -1596,7 +1597,7 @@ export default function SellScreen() {
                     <View style={styles.proceedsRow}>
                       <View style={styles.proceedsLeft}>
                         <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-                        <Text style={[styles.proceedsLabel, t.fieldHelper]}>
+                        <Text style={[styles.proceedsLabel, themed.fieldHelper]}>
                           You receive
                         </Text>
                       </View>
@@ -1604,18 +1605,18 @@ export default function SellScreen() {
                         <Text style={[styles.proceedsAmount, { color: colors.success }]}>
                           {currencySymbol}{(numericPrice - calculatePlatformChargeGbp(numericPrice)).toFixed(2)}
                         </Text>
-                        <Text style={[styles.proceedsFeeHint, t.fieldHelper]}>
+                        <Text style={[styles.proceedsFeeHint, themed.fieldHelper]}>
                           after {currencySymbol}{calculatePlatformChargeGbp(numericPrice).toFixed(2)} fee
                         </Text>
                       </View>
                     </View>
                   )}
 
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1625,12 +1626,12 @@ export default function SellScreen() {
                     />
                   </View>
                   {hasDiscount && (
-                    <Text style={[styles.discountPreview, t.discountPreview]}>-{discountPercent}% off original</Text>
+                    <Text style={[styles.discountPreview, themed.discountPreview]}>-{discountPercent}% off original</Text>
                   )}
                   {!originalPrice && hasValidPrice && (
-                    <Text style={[styles.fieldHelper, t.fieldHelper]}>Add original price to show value</Text>
+                    <Text style={[styles.fieldHelper, themed.fieldHelper]}>Add original price to show value</Text>
                   )}
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
               </>
             )}
@@ -1638,11 +1639,11 @@ export default function SellScreen() {
             {listingMode === 'auction' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Starting bid</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Starting bid</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1651,7 +1652,7 @@ export default function SellScreen() {
                       maxLength={8}
                     />
                   </View>
-                  {errors.startingBid ? <Text style={[styles.fieldError, t.fieldError]}>{errors.startingBid}</Text> : null}
+                  {errors.startingBid ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.startingBid}</Text> : null}
 
                   {/* ── Seller proceeds estimate (auction) ──
                       Per audit 04 P1: "Add seller-proceeds preview beside price."
@@ -1661,7 +1662,7 @@ export default function SellScreen() {
                     <View style={styles.proceedsRow}>
                       <View style={styles.proceedsLeft}>
                         <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-                        <Text style={[styles.proceedsLabel, t.fieldHelper]}>
+                        <Text style={[styles.proceedsLabel, themed.fieldHelper]}>
                           You receive (from starting bid)
                         </Text>
                       </View>
@@ -1669,22 +1670,22 @@ export default function SellScreen() {
                         <Text style={[styles.proceedsAmount, { color: colors.success }]}>
                           {currencySymbol}{(numericStartingBid - calculatePlatformChargeGbp(numericStartingBid)).toFixed(2)}
                         </Text>
-                        <Text style={[styles.proceedsFeeHint, t.fieldHelper]}>
+                        <Text style={[styles.proceedsFeeHint, themed.fieldHelper]}>
                           after {currencySymbol}{calculatePlatformChargeGbp(numericStartingBid).toFixed(2)} fee
                         </Text>
                       </View>
                     </View>
                   )}
 
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Reserve price (optional)</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Reserve price (optional)</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1693,30 +1694,30 @@ export default function SellScreen() {
                       maxLength={8}
                     />
                   </View>
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Duration</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Duration</Text>
                   <View style={styles.toggleRow}>
                     {AUCTION_DURATIONS.map((h) => {
                       const active = auctionDurationHours === h;
                       return (
                         <Pressable
                           key={h}
-                          style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
+                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.7 }]}
                           onPress={() => setAuctionDurationHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set duration to ${h} hours`}
                         >
-                          <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
+                          <Text style={[styles.toggleText, themed.toggleText, active && styles.toggleTextActive, active && themed.toggleTextActive]}>
                             {h < 72 ? `${h}h` : `${h / 24}d`}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
               </>
             )}
@@ -1724,11 +1725,11 @@ export default function SellScreen() {
             {listingMode === 'co_own' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Total valuation</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Total valuation</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1737,31 +1738,31 @@ export default function SellScreen() {
                       maxLength={8}
                     />
                   </View>
-                  {errors.price ? <Text style={[styles.fieldError, t.fieldError]}>{errors.price}</Text> : null}
-                  <View style={[styles.hairline, t.hairline]} />
+                  {errors.price ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.price}</Text> : null}
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Share count</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Share count</Text>
                   <TextInput
-                    style={[styles.fieldInput, t.fieldInput]}
+                    style={[styles.fieldInput, themed.fieldInput]}
                     placeholder="20"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     value={shareCountInput}
                     onChangeText={(t) => { handleShareCountChange(t); setErrors((p) => ({ ...p, shareCount: '' })); }}
                   />
-                  <Text style={[styles.fieldHelper, t.fieldHelper]}>Maximum 20 units per co-own</Text>
-                  {errors.shareCount ? <Text style={[styles.fieldError, t.fieldError]}>{errors.shareCount}</Text> : null}
-                  <View style={[styles.hairline, t.hairline]} />
+                  <Text style={[styles.fieldHelper, themed.fieldHelper]}>Maximum 20 units per co-own</Text>
+                  {errors.shareCount ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.shareCount}</Text> : null}
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Share price ({currency.currencyCode})</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Share price ({currency.currencyCode})</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={[styles.priceInput, t.priceInput]}
+                      style={[styles.priceInput, themed.priceInput]}
                       placeholder="0.00"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
@@ -1770,36 +1771,36 @@ export default function SellScreen() {
                       maxLength={8}
                     />
                   </View>
-                  {errors.sharePrice ? <Text style={[styles.fieldError, t.fieldError]}>{errors.sharePrice}</Text> : null}
+                  {errors.sharePrice ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.sharePrice}</Text> : null}
                   {Number(price) > 0 && Number(shareCountInput) > 0 && (
-                    <Text style={[styles.fieldHelper, t.fieldHelper]}>
+                    <Text style={[styles.fieldHelper, themed.fieldHelper]}>
                       {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)} per share
                     </Text>
                   )}
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Offering window</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Offering window</Text>
                   <View style={styles.toggleRow}>
                     {[24, 48, 72, 168].map((h) => {
                       const active = offeringWindowHours === h;
                       return (
                         <Pressable
                           key={h}
-                          style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
+                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.7 }]}
                           onPress={() => setOfferingWindowHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set offering window to ${h} hours`}
                         >
-                          <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
+                          <Text style={[styles.toggleText, themed.toggleText, active && styles.toggleTextActive, active && themed.toggleTextActive]}>
                             {h < 72 ? `${h}h` : `${h / 24}d`}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                  <View style={[styles.hairline, t.hairline]} />
+                  <View style={[styles.hairline, themed.hairline]} />
                 </View>
               </>
             )}
@@ -1807,19 +1808,19 @@ export default function SellScreen() {
 
           {/* -- 6. DESCRIPTION AND TAGS -- */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Description</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Description</Text>
                 {desc.trim().length >= 10 ? (
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                 )}
               </View>
               <TextInput
-                style={[styles.fieldInput, t.fieldInput, styles.fieldInputMultiline]}
+                style={[styles.fieldInput, themed.fieldInput, styles.fieldInputMultiline]}
                 value={desc}
                 onChangeText={(t) => { setDesc(t); setErrors((p) => ({ ...p, description: '' })); }}
                 placeholder="Describe the fit, fabric, flaws, and why you love it..."
@@ -1827,26 +1828,26 @@ export default function SellScreen() {
                 multiline
                 textAlignVertical="top"
               />
-              <Text style={[styles.fieldHelper, desc.trim().length < 10 ? t.charCountWarn : t.fieldHelper]}>
+              <Text style={[styles.fieldHelper, desc.trim().length < 10 ? themed.charCountWarn : themed.fieldHelper]}>
                 {desc.length} characters{desc.trim().length < 10 ? ' · min 10' : desc.length < 60 ? ' · add more detail' : ''}
               </Text>
-              {errors.description ? <Text style={[styles.fieldError, t.fieldError]}>{errors.description}</Text> : null}
-              <View style={[styles.hairline, t.hairline]} />
+              {errors.description ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.description}</Text> : null}
+              <View style={[styles.hairline, themed.hairline]} />
             </View>
 
-            <Text style={[styles.fieldLabel, t.fieldLabel]}>Tags</Text>
+            <Text style={[styles.fieldLabel, themed.fieldLabel]}>Tags</Text>
             <View style={styles.tagAutocompleteWrap}>
               <View style={styles.tagWrap}>
                 {tags.map((tag) => (
-                  <View key={tag} style={[styles.tagChip, t.tagChip]}>
-                    <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
+                  <View key={tag} style={[styles.tagChip, themed.tagChip]}>
+                    <Text style={[styles.tagText, themed.tagText]}>#{tag}</Text>
                     <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
                       <Ionicons name="close" size={12} color={colors.textMuted} aria-hidden={true} />
                     </Pressable>
                   </View>
                 ))}
                 <TextInput
-                  style={[styles.tagInput, t.tagInput]}
+                  style={[styles.tagInput, themed.tagInput]}
                   placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
                   placeholderTextColor={colors.textMuted}
                   value={tagInput}
@@ -1876,15 +1877,15 @@ export default function SellScreen() {
                 </View>
               )}
             </View>
-            <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
+            <Text style={[styles.fieldHelper, themed.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
             {tags.length > 0 && tags.length < 3 && (
-              <Text style={[styles.fieldHelper, t.fieldHelper]}>Add {3 - tags.length} more tag{3 - tags.length > 1 ? 's' : ''} to improve discovery</Text>
+              <Text style={[styles.fieldHelper, themed.fieldHelper]}>Add {3 - tags.length} more tag{3 - tags.length > 1 ? 's' : ''} to improve discovery</Text>
             )}
           </View>
 
           {/* -- 7. SHIPPING -- */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Shipping</Text>
             {!shippingMethod && (
               <View style={styles.contextualHintRow}>
                 <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
@@ -2002,12 +2003,12 @@ export default function SellScreen() {
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
             <View style={styles.sectionGroup}>
-              <Text style={[styles.sectionHeading, t.sectionHeading]}>Authentication photos</Text>
-              <Text style={[styles.fieldHelper, t.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
-              {errors.authPhotos ? <Text style={[styles.fieldError, t.fieldError]}>{errors.authPhotos}</Text> : null}
+              <Text style={[styles.sectionHeading, themed.sectionHeading]}>Authentication photos</Text>
+              <Text style={[styles.fieldHelper, themed.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
+              {errors.authPhotos ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.authPhotos}</Text> : null}
               <View style={styles.authPhotoRow}>
                 {authPhotos.map((uri, i) => (
-                  <View key={`auth_${i}_${uri}`} style={[styles.authThumb, t.authThumb]}>
+                  <View key={`auth_${i}_${uri}`} style={[styles.authThumb, themed.authThumb]}>
                     <Image source={{ uri }} style={styles.authThumbImage} resizeMode="cover" />
                     <Pressable
                       style={[styles.authThumbRemove, { backgroundColor: colors.background }]}
@@ -2025,7 +2026,7 @@ export default function SellScreen() {
                 ))}
                 {authPhotos.length < 2 && (
                   <Pressable
-                    style={[styles.authAddBtn, t.authAddBtn]}
+                    style={[styles.authAddBtn, themed.authAddBtn]}
                     onPress={handlePickFromLibrary}
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
@@ -2041,7 +2042,7 @@ export default function SellScreen() {
           {errorMsg && publicationStage === 'idle' && (
             <View style={styles.inlineErrorRow}>
               <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
-              <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
+              <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
 
@@ -2142,7 +2143,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheethemed.hairlineWidth,
   },
   navCloseBtn: {
     width: Control.hit,
@@ -2319,7 +2320,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   hairline: {
-    height: StyleSheet.hairlineWidth,
+    height: StyleSheethemed.hairlineWidth,
     marginTop: Space.sm,
   },
 
@@ -2402,7 +2403,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheethemed.hairlineWidth,
     minHeight: Control.hit,
   },
   togglePillActive: {
@@ -2430,7 +2431,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheethemed.hairlineWidth,
   },
   tagText: {
     fontSize: TypographyV2.meta.size,
@@ -2457,7 +2458,7 @@ const styles = StyleSheet.create({
     right: 0,
     marginTop: Space.xs,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheethemed.hairlineWidth,
     overflow: 'hidden',
     zIndex: 1000,
     elevation: 1000,
@@ -2717,7 +2718,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheethemed.hairlineWidth,
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSummaryLabel: {
@@ -2777,7 +2778,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheethemed.hairlineWidth,
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSheetRowLabel: {

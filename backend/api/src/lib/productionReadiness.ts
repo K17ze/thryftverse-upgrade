@@ -343,6 +343,34 @@ export function collectProductionReadinessErrors(
     }
   }
 
+  // DSA Transparency Database submission token. This is optional — not every
+  // deployment is required to submit statements to the EU DSA Transparency
+  // Database — but when it is missing, automated DSA submission is disabled
+  // and statements must be exported and submitted manually. We warn rather
+  // than block so that deployments without DSA obligations can still start.
+  if (!valueOf(environment, "DSA_DB_API_TOKEN")) {
+    console.warn(
+      "[compliance] DSA_DB_API_TOKEN is not set — automated submission to the DSA Transparency Database is disabled. Statements must be exported and submitted manually.",
+    );
+  }
+
+  // NCMEC CyberTipline credentials (18 U.S.C. § 2258A). US operations that
+  // detect CSAM must report to NCMEC. These are advisory — not every
+  // deployment has US obligations — but when missing, automatic CSAM
+  // reporting is disabled and reports must be submitted manually. We warn
+  // rather than block so non-US deployments can still start.
+  for (const key of [
+    "NCMEC_USERNAME",
+    "NCMEC_PASSWORD",
+    "NCMEC_ORG_ID",
+  ] as const) {
+    if (!valueOf(environment, key)) {
+      console.warn(
+        `[compliance] ${key} is not set — NCMEC CyberTipline reporting is disabled. CSAM reports must be submitted manually (18 U.S.C. § 2258A).`,
+      );
+    }
+  }
+
   return errors;
 }
 

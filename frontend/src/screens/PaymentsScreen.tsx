@@ -30,6 +30,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
 
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
@@ -141,9 +142,9 @@ export default function PaymentsScreen({ navigation }: Props) {
     try {
       const methods = await setDefaultUserPaymentMethod(method.providerPaymentMethodId);
       setBackendPaymentMethods(methods);
-      show('Default payment method updated', 'success');
+      show(t('payments.toast.defaultUpdated'), 'success');
     } catch {
-      show('Default could not be updated. Your previous choice is unchanged.', 'error');
+      show(t('payments.toast.defaultUpdateFailed'), 'error');
       setBackendPaymentMethods(previous);
     } finally {
       setIsUpdatingDefault(false);
@@ -152,17 +153,17 @@ export default function PaymentsScreen({ navigation }: Props) {
 
   const handleRemovePaymentMethod = (method: CommercePaymentMethod) => {
     Alert.alert(
-      'Remove payment method?',
-      `Are you sure you want to remove ${method.label}?`,
+      t('payments.alert.removeTitle'),
+      t('payments.alert.removeMessage', { label: method.label }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('payments.alert.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('payments.alert.remove'),
           style: 'destructive',
           onPress: async () => {
             const previous = backendPaymentMethods;
             setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
-            show('Payment method removed', 'info');
+            show(t('payments.toast.removed'), 'info');
             const userId = currentUser?.id;
             if (!userId) return;
             try {
@@ -171,7 +172,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                 clearSavedPaymentMethod();
               }
             } catch {
-              show('Payment method could not be detached. It has been restored.', 'error');
+              show(t('payments.toast.detachFailed'), 'error');
               setBackendPaymentMethods(previous);
             }
           },
@@ -183,13 +184,13 @@ export default function PaymentsScreen({ navigation }: Props) {
   const handlePaymentMethodPress = (method: CommercePaymentMethod) => {
     Alert.alert(
       method.label,
-      method.details ?? 'Saved payment method',
+      method.details ?? t('payments.label.savedPaymentMethod'),
       [
         ...(method.isDefault
           ? []
-          : [{ text: 'Set as default', onPress: () => void handleSetDefault(method) }]),
-        { text: 'Remove', style: 'destructive', onPress: () => handleRemovePaymentMethod(method) },
-        { text: 'Cancel', style: 'cancel' },
+          : [{ text: t('payments.alert.setAsDefault'), onPress: () => void handleSetDefault(method) }]),
+        { text: t('payments.alert.remove'), style: 'destructive', onPress: () => handleRemovePaymentMethod(method) },
+        { text: t('payments.alert.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -240,7 +241,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             {method.isDefault ? (
               <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
                 <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                <Text style={[styles.defaultText, { color: colors.success }]}>Default</Text>
+                <Text style={[styles.defaultText, { color: colors.success }]}>{t('payments.label.default')}</Text>
               </View>
             ) : null}
           </AnimatedPressable>
@@ -261,7 +262,7 @@ export default function PaymentsScreen({ navigation }: Props) {
   // Auto-prompt biometric once availability is confirmed.
   useEffect(() => {
     if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
-      void biometricGate.authenticate('Authenticate to view payment methods');
+      void biometricGate.authenticate(t('payments.biometric.reason'));
     }
   }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
 
@@ -271,8 +272,8 @@ export default function PaymentsScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Payment Centre"
-            subtitle="Payment methods"
+            title={t('payments.header.title')}
+            subtitle={t('payments.header.subtitle')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -280,7 +281,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       >
         <BiometricGatePrompt
           gate={biometricGate}
-          reason="Authenticate to view payment methods"
+          reason={t('payments.biometric.reason')}
           onBack={() => navigation.goBack()}
         />
       </FlagshipScreen>

@@ -24,6 +24,7 @@ export type NotificationEventType =
   | 'new_follower'
   | 'price_drop'
   | 'new_listing_from_followed_seller'
+  | 'safety_outcome'
   | 'generic';
 
 export type NotificationPushCategory =
@@ -470,6 +471,13 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
         walletObjectExtractor(payload)
       );
     },
+  },
+  safety_outcome: {
+    semanticRole: 'system',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: (payload) => payloadString(payload, 'caseId') ?? null,
+    objectExtractor: () => undefined,
   },
 };
 

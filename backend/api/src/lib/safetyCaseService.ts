@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { writeAuditEvent } from './immutableAudit.js';
 import { logger } from './logger.js';
+import { hasNcmecReport, submitNcmecReport } from './ncmecReporting.js';
 import type { WorkforcePrincipal, WorkforceSession } from './workforceAuth.js';
+import { sendOutcomeNotification } from './safetyNotifications.js';
 
 // ── Safety case service ─────────────────────────────────────────────────
 //
@@ -562,6 +564,21 @@ export async function recordDecision(
     });
 
     await client.query('COMMIT');
+
+    // If CSAM is involved, automatically submit an NCMEC CyberTipline report
+    // (18 U.S.C. § 2258A). The submission is fire-and-forget: it must never
+    // block or fail the decision. A duplicate check prevents re-reporting a
+    // case that has already been submitted.
+    maybeReportToNcmec(db, caseId, input).catch((e) =>
+      logger.error({ caseId, error: e }, '[safetyCaseService] NCMEC report trigger failed'),
+    );
+
+    // Best-effort outcome notification to the reporter. The decision is
+    // already committed — a notification failure must never roll it back.
+    notifyReporterOfOutcome(db, caseId, input).catch((e) =>
+      logger.warn({ caseId, error: e }, '[safetyCaseService] outcome notification failed'),
+    );
+
     return mapDecisionRow(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -569,6 +586,133 @@ export async function recordDecision(
   } finally {
     client.release();
   }
+}
+
+// ── NCMEC CyberTipline trigger ──────────────────────────────────────────
+//
+// CSAM detection imposes a statutory reporting obligation under 18 U.S.C.
+// § 2258A. When a decision's reason code indicates child sexual abuse
+// material (or minor safety more broadly), an NCMEC report is submitted
+// automatically. The check is intentionally broad — `minor_safety`, `csam`,
+// and `child` substrings all qualify — so a taxonomy rename does not silently
+// drop a statutory report. The submission itself is best-effort with
+// alerting (see ncmecReporting.ts).
+
+function isCsamReasonCode(reasonCode: string): boolean {
+  const lower = reasonCode.toLowerCase();
+  return (
+    lower === 'minor_safety' ||
+    lower.includes('csam') ||
+    lower.includes('child')
+  );
+}
+
+async function maybeReportToNcmec(
+  db: Pool,
+  caseId: string,
+  input: {
+    user_reason_code: string;
+    automated_means?: boolean;
+    human_reviewer_id?: string;
+    principal: WorkforcePrincipal;
+  },
+): Promise<void> {
+  if (!isCsamReasonCode(input.user_reason_code)) {
+    return;
+  }
+
+  const alreadyReported = await hasNcmecReport(db, caseId);
+  if (alreadyReported) {
+    return;
+  }
+
+  // Resolve the notice to obtain the reporter id, subject id, and a content
+  // locator. The case→notice join is the canonical source for these fields.
+  const caseResult = await db.query<{ notice_id: string | null }>(
+    `SELECT notice_id FROM safety_cases WHERE id = $1`,
+    [caseId],
+  );
+  const noticeId = caseResult.rows[0]?.notice_id ?? null;
+
+  let reporterId: string | null = null;
+  let subjectId = caseId;
+  let contentUrl = '';
+  let contentHash = '';
+
+  if (noticeId) {
+    const noticeResult = await db.query<{
+      reporter_id: string | null;
+      subject_id: string;
+      subject_type: string;
+    }>(`SELECT reporter_id, subject_id, subject_type FROM safety_notices WHERE id = $1`, [
+      noticeId,
+    ]);
+    const notice = noticeResult.rows[0];
+    if (notice) {
+      reporterId = notice.reporter_id;
+      subjectId = notice.subject_id;
+      contentUrl = `${process.env.APP_URL?.trim() ?? ''}/safety/case/${caseId}`;
+      contentHash = crypto
+        .createHash('sha256')
+        .update(`${caseId}:${notice.subject_id}:${input.user_reason_code}`)
+        .digest('hex');
+    }
+  }
+
+  const moderatorId = input.human_reviewer_id ?? input.principal.id;
+
+  submitNcmecReport(db, {
+    caseId,
+    reporterId,
+    subjectId,
+    contentUrl,
+    contentHash,
+    detectedCategories: [input.user_reason_code],
+    detectionMethod: input.automated_means ? 'automated' : 'human_review',
+    moderatorId,
+    incidentDate: new Date().toISOString(),
+  }).catch((e) =>
+    logger.error(
+      { caseId, error: e },
+      '[safetyCaseService] NCMEC report submission failed',
+    ),
+  );
+}
+
+// ── Reporter outcome notification ────────────────────────────────────────
+//
+// Resolves the reporter from the case's notice and dispatches an outcome
+// notification. Anonymous reports (null reporter_id) produce no notification.
+
+async function notifyReporterOfOutcome(
+  db: Pool,
+  caseId: string,
+  input: {
+    decision: SafetyDecision;
+    user_reason_code: string;
+    automated_means?: boolean;
+  },
+): Promise<void> {
+  const caseResult = await db.query<{ notice_id: string | null }>(
+    `SELECT notice_id FROM safety_cases WHERE id = $1`,
+    [caseId],
+  );
+  const noticeId = caseResult.rows[0]?.notice_id ?? null;
+  if (!noticeId) return;
+
+  const noticeResult = await db.query<{ reporter_id: string | null }>(
+    `SELECT reporter_id FROM safety_notices WHERE id = $1`,
+    [noticeId],
+  );
+  const reporterId = noticeResult.rows[0]?.reporter_id ?? null;
+
+  await sendOutcomeNotification(db, {
+    caseId,
+    reporterId,
+    decision: input.decision,
+    reasonCode: input.user_reason_code,
+    automatedMeans: input.automated_means ?? false,
+  });
 }
 
 // ── Generate a DSA-compatible statement of reasons ──────────────────────
@@ -967,6 +1111,107 @@ export async function createAppeal(
       },
       principal: input.principal,
       session: input.session,
+    });
+
+    await client.query('COMMIT');
+    return mapAppealRow(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Create a consumer-submitted appeal ──────────────────────────────────
+//
+// DSA Article 20 requires a free, easy-to-access internal complaint path.
+// Unlike `createAppeal` (which requires a workforce principal/session for
+// operator-initiated appeals), this variant is called from the consumer API
+// and records the audit event with principalType 'consumer'.
+
+export async function createConsumerAppeal(
+  db: Pool,
+  decisionId: string,
+  input: {
+    appellant_id: string;
+    grounds: string;
+    new_evidence_ids?: string[];
+    deadline_days?: number;
+  },
+): Promise<SafetyAppealRecord> {
+  const appealId = `sap_${crypto.randomUUID()}`;
+  const deadlineDays = input.deadline_days ?? 15;
+  const deadline = new Date(Date.now() + deadlineDays * 24 * 3600 * 1000);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `
+        INSERT INTO safety_appeals (
+          id, decision_id, appellant_id, grounds, new_evidence_ids,
+          deadline, status
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, 'submitted'
+        )
+        RETURNING *
+      `,
+      [
+        appealId,
+        decisionId,
+        input.appellant_id,
+        input.grounds,
+        input.new_evidence_ids ?? [],
+        deadline.toISOString(),
+      ],
+    );
+
+    const decisionResult = await client.query<{ case_id: string }>(
+      `SELECT case_id FROM safety_decisions WHERE id = $1`,
+      [decisionId],
+    );
+    const caseId = decisionResult.rows[0]?.case_id ?? null;
+
+    if (caseId) {
+      await client.query(
+        `UPDATE safety_cases SET status = 'appealed', updated_at = NOW() WHERE id = $1`,
+        [caseId],
+      );
+    }
+
+    await client.query(
+      `
+        INSERT INTO safety_audit_events (id, case_id, actor_id, event_type, event_data)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        crypto.randomUUID(),
+        caseId,
+        input.appellant_id,
+        'appeal.submitted',
+        JSON.stringify({
+          appealId,
+          decisionId,
+          appellantId: input.appellant_id,
+          source: 'consumer',
+          deadline: deadline.toISOString(),
+        }),
+      ],
+    );
+
+    await writeAuditEvent(client, {
+      principalType: 'consumer',
+      principalId: input.appellant_id,
+      action: 'appeal.submitted',
+      resourceType: 'safety_case',
+      resourceId: caseId ?? undefined,
+      caseId: caseId ?? undefined,
+      reason: 'Consumer-submitted appeal (DSA Article 20)',
+      outcome: 'success',
+      retentionClass: 'standard',
     });
 
     await client.query('COMMIT');

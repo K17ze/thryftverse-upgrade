@@ -54,6 +54,16 @@ export function CaseWorkspaceView() {
   const [slaReason, setSlaReason] = useState('');
   const [slaBusy, setSlaBusy] = useState(false);
 
+  // Assignment & team routing (omni-channel). Inline panel, not a modal —
+  // the operator assigns or re-routes without leaving the case surface.
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignInput, setAssignInput] = useState('');
+  const [assignTeam, setAssignTeam] = useState('');
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignConfirm, setAssignConfirm] = useState<string | null>(null);
+  const assignInputRef = useRef<HTMLInputElement>(null);
+
   const loadCase = useCallback(async () => {
     setState('loading');
     setPartialErrors({});
@@ -132,6 +142,26 @@ export function CaseWorkspaceView() {
     api.getSafetyReasonCodes().then(result => setReasonCodes(result.reasonCodes)).catch(() => {});
   }, []);
 
+  // `a` focuses the assignment input — the Linear pattern. Ignored while
+  // typing in any field so it never hijacks text entry.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'a' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      e.preventDefault();
+      setAssignOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Focus the input the moment the panel mounts.
+  useEffect(() => {
+    if (assignOpen) assignInputRef.current?.focus();
+  }, [assignOpen]);
+
   const handleAddNote = async () => {
     if (!noteText.trim() || !caseId) return;
     setNoteSaving(true);
@@ -183,6 +213,55 @@ export function CaseWorkspaceView() {
     }
   };
 
+  // Assign to a moderator and/or re-route to a team. A team-only change keeps
+  // the current owner; an assignee-only change keeps the current team.
+  const handleAssign = async () => {
+    if (!caseId || !caseRecord) return;
+    const id = assignInput.trim();
+    const teamVal = assignTeam || undefined;
+    if (!id && !teamVal) return;
+    setAssignBusy(true);
+    setAssignError(null);
+    setAssignConfirm(null);
+    try {
+      const assigneeId = id || caseRecord.ownerId || '';
+      const result = await api.assignCase(caseId, assigneeId, teamVal);
+      setCaseRecord(result.case);
+      setAssignConfirm(teamVal && !id ? `Routed to ${teamVal} team` : `Assigned to ${id || caseRecord.ownerId}`);
+      setAssignInput('');
+      setAssignTeam('');
+      // Pull the fresh audit trail so the assignment event lands immediately.
+      api.getAuditEvents({ caseId, limit: '50' })
+        .then((r) => setAuditEvents(r.events))
+        .catch(() => {});
+    } catch (err) {
+      setAssignError((err as Error).message);
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
+  const handleUnassign = async () => {
+    if (!caseId) return;
+    setAssignBusy(true);
+    setAssignError(null);
+    setAssignConfirm(null);
+    try {
+      const result = await api.assignCase(caseId, '', undefined);
+      setCaseRecord(result.case);
+      setAssignConfirm('Unassigned');
+      setAssignInput('');
+      setAssignTeam('');
+      api.getAuditEvents({ caseId, limit: '50' })
+        .then((r) => setAuditEvents(r.events))
+        .catch(() => {});
+    } catch (err) {
+      setAssignError((err as Error).message);
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
   // ── State gates ──────────────────────────────────────────────────────
 
   if (state === 'loading') {
@@ -226,6 +305,23 @@ export function CaseWorkspaceView() {
             )}
           </div>
         </div>
+
+        <AssignmentSection
+          caseRecord={caseRecord}
+          open={assignOpen}
+          setOpen={setAssignOpen}
+          input={assignInput}
+          setInput={setAssignInput}
+          team={assignTeam}
+          setTeam={setAssignTeam}
+          busy={assignBusy}
+          error={assignError}
+          confirm={assignConfirm}
+          inputRef={assignInputRef}
+          onAssign={handleAssign}
+          onUnassign={handleUnassign}
+          onClose={() => { setAssignOpen(false); setAssignInput(''); setAssignTeam(''); setAssignError(null); }}
+        />
 
         {/* Evidence — the dominant object */}
         <EvidenceSection
@@ -760,6 +856,165 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
   );
 }
 
+// ── Assignment & team routing ───────────────────────────────────────────
+
+const ASSIGN_TEAMS = ['Trust & Safety', 'Legal', 'Community', 'Escalations'];
+
+function AssignmentSection({
+  caseRecord,
+  open,
+  setOpen,
+  input,
+  setInput,
+  team,
+  setTeam,
+  busy,
+  error,
+  confirm,
+  inputRef,
+  onAssign,
+  onUnassign,
+  onClose,
+}: {
+  caseRecord: CaseRecord;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  input: string;
+  setInput: (v: string) => void;
+  team: string;
+  setTeam: (v: string) => void;
+  busy: boolean;
+  error: string | null;
+  confirm: string | null;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onAssign: () => void;
+  onUnassign: () => void;
+  onClose: () => void;
+}) {
+  const assigned = !!caseRecord.ownerId;
+  const teamLabel = caseRecord.team ?? 'No team';
+
+  return (
+    <div style={{ marginBottom: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setOpen(!open)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--space-1)',
+            fontSize: 'var(--text-metadata)',
+            color: assigned ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+            background: 'transparent',
+            border: '1px solid var(--border-hairline)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '2px var(--space-2)',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: assigned ? 'var(--state-success)' : 'var(--text-tertiary)' }} />
+          {assigned ? `Assigned to ${caseRecord.ownerId}` : 'Unassigned'}
+          <span style={{ color: 'var(--text-tertiary)' }}>· {teamLabel}</span>
+        </button>
+        {confirm && !open && (
+          <span style={{ fontSize: 'var(--text-metadata)', color: 'var(--state-success)' }}>{confirm}</span>
+        )}
+      </div>
+
+      {open && (
+        <div
+          style={{
+            marginTop: 'var(--space-2)',
+            padding: 'var(--space-3)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-hairline)',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-2)',
+          }}
+        >
+          <div>
+            <label style={{ fontSize: 'var(--text-metadata)', color: 'var(--text-tertiary)', display: 'block', marginBottom: 'var(--space-1)' }}>
+              Assign to
+            </label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onAssign(); }}
+              placeholder="Moderator ID or name"
+              disabled={busy}
+              style={{
+                width: '100%',
+                padding: 'var(--space-2) var(--space-3)',
+                fontSize: 'var(--text-body)',
+                color: 'var(--text-primary)',
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-standard)',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-metadata)', color: 'var(--text-tertiary)', marginBottom: 'var(--space-1)' }}>
+              Team
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
+              {ASSIGN_TEAMS.map((t) => {
+                const selected = team === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTeam(selected ? '' : t)}
+                    disabled={busy}
+                    style={{
+                      padding: 'var(--space-1) var(--space-3)',
+                      fontSize: 'var(--text-metadata)',
+                      color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      background: selected ? 'var(--bg-active)' : 'transparent',
+                      border: `1px solid ${selected ? 'var(--border-focus)' : 'var(--border-hairline)'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ fontSize: 'var(--text-metadata)', color: 'var(--state-danger)' }}>{error}</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button className="btn btn--primary" onClick={onAssign} disabled={busy || (!input.trim() && !team)}>
+              {busy ? '…' : 'Assign'}
+            </button>
+            {assigned && (
+              <button className="btn btn--secondary" onClick={onUnassign} disabled={busy}>
+                Unassign
+              </button>
+            )}
+            <button
+              className="btn btn--secondary"
+              onClick={onClose}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Audit timeline ──────────────────────────────────────────────────────
 
 function AuditSection({ events, error }: { events: AuditEvent[]; error?: string }) {
@@ -785,7 +1040,7 @@ function AuditSection({ events, error }: { events: AuditEvent[]; error?: string 
           <div key={ev.id} className="audit-event">
             <span>{new Date(ev.occurredAt).toLocaleString()}</span>
             <span style={{ color: 'var(--text-tertiary)' }}>{ev.principalType}</span>
-            <span className="audit-event__action">{ev.action}</span>
+            <span className="audit-event__action">{formatAuditAction(ev.action)}</span>
             <span style={{ color: ev.outcome === 'success' ? 'var(--state-success)' : ev.outcome === 'failure' ? 'var(--state-danger)' : 'var(--text-tertiary)' }}>
               {ev.outcome}
             </span>
@@ -1388,6 +1643,13 @@ function getStateOrder(status: string): number {
 
 function formatStateLabel(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Audit actions arrive as snake_case verbs (case.assign, case.transition…).
+// Surface them in the timeline the same way state labels are surfaced.
+function formatAuditAction(action: string): string {
+  const tail = action.includes('.') ? action.split('.').pop()! : action;
+  return tail.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const TRANSITIONS: Record<string, string[]> = {

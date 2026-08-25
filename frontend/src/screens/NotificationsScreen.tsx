@@ -151,6 +151,7 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   new_follower: 'generic',
   price_drop: 'price',
   new_listing_from_followed_seller: 'new_item',
+  safety_outcome: 'generic',
   generic: 'generic', // resolved further by objectRef below
 };
 

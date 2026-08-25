@@ -153,6 +153,40 @@ export async function unblockUser(userId: string): Promise<{ isBlocked: boolean 
   return { isBlocked: response.isBlocked };
 }
 
+// ── Appeal (DSA Article 20) ───────────────────────────────────────────
+
+export interface DecisionSummary {
+  id: string;
+  decision: string;
+  userReasonCode: string;
+  summary: string;
+  decidedAt: string;
+  durationKind: 'permanent' | 'temporary';
+  durationUntil: string | null;
+  withinComplaintWindow: boolean;
+}
+
+export async function fetchDecisionSummary(decisionId: string): Promise<DecisionSummary> {
+  const response = await fetchJson<{ ok: boolean; decision: DecisionSummary }>(
+    `/appeals/${encodeURIComponent(decisionId)}`,
+    { method: 'GET' },
+  );
+  return response.decision;
+}
+
+export async function appealDecisionOnApi(
+  decisionId: string,
+  grounds: string,
+  evidenceUris?: string[],
+): Promise<{ ok: boolean; appealId: string }> {
+  const body: Record<string, unknown> = { decisionId, grounds };
+  if (evidenceUris && evidenceUris.length > 0) body.evidence_uris = evidenceUris;
+  return fetchJson<{ ok: boolean; appealId: string }>('/appeals', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 // ── Report ───────────────────────────────────────────────────────────
 
 export type ReportReason =

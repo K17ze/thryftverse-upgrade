@@ -298,6 +298,7 @@ export type RootStackParamList = {
 
   // ── Support & Help ──
   Report: { type: 'item' | 'user' | 'group'; targetId?: string };
+  Appeal: { decisionId: string };
 
   // ── Auctions & Trading ──
   MyBids: undefined;
@@ -620,6 +621,7 @@ export const ROOT_STACK_ROUTES = [
   'TwoFactorSetup',
   'WriteReview',
   'Report',
+  'Appeal',
   'MyBids',
   'MyListings',
   'SavedSearches',

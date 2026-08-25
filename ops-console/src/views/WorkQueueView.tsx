@@ -99,7 +99,13 @@ export function WorkQueueView() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | 'assign' | 'close' | 'escalate'>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [assignInput, setAssignInput] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  const assignRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
   // ── Fetch ────────────────────────────────────────────────────────────
@@ -151,6 +157,9 @@ export function WorkQueueView() {
     setSearchInput('');
     setSearch('');
     setSelectedIdx(0);
+    setSelectedIds(new Set());
+    setBulkAction(null);
+    setBulkError(null);
   };
 
   // ── Client-side filter + sort ────────────────────────────────────────
@@ -220,7 +229,8 @@ export function WorkQueueView() {
   }, [cases]);
 
   const showMetrics =
-    state === 'populated' && (metrics.breached > 0 || metrics.emergency > 0 || metrics.minor > 0);
+    state === 'populated' &&
+    (metrics.breached > 0 || metrics.emergency > 0 || metrics.minor > 0 || selectedIds.size > 0);
 
   // ── Sort handler ─────────────────────────────────────────────────────
   const onSort = (key: SortKey) => {
@@ -232,6 +242,69 @@ export function WorkQueueView() {
     }
     setSelectedIdx(0);
   };
+
+  // ── Bulk operations ──────────────────────────────────────────────────
+  const runBulk = useCallback(
+    async (ids: string[], fn: (id: string) => Promise<unknown>, label: string) => {
+      setBulkProgress({ done: 0, total: ids.length, label });
+      setBulkError(null);
+      let done = 0;
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fn(id).then(() => {
+            done += 1;
+            setBulkProgress({ done, total: ids.length, label });
+          }),
+        ),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      setBulkProgress(null);
+      setSelectedIds(new Set());
+      setBulkAction(null);
+      setAssignInput('');
+      if (failed > 0) {
+        setBulkError(`${failed}/${ids.length} failed`);
+      }
+      loadQueue();
+    },
+    [loadQueue],
+  );
+
+  const onBulkAssign = () => {
+    const assigneeId = assignInput.trim();
+    if (!assigneeId) return;
+    runBulk([...selectedIds], (id) => api.assignCase(id, assigneeId), 'Assigning');
+  };
+
+  const onBulkClose = () => {
+    const decision = {
+      decisionType: 'no_violation',
+      outcome: 'no_violation',
+      reasonCode: 'no_violation',
+      isAutomated: false,
+    };
+    runBulk([...selectedIds], (id) => api.recordDecision(id, decision), 'Closing');
+  };
+
+  const onBulkEscalate = () => {
+    runBulk(
+      [...selectedIds],
+      (id) => api.transitionCase(id, 'escalated', 'Bulk escalation'),
+      'Escalating',
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBulkAction(null);
+    setBulkError(null);
+    setAssignInput('');
+  };
+
+  // Focus the assign input when that bulk action is opened.
+  useEffect(() => {
+    if (bulkAction === 'assign') assignRef.current?.focus();
+  }, [bulkAction]);
 
   // ── Keyboard navigation ──────────────────────────────────────────────
   useEffect(() => {
@@ -249,6 +322,8 @@ export function WorkQueueView() {
           setSearchInput('');
           setSearch('');
           searchRef.current?.blur();
+        } else if (selectedIds.size > 0) {
+          clearSelection();
         } else {
           setSelectedIdx(0);
         }
@@ -265,11 +340,26 @@ export function WorkQueueView() {
       } else if (e.key === 'Enter') {
         const c = visibleCases[selectedIdx];
         if (c) navigate(`/cases/${c.id}`);
+      } else if (e.key === 'x' || e.key === 'X') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setSelectedIds(new Set(visibleCases.map((c) => c.id)));
+        } else {
+          const c = visibleCases[selectedIdx];
+          if (c) {
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(c.id)) next.delete(c.id);
+              else next.add(c.id);
+              return next;
+            });
+          }
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [visibleCases, selectedIdx, navigate]);
+  }, [visibleCases, selectedIdx, selectedIds, navigate]);
 
   const filters = [
     { key: 'all', label: 'All' },
@@ -336,7 +426,7 @@ export function WorkQueueView() {
         </div>
       </div>
 
-      {showMetrics && <MetricsBar metrics={metrics} />}
+      {showMetrics && <MetricsBar metrics={metrics} selectedCount={selectedIds.size} />}
 
       {state === 'loading' && (
         <StateMessage title="Loading queue…" description="Fetching cases from the operations API." />
@@ -374,6 +464,7 @@ export function WorkQueueView() {
         <table className="data-table">
           <thead className="data-table__head">
             <tr>
+              <th className="data-table__th" style={{ width: '28px', padding: 'var(--space-2)' }} />
               <SortTh label="Pri" keyName="priority" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="data-table__th">Type</th>
               <th className="data-table__th">Subject</th>
@@ -386,54 +477,92 @@ export function WorkQueueView() {
             </tr>
           </thead>
           <tbody>
-            {visibleCases.map((c, idx) => (
-              <tr
-                key={c.id}
-                ref={(el) => {
-                  rowRefs.current[idx] = el;
-                }}
-                className={`data-table__row${idx === selectedIdx ? ' data-table__row--selected' : ''}`}
-                onClick={() => {
-                  setSelectedIdx(idx);
-                  navigate(`/cases/${c.id}`);
-                }}
-              >
-                <td className="data-table__td">
-                  <PriorityTuple c={c} />
-                </td>
-                <td className="data-table__td data-table__td--secondary">{c.type}</td>
-                <td className="data-table__td">{c.subject}</td>
-                <td className="data-table__td">
-                  <CaseStatusBadge status={c.status} />
-                </td>
-                <td className="data-table__td">
-                  <SeverityBadge severity={c.severity} />
-                </td>
-                <td className="data-table__td data-table__td--metadata">
-                  <SlaIndicator deadline={c.slaDeadlineAt} breached={c.slaBreachAt !== null} />
-                </td>
-                <td className="data-table__td data-table__td--metadata">
-                  {c.financialValueGbp > 0 ? `£${c.financialValueGbp.toFixed(2)}` : '—'}
-                </td>
-                <td className="data-table__td data-table__td--metadata">{ageLabel(c.createdAt)}</td>
-                <td className="data-table__td data-table__td--secondary">{c.team ?? '—'}</td>
-              </tr>
-            ))}
+            {visibleCases.map((c, idx) => {
+              const checked = selectedIds.has(c.id);
+              return (
+                <tr
+                  key={c.id}
+                  ref={(el) => {
+                    rowRefs.current[idx] = el;
+                  }}
+                  className={`data-table__row${idx === selectedIdx ? ' data-table__row--selected' : ''}${checked ? ' data-table__row--checked' : ''}`}
+                  onClick={() => {
+                    setSelectedIdx(idx);
+                    navigate(`/cases/${c.id}`);
+                  }}
+                >
+                  <td className="data-table__td" style={{ padding: 'var(--space-2)' }}>
+                    <Checkbox
+                      checked={checked}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedIdx(idx);
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(c.id)) next.delete(c.id);
+                          else next.add(c.id);
+                          return next;
+                        });
+                      }}
+                    />
+                  </td>
+                  <td className="data-table__td">
+                    <PriorityTuple c={c} />
+                  </td>
+                  <td className="data-table__td data-table__td--secondary">{c.type}</td>
+                  <td className="data-table__td">{c.subject}</td>
+                  <td className="data-table__td">
+                    <CaseStatusBadge status={c.status} />
+                  </td>
+                  <td className="data-table__td">
+                    <SeverityBadge severity={c.severity} />
+                  </td>
+                  <td className="data-table__td data-table__td--metadata">
+                    <SlaIndicator deadline={c.slaDeadlineAt} breached={c.slaBreachAt !== null} />
+                  </td>
+                  <td className="data-table__td data-table__td--metadata">
+                    {c.financialValueGbp > 0 ? `£${c.financialValueGbp.toFixed(2)}` : '—'}
+                  </td>
+                  <td className="data-table__td data-table__td--metadata">{ageLabel(c.createdAt)}</td>
+                  <td className="data-table__td data-table__td--secondary">{c.team ?? '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
 
-      <div
-        style={{
-          marginTop: 'auto',
-          padding: 'var(--space-2) var(--space-4)',
-          borderTop: '1px solid var(--border-hairline)',
-          fontSize: 'var(--text-metadata)',
-          color: 'var(--text-tertiary)',
-        }}
-      >
-        j/k navigate · Enter open · / search
-      </div>
+      {selectedIds.size > 0 || bulkProgress ? (
+        <BulkActionBar
+          count={selectedIds.size}
+          bulkAction={bulkAction}
+          bulkProgress={bulkProgress}
+          bulkError={bulkError}
+          assignInput={assignInput}
+          assignRef={assignRef}
+          onAssignInput={setAssignInput}
+          onAssignClick={() => {
+            setBulkAction('assign');
+            setBulkError(null);
+          }}
+          onConfirmAssign={onBulkAssign}
+          onClose={onBulkClose}
+          onEscalate={onBulkEscalate}
+          onCancel={clearSelection}
+        />
+      ) : (
+        <div
+          style={{
+            marginTop: 'auto',
+            padding: 'var(--space-2) var(--space-4)',
+            borderTop: '1px solid var(--border-hairline)',
+            fontSize: 'var(--text-metadata)',
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          j/k navigate · Enter open · / search · x select · Shift+X all
+        </div>
+      )}
     </div>
   );
 }
@@ -470,7 +599,7 @@ function SortTh({
 
 // ── Metrics bar (flat row of text + dots, not cards) ────────────────────
 
-function MetricsBar({ metrics }: { metrics: { total: number; breached: number; emergency: number; minor: number } }) {
+function MetricsBar({ metrics, selectedCount }: { metrics: { total: number; breached: number; emergency: number; minor: number }; selectedCount: number }) {
   return (
     <div
       style={{
@@ -487,6 +616,7 @@ function MetricsBar({ metrics }: { metrics: { total: number; breached: number; e
       {metrics.breached > 0 && <MetricItem label={`${metrics.breached} breached`} dot="danger" />}
       {metrics.emergency > 0 && <MetricItem label={`${metrics.emergency} emergency`} dot="danger" />}
       {metrics.minor > 0 && <MetricItem label={`${metrics.minor} minor-safety`} dot="danger" />}
+      {selectedCount > 0 && <MetricItem label={`${selectedCount} selected`} dot="info" />}
     </div>
   );
 }
@@ -639,6 +769,157 @@ function StateMessage({ title, description }: { title: string; description: stri
     <div className="state-message">
       <div className="state-message__title">{title}</div>
       <div className="state-message__description">{description}</div>
+    </div>
+  );
+}
+
+// ── Selection checkbox (12px hairline, no shadow) ──────────────────────
+
+function Checkbox({ checked, onClick }: { checked: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <span
+      onClick={onClick}
+      role="checkbox"
+      aria-checked={checked}
+      style={{
+        width: 12,
+        height: 12,
+        borderRadius: 2,
+        border: `1px solid ${checked ? 'var(--state-info)' : 'var(--border-standard)'}`,
+        background: checked ? 'var(--state-info)' : 'transparent',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        cursor: 'pointer',
+        transition: 'background 80ms ease, border-color 80ms ease',
+      }}
+    >
+      {checked && (
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+          <path
+            d="M1.5 4L3 5.5L6.5 2"
+            stroke="#fff"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+// ── Bulk action bar (flat utility, hairline top, no shadow) ─────────────
+
+function BulkActionBar({
+  count,
+  bulkAction,
+  bulkProgress,
+  bulkError,
+  assignInput,
+  assignRef,
+  onAssignInput,
+  onAssignClick,
+  onConfirmAssign,
+  onClose,
+  onEscalate,
+  onCancel,
+}: {
+  count: number;
+  bulkAction: null | 'assign' | 'close' | 'escalate';
+  bulkProgress: { done: number; total: number; label: string } | null;
+  bulkError: string | null;
+  assignInput: string;
+  assignRef: React.RefObject<HTMLInputElement | null>;
+  onAssignInput: (v: string) => void;
+  onAssignClick: () => void;
+  onConfirmAssign: () => void;
+  onClose: () => void;
+  onEscalate: () => void;
+  onCancel: () => void;
+}) {
+  const barStyle: React.CSSProperties = {
+    marginTop: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 'var(--space-2) var(--space-4)',
+    borderTop: '1px solid var(--border-hairline)',
+    background: 'var(--bg-surface)',
+    fontSize: 'var(--text-metadata)',
+    color: 'var(--text-tertiary)',
+  };
+
+  if (bulkProgress) {
+    return (
+      <div style={barStyle}>
+        <span style={{ color: 'var(--text-secondary)' }}>
+          {bulkProgress.label} {bulkProgress.done}/{bulkProgress.total}…
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={barStyle}>
+      <span style={{ color: 'var(--text-secondary)' }}>{count} selected</span>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+        {bulkError && (
+          <span style={{ color: 'var(--state-danger)', fontSize: 'var(--text-metadata)' }}>
+            {bulkError}
+          </span>
+        )}
+        {bulkAction === 'assign' ? (
+          <>
+            <input
+              ref={assignRef}
+              value={assignInput}
+              onChange={(e) => onAssignInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onConfirmAssign();
+                if (e.key === 'Escape') onCancel();
+              }}
+              placeholder="Moderator ID or team"
+              style={{
+                padding: 'var(--space-1) var(--space-3)',
+                fontSize: 'var(--text-metadata)',
+                color: 'var(--text-primary)',
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-standard)',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+                width: '180px',
+              }}
+            />
+            <button
+              className="filter-chip"
+              onClick={onConfirmAssign}
+              disabled={!assignInput.trim()}
+            >
+              Confirm
+            </button>
+            <button className="filter-chip" onClick={onCancel}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="filter-chip" onClick={onAssignClick}>
+              Assign
+            </button>
+            <button className="filter-chip" onClick={onClose}>
+              Close (no violation)
+            </button>
+            <button className="filter-chip" onClick={onEscalate}>
+              Escalate
+            </button>
+            <button className="filter-chip" onClick={onCancel}>
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

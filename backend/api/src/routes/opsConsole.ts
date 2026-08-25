@@ -55,7 +55,9 @@ import {
   exportForDsaDatabase,
   markSubmittedToDsaDb,
   generateTransparencyReport,
+  getDsaStatementsByIds,
 } from '../lib/dsaExport.js';
+import { submitToDsaDatabase } from '../lib/dsaSubmissionClient.js';
 import {
   listRiskAssessments,
   getMissingOffences,
@@ -1178,6 +1180,85 @@ export const registerOpsConsoleRoutes = ({ app }: OpsRouteDependencies) => {
     if (!parsed.success) { reply.code(400); return { ok: false, error: 'Invalid body', details: parsed.error.flatten() }; }
     const updated = await markSubmittedToDsaDb(db, parsed.data.statementIds);
     return { ok: true, updated };
+  });
+
+  // ── DSA submission ───────────────────────────────────────────────────
+  //
+  // Actually submits the selected statements to the EU DSA Transparency
+  // Database via the submission client. Statements are fetched by ID,
+  // mapped to the DSA schema, POSTed in batches of 100, and — on success —
+  // marked as submitted in the local database. A dry-run mode validates the
+  // round-trip without calling the external API.
+
+  app.post('/ops/v1/safety/dsa-export/submit', async (request, reply) => {
+    const guard = await requireOpsPermission(request, reply, 'cases.decide');
+    if (!guard) return null;
+
+    const bodySchema = z.object({
+      statementIds: z.array(z.string()).min(1).max(500),
+      dryRun: z.boolean().default(false),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid body', details: parsed.error.flatten() };
+    }
+
+    // Verify every requested ID exists before fetching full records, so that
+    // operators are not silently submitting a subset of their selection.
+    const foundRows = await db.query<{ id: string }>(
+      'SELECT id FROM statements_of_reasons WHERE id = ANY($1::text[])',
+      [parsed.data.statementIds],
+    );
+    const foundIds = new Set(foundRows.rows.map((r) => r.id));
+    const missing = parsed.data.statementIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      reply.code(404);
+      return {
+        ok: false,
+        error: 'Some statement IDs were not found',
+        missingIds: missing,
+      };
+    }
+
+    // Load the selected statements and map them to the DSA schema.
+    const records = await getDsaStatementsByIds(db, parsed.data.statementIds);
+
+    const submission = await submitToDsaDatabase(
+      records as unknown as Array<Record<string, unknown>>,
+      { dryRun: parsed.data.dryRun },
+    );
+
+    // Mark successfully submitted statements in the local database so that
+    // the export view and submission statistics reflect the real state. We
+    // only mark statements whose PUID succeeded; failures remain pending.
+    // The submission client works with PUIDs, so we resolve back to row IDs.
+    if (!parsed.data.dryRun && submission.succeeded > 0) {
+      const succeededPuids = submission.results
+        .filter((r) => r.success)
+        .map((r) => r.puid);
+      const idResult = await db.query<{ id: string }>(
+        'SELECT id FROM statements_of_reasons WHERE puid = ANY($1::text[])',
+        [succeededPuids],
+      );
+      const rowIds = idResult.rows.map((r) => r.id);
+      if (rowIds.length > 0) {
+        await markSubmittedToDsaDb(db, rowIds);
+      }
+    }
+
+    logger.info(
+      {
+        total: submission.total,
+        succeeded: submission.succeeded,
+        failed: submission.failed,
+        dryRun: parsed.data.dryRun,
+        principal: guard.token.principal.id,
+      },
+      'opsConsole.dsaSubmit: submission complete',
+    );
+
+    return { ok: true, submission };
   });
 
   // ── DSA transparency report ──────────────────────────────────────────

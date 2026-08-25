@@ -108,6 +108,27 @@ export interface ModerationProvider {
    * @returns A {@link ModerationResult}. Never throws.
    */
   moderateText(text: string, options?: ModerationOptions): Promise<ModerationResult>;
+  /**
+   * Moderate a video. Optional: providers without a native video adapter leave
+   * this undefined, and the gateway falls back to moderating a representative
+   * poster frame (or fails closed when no frame is available).
+   *
+   * @param contentRef - Provider-specific video locator (URL, asset id, or
+   *   `video_id:poster_url` compound ref).
+   * @param options - Optional thresholds overriding provider defaults.
+   * @returns A {@link ModerationResult}. Never throws.
+   */
+  moderateVideo?(contentRef: string, options?: ModerationOptions): Promise<ModerationResult>;
+  /**
+   * Moderate an audio clip. Optional: providers without a native audio adapter
+   * leave this undefined, and the gateway fails closed rather than approving
+   * unmoderated audio.
+   *
+   * @param contentRef - Provider-specific audio locator (URL or asset id).
+   * @param options - Optional thresholds overriding provider defaults.
+   * @returns A {@link ModerationResult}. Never throws.
+   */
+  moderateAudio?(contentRef: string, options?: ModerationOptions): Promise<ModerationResult>;
 }
 
 /**

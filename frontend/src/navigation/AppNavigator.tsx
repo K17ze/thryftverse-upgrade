@@ -376,6 +376,9 @@ export default function AppNavigator() {
       {/* ── Support & Help ── (report) */}
       <Stack.Screen name="Report" getComponent={() => require('../screens/ReportScreen').default} options={modalScreenOptions} />
 
+      {/* ── Support & Help ── (appeal — DSA Article 20 user-facing complaint) */}
+      <Stack.Screen name="Appeal" getComponent={() => require('../screens/AppealScreen').default} />
+
       {/* ── Creator Studio ── (visual search, camera, looks, studio, outfits, explore) */}
       {/* Visual Search — full-screen camera viewfinder with its own header on results */}
       <Stack.Screen name="VisualSearch" getComponent={() => require('../screens/VisualSearchScreen').default} options={{ headerShown: false }} />

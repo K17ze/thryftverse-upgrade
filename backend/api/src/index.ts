@@ -245,6 +245,7 @@ import { registerVendorWebhookRoutes } from './routes/vendorWebhooks.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
+import { registerAppealsRoutes } from './routes/appeals.js';
 import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
@@ -27571,6 +27572,7 @@ registerMediaAssetRoutes({
   authorizeInternalServiceRequest,
 });
 registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerAppealsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
