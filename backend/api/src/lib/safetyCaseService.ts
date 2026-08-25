@@ -257,7 +257,7 @@ export async function createSafetyNotice(
         $11, $12, 'pending'
       )
       ON CONFLICT (reporter_id, idempotency_key) DO UPDATE
-        SET acknowledgement_state = 'sent'
+        SET acknowledgement_state = safety_notices.acknowledgement_state
       RETURNING *
     `,
     [
@@ -329,8 +329,9 @@ export async function openSafetyCase(
       severity_class: number;
       is_illegal_content: boolean;
       requires_legal_review: boolean;
+      uk_priority_offence: string | null;
     }>(
-      `SELECT severity_class, is_illegal_content, requires_legal_review FROM safety_reason_codes WHERE code = $1`,
+      `SELECT severity_class, is_illegal_content, requires_legal_review, uk_priority_offence FROM safety_reason_codes WHERE code = $1 AND superseded_at IS NULL`,
       [notice.reason_code],
     );
 
@@ -340,7 +341,10 @@ export async function openSafetyCase(
     }
 
     const severity = reason.severity_class;
-    const involvesMinor = notice.reason_code.startsWith('minor_') || notice.reason_code.startsWith('csam');
+    const involvesMinor =
+      reason.uk_priority_offence?.includes('child') === true ||
+      reason.uk_priority_offence?.includes('minor') === true ||
+      notice.reason_code === 'minor_safety';
     const slaClass = computeSlaClass(notice.urgency, severity, involvesMinor);
     const slaDeadline = computeSlaDeadline(slaClass);
     const caseId = `sc_${crypto.randomUUID()}`;
@@ -605,14 +609,16 @@ export async function generateStatementOfReasons(
       const noticeResult = await client.query<{
         reporter_id: string | null;
         subject_type: string;
-        subject_id: string;
+        subject_id: string | null;
         reason_code: string;
         reporter_status: string | null;
       }>(`SELECT * FROM safety_notices WHERE id = $1`, [caseRow.notice_id]);
 
       const notice = noticeResult.rows[0];
       if (notice) {
-        affectedUserId = notice.reporter_id ?? notice.subject_id;
+        // DSA statement of reasons must go to the affected user (the person
+        // whose content was restricted), not the reporter.
+        affectedUserId = notice.subject_id;
         source =
           notice.reporter_status === 'trusted_flagger'
             ? 'trusted_flagger'
@@ -623,7 +629,9 @@ export async function generateStatementOfReasons(
     }
 
     if (!affectedUserId) {
-      affectedUserId = 'unknown';
+      throw new Error(
+        '[safetyCaseService] generateStatementOfReasons: cannot generate a statement of reasons without an affected user (subject_id is null)',
+      );
     }
 
     const reasonResult = await client.query<{
@@ -645,7 +653,7 @@ export async function generateStatementOfReasons(
       ? 'permanent'
       : decision.duration_until ?? 'temporary';
 
-    const puid = `sor_${decisionId}_${Date.now()}`;
+    const puid = `sor_${decisionId}`;
     const statementId = `sor_${crypto.randomUUID()}`;
 
     const result = await client.query(
@@ -704,27 +712,75 @@ export async function createEnforcementAction(
   },
 ): Promise<EnforcementActionRecord> {
   const actionId = `enf_${crypto.randomUUID()}`;
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
 
-  const result = await db.query(
-    `
-      INSERT INTO enforcement_actions (
-        id, decision_id, action_type, target_type, target_id, scope, status
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, 'pending'
-      )
-      RETURNING *
-    `,
-    [
-      actionId,
-      decisionId,
-      input.action_type,
-      input.target_type,
-      input.target_id,
-      JSON.stringify(input.scope ?? {}),
-    ],
-  );
+    const result = await client.query(
+      `
+        INSERT INTO enforcement_actions (
+          id, decision_id, action_type, target_type, target_id, scope, status
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, 'pending'
+        )
+        RETURNING *
+      `,
+      [
+        actionId,
+        decisionId,
+        input.action_type,
+        input.target_type,
+        input.target_id,
+        JSON.stringify(input.scope ?? {}),
+      ],
+    );
 
-  return mapEnforcementRow(result.rows[0]);
+    await client.query('COMMIT');
+    return mapEnforcementRow(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Bind evidence media assets to a case ────────────────────────────────
+//
+// Inserts one safety_case_evidence row per item inside a single transaction
+// so partial evidence binding is never persisted.
+
+export async function addEvidenceToCase(
+  db: Pool,
+  caseId: string,
+  evidence: Array<{
+    source: string;
+    sourceRef?: string;
+    objectType: string;
+    objectRef: string;
+    objectHash?: string;
+    sensitivity?: 'standard' | 'sensitive' | 'restricted';
+  }>,
+): Promise<void> {
+  if (evidence.length === 0) return;
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    for (const item of evidence) {
+      const id = `ev_${crypto.randomUUID()}`;
+      await client.query(
+        `INSERT INTO safety_case_evidence (id, case_id, source, source_ref, object_type, object_ref, object_hash, sensitivity)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, caseId, item.source, item.sourceRef ?? null, item.objectType, item.objectRef, item.objectHash ?? null, item.sensitivity ?? 'standard'],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Execute a pending enforcement action ────────────────────────────────
@@ -853,6 +909,8 @@ export async function createAppeal(
     grounds: string;
     new_evidence_ids?: string[];
     deadline_days?: number;
+    principal: WorkforcePrincipal;
+    session: WorkforceSession;
   },
 ): Promise<SafetyAppealRecord> {
   const appealId = `sap_${crypto.randomUUID()}`;
@@ -897,18 +955,19 @@ export async function createAppeal(
       );
     }
 
-    await client.query(
-      `
-        INSERT INTO safety_audit_events (id, case_id, actor_id, event_type, event_data)
-        VALUES ($1, $2, $3, 'appeal.submitted', $4)
-      `,
-      [
-        crypto.randomUUID(),
-        caseId,
-        input.appellant_id,
-        JSON.stringify({ appealId, decisionId, deadline: deadline.toISOString() }),
-      ],
-    );
+    await writeSafetyAuditEvent(client, {
+      caseId,
+      actorId: input.principal.id,
+      eventType: 'appeal.submitted',
+      eventData: {
+        appealId,
+        decisionId,
+        appellantId: input.appellant_id,
+        deadline: deadline.toISOString(),
+      },
+      principal: input.principal,
+      session: input.session,
+    });
 
     await client.query('COMMIT');
     return mapAppealRow(result.rows[0]);
@@ -1095,15 +1154,22 @@ export async function getCaseQueue(
       LEFT JOIN safety_notices sn ON sn.id = sc.notice_id
       ${where}
       ORDER BY
+        -- emergency: SLA class emergency first
         (sc.sla_class = 'emergency') DESC,
-        (sc.sla_class = 'priority') DESC,
+        -- minor: involves_minor first
         sc.involves_minor DESC,
-        sc.involves_vulnerable_user DESC,
+        -- harm: severity class from reason code (higher = more harmful)
         sc.severity DESC,
+        -- virality: higher score first
         sc.virality_score DESC,
-        sc.exposure_count DESC,
-        sc.sla_deadline ASC NULLS LAST,
-        sc.created_at ASC
+        -- severity: higher first (redundant with harm but kept for spec compliance)
+        sc.severity DESC,
+        -- trusted: trusted notifier first (join to notice)
+        (sn.reporter_status IN ('trusted_flagger', 'law_enforcement')) DESC,
+        -- linked: more linked cases first
+        COALESCE(array_length(sc.linked_case_ids, 1), 0) DESC,
+        -- due_time: earliest deadline first
+        sc.sla_deadline ASC NULLS LAST
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `,
     [...params, limit, offset],

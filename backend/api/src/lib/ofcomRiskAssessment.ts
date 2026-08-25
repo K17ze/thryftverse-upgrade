@@ -40,6 +40,15 @@ export type OfcomOffenceType = (typeof OFCOM_PRIORITY_OFFENCES)[number];
 
 export type OfcomRiskLevel = 'low' | 'medium' | 'high';
 
+/**
+ * Distinguishes the two Ofcom risk assessment obligations under the UK
+ * Online Safety Act:
+ *  - `illegal_content`: Section 9 illegal content risk assessment
+ *  - `children`: Section 11 children's risk assessment (services likely
+ *    to be accessed by children)
+ */
+export type OfcomAssessmentType = 'illegal_content' | 'children';
+
 /** Input for creating a risk assessment record. */
 export interface RiskAssessmentInput {
   offence_type: OfcomOffenceType;
@@ -50,6 +59,8 @@ export interface RiskAssessmentInput {
   assessment_date?: Date;
   /** When the next review is due. Defaults to +3 months per Ofcom guidance. */
   next_review_date?: Date;
+  /** Section 9 (illegal content) or Section 11 (children). Defaults to `illegal_content`. */
+  assessment_type?: OfcomAssessmentType;
 }
 
 /** A persisted risk assessment record. */
@@ -63,6 +74,7 @@ export interface RiskAssessmentRecord {
   assessment_date: string;
   next_review_date: string | null;
   created_at: string;
+  assessment_type: OfcomAssessmentType;
 }
 
 /** Overall compliance status for the Ofcom risk assessment obligation. */
@@ -118,6 +130,11 @@ const CREATE_TABLE_SQL = `
 
 export async function ensureSchema(db: Pool): Promise<void> {
   await db.query(CREATE_TABLE_SQL);
+  await db.query(
+    `ALTER TABLE ofcom_risk_assessments
+       ADD COLUMN IF NOT EXISTS assessment_type TEXT NOT NULL DEFAULT 'illegal_content'
+       CHECK (assessment_type IN ('illegal_content', 'children'))`,
+  );
 }
 
 // ── Check whether a risk assessment exists and is current ────────────────
@@ -188,8 +205,9 @@ export async function createRiskAssessmentRecord(
     `
       INSERT INTO ofcom_risk_assessments (
         id, offence_type, risk_level, assessment_summary,
-        mitigation_measures, assessed_by, assessment_date, next_review_date
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        mitigation_measures, assessed_by, assessment_date, next_review_date,
+        assessment_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `,
     [
       id,
@@ -200,6 +218,7 @@ export async function createRiskAssessmentRecord(
       input.assessed_by,
       assessmentDate.toISOString(),
       nextReviewDate.toISOString(),
+      input.assessment_type ?? 'illegal_content',
     ],
   );
 
@@ -227,7 +246,7 @@ export async function listRiskAssessments(db: Pool): Promise<RiskAssessmentRecor
       SELECT DISTINCT ON (offence_type)
         id, offence_type, risk_level, assessment_summary,
         mitigation_measures, assessed_by, assessment_date,
-        next_review_date, created_at
+        next_review_date, created_at, assessment_type
       FROM ofcom_risk_assessments
       ORDER BY offence_type, assessment_date DESC
     `,
@@ -341,7 +360,7 @@ async function getRiskAssessmentRecord(
     `
       SELECT id, offence_type, risk_level, assessment_summary,
              mitigation_measures, assessed_by, assessment_date,
-             next_review_date, created_at
+             next_review_date, created_at, assessment_type
       FROM ofcom_risk_assessments
       WHERE id = $1
       LIMIT 1
@@ -376,6 +395,7 @@ function mapRiskAssessmentRow(row: Record<string, unknown>): RiskAssessmentRecor
     assessment_date: row.assessment_date as string,
     next_review_date: (row.next_review_date as string) ?? null,
     created_at: row.created_at as string,
+    assessment_type: (row.assessment_type as OfcomAssessmentType) ?? 'illegal_content',
   };
 }
 
@@ -388,4 +408,78 @@ function defaultNextReviewDate(assessmentDate: Date): Date {
   const next = new Date(assessmentDate);
   next.setMonth(next.getMonth() + 3);
   return next;
+}
+
+// ── Section 11: Children's risk assessment ────────────────────────────────
+//
+// The UK Online Safety Act Section 11 requires a separate children's risk
+// assessment for services likely to be accessed by children. The assessment
+// evaluates the likelihood of children encountering harmful content across
+// defined age groups and risk factors, and records mitigation measures.
+
+/** Risk factor categories for the Section 11 children's assessment. */
+export const CHILDREN_RISK_FACTORS = [
+  'content_that_ENCOURAGES_RISK_TAKING_BEHAVIOUR',
+  'content_that_PROMOTES_EATING_DISORDERS',
+  'content_that_DEPICTS_SEXUAL_MATERIAL',
+  'content_that_DEPICTS_VIOLENCE',
+  'content_that_PROMOTES_SELF_HARM',
+  'content_that_PROMOTES_DRUG_USE',
+  'content_that_PROMOTES_ALCOHOL_USE',
+  'content_that_CONTAINS_GROOMING_BEHAVIOUR',
+] as const;
+
+export interface ChildrenRiskFactor {
+  factor: string;
+  likelihood: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  mitigation: string;
+}
+
+/**
+ * Create a Section 11 children's risk assessment record. The risk factors
+ * and age groups are stored in `mitigation_measures`; the overall risk level
+ * is derived from the factor likelihood/impact ratings.
+ */
+export async function createChildrenRiskAssessment(
+  db: Pool,
+  input: {
+    assessed_by: string;
+    age_groups: string[]; // e.g. ['0-5', '6-12', '13-17']
+    risk_factors: ChildrenRiskFactor[];
+    overall_summary: string;
+    next_review_date?: Date;
+  },
+): Promise<RiskAssessmentRecord> {
+  return createRiskAssessmentRecord(db, {
+    offence_type: 'child_sexual_abuse',
+    risk_level: computeOverallRiskLevel(input.risk_factors),
+    assessment_summary: input.overall_summary,
+    mitigation_measures: {
+      age_groups: input.age_groups,
+      risk_factors: input.risk_factors,
+    },
+    assessed_by: input.assessed_by,
+    assessment_type: 'children',
+    next_review_date: input.next_review_date,
+  });
+}
+
+/** Derive the overall risk level from the individual factor ratings. */
+function computeOverallRiskLevel(factors: ChildrenRiskFactor[]): OfcomRiskLevel {
+  const highCount = factors.filter((f) => f.likelihood === 'high' || f.impact === 'high').length;
+  const mediumCount = factors.filter((f) => f.likelihood === 'medium' || f.impact === 'medium').length;
+  if (highCount > 0) return 'high';
+  if (mediumCount > 2) return 'high';
+  if (mediumCount > 0) return 'medium';
+  return 'low';
+}
+
+/** List all Section 11 children's risk assessments, newest first. */
+export async function listChildrenRiskAssessments(db: Pool): Promise<RiskAssessmentRecord[]> {
+  await ensureSchema(db);
+  const result = await db.query(
+    `SELECT * FROM ofcom_risk_assessments WHERE assessment_type = 'children' ORDER BY assessment_date DESC`,
+  );
+  return result.rows.map(mapRiskAssessmentRow);
 }

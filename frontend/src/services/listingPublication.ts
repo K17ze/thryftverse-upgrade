@@ -1,8 +1,10 @@
 import { MediaUploadQueue, UploadQueueItemState } from './mediaUploadQueue';
-import { createListingOnApi, createListingImageOnApi } from './listingsApi';
+import { createListingOnApi, createListingImageOnApi, type ListingCreateBody } from './listingsApi';
 import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { ListingPublicationRecovery } from '../store/useStore';
 import { makeStableId } from '../utils/createStableId';
+import { getDb } from '../storage/db';
+import { enqueueOperation, removeOutboxOperation } from '../storage/outboxClient';
 
 export type PublicationStage =
   | 'validating'
@@ -190,7 +192,7 @@ export async function executePublication(
     let listingId = ctx.listingId;
     if (!listingId) {
       listingId = makeStableId('listing');
-      await createListingOnApi({
+      const listingBody: ListingCreateBody = {
         id: listingId,
         sellerId: input.sellerId,
         title: input.title.trim(),
@@ -206,7 +208,36 @@ export async function executePublication(
         originalPriceGbp: input.originalPriceGbp,
         shippingMethod: input.shippingMethod,
         shippingPayer: input.shippingPayer,
+      };
+
+      const db = await getDb();
+      await enqueueOperation(db, {
+        operationId: listingId,
+        entityType: 'listing',
+        entityId: listingId,
+        operation: 'create',
+        payload: JSON.stringify(listingBody),
+        baseRev: 0,
       });
+
+      try {
+        await createListingOnApi(listingBody);
+        await removeOutboxOperation(listingId);
+      } catch (e) {
+        const isNetworkError = e instanceof Error && (
+          e.message.includes('Network request failed') ||
+          e.message.includes('offline') ||
+          e.message.includes('connection dropped')
+        );
+        if (isNetworkError) {
+          ctx.listingId = listingId;
+          ctx.lastError = e instanceof Error ? e.message : 'Network error — listing saved offline.';
+          setStage('failed_recoverable');
+          return { ok: false, error: ctx.lastError, context: ctx };
+        }
+        await removeOutboxOperation(listingId);
+        throw e;
+      }
       ctx.listingId = listingId;
     }
 

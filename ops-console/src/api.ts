@@ -287,66 +287,27 @@ export interface OfcomRiskAssessmentRecord {
   assessmentDate: string;
   nextReviewDate: string | null;
   createdAt: string;
+  assessmentType: 'illegal_content' | 'children';
+}
+
+export interface OfcomChildrenRiskFactor {
+  factor: string;
+  likelihood: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  mitigation: string;
 }
 
 export interface DsaTransparencyReport {
-  periodStart: string;
-  periodEnd: string;
-  totalCases: number;
-  totalDecisions: number;
-  decisionsByType: Record<string, number>;
-  automationRate: number;
-  averageTimeToDecision: number;
-  appealRate: number;
-  overturnRate: number;
-  byContentCategory: Record<string, number>;
-}
-
-export interface AppealRecord {
-  id: string;
-  decisionId: string;
-  appellantId: string;
-  grounds: string;
-  status: 'submitted' | 'under_review' | 'upheld' | 'overturned' | 'withdrawn';
-  outcomeReason: string | null;
-  remedy: string | null;
-  independentReviewerId: string | null;
-  deadline: string;
-  createdAt: string;
-  decidedAt: string | null;
-}
-
-export interface StatementOfReasonsRecord {
-  id: string;
-  decisionId: string;
-  affectedUserId: string;
-  decisionVisibility: boolean;
-  decisionMandatory: boolean;
-  decisionProvision: boolean;
-  decisionAccount: boolean;
-  territorialScope: string[];
-  duration: string;
-  facts: string;
-  automatedMeans: boolean;
-  source: string;
-  puid: string;
-  dsaCategory: string;
-  userNotificationState: string;
-  submittedToDsaDb: boolean;
-  submittedAt: string | null;
-  createdAt: string;
-}
-
-export interface OfcomRiskAssessmentRecord {
-  id: string;
-  offenceType: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  assessmentSummary: string;
-  mitigationMeasures: Record<string, unknown>;
-  assessedBy: string;
-  assessmentDate: string;
-  nextReviewDate: string | null;
-  createdAt: string;
+  period_start: string;
+  period_end: string;
+  total_cases: number;
+  total_decisions: number;
+  decisions_by_type: Record<string, number>;
+  automation_rate: number;
+  average_time_to_decision_hours: number | null;
+  appeal_rate: number;
+  overturn_rate: number;
+  by_content_category: Record<string, number>;
 }
 
 // ── API methods ─────────────────────────────────────────────────────────
@@ -522,7 +483,7 @@ export const api = {
 
   exportDsaStatements: (params?: Record<string, string>) => {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
-    return apiFetch<{ ok: boolean; records: unknown[]; total: number }>(
+    return apiFetch<{ ok: boolean; records: Record<string, unknown>[]; total: number }>(
       `/ops/v1/safety/dsa-export${query}`,
     );
   },
@@ -546,12 +507,23 @@ export const api = {
   // ── Ofcom risk assessment ──────────────────────────────────────────
 
   getOfcomRiskAssessments: () =>
-    apiFetch<{ ok: boolean; assessments: OfcomRiskAssessmentRecord[]; missing: string[]; overdue: boolean }>(
+    apiFetch<{ ok: boolean; assessments: OfcomRiskAssessmentRecord[]; missing: string[]; overdue: boolean; childrenAssessments: OfcomRiskAssessmentRecord[] }>(
       `/ops/v1/safety/ofcom-risk-assessments`,
     ),
 
   createOfcomRiskAssessment: (body: Record<string, unknown>) =>
     apiFetch<{ ok: boolean; assessment: OfcomRiskAssessmentRecord }>(`/ops/v1/safety/ofcom-risk-assessments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  createOfcomChildrenRiskAssessment: (body: {
+    ageGroups: string[];
+    riskFactors: OfcomChildrenRiskFactor[];
+    overallSummary: string;
+    nextReviewDate?: string;
+  }) =>
+    apiFetch<{ ok: boolean; assessment: OfcomRiskAssessmentRecord }>(`/ops/v1/safety/ofcom-children-risk-assessments`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

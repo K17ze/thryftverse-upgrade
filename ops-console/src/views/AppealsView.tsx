@@ -11,9 +11,9 @@ import { api, ApiError, type AppealRecord } from '../api.js';
 //
 // Deadline urgency: red if past deadline, amber if under 48h remaining.
 
-type LoadingState = 'loading' | 'populated' | 'empty' | 'error' | 'denied';
+type LoadingState = 'loading' | 'populated' | 'empty' | 'error' | 'denied' | 'offline';
 
-type DecisionAction = 'uphold' | 'overturn' | 'withdraw';
+type DecisionAction = 'upheld' | 'overturned' | 'withdrawn';
 
 const APPEAL_FILTERS: { key: string; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -43,6 +43,7 @@ export function AppealsView() {
   const [submitting, setSubmitting] = useState(false);
 
   const loadAppeals = useCallback(async () => {
+    if (!navigator.onLine) { setState('offline'); return; }
     setState('loading');
     try {
       const params: Record<string, string> = { limit: '100' };
@@ -56,6 +57,7 @@ export function AppealsView() {
         if (err.statusCode === 401) { navigate('/'); return; }
         if (err.statusCode === 403) { setState('denied'); return; }
       }
+      if (!navigator.onLine) { setState('offline'); return; }
       setState('error');
     }
   }, [filter, navigate]);
@@ -77,7 +79,7 @@ export function AppealsView() {
     setActionError(null);
     setSubmitting(true);
     try {
-      const body: Record<string, unknown> = { action, outcomeReason };
+      const body: Record<string, unknown> = { status: action, outcomeReason };
       if (remedy) body.remedy = remedy;
       const result = await api.decideAppeal(selected.id, body);
       setSelected(result.appeal);
@@ -122,6 +124,9 @@ export function AppealsView() {
       )}
       {state === 'denied' && (
         <StateMessage title="Permission denied" description="You do not have permission to review appeals." />
+      )}
+      {state === 'offline' && (
+        <StateMessage title="You're offline" description="Appeals can't be loaded while offline. Reconnect and try again." />
       )}
 
       {state === 'populated' && (
@@ -200,11 +205,17 @@ function AppealDrawer({
   submitting: boolean;
   actionError: string | null;
 }) {
-  const [action, setAction] = useState<DecisionAction>('uphold');
+  const [action, setAction] = useState<DecisionAction>('upheld');
   const [outcomeReason, setOutcomeReason] = useState('');
   const [remedy, setRemedy] = useState('');
 
   const decided = appeal.status === 'upheld' || appeal.status === 'overturned' || appeal.status === 'withdrawn';
+
+  const DECISION_LABELS: Record<DecisionAction, string> = {
+    upheld: 'Uphold',
+    overturned: 'Overturn',
+    withdrawn: 'Withdraw',
+  };
 
   return (
     <div
@@ -312,14 +323,14 @@ function AppealDrawer({
           <div className="action-rail__title">Decision</div>
 
           <div style={{ display: 'flex', gap: 'var(--space-1)', marginBottom: 'var(--space-3)' }}>
-            {(['uphold', 'overturn', 'withdraw'] as DecisionAction[]).map((a) => (
+            {(['upheld', 'overturned', 'withdrawn'] as DecisionAction[]).map((a) => (
               <button
                 key={a}
                 className={`filter-chip${action === a ? ' filter-chip--active' : ''}`}
                 onClick={() => setAction(a)}
-                style={a === 'overturn' ? { borderColor: action === a ? 'var(--state-success)' : undefined } : undefined}
+                style={a === 'overturned' ? { borderColor: action === a ? 'var(--state-success)' : undefined } : undefined}
               >
-                {a === 'uphold' ? 'Uphold' : a === 'overturn' ? 'Overturn' : 'Withdraw'}
+                {DECISION_LABELS[a]}
               </button>
             ))}
           </div>
@@ -352,7 +363,7 @@ function AppealDrawer({
             disabled={submitting || !outcomeReason.trim()}
             onClick={() => onDecide(action, outcomeReason.trim(), remedy.trim())}
           >
-            {submitting ? 'Submitting…' : `Submit ${action}`}
+            {submitting ? 'Submitting…' : `Submit ${DECISION_LABELS[action]}`}
           </button>
         </div>
       )}

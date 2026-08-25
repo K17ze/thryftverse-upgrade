@@ -116,7 +116,10 @@ export function DsaTransparencyView() {
     setActionError(null);
     setReportLoading(true);
     try {
-      const result = await api.getDsaTransparencyReport(from, to);
+      const result = await api.getDsaTransparencyReport(
+        new Date(from + 'T00:00:00.000Z').toISOString(),
+        new Date(to + 'T23:59:59.999Z').toISOString(),
+      );
       setReport(result.report);
     } catch (err) {
       setActionError((err as Error).message);
@@ -217,12 +220,12 @@ export function DsaTransparencyView() {
             gap: 'var(--space-4)',
           }}
         >
-          <span><strong style={{ color: 'var(--text-primary)' }}>{report.totalDecisions}</strong> decisions</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>{report.totalCases}</strong> cases</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>{Math.round(report.automationRate * 100)}%</strong> automated</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>{report.appealRate.toFixed(2)}</strong> appeal rate</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>{report.overturnRate.toFixed(2)}</strong> overturn rate</span>
-          <span><strong style={{ color: 'var(--text-primary)' }}>{report.averageTimeToDecision.toFixed(1)}h</strong> avg time</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{report.total_decisions}</strong> decisions</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{report.total_cases}</strong> cases</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{Math.round(report.automation_rate * 100)}%</strong> automated</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{report.appeal_rate.toFixed(2)}</strong> appeal rate</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{report.overturn_rate.toFixed(2)}</strong> overturn rate</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>{report.average_time_to_decision_hours !== null ? report.average_time_to_decision_hours.toFixed(1) : '—'}h</strong> avg time</span>
         </div>
       )}
 

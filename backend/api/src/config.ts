@@ -488,6 +488,7 @@ export const config = {
     false
   ),
   platformRevenueSweepIntervalMs: asNumber(process.env.PLATFORM_REVENUE_SWEEP_INTERVAL_MS, 6 * 60 * 60 * 1000),
+  retentionSweepIntervalMs: asNumber(process.env.RETENTION_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
   opsAlertIntervalMs: asNumber(process.env.OPS_ALERT_INTERVAL_MS, 60_000),
   alertingWebhookUrls: asCsvList(process.env.ALERTING_WEBHOOK_URLS ?? process.env.ALERTING_WEBHOOK_URL),
   alertingAdminUserIds: asCsvList(process.env.ALERTING_ADMIN_USER_IDS),

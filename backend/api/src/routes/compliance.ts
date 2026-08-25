@@ -2,6 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { performUserErasure } from '../lib/userErasure.js';
+import {
+  propagateUserDeletion,
+  moderationProvider,
+  aiProvider,
+  pushProvider,
+  analyticsProvider,
+} from '../lib/vendorDeletion.js';
+import { logger } from '../lib/logger.js';
 
 type ComplianceRouteDependencies = {
   app: FastifyInstance;
@@ -292,6 +300,19 @@ export function registerComplianceRoutes({
       await performUserErasure(client, userId, 'ccpa');
 
       await client.query('COMMIT');
+
+      await propagateUserDeletion(userId, [
+        moderationProvider,
+        aiProvider,
+        pushProvider,
+        analyticsProvider,
+      ]).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          { userId, err: message },
+          'compliance.ccpa.vendorDeletionFailed',
+        );
+      });
 
       return {
         ok: true,

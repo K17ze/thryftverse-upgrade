@@ -2,15 +2,18 @@
  * Sustainability Score — fail-closed impact data for ThryftVerse listings.
  *
  * TRUTHFUL LABELING (AGENTS.md §11): a badge rendered from a hardcoded value
- * or a frontend default is a lie. Until a backend impact service exists that
- * provides real emissions data, this module returns `null` in production —
- * no fabricated CO2, water, or grade figures are ever surfaced to users.
+ * or a frontend default is a lie. The backend impact service (P3-2) now
+ * provides real net avoided emissions calculated from verified emissions
+ * factors (DEFRA 2024 / Higg MSI v3.7). In production, `computeSustainabilityScore`
+ * fetches real data from the backend; if the backend reports the data is
+ * unavailable (missing material or weight), it returns `null` — no fabricated
+ * CO2, water, or grade figures are ever surfaced to users.
  *
  * In development (`__DEV__`), a heuristic estimate runs so the UI can be
- * tested. The heuristic computes a 0–100 composite and A–D grade from listing
- * attributes (condition, category, brand, seller location, co-own eligibility)
- * using industry-average approximations. These figures are never shown in
- * production.
+ * tested without a backend. The heuristic computes a 0–100 composite and A–D
+ * grade from listing attributes (condition, category, brand, seller location,
+ * co-own eligibility) using industry-average approximations. These figures are
+ * never shown in production.
  *
  * Sources for the dev-mode averages:
  *  - New garment average: ~8 kg CO2e and ~2,900 L water (industry literature,
@@ -200,11 +203,56 @@ function gradeForScore(score: number): SustainabilityScore['grade'] {
 
 /**
  * Returns `true` when a backend impact service provides real emissions data.
- * Currently `false` — no backend impact service exists yet. When this returns
- * `false`, `computeSustainabilityScore` returns `null` in production.
+ * The backend impact service (P3-2) now exists and calculates net avoided
+ * emissions from verified emissions factors. When this returns `true`,
+ * `computeSustainabilityScore` fetches real data from the backend in
+ * production; if the backend reports the data is unavailable it returns
+ * `null` (fail-closed).
  */
 export function hasRealImpactData(): boolean {
-  return false;
+  return true;
+}
+
+/**
+ * Fetch real net avoided emissions for a listing from the backend impact
+ * service. Returns a `SustainabilityScore` derived from verified emissions
+ * factors, or `null` when the backend reports the data is unavailable
+ * (missing material composition or weight) — fail-closed, never fabricated.
+ */
+export async function fetchListingImpact(
+  listingId: string,
+): Promise<SustainabilityScore | null> {
+  const { fetchListingImpact: fetchImpact } = await import('../services/impactApi');
+  const result = await fetchImpact(listingId);
+  if (!result.available) {
+    return null;
+  }
+
+  const co2SavedKg = Math.round(result.co2eAvoidedKg * 10) / 10;
+  const grade = gradeForCo2e(co2SavedKg);
+
+  return {
+    grade,
+    score: co2SavedKg > 0 ? Math.min(100, Math.round(co2SavedKg * 5)) : 0,
+    factors: [
+      { label: 'Production avoided', value: `${result.co2eProductionAvoidedKg.toFixed(2)} kg CO2e`, positive: true },
+      { label: 'End-of-life avoided', value: `${result.co2eEolAvoidedKg.toFixed(2)} kg CO2e`, positive: true },
+      { label: 'Shipping', value: `${result.co2eShippingKg.toFixed(2)} kg CO2e`, positive: false },
+      { label: 'Packaging', value: `${result.co2ePackagingKg.toFixed(2)} kg CO2e`, positive: false },
+    ],
+    co2SavedKg,
+    waterSavedL: 0,
+    summary: co2SavedKg >= 0
+      ? `Buying this pre-owned item saves ~${co2SavedKg} kg CO2e vs buying new (net of shipping & packaging).`
+      : `Shipping this item produces ~${Math.abs(co2SavedKg)} kg CO2e more than resale avoids — shown honestly.`,
+  };
+}
+
+function gradeForCo2e(co2eKg: number): SustainabilityScore['grade'] {
+  if (co2eKg >= 20) return 'A';
+  if (co2eKg >= 10) return 'B';
+  if (co2eKg >= 1) return 'C';
+  return 'D';
 }
 
 /**
@@ -214,8 +262,10 @@ export function hasRealImpactData(): boolean {
  * a 0–100 composite, an A–D grade, a factor breakdown, and estimated CO2 /
  * water savings derived from listing attributes and industry averages.
  *
- * In production, returns `null` — no fabricated impact data is surfaced.
- * Callers must handle `null` by rendering nothing (fail-closed).
+ * In production, this synchronous helper returns `null` — real impact data is
+ * fetched asynchronously via `fetchListingImpact(listingId)` which calls the
+ * backend impact service. Callers must handle `null` by rendering nothing
+ * (fail-closed) until the async fetch resolves.
  */
 export function computeSustainabilityScore(
   input: SustainabilityInput,
@@ -312,8 +362,8 @@ function computeHeuristicScore(
 /**
  * Convenience predicate for the "Sustainable" browse filter — true when the
  * computed grade is A or B. Returns `false` when no real data is available
- * (production), so the filter honestly yields no results until a backend
- * impact service exists.
+ * (production synchronous path), so the filter honestly yields no results
+ * until `fetchListingImpact` resolves with real backend data.
  */
 export function isSustainableGrade(input: SustainabilityInput): boolean {
   const score = computeSustainabilityScore(input);

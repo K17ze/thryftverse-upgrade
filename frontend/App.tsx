@@ -56,6 +56,8 @@ import { restoreAuthSession } from './src/services/authApi';
 import { useStore } from './src/store/useStore';
 import { joinGroupByInviteOnApi } from './src/services/chatApi';
 import { initChatOutboxDrain, drainChatOutbox } from './src/services/chatOutbox';
+import { initOutboxDrain } from './src/storage/outboxClient';
+import { runSync, type SyncDomain } from './src/storage/syncEngine';
 import { parseApiError } from './src/lib/apiClient';
 import { useOfflineQueue } from './src/lib/offlineQueue';
 import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences';
@@ -178,6 +180,19 @@ Notifications.setNotificationCategoryAsync('message', [
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
+let lastListingDraftSyncAt = 0;
+const LISTING_DRAFT_SYNC_MIN_INTERVAL_MS = 60_000;
+
+function runSyncListingDraft(): void {
+  const now = Date.now();
+  if (now - lastListingDraftSyncAt < LISTING_DRAFT_SYNC_MIN_INTERVAL_MS) {
+    return;
+  }
+  lastListingDraftSyncAt = now;
+  const domain: SyncDomain = 'listing_draft';
+  runSync(domain).catch(() => undefined);
+}
+
 let globalTypographyApplied = false;
 
 function applyGlobalTypographyDefaults(useInterFonts: boolean) {
@@ -280,9 +295,11 @@ export default function App() {
   React.useEffect(() => {
     initChatOutboxDrain();
     drainChatOutbox().catch(() => undefined);
+    initOutboxDrain();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         drainChatOutbox().catch(() => undefined);
+        runSyncListingDraft();
       }
     });
     return () => subscription.remove();
@@ -332,6 +349,7 @@ export default function App() {
         }
         store.login(localAuthSnapshot.user);
         store.setTwoFactorEnabled(localAuthSnapshot.twoFactorEnabled);
+        runSyncListingDraft();
       }
 
       if (storedProfileMedia.avatar) {
@@ -361,6 +379,7 @@ export default function App() {
           const latestStore = useStore.getState();
           latestStore.login(restoredSession.storeUser);
           latestStore.setTwoFactorEnabled(restoredSession.user.twoFactorEnabled);
+          runSyncListingDraft();
         })
         .catch(() => {
           // Session refresh is best-effort and should not interrupt app usage.

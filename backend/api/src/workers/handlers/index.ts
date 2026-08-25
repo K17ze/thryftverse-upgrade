@@ -63,3 +63,6 @@ export type { VendorSyncJobData } from './vendorSyncHandler.js';
 
 export { processSlaEscalationJob } from './slaEscalationHandler.js';
 export type { SlaEscalationJobData } from './slaEscalationHandler.js';
+
+export { processRetentionSweep } from './retentionSweepHandler.js';
+export type { RetentionSweepJobData } from './retentionSweepHandler.js';

@@ -23,6 +23,13 @@ import {
 import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 import { validateCompositionDocument } from './lib/compositionValidation.js';
 import { performUserErasure } from './lib/userErasure.js';
+import {
+  propagateUserDeletion,
+  moderationProvider,
+  aiProvider,
+  pushProvider,
+  analyticsProvider,
+} from './lib/vendorDeletion.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
@@ -116,6 +123,7 @@ import {
   enqueueOnezeMintReserveJob,
   enqueueOutboxDrainJob,
   enqueueReconciliationJob,
+  enqueueRetentionSweepJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
@@ -251,6 +259,7 @@ import {
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
+  processRetentionSweep,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
@@ -264,10 +273,13 @@ import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
 import { registerAccountSecurityRoutes } from './routes/accountSecurity.js';
 import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
 import { registerComplianceRoutes } from './routes/compliance.js';
+import { registerSyncRoutes } from './routes/sync.js';
+import { registerImpactRoutes } from './routes/impact.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
 import { registerAdminAuditRoutes } from './routes/adminAudit.js';
+import { registerRetentionRoutes } from './routes/retention.js';
 import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
 import { registerV2Routes } from './routes/v2.js';
@@ -288,6 +300,9 @@ import { registerTaxonomyRoutes } from './routes/taxonomy.js';
 import { registerCatalogImportRoutes } from './routes/catalogImports.js';
 import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
 import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
+import { registerReturnRoutes } from './routes/returns.js';
+import { registerRefundRoutes } from './routes/refunds.js';
+import { registerExceptionQueueRoutes } from './routes/exceptionQueue.js';
 import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
@@ -1742,7 +1757,8 @@ type PaymentIntentStatus =
   | 'processing'
   | 'succeeded'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'provider_submission_pending';
 type PaymentIntentTerminalStatus = 'succeeded' | 'failed' | 'cancelled';
 type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
 type MintOperationState =
@@ -7651,6 +7667,33 @@ async function settlePaymentIntent(
   };
 }
 
+/**
+ * Mark a payment intent as failed after a provider call error.
+ * Used when the provider I/O phase fails after the intent was already
+ * persisted in 'provider_submission_pending' state.
+ */
+async function markIntentFailed(
+  db: DbQueryable,
+  intentId: string,
+  failureCode: string,
+  failureMessage: string
+): Promise<void> {
+  try {
+    await db.query(
+      `UPDATE payment_intents
+       SET status = 'failed',
+           failure_code = $2,
+           failure_message = $3,
+           updated_at = NOW()
+       WHERE id = $1 AND status = 'provider_submission_pending'`,
+      [intentId, failureCode, failureMessage]
+    );
+  } catch {
+    // Best-effort — the intent stays in provider_submission_pending
+    // for recovery by the background worker.
+  }
+}
+
 async function transitionPaymentIntentStatus(
   client: PoolClient,
   input: {
@@ -7733,6 +7776,7 @@ async function transitionPaymentIntentStatus(
     requires_payment_method: ['requires_confirmation', 'cancelled'],
     requires_confirmation: ['processing', 'succeeded', 'failed', 'cancelled'],
     processing: ['succeeded', 'failed', 'cancelled'],
+    provider_submission_pending: ['requires_payment_method', 'requires_confirmation', 'processing', 'succeeded', 'failed', 'cancelled'],
     succeeded: [],
     failed: [],
     cancelled: [],
@@ -9614,6 +9658,31 @@ function stopDomainOutboxScheduler(): void {
   }
   clearInterval(domainOutboxTimer);
   domainOutboxTimer = null;
+}
+
+let retentionSweepTimer: NodeJS.Timeout | null = null;
+
+function startRetentionSweepScheduler(): void {
+  if (retentionSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueRetentionSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling retention sweep job');
+    });
+  };
+
+  retentionSweepTimer = setInterval(enqueueSweep, config.retentionSweepIntervalMs);
+  retentionSweepTimer.unref?.();
+}
+
+function stopRetentionSweepScheduler(): void {
+  if (!retentionSweepTimer) {
+    return;
+  }
+  clearInterval(retentionSweepTimer);
+  retentionSweepTimer = null;
 }
 
 function startAuctionSweepScheduler(): void {
@@ -19278,6 +19347,8 @@ registerAccountSecurityRoutes({ app, db, redis });
 registerFraudShadowRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 registerAdminAuditRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerRetentionRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 registerOpsConsoleRoutes({ app });
 
@@ -31500,73 +31571,13 @@ app.post('/payments/intents', async (request, reply) => {
       }
     }
 
-    let stripeCustomerId: string | null = null;
-    let stripePaymentMethodId: string | null = null;
-    if (gatewayId === 'stripe_americas') {
-      if (!stripe) {
-        await client.query('ROLLBACK');
-        reply.code(503);
-        return {
-          ok: false,
-          error: 'Stripe payment collection is not configured',
-          code: 'PAYMENT_PROVIDER_UNAVAILABLE',
-        };
-      }
-
-      const customer = await getOrCreateStripeCustomer({
-        db: client,
-        stripe,
-        userId: actorUserId,
-      });
-      stripeCustomerId = customer.customerId;
-
-      if (selectedPaymentMethodProjectionId) {
-        const selectedMethod = await resolveActiveStripeMethod({
-          db: client,
-          userId: actorUserId,
-          projectionId: selectedPaymentMethodProjectionId,
-        });
-        if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
-          await client.query('ROLLBACK');
-          reply.code(409);
-          return {
-            ok: false,
-            error: 'The selected payment method must be added again before checkout',
-            code: 'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
-          };
-        }
-        stripePaymentMethodId = selectedMethod.paymentMethodId;
-      }
-    }
-
+    // ── Phase 1: Persist intent with provider_submission_pending status ──
+    // The payment intent is created in 'provider_submission_pending' state
+    // BEFORE calling the provider. This ensures:
+    // 1. No provider I/O while DB locks are held (§5.1 gate)
+    // 2. If the provider call times out, the intent exists for recovery
+    // 3. The order is bound atomically, preventing concurrent checkout
     const intentId = createRuntimeId('pi');
-    // Fetch the buyer's email for providers that require customer identity
-    // (e.g. Flutterwave). Fall back to platform email if not available.
-    const buyerEmailRow = await client.query<{ email: string | null }>(
-      'SELECT email FROM users WHERE id = $1 LIMIT 1',
-      [actorUserId]
-    );
-    const customerEmail = buyerEmailRow.rows[0]?.email ?? null;
-    const gatewayIntent = await createGatewayPaymentIntent({
-      gatewayId,
-      intentId,
-      channel,
-      money: paymentMoney,
-      stripeCustomerId,
-      stripePaymentMethodId,
-      returnUrl: payload.returnUrl,
-      webhookUrl: payload.webhookUrl,
-      platformFeeAmountGbp,
-      radarSessionId: payload.radarSessionId ?? null,
-      customerEmail,
-      metadata: {
-        ...(payload.metadata ?? {}),
-        userId: actorUserId,
-        orderId,
-        coOwnOrderId,
-        platformFeeAmountGbp,
-      },
-    });
 
     const inserted = await client.query<PaymentIntentRow>(
       `
@@ -31643,21 +31654,20 @@ app.post('/payments/intents', async (request, reply) => {
         paymentMoney.minorAmount,
         paymentMoney.exponent,
         paymentMoney.registryVersion,
-        gatewayIntent.providerAmount,
-        gatewayIntent.providerAmountUnit,
-        toJsonString(gatewayIntent.conversionTrace),
-        gatewayIntent.initialStatus,
-        gatewayIntent.providerIntentRef,
-        gatewayIntent.clientSecret,
-        gatewayIntent.providerStatus ?? null,
-        gatewayIntent.nextActionUrl ?? null,
-        gatewayIntent.scaExpiresAt ?? null,
+        null,
+        null,
+        toJsonString({}),
+        'provider_submission_pending',
+        null,
+        null,
+        null,
+        null,
+        null,
         payload.idempotencyKey ?? null,
         paymentRequestHash,
         toJsonString({
           ...(payload.metadata ?? {}),
           canonicalMoney: paymentMoney,
-          providerConversion: gatewayIntent.conversionTrace,
         }),
       ]
     );
@@ -31694,15 +31704,192 @@ app.post('/payments/intents', async (request, reply) => {
       );
     }
 
+    // Commit Phase 1 — release all DB locks before provider I/O.
     await client.query('COMMIT');
-    reply.code(201);
-    return {
-      ok: true,
-      idempotent: false,
-      intent: toPaymentIntentPayload(inserted.rows[0]),
-    };
+    client.release();
+
+    // ── Phase 2: Provider I/O (no DB locks held) ──
+    // If the provider call fails or times out, the intent remains in
+    // 'provider_submission_pending'. A background worker can query the
+    // provider for the authoritative state (unknown-outcome recovery).
+    let stripeCustomerId: string | null = null;
+    let stripePaymentMethodId: string | null = null;
+    if (gatewayId === 'stripe_americas') {
+      if (!stripe) {
+        // Mark intent as failed — provider not configured.
+        await markIntentFailed(db, intentId, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Stripe payment collection is not configured');
+        reply.code(503);
+        return {
+          ok: false,
+          error: 'Stripe payment collection is not configured',
+          code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+        };
+      }
+
+      try {
+        const customer = await getOrCreateStripeCustomer({
+          db,
+          stripe,
+          userId: actorUserId,
+        });
+        stripeCustomerId = customer.customerId;
+
+        if (selectedPaymentMethodProjectionId) {
+          const selectedMethod = await resolveActiveStripeMethod({
+            db,
+            userId: actorUserId,
+            projectionId: selectedPaymentMethodProjectionId,
+          });
+          if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
+            await markIntentFailed(db, intentId, 'PAYMENT_METHOD_RECOLLECTION_REQUIRED', 'The selected payment method must be added again before checkout');
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'The selected payment method must be added again before checkout',
+              code: 'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
+            };
+          }
+          stripePaymentMethodId = selectedMethod.paymentMethodId;
+        }
+      } catch (stripeCustomerError) {
+        await markIntentFailed(db, intentId, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Failed to resolve Stripe customer');
+        throw stripeCustomerError;
+      }
+    }
+
+    // Fetch the buyer's email for providers that require customer identity
+    // (e.g. Flutterwave). Fall back to platform email if not available.
+    const buyerEmailRow = await db.query<{ email: string | null }>(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [actorUserId]
+    );
+    const customerEmail = buyerEmailRow.rows[0]?.email ?? null;
+
+    let gatewayIntent: Awaited<ReturnType<typeof createGatewayPaymentIntent>>;
+    try {
+      gatewayIntent = await createGatewayPaymentIntent({
+        gatewayId,
+        intentId,
+        channel,
+        money: paymentMoney,
+        stripeCustomerId,
+        stripePaymentMethodId,
+        returnUrl: payload.returnUrl,
+        webhookUrl: payload.webhookUrl,
+        platformFeeAmountGbp,
+        radarSessionId: payload.radarSessionId ?? null,
+        customerEmail,
+        metadata: {
+          ...(payload.metadata ?? {}),
+          userId: actorUserId,
+          orderId,
+          coOwnOrderId,
+          platformFeeAmountGbp,
+        },
+      });
+    } catch (providerError) {
+      // Provider call failed — mark intent as failed for recovery.
+      const failureCode = getApiError(providerError)?.code ?? 'PROVIDER_CALL_FAILED';
+      const failureMessage = (providerError as Error).message ?? 'Provider call failed';
+      await markIntentFailed(db, intentId, failureCode, failureMessage);
+      request.log.error(
+        { err: providerError, intentId, gatewayId },
+        'Provider payment intent creation failed'
+      );
+      const apiError = getApiError(providerError);
+      if (apiError) {
+        reply.code(502);
+        return { ok: false, error: apiError.message, code: apiError.code };
+      }
+      reply.code(502);
+      return { ok: false, error: 'Payment provider could not create the intent' };
+    }
+
+    // ── Phase 3: Update intent with provider results ──
+    const settleClient = await db.connect();
+    try {
+      await settleClient.query('BEGIN');
+
+      const updated = await settleClient.query<PaymentIntentRow>(
+        `UPDATE payment_intents
+         SET
+           provider_amount = $2,
+           provider_amount_unit = $3,
+           money_conversion_trace = $4::jsonb,
+           status = $5,
+           provider_intent_ref = $6,
+           client_secret = $7,
+           provider_status = $8,
+           next_action_url = $9,
+           sca_expires_at = $10,
+           metadata = metadata || $11::jsonb,
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING
+           id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+           instrument_id, amount_gbp, amount_currency, amount_minor,
+           currency_exponent, money_registry_version, provider_amount,
+           provider_amount_unit, money_conversion_trace, money_quarantined,
+           status, provider_intent_ref, client_secret, provider_status,
+           next_action_url, sca_expires_at, settled_at, failure_code,
+           failure_message, created_at, updated_at`,
+        [
+          intentId,
+          gatewayIntent.providerAmount,
+          gatewayIntent.providerAmountUnit,
+          toJsonString(gatewayIntent.conversionTrace),
+          gatewayIntent.initialStatus,
+          gatewayIntent.providerIntentRef,
+          gatewayIntent.clientSecret,
+          gatewayIntent.providerStatus ?? null,
+          gatewayIntent.nextActionUrl ?? null,
+          gatewayIntent.scaExpiresAt ?? null,
+          toJsonString({ providerConversion: gatewayIntent.conversionTrace }),
+        ]
+      );
+
+      await settleClient.query('COMMIT');
+
+      reply.code(201);
+      return {
+        ok: true,
+        idempotent: false,
+        intent: toPaymentIntentPayload(updated.rows[0]),
+      };
+    } catch (settleError) {
+      await settleClient.query('ROLLBACK');
+      // The provider intent was created but we couldn't persist the result.
+      // The intent stays in 'provider_submission_pending' — a background
+      // worker will query the provider and reconcile.
+      request.log.error(
+        { err: settleError, intentId, providerIntentRef: gatewayIntent.providerIntentRef },
+        'Failed to persist provider result — intent left in provider_submission_pending for recovery'
+      );
+      // Return the intent as-is (in pending state) so the client can poll.
+      const pendingIntent = await db.query<PaymentIntentRow>(
+        `SELECT id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+           instrument_id, amount_gbp, amount_currency, amount_minor,
+           currency_exponent, money_registry_version, provider_amount,
+           provider_amount_unit, money_conversion_trace, money_quarantined,
+           status, provider_intent_ref, client_secret, provider_status,
+           next_action_url, sca_expires_at, settled_at, failure_code,
+           failure_message, created_at, updated_at
+         FROM payment_intents WHERE id = $1 LIMIT 1`,
+        [intentId]
+      );
+      reply.code(201);
+      return {
+        ok: true,
+        idempotent: false,
+        intent: toPaymentIntentPayload(pendingIntent.rows[0]),
+      };
+    } finally {
+      settleClient.release();
+    }
   } catch (error) {
-    await client.query('ROLLBACK');
+    // The client may have already been released after Phase 1 commit.
+    // Only attempt rollback if the client is still held (Phase 1 error).
+    try { await client.query('ROLLBACK'); } catch { /* already released */ }
     const apiError = getApiError(error);
     if (apiError) {
       throw apiError;
@@ -31714,7 +31901,7 @@ app.post('/payments/intents', async (request, reply) => {
       error: 'Unable to create payment intent',
     };
   } finally {
-    client.release();
+    try { client.release(); } catch { /* already released */ }
   }
 });
 
@@ -44344,6 +44531,9 @@ const start = async () => {
         handleCatalogImportReconcileJob: async ({ itemId, publicationKey }) => {
           await processCatalogImportReconcile({ itemId, publicationKey });
         },
+        handleRetentionSweepJob: async ({ reason }) => {
+          await processRetentionSweep({ reason });
+        },
       });
     } else {
       app.log.info('[api] background workers disabled — running in separate container');
@@ -44351,6 +44541,7 @@ const start = async () => {
 
     startAuctionSweepScheduler();
     startDomainOutboxScheduler();
+    startRetentionSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -46182,6 +46373,10 @@ registerAiTruthRoutes({
 });
 
 registerComplianceRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerSyncRoutes({ app, db, readDb, resolveAuthenticatedUserId, createApiError });
+
+registerImpactRoutes({ app, db, resolveAuthenticatedUserId });
 
 // POST /creator/documents — create or replace a draft document
 

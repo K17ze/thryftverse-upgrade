@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, ApiError, type CaseRecord, type CommandRecord, type AuditEvent } from '../api.js';
+import { api, ApiError, type CaseRecord, type CommandRecord, type AuditEvent, type EvidenceItem, type DecisionRecord, type CommunicationRecord } from '../api.js';
 
 // ── Case Workspace View ─────────────────────────────────────────────────
 //
@@ -16,66 +16,9 @@ import { api, ApiError, type CaseRecord, type CommandRecord, type AuditEvent } f
 // Flat canvas, hairline separators, no card-on-card. One radius grammar
 // (6px utility / 10px media). Three type sizes. Status = text + dot.
 
-// ── Types for resources not yet in api.ts ───────────────────────────────
-// The main agent will add the matching api methods; these interfaces let
-// the view compile against the assumed response shapes today.
+type ReasonCode = { code: string; userFacingLabel: string; severityClass: number; dsaCategory: string | null; ukPriorityOffence: string | null };
 
-interface EvidenceItem {
-  id: string;
-  caseId: string;
-  type: 'image' | 'video' | 'text' | 'screenshot';
-  source: 'reporter' | 'system_scan' | 'provider';
-  sensitivity: 'public' | 'internal' | 'restricted' | 'pii';
-  hash: string;
-  caption: string | null;
-  mediaUrl: string | null;
-  textContent: string | null;
-  addedAt: string;
-  addedBy: string;
-}
-
-interface DecisionRecord {
-  id: string;
-  caseId: string;
-  decisionType: 'no_violation' | 'restrict' | 'escalate' | 'emergency_hold';
-  reasonCode: string;
-  policyVersion: string;
-  duration: 'permanent' | 'temporary';
-  durationUntil: string | null;
-  territorialScope: string[];
-  automatedMeans: boolean;
-  internalReason: string;
-  actorId: string;
-  createdAt: string;
-}
-
-interface CommunicationRecord {
-  id: string;
-  caseId: string;
-  channel: 'email' | 'sms' | 'in_app' | 'push';
-  direction: 'outbound' | 'inbound';
-  subject: string | null;
-  deliveryStatus: 'pending' | 'sent' | 'delivered' | 'failed' | 'read';
-  sentAt: string;
-}
-
-type LoadingState = 'loading' | 'populated' | 'empty' | 'error' | 'denied';
-
-// Reason codes drawn from the safety policy taxonomy.
-const SAFETY_REASON_CODES: Array<{ value: string; label: string }> = [
-  { value: 'fraud_scam', label: 'Fraud / scam' },
-  { value: 'counterfeit_goods', label: 'Counterfeit goods' },
-  { value: 'unsafe_product', label: 'Unsafe product' },
-  { value: 'prohibited_item', label: 'Prohibited item' },
-  { value: 'ip_infringement', label: 'IP infringement' },
-  { value: 'harassment', label: 'Harassment' },
-  { value: 'hate_speech', label: 'Hate speech' },
-  { value: 'csam', label: 'CSAM' },
-  { value: 'terrorism', label: 'Terrorism' },
-  { value: 'money_laundering', label: 'Money laundering' },
-  { value: 'sanctions_breach', label: 'Sanctions breach' },
-  { value: 'other', label: 'Other' },
-];
+type LoadingState = 'loading' | 'populated' | 'empty' | 'error' | 'denied' | 'offline';
 
 const TERRITORIAL_SCOPES = ['GB', 'EU', 'US', 'AU', 'CA', 'GLOBAL'];
 
@@ -92,6 +35,8 @@ export function CaseWorkspaceView() {
   const [communications, setCommunications] = useState<CommunicationRecord[]>([]);
   const [linkedCases, setLinkedCases] = useState<CaseRecord[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+
+  const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
 
   const [state, setState] = useState<LoadingState>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +66,9 @@ export function CaseWorkspaceView() {
         if (err.statusCode === 401) { navigate('/'); return; }
         if (err.statusCode === 403) { setState('denied'); return; }
         if (err.statusCode === 404) { setState('empty'); return; }
+        if (err.statusCode === 0 || err.statusCode >= 500) { setState('offline'); return; }
       }
+      if (err instanceof TypeError) { setState('offline'); return; }
       setState('error');
       setError((err as Error).message);
       return;
@@ -138,22 +85,22 @@ export function CaseWorkspaceView() {
       },
       {
         key: 'evidence',
-        fn: () => (api as unknown as { getCaseEvidence: (id: string) => Promise<{ ok: boolean; evidence: EvidenceItem[] }> }).getCaseEvidence(cid),
+        fn: () => api.getCaseEvidence(cid),
         setter: (v) => setEvidence((v as { evidence: EvidenceItem[] }).evidence),
       },
       {
         key: 'decisions',
-        fn: () => (api as unknown as { getCaseDecisions: (id: string) => Promise<{ ok: boolean; decisions: DecisionRecord[] }> }).getCaseDecisions(cid),
+        fn: () => api.getCaseDecisions(cid),
         setter: (v) => setDecisions((v as { decisions: DecisionRecord[] }).decisions),
       },
       {
         key: 'communications',
-        fn: () => (api as unknown as { getCaseCommunications: (id: string) => Promise<{ ok: boolean; communications: CommunicationRecord[] }> }).getCaseCommunications(cid),
+        fn: () => api.getCaseCommunications(cid),
         setter: (v) => setCommunications((v as { communications: CommunicationRecord[] }).communications),
       },
       {
         key: 'linked',
-        fn: () => (api as unknown as { getLinkedCases: (id: string) => Promise<{ ok: boolean; cases: CaseRecord[] }> }).getLinkedCases(cid),
+        fn: () => api.getLinkedCases(cid),
         setter: (v) => setLinkedCases((v as { cases: CaseRecord[] }).cases),
       },
       {
@@ -180,6 +127,10 @@ export function CaseWorkspaceView() {
   useEffect(() => {
     loadCase();
   }, [loadCase]);
+
+  useEffect(() => {
+    api.getSafetyReasonCodes().then(result => setReasonCodes(result.reasonCodes)).catch(() => {});
+  }, []);
 
   const handleAddNote = async () => {
     if (!noteText.trim() || !caseId) return;
@@ -209,7 +160,7 @@ export function CaseWorkspaceView() {
     if (!caseId || !slaReason.trim()) return;
     setSlaBusy(true);
     try {
-      const result = await (api as unknown as { pauseSla: (id: string, reason: string) => Promise<{ ok: boolean; case: CaseRecord }> }).pauseSla(caseId, slaReason.trim());
+      const result = await api.pauseSla(caseId, slaReason.trim());
       setCaseRecord(result.case);
       setSlaReason('');
     } catch (err) {
@@ -223,7 +174,7 @@ export function CaseWorkspaceView() {
     if (!caseId) return;
     setSlaBusy(true);
     try {
-      const result = await (api as unknown as { resumeSla: (id: string) => Promise<{ ok: boolean; case: CaseRecord }> }).resumeSla(caseId);
+      const result = await api.resumeSla(caseId);
       setCaseRecord(result.case);
     } catch (err) {
       setError((err as Error).message);
@@ -245,6 +196,9 @@ export function CaseWorkspaceView() {
   }
   if (state === 'denied') {
     return <StateMessage title="Permission denied" description="You do not have permission to view this case. Request access from your team lead." />;
+  }
+  if (state === 'offline') {
+    return <StateMessage title="You're offline" description="The case could not be loaded. Check your connection and try again." />;
   }
   if (!caseRecord) return null;
 
@@ -408,7 +362,7 @@ export function CaseWorkspaceView() {
                   <span>{new Date(d.createdAt).toLocaleString()}</span>
                   <span style={{ color: 'var(--text-primary)' }}>{d.decisionType.replace(/_/g, ' ')}</span>
                   <span>{d.reasonCode}</span>
-                  <span style={{ color: 'var(--text-tertiary)' }}>{d.policyVersion}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{d.policyVersion ?? '—'}</span>
                 </div>
               ))}
             </div>
@@ -555,6 +509,7 @@ export function CaseWorkspaceView() {
         <DecisionComposer
           caseId={caseRecord.id}
           legalEntity={caseRecord.legalEntity}
+          reasonCodes={reasonCodes}
           saving={decisionSaving}
           error={decisionError}
           onClose={() => { setDecisionOpen(false); setDecisionError(null); }}
@@ -562,7 +517,7 @@ export function CaseWorkspaceView() {
             setDecisionSaving(true);
             setDecisionError(null);
             try {
-              await (api as unknown as { recordDecision: (id: string, b: Record<string, unknown>) => Promise<{ ok: boolean }> }).recordDecision(caseRecord.id, body);
+              await api.recordDecision(caseRecord.id, body);
               setDecisionOpen(false);
               loadCase();
             } catch (err) {
@@ -630,8 +585,8 @@ function EvidenceSection({
 }
 
 function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) {
-  const isSensitive = item.sensitivity === 'pii' || item.sensitivity === 'restricted';
-  const isMedia = item.type === 'image' || item.type === 'video' || item.type === 'screenshot';
+  const isSensitive = item.sensitivity === 'restricted' || item.sensitivity === 'sensitive';
+  const isMedia = item.objectType === 'image' || item.objectType === 'video' || item.objectType === 'screenshot';
   const [revealed, setRevealed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
@@ -655,10 +610,9 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
   }, []);
 
   const sensitivityColour: Record<EvidenceItem['sensitivity'], string> = {
-    public: 'var(--text-tertiary)',
-    internal: 'var(--text-secondary)',
-    restricted: 'var(--state-warning)',
-    pii: 'var(--state-danger)',
+    standard: 'var(--text-tertiary)',
+    sensitive: 'var(--state-warning)',
+    restricted: 'var(--state-danger)',
   };
 
   return (
@@ -676,10 +630,10 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
       {/* Media or text body */}
       {isMedia ? (
         <div style={{ position: 'relative', height: '180px', background: 'var(--bg-canvas)' }}>
-          {item.mediaUrl ? (
+          {item.objectRef ? (
             <img
-              src={item.mediaUrl}
-              alt={item.caption ?? item.type}
+              src={item.objectRef}
+              alt={item.objectType}
               style={{
                 width: '100%',
                 height: '100%',
@@ -700,7 +654,7 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
                 filter: isSensitive && !revealed ? 'blur(8px)' : 'none',
               }}
             >
-              {item.type} placeholder
+              {item.objectType} placeholder
             </div>
           )}
           {isSensitive && !revealed && (
@@ -753,7 +707,7 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
             background: 'var(--bg-canvas)',
           }}
         >
-          {item.textContent ?? '(empty)'}
+          {item.objectRef ?? '(empty)'}
         </div>
       )}
 
@@ -770,7 +724,7 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
         }}
       >
         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-          <span style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{item.type}</span>
+          <span style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{item.objectType}</span>
           <span>·</span>
           <span style={{ textTransform: 'capitalize' }}>{item.source.replace(/_/g, ' ')}</span>
           <span>·</span>
@@ -780,7 +734,7 @@ function EvidenceCard({ caseId, item }: { caseId: string; item: EvidenceItem }) 
           </span>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
-          {item.hash.slice(0, 12)} · {new Date(item.addedAt).toLocaleDateString()}
+          {(item.objectHash ?? '').slice(0, 12)} · {new Date(item.createdAt).toLocaleDateString()}
         </div>
         {revealError && (
           <div style={{ color: 'var(--state-danger)' }}>Reveal failed: {revealError}</div>
@@ -864,7 +818,7 @@ function CommunicationsSection({
   }
   if (communications.length === 0) return null;
 
-  const statusColour: Record<CommunicationRecord['deliveryStatus'], string> = {
+  const statusColour: Record<string, string> = {
     pending: 'var(--text-tertiary)',
     sent: 'var(--state-info)',
     delivered: 'var(--state-success)',
@@ -889,12 +843,12 @@ function CommunicationsSection({
               color: 'var(--text-secondary)',
             }}
           >
-            <span>{new Date(c.sentAt).toLocaleString()}</span>
+            <span>{new Date(c.createdAt).toLocaleString()}</span>
             <span style={{ textTransform: 'capitalize' }}>{c.channel}</span>
-            <span style={{ color: 'var(--text-primary)' }}>{c.subject ?? c.direction}</span>
+            <span style={{ color: 'var(--text-primary)' }}>{c.templateId ?? c.direction}</span>
             <span style={{ textTransform: 'capitalize' }}>{c.direction}</span>
-            <span style={{ color: statusColour[c.deliveryStatus] }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: statusColour[c.deliveryStatus], marginRight: '4px', verticalAlign: 'middle' }} />
+            <span style={{ color: statusColour[c.deliveryStatus] ?? 'var(--text-tertiary)' }}>
+              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: statusColour[c.deliveryStatus] ?? 'var(--text-tertiary)', marginRight: '4px', verticalAlign: 'middle' }} />
               {c.deliveryStatus}
             </span>
           </div>
@@ -1069,6 +1023,7 @@ function SlaSection({
 function DecisionComposer({
   caseId,
   legalEntity,
+  reasonCodes,
   saving,
   error,
   onClose,
@@ -1076,13 +1031,14 @@ function DecisionComposer({
 }: {
   caseId: string;
   legalEntity: string;
+  reasonCodes: ReasonCode[];
   saving: boolean;
   error: string | null;
   onClose: () => void;
   onSubmit: (body: Record<string, unknown>) => Promise<void>;
 }) {
-  const [decisionType, setDecisionType] = useState<DecisionRecord['decisionType']>('restrict');
-  const [reasonCode, setReasonCode] = useState(SAFETY_REASON_CODES[0].value);
+  const [decisionType, setDecisionType] = useState<'no_violation' | 'restrict' | 'escalate' | 'emergency_hold'>('restrict');
+  const [reasonCode, setReasonCode] = useState(reasonCodes[0]?.code ?? '');
   const [duration, setDuration] = useState<'permanent' | 'temporary'>('temporary');
   const [durationUntil, setDurationUntil] = useState('');
   const [scope, setScope] = useState<string[]>(['GB']);
@@ -1098,7 +1054,7 @@ function DecisionComposer({
     setScope((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
   };
 
-  const effectPreview: Record<DecisionRecord['decisionType'], string> = {
+  const effectPreview: Record<'no_violation' | 'restrict' | 'escalate' | 'emergency_hold', string> = {
     no_violation: 'No action taken. Case closed with no restriction. The affected user is notified of the outcome.',
     restrict: 'Restricts the listing, notifies the seller, and starts a 7-day appeal window.',
     escalate: 'Escalates to the senior review queue. No restriction applied until senior review completes.',
@@ -1156,7 +1112,7 @@ function DecisionComposer({
           <select
             style={fieldStyle}
             value={decisionType}
-            onChange={(e) => setDecisionType(e.target.value as DecisionRecord['decisionType'])}
+            onChange={(e) => setDecisionType(e.target.value as 'no_violation' | 'restrict' | 'escalate' | 'emergency_hold')}
           >
             <option value="no_violation">No violation</option>
             <option value="restrict">Restrict</option>
@@ -1169,8 +1125,8 @@ function DecisionComposer({
         <div>
           <label style={labelStyle}>Reason code</label>
           <select style={fieldStyle} value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
-            {SAFETY_REASON_CODES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            {reasonCodes.map((r) => (
+              <option key={r.code} value={r.code}>{r.userFacingLabel}</option>
             ))}
           </select>
         </div>

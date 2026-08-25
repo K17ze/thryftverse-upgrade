@@ -40,6 +40,10 @@ export interface OutboxDrainJobData {
   reason: 'scheduled' | 'after_commit' | 'manual';
 }
 
+export interface RetentionSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 export interface MediaIngestJobData {
   assetId: string;
   reason: string;
@@ -136,7 +140,8 @@ type InfraJobData =
   | OnezeWithdrawalExecuteJobData
   | OnezeMintReserveJobData
   | ReconciliationJobData
-  | OutboxDrainJobData;
+  | OutboxDrainJobData
+  | RetentionSweepJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -145,6 +150,7 @@ interface QueueHandlers {
   handleOnezeMintReserveJob: (job: OnezeMintReserveJobData) => Promise<void>;
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
   handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
+  handleRetentionSweepJob: (job: RetentionSweepJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -422,6 +428,8 @@ export function startBackgroundWorkers(
             await handlers.handleReconciliationJob(job.data as ReconciliationJobData);
           } else if (job.name === 'domain_outbox_drain') {
             await handlers.handleOutboxDrainJob(job.data as OutboxDrainJobData);
+          } else if (job.name === 'retention_sweep') {
+            await handlers.handleRetentionSweepJob(job.data as RetentionSweepJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -832,6 +840,26 @@ export async function enqueueOutboxDrainJob(
       },
       removeOnComplete: true,
       removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueRetentionSweepJob(
+  reason: RetentionSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  await infraQueue.add(
+    'retention_sweep',
+    { reason },
+    {
+      jobId: `retention_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
     },
   );
 }

@@ -48,6 +48,27 @@ import type {
 import { resolveModel } from './modelRegistry.js';
 
 // ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/**
+ * Error thrown by the gateway when a provider is unavailable, misconfigured,
+ * or circuit-broken. Carries the provider name and a coarse outcome so the
+ * caller (and tests) can distinguish a config/availability failure from a
+ * genuine provider error without inspecting message strings.
+ */
+export class ModerationProviderError extends Error {
+  readonly provider: string;
+  readonly outcome: 'unavailable' | 'failed';
+  constructor(provider: string, message: string, outcome: 'unavailable' | 'failed') {
+    super(message);
+    this.name = 'ModerationProviderError';
+    this.provider = provider;
+    this.outcome = outcome;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -117,11 +138,12 @@ export interface ProviderHealth {
 const providerCache = new Map<string, ModerationProvider>();
 
 /**
- * Return the adapter for a resolved provider. The mock adapter is used for
- * `openai_omni` until a dedicated OpenAI moderation adapter lands; this keeps
- * the gateway routable in development without fabricating a half-built
- * provider. The mapping is centralised here so a real adapter can replace the
- * mock without touching call sites.
+ * Return the adapter for a resolved provider. `rekognition` and `sightengine`
+ * map to their real adapters; `openai_omni` is not yet implemented and throws
+ * {@link ModerationProviderError} so the gateway fails closed rather than
+ * silently routing content through the always-approve mock (TS-10). The
+ * mapping is centralised here so a real adapter can replace the throw without
+ * touching call sites.
  */
 function getProvider(providerName: string): ModerationProvider {
   const cached = providerCache.get(providerName);
@@ -137,10 +159,13 @@ function getProvider(providerName: string): ModerationProvider {
       provider = createSightengineModerationProvider();
       break;
     case 'openai_omni':
-      // TODO(phase-3): replace with a dedicated OpenAI moderation adapter.
-      // Until then the mock is used so the registry is routable in dev/CI.
-      provider = createMockModerationProvider();
-      break;
+      // The OpenAI moderation adapter is not yet implemented. Fail closed
+      // rather than silently approving content. See TS-10 rationale.
+      throw new ModerationProviderError(
+        'openai_omni',
+        'The OpenAI moderation adapter is not yet implemented. Configure a supported provider (rekognition, sightengine) or implement the adapter.',
+        'unavailable',
+      );
     default:
       provider = createMockModerationProvider();
       break;
@@ -343,17 +368,127 @@ function contentHash(request: ModerationRequest): string {
   return sha256(request.content_ref);
 }
 
+// ---------------------------------------------------------------------------
+// Circuit breaker + timeout
+// ---------------------------------------------------------------------------
+
+/** Per-provider circuit-breaker state. */
+interface CircuitBreakerState {
+  failures: number;
+  lastFailureAt: number;
+  tripped: boolean;
+}
+
+const circuitBreakers = new Map<string, CircuitBreakerState>();
+
+const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures
+const CIRCUIT_BREAKER_RESET_MS = 60_000; // 1 minute
+const PROVIDER_TIMEOUT_MS = 10_000; // 10 seconds
+
+/**
+ * Throw {@link ModerationProviderError} when the provider's circuit breaker is
+ * tripped and the reset window has not elapsed. After the window elapses the
+ * breaker is reset (half-open) so the next call is allowed through and a
+ * success closes it.
+ */
+function checkCircuitBreaker(providerName: string): void {
+  const breaker = circuitBreakers.get(providerName);
+  if (breaker?.tripped) {
+    const elapsed = Date.now() - breaker.lastFailureAt;
+    if (elapsed < CIRCUIT_BREAKER_RESET_MS) {
+      throw new ModerationProviderError(
+        providerName,
+        `Circuit breaker tripped for ${providerName}. ${Math.ceil((CIRCUIT_BREAKER_RESET_MS - elapsed) / 1000)}s until reset.`,
+        'unavailable',
+      );
+    }
+    // Reset after timeout — allow a trial call (half-open).
+    breaker.tripped = false;
+    breaker.failures = 0;
+  }
+}
+
+/** Reset the breaker on a successful provider call. */
+function recordProviderSuccess(providerName: string): void {
+  const breaker = circuitBreakers.get(providerName);
+  if (breaker) {
+    breaker.failures = 0;
+    breaker.tripped = false;
+  }
+}
+
+/** Record a consecutive failure and trip the breaker once the threshold is hit. */
+function recordProviderFailure(providerName: string): void {
+  let breaker = circuitBreakers.get(providerName);
+  if (!breaker) {
+    breaker = { failures: 0, lastFailureAt: 0, tripped: false };
+    circuitBreakers.set(providerName, breaker);
+  }
+  breaker.failures++;
+  breaker.lastFailureAt = Date.now();
+  if (breaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    breaker.tripped = true;
+  }
+}
+
+/**
+ * Race a provider promise against a timeout. On timeout the provider is
+ * recorded as failed and a {@link ModerationProviderError} is thrown so the
+ * caller surfaces `unavailable` rather than blocking indefinitely.
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  providerName: string,
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      recordProviderFailure(providerName);
+      reject(
+        new ModerationProviderError(
+          providerName,
+          `Provider timed out after ${ms}ms`,
+          'unavailable',
+        ),
+      );
+    }, ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider invocation
+// ---------------------------------------------------------------------------
+
 /**
  * Invoke the provider adapter for a resolved model. Returns the provider
  * result or a synthesised `failed` result if the modality is unsupported for
- * the provider (e.g. Rekognition text). Never throws.
+ * the provider (e.g. Rekognition text), the provider is circuit-broken, or
+ * the call times out. Never throws: every failure mode — including
+ * {@link ModerationProviderError} from the circuit breaker, the
+ * not-yet-implemented `openai_omni` adapter, and timeouts — is mapped to a
+ * `failed` result so the gateway's `unavailable` contract holds.
  */
 async function callProvider(
   resolved: ResolvedModel,
   request: ModerationRequest,
 ): Promise<ModerationResult> {
-  const provider = getProvider(resolved.provider);
   try {
+    // Circuit breaker: throws (ModerationProviderError) when tripped. This is
+    // not a provider call, so the catch below does not record it as a failure
+    // — recording would refresh lastFailureAt and keep the breaker tripped
+    // forever. The same applies to the openai_omni config error thrown by
+    // getProvider: it is a configuration gap, not a provider outage.
+    checkCircuitBreaker(resolved.provider);
+
+    const provider = getProvider(resolved.provider);
+
+    let providerCall: Promise<ModerationResult>;
     if (request.content_modality === 'text') {
       if (request.content_text === undefined) {
         return {
@@ -366,21 +501,33 @@ async function callProvider(
           error: 'Text moderation requested but content_text is missing',
         };
       }
-      return provider.moderateText(request.content_text);
+      providerCall = provider.moderateText(request.content_text);
+    } else {
+      // Image / video / audio all flow through moderateImage for now. The
+      // provider adapters currently expose only image + text; video/audio
+      // adapters will plug in behind the same gateway contract. Providers
+      // take a URL today; for byte payloads we pass the content_ref as the
+      // locator (a real deployment would upload to S3 and pass a pre-signed
+      // URL). This keeps the contract honest without fabricating a URL.
+      providerCall = provider.moderateImage(request.content_ref);
     }
 
-    // Image / video / audio all flow through moderateImage for now. The
-    // provider adapters currently expose only image + text; video/audio
-    // adapters will plug in behind the same gateway contract.
-    if (request.content_bytes) {
-      // Providers take a URL today; for byte payloads we hash and pass the
-      // content_ref as the locator. A real deployment would upload to S3 and
-      // pass a pre-signed URL. This keeps the contract honest without
-      // fabricating a URL.
-      return provider.moderateImage(request.content_ref);
-    }
-    return provider.moderateImage(request.content_ref);
+    const result = await withTimeout(
+      providerCall,
+      PROVIDER_TIMEOUT_MS,
+      resolved.provider,
+    );
+    recordProviderSuccess(resolved.provider);
+    return result;
   } catch (error) {
+    // withTimeout already recorded a failure for timeouts
+    // (ModerationProviderError). Circuit-breaker trips and the openai_omni
+    // config gap are also ModerationProviderError and must not refresh the
+    // breaker. Only genuine provider errors (non-ModerationProviderError) are
+    // recorded here, avoiding double-counting.
+    if (!(error instanceof ModerationProviderError)) {
+      recordProviderFailure(resolved.provider);
+    }
     const message = error instanceof Error ? error.message : String(error);
     return {
       status: 'failed',

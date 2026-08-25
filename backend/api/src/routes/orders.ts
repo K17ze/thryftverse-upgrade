@@ -927,6 +927,29 @@ app.post('/orders', async (request, reply) => {
         totalGbp,
       },
     });
+    // Gate 7: Persist seller capacity and versioned rights at purchase time.
+    // This snapshot is immutable and serves as the authoritative record of
+    // what terms the buyer and seller agreed to at the point of sale.
+    await client.query(
+      `INSERT INTO order_seller_rights_snapshot
+         (order_id, seller_id, seller_tier, dispatch_sla_days,
+          return_policy_version, return_policy_basis, return_window_days,
+          buyer_protection_fee_gbp, buyer_protection_version, platform_terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (order_id) DO NOTHING`,
+      [
+        orderId,
+        listing.seller_id,
+        'standard',          // seller_tier — TODO: derive from seller profile
+        3,                   // dispatch_sla_days — TODO: derive from seller capacity
+        1,                   // return_policy_version
+        'statutory',         // return_policy_basis
+        14,                  // return_window_days
+        platformChargeGbp,   // buyer_protection_fee_gbp
+        1,                   // buyer_protection_version
+        1,                   // platform_terms_version
+      ]
+    );
     await client.query('COMMIT');
     try {
       await enqueueOutboxDrainJob();
@@ -1216,6 +1239,29 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         toJsonString({ quoteHash, shippingQuoteId: shippingQuote.id }),
       ]
     );
+    // Gate 7: Persist seller capacity and versioned rights at purchase time.
+    // This snapshot is immutable and serves as the authoritative record of
+    // what terms the buyer and seller agreed to at the point of sale.
+    await client.query(
+      `INSERT INTO order_seller_rights_snapshot
+         (order_id, seller_id, seller_tier, dispatch_sla_days,
+          return_policy_version, return_policy_basis, return_window_days,
+          buyer_protection_fee_gbp, buyer_protection_version, platform_terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (order_id) DO NOTHING`,
+      [
+        orderId,
+        order.seller_id,
+        'standard',          // seller_tier — TODO: derive from seller profile
+        3,                   // dispatch_sla_days — TODO: derive from seller capacity
+        1,                   // return_policy_version
+        'statutory',         // return_policy_basis
+        14,                  // return_window_days
+        platformChargeGbp,   // buyer_protection_fee_gbp
+        1,                   // buyer_protection_version
+        1,                   // platform_terms_version
+      ]
+    );
     await client.query('COMMIT');
     return {
       ok: true,
@@ -1231,6 +1277,13 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         totalGbp,
         quoteVersion,
         quoteHash,
+      },
+      sellerRightsSnapshot: {
+        sellerTier: 'standard',
+        dispatchSlaDays: 3,
+        returnPolicyBasis: 'statutory',
+        returnWindowDays: 14,
+        buyerProtectionFeeGbp: platformChargeGbp,
       },
     };
   } catch (error) {
@@ -2406,10 +2459,39 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       return { ok: false, error: `Cannot confirm delivery from status: ${order.status}` };
     }
 
+    // Gate 6: Check for open blocking disputes before releasing escrow.
+    // Buyer acknowledgement cannot release money while any return/dispute/
+    // blocking risk state is open.
+    const blockingTicketsResult = await client.query<{ id: string; topic_id: string }>(
+      `SELECT id, topic_id FROM support_tickets
+       WHERE order_id = $1 AND status = 'open'
+         AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request')`,
+      [orderId]
+    );
+    const hasOpenBlockingDispute = blockingTicketsResult.rows.length > 0;
+
     await client.query(
       `UPDATE orders SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [orderId]
     );
+
+    if (hasOpenBlockingDispute) {
+      // Delivery is confirmed, but funds are held while the dispute is open.
+      // Escrow release is deferred until the dispute is resolved.
+      request.log.warn(
+        { orderId, ticketIds: blockingTicketsResult.rows.map(r => r.id) },
+        'Escrow release blocked by open dispute — delivery confirmed, funds held'
+      );
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        orderId,
+        status: 'delivered',
+        escrowHeld: true,
+        holdReason: 'OPEN_DISPUTE',
+        message: 'Delivery confirmed. Funds are held while an open dispute is resolved.',
+      };
+    }
 
     await releaseCommerceOrderEscrowToSeller(client, {
       orderId,

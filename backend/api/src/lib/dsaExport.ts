@@ -11,33 +11,39 @@ import { logger } from './logger.js';
 // to the DSA Transparency Database in a harmonised schema.
 //
 // The source tables `statements_of_reasons` and `safety_decisions` are created
-// in migration 171. This service is read/write against those tables and never
+// in migration 172. This service is read/write against those tables and never
 // invents columns that do not exist in the schema.
 
 /** A single statement of reasons mapped to the DSA Transparency Database schema. */
 export interface DsaStatementRecord {
   /** Platform-unique identifier for the statement. */
   puid: string;
-  /** Whether visibility of specific content was restricted. */
-  decision_visibility: boolean;
-  /** Whether a mandatory removal/takedown was applied. */
-  decision_mandatory: boolean;
-  /** Whether the provision of a service (e.g. monetisation) was affected. */
-  decision_provision: boolean;
-  /** Whether the account itself was suspended, banned, or otherwise restricted. */
-  decision_account: boolean;
+  /** Array of enum strings, e.g. ["DECISION_VISIBILITY_CONTENT_DISABLED"]. */
+  decision_visibility: string[];
+  /** Enum string, e.g. "DECISION_MONETARY_TERMINATION" or "". */
+  decision_monetary: string;
+  /** Enum string, e.g. "DECISION_PROVISION_TOTAL_SUSPENSION" or "". */
+  decision_provision: string;
+  /** Enum string, e.g. "DECISION_ACCOUNT_SUSPENDED" or "". */
+  decision_account: string;
+  /** "DECISION_GROUND_ILLEGAL_CONTENT" or "DECISION_GROUND_INCOMPATIBLE_CONTENT". */
+  decision_ground: string;
+  /** Array of enum strings, e.g. ["CONTENT_TYPE_IMAGE", "CONTENT_TYPE_TEXT"]. */
+  content_type: string[];
+  /** The DSA content category (harmonised taxonomy). */
+  category: string;
   /** ISO-3166-1 alpha-2 codes describing the territorial scope of the decision. */
   territorial_scope: string[];
-  /** Human-readable duration of the restriction (e.g. "permanent", "30 days"). */
-  duration: string;
+  /** ISO 639-1 content language code. */
+  content_language: string;
   /** Factual description of the content and the grounds for the decision. */
-  facts: string;
-  /** Whether the decision was made by automated means. */
-  automated_means: boolean;
-  /** The source of the decision (e.g. "human_review", "automated_detection"). */
-  source: string;
-  /** The DSA content category (harmonised taxonomy). */
-  dsa_category: string;
+  decision_facts: string;
+  /** Enum: SOURCE_TRUSTED_FLAGGER, SOURCE_NOTICE, etc. */
+  source_type: string;
+  /** "Yes" or "No". */
+  automated_detection: string;
+  /** "AUTOMATED_DECISION_FULLY" | "AUTOMATED_DECISION_PARTIALLY" | "AUTOMATED_DECISION_NOT_AUTOMATED". */
+  automated_decision: string;
   /** ISO-8601 timestamp marking when the statement was created. */
   created_at: string;
 }
@@ -134,11 +140,13 @@ export async function exportForDsaDatabase(
         sor.id,
         sor.puid,
         sor.decision_visibility,
-        sor.decision_mandatory,
+        sor.decision_monetary,
         sor.decision_provision,
         sor.decision_account,
+        sor.decision_ground,
+        sor.content_type,
         sor.territorial_scope,
-        sor.duration,
+        sor.content_language,
         sor.facts,
         sor.automated_means,
         sor.source,
@@ -229,7 +237,7 @@ export async function getSubmissionStats(
 
   const decisionResult = await db.query<{
     decision_visibility: boolean;
-    decision_mandatory: boolean;
+    decision_monetary: boolean;
     decision_provision: boolean;
     decision_account: boolean;
     count: string;
@@ -237,13 +245,13 @@ export async function getSubmissionStats(
     `
       SELECT
         decision_visibility,
-        decision_mandatory,
+        decision_monetary,
         decision_provision,
         decision_account,
         COUNT(*)::TEXT AS count
       FROM statements_of_reasons
       WHERE created_at >= $1 AND created_at <= $2
-      GROUP BY decision_visibility, decision_mandatory, decision_provision, decision_account
+      GROUP BY decision_visibility, decision_monetary, decision_provision, decision_account
     `,
     [date_from, date_to],
   );
@@ -255,7 +263,7 @@ export async function getSubmissionStats(
   for (const row of decisionResult.rows) {
     const count = parseInt(row.count, 10);
     if (row.decision_visibility) visibility += count;
-    if (row.decision_mandatory) mandatory += count;
+    if (row.decision_monetary) mandatory += count;
     if (row.decision_provision) provision += count;
     if (row.decision_account) account += count;
   }
@@ -298,32 +306,28 @@ export function validateDsaRecord(record: Partial<DsaStatementRecord>): DsaValid
   }
 
   const hasDecisionType =
-    record.decision_visibility === true ||
-    record.decision_mandatory === true ||
-    record.decision_provision === true ||
-    record.decision_account === true;
+    (record.decision_visibility !== undefined && record.decision_visibility.length > 0) ||
+    (record.decision_monetary !== undefined && record.decision_monetary !== '') ||
+    (record.decision_provision !== undefined && record.decision_provision !== '') ||
+    (record.decision_account !== undefined && record.decision_account !== '');
   if (!hasDecisionType) {
-    errors.push('at least one decision type must be true');
+    errors.push('at least one decision type must be set');
   }
 
   if (!record.territorial_scope || record.territorial_scope.length === 0) {
     errors.push('territorial_scope must be a non-empty array');
   }
 
-  if (!record.duration || record.duration.trim() === '') {
-    errors.push('duration is required');
+  if (!record.decision_facts || record.decision_facts.trim() === '') {
+    errors.push('decision_facts is required');
   }
 
-  if (!record.facts || record.facts.trim() === '') {
-    errors.push('facts is required');
+  if (!record.source_type || record.source_type.trim() === '') {
+    errors.push('source_type is required');
   }
 
-  if (!record.source || record.source.trim() === '') {
-    errors.push('source is required');
-  }
-
-  if (!record.dsa_category || record.dsa_category.trim() === '') {
-    errors.push('dsa_category is required');
+  if (!record.category || record.category.trim() === '') {
+    errors.push('category is required');
   }
 
   return { valid: errors.length === 0, errors };
@@ -336,7 +340,7 @@ export async function generateTransparencyReport(
   period_start: string,
   period_end: string,
 ): Promise<DsaTransparencyReport> {
-  // Total cases with a statement of reasons in the period.
+  // Total statements of reasons in the period.
   const totalResult = await db.query<{ total: string }>(
     `
       SELECT COUNT(*)::TEXT AS total
@@ -350,7 +354,7 @@ export async function generateTransparencyReport(
   // Decisions by type — a single statement may set multiple flags.
   const decisionResult = await db.query<{
     decision_visibility: boolean;
-    decision_mandatory: boolean;
+    decision_monetary: boolean;
     decision_provision: boolean;
     decision_account: boolean;
     count: string;
@@ -358,13 +362,13 @@ export async function generateTransparencyReport(
     `
       SELECT
         decision_visibility,
-        decision_mandatory,
+        decision_monetary,
         decision_provision,
         decision_account,
         COUNT(*)::TEXT AS count
       FROM statements_of_reasons
       WHERE created_at >= $1 AND created_at <= $2
-      GROUP BY decision_visibility, decision_mandatory, decision_provision, decision_account
+      GROUP BY decision_visibility, decision_monetary, decision_provision, decision_account
     `,
     [period_start, period_end],
   );
@@ -376,7 +380,7 @@ export async function generateTransparencyReport(
   for (const row of decisionResult.rows) {
     const count = parseInt(row.count, 10);
     if (row.decision_visibility) visibility += count;
-    if (row.decision_mandatory) mandatory += count;
+    if (row.decision_monetary) mandatory += count;
     if (row.decision_provision) provision += count;
     if (row.decision_account) account += count;
   }
@@ -398,13 +402,13 @@ export async function generateTransparencyReport(
 
   // Average time-to-decision: from the underlying safety decision's case
   // creation to the statement's created_at. We join through safety_decisions
-  // to ops_cases to compute the elapsed hours.
+  // to safety_cases to compute the elapsed hours.
   const avgTimeResult = await db.query<{ avg_hours: string | null }>(
     `
-      SELECT AVG(EXTRACT(EPOCH FROM (sor.created_at - oc.created_at)) / 3600)::TEXT AS avg_hours
-      FROM statements_of_reasons sor
-      JOIN safety_decisions sd ON sd.id = sor.safety_decision_id
-      JOIN ops_cases oc ON oc.id = sd.case_id
+      SELECT AVG(EXTRACT(EPOCH FROM (sd.created_at - sc.created_at)) / 3600)::TEXT AS avg_hours
+      FROM safety_decisions sd
+      JOIN safety_cases sc ON sc.id = sd.case_id
+      JOIN statements_of_reasons sor ON sor.decision_id = sd.id
       WHERE sor.created_at >= $1 AND sor.created_at <= $2
     `,
     [period_start, period_end],
@@ -415,36 +419,31 @@ export async function generateTransparencyReport(
       ? Math.round(parseFloat(avg_hours_raw) * 100) / 100
       : null;
 
-  // Appeal and overturn rates from safety_decisions.
-  const appealResult = await db.query<{ appealed: string; total: string }>(
+  // Appeal and overturn rates from safety_appeals joined to safety_decisions
+  // via decision_id. A single LEFT JOIN lets us count total decisions,
+  // appealed decisions, and overturned decisions in one pass.
+  const appealResult = await db.query<{
+    total_decisions: string;
+    appealed: string;
+    overturned: string;
+  }>(
     `
       SELECT
-        COUNT(*) FILTER (WHERE sd.appealed = TRUE)::TEXT AS appealed,
-        COUNT(*)::TEXT AS total
+        COUNT(*)::TEXT AS total_decisions,
+        COUNT(sa.id)::TEXT AS appealed,
+        COUNT(sa.id) FILTER (WHERE sa.status = 'overturned')::TEXT AS overturned
       FROM safety_decisions sd
-      JOIN statements_of_reasons sor ON sor.safety_decision_id = sd.id
+      JOIN statements_of_reasons sor ON sor.decision_id = sd.id
+      LEFT JOIN safety_appeals sa ON sa.decision_id = sd.id
       WHERE sor.created_at >= $1 AND sor.created_at <= $2
     `,
     [period_start, period_end],
   );
+  const totalDecisions = parseInt(appealResult.rows[0]?.total_decisions ?? '0', 10);
   const appealedCount = parseInt(appealResult.rows[0]?.appealed ?? '0', 10);
-  const appealTotal = parseInt(appealResult.rows[0]?.total ?? '0', 10);
-  const appeal_rate = appealTotal > 0 ? appealedCount / appealTotal : 0;
-
-  const overturnResult = await db.query<{ overturned: string; appealed: string }>(
-    `
-      SELECT
-        COUNT(*) FILTER (WHERE sd.appeal_outcome = 'overturned')::TEXT AS overturned,
-        COUNT(*) FILTER (WHERE sd.appealed = TRUE)::TEXT AS appealed
-      FROM safety_decisions sd
-      JOIN statements_of_reasons sor ON sor.safety_decision_id = sd.id
-      WHERE sor.created_at >= $1 AND sor.created_at <= $2
-    `,
-    [period_start, period_end],
-  );
-  const overturnedCount = parseInt(overturnResult.rows[0]?.overturned ?? '0', 10);
-  const appealedForOverturn = parseInt(overturnResult.rows[0]?.appealed ?? '0', 10);
-  const overturn_rate = appealedForOverturn > 0 ? overturnedCount / appealedForOverturn : 0;
+  const overturnedCount = parseInt(appealResult.rows[0]?.overturned ?? '0', 10);
+  const appeal_rate = totalDecisions > 0 ? appealedCount / totalDecisions : 0;
+  const overturn_rate = appealedCount > 0 ? overturnedCount / appealedCount : 0;
 
   // By content category.
   const categoryResult = await db.query<{ dsa_category: string; count: string }>(
@@ -488,20 +487,51 @@ function mapDsaStatementRow(row: Record<string, unknown>): DsaStatementRecord {
     territorial_scope = [];
   }
 
+  const contentTypeRaw = row.content_type;
+  let content_type: string[];
+  if (Array.isArray(contentTypeRaw)) {
+    content_type = contentTypeRaw as string[];
+  } else if (typeof contentTypeRaw === 'string') {
+    content_type = parsePgArray(contentTypeRaw);
+  } else {
+    content_type = ['CONTENT_TYPE_TEXT'];
+  }
+
   return {
     puid: row.puid as string,
-    decision_visibility: row.decision_visibility as boolean,
-    decision_mandatory: row.decision_mandatory as boolean,
-    decision_provision: row.decision_provision as boolean,
-    decision_account: row.decision_account as boolean,
+    decision_visibility: row.decision_visibility
+      ? ['DECISION_VISIBILITY_CONTENT_DISABLED']
+      : ['DECISION_VISIBILITY_CONTENT_REMOVED'],
+    decision_monetary: row.decision_monetary ? 'DECISION_MONETARY_TERMINATION' : '',
+    decision_provision: row.decision_provision ? 'DECISION_PROVISION_TOTAL_SUSPENSION' : '',
+    decision_account: row.decision_account ? 'DECISION_ACCOUNT_SUSPENDED' : '',
+    decision_ground: (row.decision_ground as string) ?? 'DECISION_GROUND_INCOMPATIBLE_CONTENT',
+    content_type,
+    category: row.dsa_category as string,
     territorial_scope,
-    duration: row.duration as string,
-    facts: row.facts as string,
-    automated_means: row.automated_means as boolean,
-    source: row.source as string,
-    dsa_category: row.dsa_category as string,
+    content_language: (row.content_language as string) ?? 'en',
+    decision_facts: row.facts as string,
+    source_type: mapSourceType(row.source as string),
+    automated_detection: row.automated_means ? 'Yes' : 'No',
+    automated_decision: row.automated_means
+      ? 'AUTOMATED_DECISION_FULLY'
+      : 'AUTOMATED_DECISION_NOT_AUTOMATED',
     created_at: row.created_at as string,
   };
+}
+
+/**
+ * Map an internal source identifier to the DSA Transparency Database
+ * `source_type` enum value.
+ */
+function mapSourceType(source: string): string {
+  const map: Record<string, string> = {
+    trusted_notifier: 'SOURCE_TRUSTED_FLAGGER',
+    law_enforcement: 'SOURCE_LAW_ENFORCEMENT',
+    notice: 'SOURCE_NOTICE',
+    automated: 'SOURCE_AUTOMATED_DETECTION',
+  };
+  return map[source ?? ''] ?? 'SOURCE_NOTICE';
 }
 
 /**

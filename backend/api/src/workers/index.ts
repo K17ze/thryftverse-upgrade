@@ -21,6 +21,7 @@ import {
   processCatalogImportPublication,
   processCatalogImportRetention,
   processCatalogImportReconcile,
+  processRetentionSweep,
 } from './handlers/index.js';
 
 /**
@@ -100,6 +101,9 @@ async function main(): Promise<void> {
       },
       handleCatalogImportReconcileJob: async ({ itemId, publicationKey }) => {
         await processCatalogImportReconcile({ itemId, publicationKey });
+      },
+      handleRetentionSweepJob: async ({ reason }) => {
+        await processRetentionSweep({ reason });
       },
     },
     logger,

@@ -47,6 +47,7 @@ import {
   createAppeal,
   decideAppeal,
   exportStatementsOfReasons,
+  addEvidenceToCase,
   type SafetyCaseStatus,
   type SafetySlaClass,
 } from '../lib/safetyCaseService.js';
@@ -60,6 +61,9 @@ import {
   getMissingOffences,
   isReviewOverdue,
   createRiskAssessmentRecord,
+  createChildrenRiskAssessment,
+  listChildrenRiskAssessments,
+  CHILDREN_RISK_FACTORS,
   OFCOM_PRIORITY_OFFENCES,
 } from '../lib/ofcomRiskAssessment.js';
 
@@ -1212,12 +1216,13 @@ export const registerOpsConsoleRoutes = ({ app }: OpsRouteDependencies) => {
   app.get('/ops/v1/safety/ofcom-risk-assessments', async (request, reply) => {
     const guard = await requireOpsPermission(request, reply, 'cases.read');
     if (!guard) return null;
-    const [assessments, missing, overdue] = await Promise.all([
+    const [assessments, missing, overdue, childrenAssessments] = await Promise.all([
       listRiskAssessments(db),
       getMissingOffences(db),
       isReviewOverdue(db),
+      listChildrenRiskAssessments(db),
     ]);
-    return { ok: true, assessments, missing, overdue };
+    return { ok: true, assessments, missing, overdue, childrenAssessments };
   });
 
   app.post('/ops/v1/safety/ofcom-risk-assessments', async (request, reply) => {
@@ -1237,6 +1242,37 @@ export const registerOpsConsoleRoutes = ({ app }: OpsRouteDependencies) => {
       assessment_summary: parsed.data.assessmentSummary,
       mitigation_measures: parsed.data.mitigationMeasures,
       assessed_by: guard.token.principal.id,
+    });
+    reply.code(201);
+    return { ok: true, assessment };
+  });
+
+  // ── Ofcom children's risk assessment (Section 11) ────────────────────
+  app.post('/ops/v1/safety/ofcom-children-risk-assessments', async (request, reply) => {
+    const guard = await requireOpsPermission(request, reply, 'cases.decide');
+    if (!guard) return null;
+    const likelihoodSchema = z.enum(['low', 'medium', 'high']);
+    const bodySchema = z.object({
+      ageGroups: z.array(z.string().min(1)).min(1),
+      riskFactors: z.array(
+        z.object({
+          factor: z.enum(CHILDREN_RISK_FACTORS),
+          likelihood: likelihoodSchema,
+          impact: likelihoodSchema,
+          mitigation: z.string().min(1).max(2000),
+        }),
+      ).min(1),
+      overallSummary: z.string().min(10).max(5000),
+      nextReviewDate: z.string().datetime().optional(),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) { reply.code(400); return { ok: false, error: 'Invalid body', details: parsed.error.flatten() }; }
+    const assessment = await createChildrenRiskAssessment(db, {
+      assessed_by: guard.token.principal.id,
+      age_groups: parsed.data.ageGroups,
+      risk_factors: parsed.data.riskFactors,
+      overall_summary: parsed.data.overallSummary,
+      next_review_date: parsed.data.nextReviewDate ? new Date(parsed.data.nextReviewDate) : undefined,
     });
     reply.code(201);
     return { ok: true, assessment };
