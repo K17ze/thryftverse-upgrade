@@ -82,9 +82,9 @@ export function AuctionNotificationRow({
   const currency = readPayloadString(event.payload, 'currency') ?? '£';
 
   const bidText = currentBid != null
-    ? `Current bid ${currency}${currentBid.toFixed(0)}`
+    ? `Current bid ${currency}${currentBid.toFixed(2)}`
     : minimumNextBid != null
-      ? `Next bid ${currency}${minimumNextBid.toFixed(0)}`
+      ? `Next bid ${currency}${minimumNextBid.toFixed(2)}`
       : null;
 
   const description = bidText ? `${visual.urgencyLabel} · ${objectLabel} · ${bidText}` : `${visual.urgencyLabel} · ${objectLabel}`;

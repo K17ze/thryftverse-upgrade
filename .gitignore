@@ -63,6 +63,7 @@ trash/
 
 # IDE
 .idea/
+.windsurf/
 
 # EAS Update code signing private keys (generated outside the repo)
 frontend/keys/

@@ -591,10 +591,13 @@ function MediaTab({
         {grid.map((item) => {
           const isVideo = item.mediaType === 'video';
           return (
-            <Pressable
+            <AnimatedPressable
               key={item.id}
               onPress={() => onOpenMedia(item.mediaUri!, item.mediaType, undefined, item.timestamp, item.id)}
               style={styles.mediaTile}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel={isVideo ? 'Open shared video' : 'Open shared photo'}
             >
@@ -608,7 +611,7 @@ function MediaTab({
                   <Ionicons name="play" size={14} color="#FFFFFF" />
                 </View>
               )}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>

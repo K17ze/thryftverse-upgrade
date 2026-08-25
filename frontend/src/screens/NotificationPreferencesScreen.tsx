@@ -159,7 +159,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       >
         <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.demoBannerText}>
-          Notification preferences are saved on this device and will be synced when available.
+          Most preferences sync across devices. Live shopping and preview settings are saved on this device only.
         </Text>
       </View>
 
@@ -402,8 +402,13 @@ function createStyles(colors: ThemeColors) {
     },
     summaryBlock: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.md,
       marginBottom: Space.md,
+      marginHorizontal: Space.md,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
     },
     summaryTitle: {
       fontSize: Type.bodyStrong.size,

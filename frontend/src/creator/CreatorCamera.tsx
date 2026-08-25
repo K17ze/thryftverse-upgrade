@@ -843,7 +843,7 @@ export default function CreatorCamera({
           setMultiCaptures((prev) => [...prev, media]);
         } else if (!!onCaptureBatch && !isVisualSearch) {
           // ── Single-capture direct-to-edit (poster/look) ──
-          // Per upload-department-convergence-loop.md §5: in poster/look mode
+          // Per .devin/surfaces/creator-poster.md: in poster/look mode
           // a single photo capture goes direct-to-editor with no quick-review
           // overlay — the capture commits and retake/undo lives in the editor,
           // preserving the continuous gesture. This path is reached when the
@@ -1365,8 +1365,8 @@ export default function CreatorCamera({
       {/* ── Multi-snap staging tray (Snapchat staging area pattern) ──
           Whenever captures exist, a persistent horizontal row of captured
           thumbnails is visible on the camera surface so the user sees their
-          sequence accumulate while shooting (upload-department-convergence-
-          loop.md §5). Each thumbnail is tappable to drop that frame. A Done
+          sequence accumulate while shooting (see the creator-poster surface
+          contract). Each thumbnail is tappable to drop that frame. A Done
           button at the end lets the user finish and enter the editor — the
           Snapchat Multi Snap "Edit & Send" pattern. The tray is visible
           whenever captures exist, regardless of the multi-capture toggle,

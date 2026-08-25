@@ -10,7 +10,6 @@ import {
 import {
   Space,
   Radius,
-  Stroke,
   Type,
   FontFamily,
 } from '../../theme/designTokens';
@@ -250,7 +249,7 @@ function createStripStyles(colors: ThemeColors) {
       gap: Space.xs / 2,
     },
     bar: {
-      height: Stroke.standard,
+      height: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.border,
     },

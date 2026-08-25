@@ -626,6 +626,12 @@ export async function markAllNotificationsRead(): Promise<void> {
   });
 }
 
+export async function deleteNotificationEvent(eventId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/notifications/events/${encodeURIComponent(eventId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getNotificationPreferences(): Promise<Record<string, boolean>> {
   const payload = await fetchJson<GetPreferencesResponse>('/notifications/preferences');
   return payload.preferences;

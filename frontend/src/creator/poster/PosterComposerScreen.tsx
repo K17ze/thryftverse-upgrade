@@ -899,7 +899,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // For Poster, each asset becomes its own frame via addPosterFrames.
   // The first selected media URI is captured so the camera→editor crossfade
   // can pin it as a continuity layer (the media stays in place while editor
-  // chrome fades in around it — upload-department-convergence-loop.md §5).
+  // chrome fades in around it — see the creator-poster surface contract).
   const [entryPinnedUri, setEntryPinnedUri] = useState<string | null>(null);
   const [entryPinnedKind, setEntryPinnedKind] = useState<'image' | 'video'>('image');
   // Source content transform — the camera viewport guide rect captured at

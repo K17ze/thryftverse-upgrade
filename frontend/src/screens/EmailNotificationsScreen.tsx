@@ -11,14 +11,16 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import {
   fetchEmailPreferences,
   updateEmailPreferences,
@@ -234,60 +236,24 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
             }}
           />
         ) : (
-          GROUPS.map((group, groupIdx) => (
-            <View key={group.title}>
-              {/* Section header */}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{group.title}</Text>
-                <Text style={styles.sectionDescription}>{group.description}</Text>
-              </View>
-
-              {/* Grouped card with category rows */}
-              <View style={styles.categoriesList}>
-                {group.categories.map((category, catIdx) => {
-                  const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
-                  const isUpdating = updatingKeys.has(category.key);
-                  const isLocked = category.locked;
-                  const iconColor = category.iconColor
-                    ? colors[category.iconColor]
-                    : colors.textSecondary;
-                  return (
-                    <View
-                      key={category.key}
-                      style={[
-                        styles.categoryRow,
-                        catIdx < group.categories.length - 1 && styles.categoryRowBorder,
-                      ]}
-                    >
-                      <View style={styles.categoryIcon}>
-                        <Ionicons name={category.icon} size={20} color={iconColor} />
-                      </View>
-                      <View style={styles.categoryInfo}>
-                        <View style={styles.categoryLabelRow}>
-                          <Text style={styles.categoryLabel}>{category.label}</Text>
-                          {isLocked && (
-                            <View style={styles.lockedBadge}>
-                              <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                              <Text style={styles.lockedText}>Always on</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.categoryDescription}>{category.description}</Text>
-                      </View>
-                      <Switch
-                        value={isEnabled}
-                        onValueChange={(v) => handleToggle(category, v)}
-                        disabled={isUpdating || isLocked}
-                        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                        thumbColor={colors.surface}
-                        accessibilityRole="switch"
-                        accessibilityLabel={category.label}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
+          GROUPS.map((group) => (
+            <SettingsSection key={group.title} title={group.title} description={group.description} noCard>
+              {group.categories.map((category, idx) => (
+                <SettingsRow
+                  key={category.key}
+                  icon={category.icon}
+                  iconColor={category.iconColor ? colors[category.iconColor] : undefined}
+                  title={category.label}
+                  subtitle={category.description}
+                  value={category.locked ? 'Always on' : undefined}
+                  toggleValue={preferences?.[category.key] ?? category.defaultEnabled}
+                  onToggle={(v) => handleToggle(category, v)}
+                  disabled={updatingKeys.has(category.key) || category.locked}
+                  isFirst={idx === 0}
+                  isLast={idx === group.categories.length - 1}
+                />
+              ))}
+            </SettingsSection>
           ))
         )}
 
@@ -302,80 +268,5 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
-    // Section headers
-    sectionHeader: {
-      marginTop: Space.lg,
-      marginBottom: Space.xs,
-    },
-    sectionTitle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
-      opacity: 0.7,
-    },
-    sectionDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs / 2,
-    },
-
-    // Category cards
-    categoriesList: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
-    categoryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: 72,
-      paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
-    categoryRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    categoryIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    categoryInfo: { flex: 1 },
-    categoryLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    categoryLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    lockedBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs - 1,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.xs + 2,
-      paddingVertical: Space.xs / 2,
-    },
-    lockedText: {
-      fontSize: Type.meta.size - 1,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
-    categoryDescription: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs - 1,
-      lineHeight: Type.caption.lineHeight,
-    },
   });
 }

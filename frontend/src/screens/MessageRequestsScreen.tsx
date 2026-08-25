@@ -22,6 +22,7 @@ import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
+import { ConversationListSkeleton } from '../components/skeletons/ConversationListSkeleton';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
@@ -38,6 +39,7 @@ export default function MessageRequestsScreen() {
   const { colors } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
+  const conversationsLoaded = useStore((state) => state.conversationsLoaded);
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
@@ -146,7 +148,7 @@ export default function MessageRequestsScreen() {
     );
   };
 
-  const handleReport = (id: string, name: string) => {
+  const handleReport = (id: string, _name: string) => {
     if (pendingId) return;
     haptic.light();
     const counterpartyId = resolveCounterpartyId(id);
@@ -189,11 +191,11 @@ export default function MessageRequestsScreen() {
     return (
       <View>
         <View style={styles.requestRow}>
-          {/* Identity */}
+          {/* Identity — the dominant object */}
           <View style={styles.requestIdentity}>
             <AvatarRing
               uri={avatarUri}
-              size={52}
+              size={48}
               ringWidth={2}
               fallbackInitials={displayTitle.slice(0, 2).toUpperCase()}
             />
@@ -214,37 +216,26 @@ export default function MessageRequestsScreen() {
             </View>
           </View>
 
-          {/* Listing context */}
+          {/* Marketplace context — flat hairline row, not a nested card.
+              No card-on-card: this shares the row's surface, separated by a hairline. */}
           {listing && (
-            <View style={styles.listingCard}>
+            <View style={styles.listingContext}>
               {listing.images?.[0] ? (
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
                 </View>
               )}
-              <View style={styles.listingInfo}>
-                <Caption color={colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
-                {listing.price != null && (
-                  <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
+              {listing.price != null && (
+                <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
+              )}
             </View>
           )}
 
-          {/* Safety note for non-marketplace requests */}
-          {!listing && (
-            <View style={styles.safetyNote}>
-              <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
-              <Text style={styles.safetyNoteText}>
-                If this seems suspicious, delete and block.
-              </Text>
-            </View>
-          )}
-
-          {/* Primary actions */}
+          {/* Primary actions — Accept dominates, Delete is secondary.
+              One hierarchy, not symmetry. */}
           <View style={styles.requestActions}>
             <AnimatedPressable
               style={styles.requestDecline}
@@ -274,34 +265,37 @@ export default function MessageRequestsScreen() {
             </AnimatedPressable>
           </View>
 
-          {/* Secondary actions: Block + Report */}
-          <View style={styles.secondaryActions}>
+          {/* Safety actions — quiet, low-weight text links.
+              Block is destructive (danger text), Report is secondary.
+              Not equal full-width buttons — they recede until needed. */}
+          <View style={styles.safetyActions}>
             <AnimatedPressable
               onPress={() => handleBlock(item.id, displayTitle)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
               accessibilityLabel={`Block ${displayTitle}`}
               accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
-              style={styles.secondaryBtn}
+              style={styles.safetyLink}
             >
-              <Ionicons name="ban-outline" size={14} color={colors.danger} />
-              <Text style={styles.secondaryBtnTextDanger}>Block</Text>
+              <Ionicons name="ban-outline" size={13} color={colors.danger} />
+              <Text style={styles.safetyLinkTextDanger}>Block</Text>
             </AnimatedPressable>
+            <View style={styles.safetyDivider} />
             <AnimatedPressable
               onPress={() => handleReport(item.id, displayTitle)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
               accessibilityLabel={`Report ${displayTitle}`}
-              style={styles.secondaryBtn}
+              style={styles.safetyLink}
             >
-              <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
-              <Text style={styles.secondaryBtnText}>Report</Text>
+              <Ionicons name="flag-outline" size={13} color={colors.textMuted} />
+              <Text style={styles.safetyLinkText}>Report</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -310,28 +304,26 @@ export default function MessageRequestsScreen() {
     );
   };
 
+  const showLoading = !conversationsLoaded;
+  const showEmpty = !showLoading && requestConversations.length === 0;
+
   return (
     <SafeAreaView edges={['top']} style={styles.screenRoot}>
       <ScreenHeader
         title="Message requests"
-        subtitle={
-          requestConversations.length > 0
-            ? `${requestConversations.length} pending · Accept to chat`
-            : "People you don't follow"
-        }
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.border,
         }}
       />
-      {requestConversations.length === 0 ? (
+      {showLoading ? (
+        <ConversationListSkeleton count={5} />
+      ) : showEmpty ? (
         <EmptyState
           icon="mail-outline"
           title="No message requests"
           subtitle="Messages from people you don't follow appear here."
-          ctaLabel="Back to Inbox"
-          onCtaPress={() => navigation.goBack()}
         />
       ) : (
         <FlashList
@@ -409,7 +401,7 @@ function createStyles(colors: ThemeColors) {
     requestIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.sm + 4,
+      gap: Space.sm + 2,
     },
     requestText: {
       flex: 1,
@@ -423,51 +415,40 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight + 2,
       marginTop: Space.xs / 2,
     },
-    listingCard: {
+    // ── Marketplace context — flat hairline row, not a nested card ──
+    listingContext: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.xs,
+      paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      paddingTop: Space.sm,
     },
     listingThumb: {
-      width: Space.xl + Space.xs + 4,
-      height: Space.xl + Space.xs + 4,
+      width: Space.xl + 4,
+      height: Space.xl + 4,
       borderRadius: Radius.sm,
     },
     listingThumbPlaceholder: {
-      width: Space.xl + Space.xs + 4,
-      height: Space.xl + Space.xs + 4,
+      width: Space.xl + 4,
+      height: Space.xl + 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surface,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    listingInfo: {
-      flex: 1,
-      gap: Space.xs / 2,
-    },
     listingTitle: {
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textSecondary,
     },
     listingPrice: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
     },
-    safetyNote: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-    safetyNoteText: {
-      fontSize: Type.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
+    // ── Primary actions ──
     requestActions: {
       flexDirection: 'row',
       gap: Space.sm,
@@ -506,31 +487,35 @@ function createStyles(colors: ThemeColors) {
     actionDisabledBg: {
       opacity: 0.5,
     },
-    secondaryActions: {
-      flexDirection: 'row',
-      gap: Space.sm,
-    },
-    secondaryBtn: {
-      flex: 1,
+    // ── Safety actions — quiet text links, not equal buttons ──
+    safetyActions: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs + 2,
-      minHeight: Control.hit,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      gap: Space.sm,
     },
-    secondaryBtnTextDanger: {
-      fontSize: Type.caption.size,
+    safetyLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.sm,
+      minHeight: 36,
+    },
+    safetyLinkTextDanger: {
+      fontSize: Type.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.danger,
     },
-    secondaryBtnText: {
-      fontSize: Type.caption.size,
+    safetyLinkText: {
+      fontSize: Type.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textSecondary,
+      color: colors.textMuted,
+    },
+    safetyDivider: {
+      width: 1,
+      height: 14,
+      backgroundColor: colors.border,
     },
     requestSeparator: {
       height: StyleSheet.hairlineWidth,

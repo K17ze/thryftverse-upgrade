@@ -74,7 +74,7 @@ export function FinancialNotificationRow({
 
   const amountText = amount != null ? `${currency}${amount.toFixed(2)}` : null;
   const description = amountText
-    ? `${visual.typeLabel} · ${amountText} · ${status}`
+    ? `${amountText} · ${visual.typeLabel} · ${status}`
     : `${visual.typeLabel} · ${status}`;
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${visual.typeLabel}${amountText ? ` of ${amountText}` : ''}. ${status}. ${time}`;
@@ -105,9 +105,6 @@ export function FinancialNotificationRow({
       <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
-      {amountText ? (
-        <Text style={styles.amount}>{amountText}</Text>
-      ) : null}
     </NotificationRowBase>
   );
 }
@@ -130,14 +127,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
-    },
-    amount: {
-      fontSize: Type.numericMeta.size,
-      fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-      lineHeight: Type.numericMeta.lineHeight,
-      fontVariant: ['tabular-nums'],
-      marginTop: 2,
     },
   });
 }

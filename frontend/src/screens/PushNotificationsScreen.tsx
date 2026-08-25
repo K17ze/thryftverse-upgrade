@@ -403,7 +403,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.chrome + Space.xs,
       height: Control.chrome + Space.xs,
       borderRadius: Radius.md,
-      backgroundColor: colors.overlay,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: Stroke.standard,

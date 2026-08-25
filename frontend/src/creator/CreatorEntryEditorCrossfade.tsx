@@ -15,7 +15,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ResizeMode, Video } from '../components/compat/Video';
 
 // ── Camera → Editor continuity transition ────────────────────────────────
-// Per upload-department-convergence-loop.md §5 (Continuity): the captured/
+// Per .devin/surfaces/creator-poster.md (Creator-media outcomes): the captured/
 // selected media must appear to stay in place while editor chrome fades in
 // around it. A flat opacity crossfade between two full screens does NOT
 // achieve this — the viewfinder and the editor canvas are different elements

@@ -118,7 +118,16 @@ export function NotificationRowBase({
 
       {/* Body — title + description + aggregated badge */}
       <View style={styles.body}>
-        {children}
+        <View style={styles.headerRow}>
+          {children}
+          {/* Timestamp — right-aligned, top-right of the body column */}
+          <Text
+            style={[styles.time, { color: timeColor }]}
+            accessibilityLabel={`Time: ${time}`}
+          >
+            {time}
+          </Text>
+        </View>
         <View style={styles.metaRow}>
           {aggregatedCount && aggregatedCount > 1 ? (
             <View style={styles.aggregatedBadge}>
@@ -126,13 +135,6 @@ export function NotificationRowBase({
             </View>
           ) : null}
         </View>
-        {/* Timestamp — right-aligned, top-right of the body column */}
-        <Text
-          style={[styles.time, { color: timeColor }]}
-          accessibilityLabel={`Time: ${time}`}
-        >
-          {time}
-        </Text>
       </View>
 
       {/* Trailing slot — action button or chevron */}
@@ -283,6 +285,12 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       gap: Space.xs / 2,
     },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm,
+    },
     metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -290,12 +298,11 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
     },
     time: {
-      position: 'absolute',
-      top: 0,
-      right: 0,
       fontSize: Type.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
+      flexShrink: 0,
+      marginTop: 2,
     },
     aggregatedBadge: {
       minWidth: Space.md + 4,

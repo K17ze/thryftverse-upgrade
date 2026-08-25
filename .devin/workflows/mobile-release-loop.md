@@ -23,11 +23,13 @@ protected environment.
 
 ## 1. Classify the artifact
 
-Inspect `frontend/app.json`, `app.config.js`, `eas.json`, lockfile, Expo modules,
-config plugins, permissions, and native changes. If the JavaScript update is not
-compatible with every targeted installed runtime, build a new binary. A native
-dependency, plugin/config, permission, SDK, or native contract change is not a safe
-OTA merely because TypeScript passes.
+Inspect `frontend/app.json`, `frontend/app.config.js`, `frontend/eas.json`,
+`frontend/package-lock.json`, `frontend/modules/`, committed `frontend/android/`,
+`.eas/workflows/`, `frontend/.eas/workflows/`, and the authoritative GitHub build,
+staging, OTA, rollback, and release controllers under `.github/workflows/`. If the
+JavaScript update is not compatible with every targeted installed runtime, build a
+new binary. A native dependency, plugin/config, permission, SDK, or native contract
+change is not a safe OTA merely because TypeScript passes.
 
 Record one identity chain:
 

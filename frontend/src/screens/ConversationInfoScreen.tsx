@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -49,17 +49,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     [conversations, conversationId]
   );
 
-  // Build participant name lookup from the conversation's profiles.
-  const participantNameLookup = useMemo(() => {
-    const map = new Map<string, string>();
-    if (currentUser?.id) {
-      map.set(currentUser.id, currentUser.displayName ?? currentUser.username ?? 'you');
-    }
-    for (const profile of conversation?.participantProfiles ?? []) {
-      map.set(profile.id, profile.displayName ?? profile.username ?? `User ${profile.id.slice(-6)}`);
-    }
-    return map;
-  }, [conversation?.participantProfiles, currentUser]);
+  const [isTogglingMute, setIsTogglingMute] = useState(false);
 
   if (!conversation) {
     return (
@@ -79,16 +69,20 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   );
   const isMuted = mutedIds.includes(conversationId);
   const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
+  const counterpartyProfile = counterpartyId
+    ? conversation.participantProfiles?.find((p) => p.id === counterpartyId)
+    : undefined;
   const displayName =
-    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ||
+    counterpartyProfile?.displayName ||
+    counterpartyProfile?.username ||
     conversation.title ||
     'Thryft user';
   const avatarUrl =
     conversation.avatar ||
     (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar || null : null);
   const handle = counterpartyId
-    ? participantNameLookup?.get(counterpartyId)
-      ? `@${participantNameLookup.get(counterpartyId)}`
+    ? counterpartyProfile?.username
+      ? `@${counterpartyProfile.username}`
       : 'Member'
     : 'Direct message';
   const mediaCount = conversation.messages?.filter((message) => message.mediaUri).length ?? 0;
@@ -105,12 +99,21 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
   const toggleMute = async () => {
     haptic.light();
+    setIsTogglingMute(true);
     try {
       await toggleMuted(conversationId);
       show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
     } catch {
       show('Could not update mute status. Check your connection and try again.', 'error');
+    } finally {
+      setIsTogglingMute(false);
     }
+  };
+
+  const reportUser = () => {
+    if (!counterpartyId) return;
+    haptic.light();
+    navigation.navigate('Report', { type: 'user', targetId: counterpartyId });
   };
 
   const archive = async () => {
@@ -215,6 +218,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
             label={isMuted ? 'Unmute' : 'Mute'}
             onPress={toggleMute}
+            busy={isTogglingMute}
           />
         </View>
 
@@ -263,6 +267,12 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             onPress={toggleBlock}
             danger={!isBlocked}
           />
+          <ChatInfoRow
+            icon="flag-outline"
+            label="Report user"
+            onPress={reportUser}
+            showChevron
+          />
           <ChatInfoRow icon="trash-outline" label="Remove from inbox" onPress={deleteForMe} danger />
         </ChatInfoSection>
       </ScrollView>
@@ -274,10 +284,12 @@ function QuickAction({
   icon,
   label,
   onPress,
+  busy,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  busy?: boolean;
 }) {
   const { colors } = useAppTheme();
   const quickThemed = useMemo(() => ({
@@ -292,8 +304,14 @@ function QuickAction({
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ busy }}
+      disabled={busy}
     >
-      <Ionicons name={icon} size={21} color={colors.textPrimary} />
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.textPrimary} />
+      ) : (
+        <Ionicons name={icon} size={21} color={colors.textPrimary} />
+      )}
       <Text style={[styles.quickActionLabel, quickThemed.quickActionLabel]}>{label}</Text>
     </AnimatedPressable>
   );

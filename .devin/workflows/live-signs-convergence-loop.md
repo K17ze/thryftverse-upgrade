@@ -84,13 +84,17 @@ in-memory state alone.
 
 1. Run type and focused unit/contract tests.
 2. Start only the isolated dependencies required by the slice.
-3. Migrate a clean schema and, when relevant, rehearse upgrade compatibility.
-4. Hit the actual local/staging endpoint with synthetic identities and rows.
-5. Exercise success, duplicate/replay, unauthorized, validation, concurrency,
+3. Provision a disposable database and set `RUN_INTEGRATION_TESTS=true` plus
+   `TEST_DATABASE_URL` through the secure environment. Parse and record only its
+   redacted host/database name; reject missing, unknown, shared, or production-like
+   targets. Set `DATABASE_URL` explicitly to this validated target before migration.
+4. Migrate a clean schema and, when relevant, rehearse upgrade compatibility.
+5. Hit the actual local/staging endpoint with synthetic identities and rows.
+6. Exercise success, duplicate/replay, unauthorized, validation, concurrency,
    interruption, offline, and unknown-outcome paths.
-6. Confirm every consuming surface converges after mutation and app restart.
-7. Confirm worker retry/dead-letter or provider reconciliation when applicable.
-8. Clean up synthetic data and record sanitized evidence.
+7. Confirm every consuming surface converges after mutation and app restart.
+8. Confirm worker retry/dead-letter or provider reconciliation when applicable.
+9. Clean up synthetic data and record sanitized evidence.
 
 Resolve commands from manifests. Common families include:
 
@@ -102,6 +106,10 @@ npm run backend:api:migrate
 npm run frontend:typecheck
 npm run frontend:test
 ```
+
+This repository's integration script can return exit code 0 while database tests
+are skipped. A passing gate therefore requires the expected persistence cases to
+run with zero relevant skips; record counts, not only the exit code.
 
 Do not run the migration rollback command until matching down migrations are proven
 to exist and are tested; prefer a rehearsed forward-fix when rollback is unsupported.

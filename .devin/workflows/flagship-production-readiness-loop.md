@@ -112,10 +112,18 @@ npm --prefix frontend run check:visual-gates
 npm --prefix frontend run check:residue
 npm run backend:api:build
 npm run backend:api:test
-npm --prefix backend/api run test:integration   # requires isolated Postgres
+npm --prefix backend/api run test:integration   # requires guarded isolated Postgres
 npm run backend:key:build
 npm --prefix backend/key-service test
 ```
+
+The API integration runner exits successfully when its persistence suite is
+skipped. Before treating it as a gate, require `RUN_INTEGRATION_TESTS=true` and a
+separately provisioned `TEST_DATABASE_URL`; parse and record only the redacted
+host/database name, reject an unknown or production-like target, and require the
+expected persistence tests to execute with zero relevant skips. Before migration,
+set `DATABASE_URL` explicitly to that already-validated isolated target—never rely
+on implicit `.env` loading.
 
 Run only gates relevant to the changed slice, then the authoritative CI set. A
 pre-existing failure is recorded before edits and never re-labelled as caused by

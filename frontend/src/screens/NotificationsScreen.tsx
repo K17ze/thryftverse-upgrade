@@ -31,6 +31,7 @@ import {
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotificationEvent,
   upgradeToV2,
 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
@@ -441,7 +442,7 @@ export default function NotificationsScreen() {
         }
       }
     },
-    [show]
+    []
   );
 
   const loadMore = React.useCallback(
@@ -619,10 +620,15 @@ export default function NotificationsScreen() {
 
   const handleSwipeDismiss = React.useCallback(
     (notification: NotificationCard) => {
+      const previousNotifications = notifications;
       setNotifications((previous) => previous.filter((item) => item.id !== notification.id));
       haptics.tap();
+      void deleteNotificationEvent(notification.id).catch(() => {
+        setNotifications(previousNotifications);
+        show('Could not delete this notification', 'error');
+      });
     },
-    []
+    [notifications, show]
   );
 
   const handleMarkAllAsRead = React.useCallback(async () => {
@@ -880,14 +886,16 @@ export default function NotificationsScreen() {
           const isActive = activeFilter === filter.key;
           const count = filterCounts[filter.key] ?? 0;
           return (
-            <Pressable
+            <AnimatedPressable
               key={filter.key}
-              style={({ pressed }) => [
+              style={[
                 styles.filterTab,
                 isActive && styles.filterTabActive,
-                pressed && { opacity: 0.6 },
               ]}
               onPress={() => { haptics.tap(); setActiveFilter(filter.key); }}
+              activeOpacity={0.7}
+              scaleValue={0.96}
+              hapticFeedback="light"
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={`${filter.label} filter${count > 0 ? `, ${count} items` : ''}`}
@@ -906,7 +914,7 @@ export default function NotificationsScreen() {
                   {count > 99 ? '99+' : count}
                 </Text>
               ) : null}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>
@@ -916,7 +924,6 @@ export default function NotificationsScreen() {
         <View style={styles.summaryBannerRow}>
           {unreadCount > 0 ? (
             <View style={styles.unreadSummaryBadge}>
-              <View style={styles.unreadSummaryDot} />
               <Text style={styles.unreadSummaryText}>
                 {unreadCount > 99 ? '99+' : unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
               </Text>
@@ -1062,18 +1069,20 @@ export default function NotificationsScreen() {
             const isActive = activeFilter === filter.key;
             const count = filterCounts[filter.key] ?? 0;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={filter.key}
-                style={({ pressed }) => [
+                style={[
                   styles.overflowRow,
                   isActive && { backgroundColor: `${colors.brand}0A` },
-                  pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => {
                   haptics.tap();
                   setActiveFilter(filter.key);
                   setOverflowVisible(false);
                 }}
+                activeOpacity={0.7}
+                scaleValue={0.96}
+                hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
                 accessibilityState={{ selected: isActive }}
@@ -1097,7 +1106,7 @@ export default function NotificationsScreen() {
                     <Ionicons name="checkmark" size={18} color={colors.brand} />
                   ) : null}
                 </View>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>
