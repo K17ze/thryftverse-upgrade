@@ -63,19 +63,21 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
-  { value: 'buy', label: 'Buy', accessibilityLabel: 'Buy side' },
-  { value: 'sell', label: 'Sell', accessibilityLabel: 'Sell side' },
+  { value: 'buy', label: t('trade.side.buy'), accessibilityLabel: t('trade.side.buyA11y') },
+  { value: 'sell', label: t('trade.side.sell'), accessibilityLabel: t('trade.side.sellA11y') },
 ];
 
 // Phase 2.5: order-type selector options
 const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; accessibilityLabel: string }> = [
-  { value: 'protected_instant', label: 'Protected instant', accessibilityLabel: 'Protected instant — marketable limit with visible protection price' },
-  { value: 'limit', label: 'Limit', accessibilityLabel: 'Limit — resting order' },
+  { value: 'protected_instant', label: t('trade.orderType.protectedInstant'), accessibilityLabel: t('trade.orderType.protectedInstantA11y') },
+  { value: 'limit', label: t('trade.orderType.limit'), accessibilityLabel: t('trade.orderType.limitA11y') },
 ];
 
 export default function TradeScreen() {
@@ -131,7 +133,7 @@ export default function TradeScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load asset');
+        const parsed = parseApiError(err, t('trade.error.unableLoadAsset'));
         show(parsed.message, 'error');
         setIsError(true);
       })
@@ -187,7 +189,7 @@ export default function TradeScreen() {
       if (structured) {
         return { label, answer: structured, isTbc: false };
       }
-      return { label, answer: 'To be confirmed', isTbc: true };
+      return { label, answer: t('trade.rights.tbc'), isTbc: true };
     });
     return rightsRows.some((r) => r.isTbc);
   }, [asset]);
@@ -237,7 +239,7 @@ export default function TradeScreen() {
     return { unitsAfter, ownershipPct, outstandingUnits };
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
-  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
+  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: t('trade.error.assetNotFound') };
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
     && Boolean(orderBook.serverTimestamp);
@@ -248,10 +250,10 @@ export default function TradeScreen() {
   const submitDisabledReason = React.useMemo(() => {
     const tradeReason = getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights });
     if (tradeReason) return tradeReason;
-    if (isOffline) return 'Reconnect to review this order';
-    if (orderBook?.source !== 'live') return 'Live market data is unavailable';
-    if (orderBook.reconciliationState !== 'reconciled') return 'Market reconciliation is in progress';
-    if (!orderBook.serverTimestamp) return 'Market timestamp is unavailable';
+    if (isOffline) return t('trade.error.reconnectToReview');
+    if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
+    if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
+    if (!orderBook.serverTimestamp) return t('trade.error.timestampUnavailable');
     return null;
   }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote]);
 
@@ -270,11 +272,11 @@ export default function TradeScreen() {
     });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
-    if (!asset) { show('Asset not found', 'error'); return; }
+    if (!asset) { show(t('trade.error.assetNotFound'), 'error'); return; }
 
-    if (!currentUser?.id) { show('Sign in is required to trade.', 'error'); return; }
+    if (!currentUser?.id) { show(t('trade.error.signInRequired'), 'error'); return; }
     if (!marketIsAuthoritative || !orderBook) {
-      show('Live market data is unavailable. Trading remains paused.', 'error');
+      show(t('trade.error.liveDataPaused'), 'error');
       return;
     }
 
@@ -294,7 +296,7 @@ export default function TradeScreen() {
       const previewResponse = await previewCoOwnOrder(asset.id, command);
       const preview = previewResponse.preview;
       if (!preview.eligibility.allowed) {
-        show(preview.eligibility.message || 'This order is not eligible.', 'error');
+        show(preview.eligibility.message || t('trade.error.notEligible'), 'error');
         return;
       }
       const reservationResponse = await reserveCoOwnOrder(asset.id, {

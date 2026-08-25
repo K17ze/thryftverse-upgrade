@@ -26,6 +26,8 @@ import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../compo
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
 

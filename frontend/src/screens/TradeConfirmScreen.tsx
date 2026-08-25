@@ -22,6 +22,8 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
 

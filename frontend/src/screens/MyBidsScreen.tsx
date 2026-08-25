@@ -21,6 +21,8 @@ import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction }
 import { haptics } from '../utils/haptics';
 import { useBucketedServerClock } from '../hooks/useServerClock';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

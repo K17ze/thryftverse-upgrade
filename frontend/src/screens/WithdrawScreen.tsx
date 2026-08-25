@@ -54,6 +54,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { createStableId } from '../utils/createStableId';
+import { t } from '../i18n';
+
 
 type WithdrawStep = 'form' | 'confirm' | 'success';
 
@@ -79,27 +81,27 @@ interface PayoutStatusConfig {
 
 const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
   requested: {
-    label: 'Pending',
-    subtitle: 'Awaiting review',
+    label: t('withdraw.status.pending'),
+    subtitle: t('withdraw.status.awaitingReview'),
     colorKey: 'textMuted',
   },
   processing: {
-    label: 'Processing',
-    subtitle: 'Transfer initiated, awaiting bank confirmation',
+    label: t('withdraw.status.processing'),
+    subtitle: t('withdraw.status.transferInitiated'),
     colorKey: 'warning',
   },
   paid: {
-    label: 'Paid',
-    subtitle: 'Bank confirmed',
+    label: t('withdraw.status.paid'),
+    subtitle: t('withdraw.status.bankConfirmed'),
     colorKey: 'success',
   },
   failed: {
-    label: 'Failed',
-    subtitle: 'Transfer could not be completed',
+    label: t('withdraw.status.failed'),
+    subtitle: t('withdraw.status.transferCouldNotComplete'),
     colorKey: 'danger',
   },
   cancelled: {
-    label: 'Cancelled',
+    label: t('withdraw.status.cancelled'),
     subtitle: '',
     colorKey: 'textMuted',
   },
@@ -301,21 +303,21 @@ export default function WithdrawScreen() {
       return {
         name:
           payoutAccount.status === 'active'
-            ? 'Connected payout profile'
-            : 'Payout verification pending',
+            ? t('withdraw.payout.connectedProfile')
+            : t('withdraw.payout.verificationPending'),
         details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}`,
       };
     }
 
     if (!allowBankAccounts) {
       return {
-        name: 'Bank payouts unavailable in your region',
+        name: t('withdraw.payout.bankUnavailable'),
         details: 'Country policy will route withdrawals through supported payout rails.',
       };
     }
 
     return {
-      name: 'Connect a payout profile',
+      name: t('withdraw.form.connectPayoutProfile'),
       details: 'Verify your identity and bank details to enable payouts',
     };
   }, [allowBankAccounts, payoutAccount]);
@@ -364,7 +366,7 @@ export default function WithdrawScreen() {
 
     if (!connectStatus.payoutsEnabled) {
       throw new Error(
-        'Payout setup is not complete yet. Finish the required verification steps, then refresh your payout profile.'
+        t('withdraw.error.payoutSetupIncomplete')
       );
     }
 
@@ -392,7 +394,7 @@ export default function WithdrawScreen() {
     }
 
     if (activeAccount.status !== 'active') {
-      throw new Error('Payouts are not enabled for this profile yet.');
+      throw new Error(t('withdraw.error.payoutsNotEnabled'));
     }
 
     setPayoutAccount(activeAccount);
@@ -881,7 +883,7 @@ export default function WithdrawScreen() {
                 accessibilityLabel={
                   payoutAccount?.status === 'active'
                     ? 'Refresh verified payout profile'
-                    : 'Connect verified payout profile'
+                    : t('withdraw.form.connectVerifiedPayoutProfile')
                 }
                 accessibilityHint="Opens secure payout onboarding when verification is required"
               />
@@ -895,7 +897,7 @@ export default function WithdrawScreen() {
                   accessibilityLabel={
                     payoutAccount?.status === 'active'
                       ? 'Refresh payout profile'
-                      : 'Connect payout profile'
+                      : t('withdraw.form.connectPayoutProfileLabel')
                   }
                   accessibilityHint="Checks payout verification and opens any required onboarding steps"
                 >

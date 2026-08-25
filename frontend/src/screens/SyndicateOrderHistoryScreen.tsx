@@ -26,6 +26,8 @@ import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnStateCanvas } from '../components/coown';
 import type { OrderStatus } from '../data/coOwnModels';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

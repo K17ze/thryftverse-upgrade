@@ -21,6 +21,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { haptics } from '../utils/haptics';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WalletActivity'>;
 

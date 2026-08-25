@@ -18,6 +18,8 @@ import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'MyListings'>;

@@ -25,6 +25,8 @@ import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 

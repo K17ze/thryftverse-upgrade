@@ -34,6 +34,8 @@ import { parseApiError } from '../lib/apiClient';
 import { haptics } from '../utils/haptics';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SellerEarnings'>;
 

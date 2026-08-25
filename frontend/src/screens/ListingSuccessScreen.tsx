@@ -27,6 +27,8 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 

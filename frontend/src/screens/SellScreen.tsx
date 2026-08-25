@@ -2143,7 +2143,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheethemed.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   navCloseBtn: {
     width: Control.hit,
@@ -2320,7 +2320,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   hairline: {
-    height: StyleSheethemed.hairlineWidth,
+    height: StyleSheet.hairlineWidth,
     marginTop: Space.sm,
   },
 
@@ -2403,7 +2403,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: StyleSheethemed.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.hit,
   },
   togglePillActive: {
@@ -2431,7 +2431,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheethemed.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   tagText: {
     fontSize: TypographyV2.meta.size,
@@ -2458,7 +2458,7 @@ const styles = StyleSheet.create({
     right: 0,
     marginTop: Space.xs,
     borderRadius: Radius.md,
-    borderWidth: StyleSheethemed.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     zIndex: 1000,
     elevation: 1000,
@@ -2718,7 +2718,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheethemed.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSummaryLabel: {
@@ -2778,7 +2778,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheethemed.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSheetRowLabel: {

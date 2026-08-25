@@ -21,6 +21,8 @@ import {
   type SellerVerificationDemand,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
+import { t } from '../i18n';
+
 
 const DEMAND_TYPE_LABELS: Record<string, string> = {
   authenticity: 'Authenticity proof',

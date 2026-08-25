@@ -50,6 +50,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { t } from '../i18n';
+
 
 const { width: SCREEN_W } = Dimensions.get('window');
 

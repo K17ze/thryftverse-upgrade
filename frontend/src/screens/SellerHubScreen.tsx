@@ -26,6 +26,8 @@ import { fetchImportBatches, type BatchSummaryDTO, type CatalogSource } from '..
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

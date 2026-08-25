@@ -39,6 +39,8 @@ import {
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
 import { track } from '../analytics';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -72,7 +74,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         if (!mounted) return;
         if (res.ok && res.listing) setListing(res.listing);
       })
-      .catch(() => { if (mounted) show('Could not load listing', 'error'); })
+      .catch(() => { if (mounted) show(t('makeOffer.toast.couldNotLoadListing'), 'error'); })
       .finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
   }, [itemId, show]);
@@ -110,17 +112,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   // the confirmation step without submitting.
   const validateOffer = useCallback((): string | null => {
     if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
-      return 'Enter a valid offer amount.';
+      return t('makeOffer.error.invalidAmount');
     }
     if (numericOfferGbp > price * 2) {
-      return 'Offer seems too high. Review the amount.';
+      return t('makeOffer.error.tooHigh');
     }
     const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
     if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      return `Seller's minimum offer is ${formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE)}.`;
+      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) });
     }
     if (!listing?.sellerId) {
-      return 'Could not load seller info. Try again.';
+      return t('makeOffer.error.couldNotLoadSeller');
     }
     return null;
   }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat]);
@@ -154,7 +156,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         idempotencyKeyRef.current = createStableId(isCounterOffer ? 'counter' : 'offer');
       }
       if (isCounterOffer && !parentOfferId) {
-        throw new Error('The original offer is unavailable. Refresh the conversation and try again.');
+        throw new Error(t('makeOffer.error.originalOfferUnavailable'));
       }
       const offer = isCounterOffer
         ? await counterListingOfferOnApi(parentOfferId!, {
@@ -176,8 +178,8 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
 
       const offerText = isCounterOffer
-        ? `Counter-offer: ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} (was ${formatFromFiat(previousOffer ?? 0, DEFAULT_CURRENCY_CODE)}). Valid for ${expiryHours}h.`
-        : `Offer: ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} for ${title}. Valid for ${expiryHours}h.`;
+        ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), previousAmount: formatFromFiat(previousOffer ?? 0, DEFAULT_CURRENCY_CODE), hours: expiryHours })
+        : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), title, hours: expiryHours });
 
       navigation.navigate('Chat', {
         conversationId: `offer_${listing.sellerId}_${itemId}`,
@@ -191,12 +193,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           counterRound: offer.counterRound,
         },
       });
-      show('Opening chat to send your offer.', 'info');
+      show(t('makeOffer.toast.openingChat'), 'info');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const message = isNetworkError
-        ? 'You appear to be offline. Check your connection and try again.'
-        : err instanceof Error ? err.message : 'Could not submit offer.';
+        ? t('makeOffer.error.offline')
+        : err instanceof Error ? err.message : t('makeOffer.error.couldNotSubmit');
       setErrorMsg(message);
       // Stay on review step so the user can retry without re-entering details.
     } finally {
@@ -222,7 +224,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       focusQuery: title,
       partnerUserId: listing.sellerId,
     });
-    show('Opening seller chat.', 'info');
+    show(t('makeOffer.toast.openingSellerChat'), 'info');
   }, [itemId, navigation, listing?.sellerId, show, title]);
 
   // Item image — use listing image if available, fall back to icon
@@ -232,7 +234,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title={isCounterOffer ? 'Counter-offer' : 'Make offer'}
+          title={isCounterOffer ? t('makeOffer.header.counterOffer') : t('makeOffer.header.makeOffer')}
           onBack={() => navigation.goBack()}
           backIcon="close"
         />
@@ -268,7 +270,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               {title}
             </Text>
             <Text style={[styles.itemListingPrice, { color: colors.textSecondary }]}>
-              Listed at {formatFromFiat(price, DEFAULT_CURRENCY_CODE)}
+              {t('makeOffer.item.listedAt', { amount: formatFromFiat(price, DEFAULT_CURRENCY_CODE) })}
             </Text>
           </View>
         </View>
@@ -281,12 +283,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           style={styles.messageAction}
           onPress={handleMessageSeller}
           accessibilityRole="button"
-          accessibilityLabel="Message seller"
-          accessibilityHint="Opens chat with the seller"
+          accessibilityLabel={t('makeOffer.a11y.messageSeller')}
+          accessibilityHint={t('makeOffer.a11y.opensChatSeller')}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textSecondary} />
           <Text style={[styles.messageActionText, { color: colors.textSecondary }]}>
-            Message seller
+            {t('makeOffer.action.messageSeller')}
           </Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </Pressable>
@@ -303,7 +305,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         <View>
         <View style={styles.priceSection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            {isCounterOffer ? 'Your counter-offer' : 'Your offer'}
+            {isCounterOffer ? t('makeOffer.label.yourCounterOffer') : t('makeOffer.label.yourOffer')}
           </Text>
 
           <View style={[styles.priceInputContainer, { borderBottomColor: colors.border }]}>
@@ -318,7 +320,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               selectionColor={colors.brand}
               placeholderTextColor={colors.textMuted}
               placeholder="0.00"
-              accessibilityLabel="Offer amount"
+              accessibilityLabel={t('makeOffer.a11y.offerAmount')}
             />
           </View>
 
@@ -326,7 +328,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           {discountPct != null && (
             <View style={styles.discountRow}>
               <Text style={[styles.discountText, { color: colors.warning }]}>
-                {discountPct}% below asking
+                {t('makeOffer.discount.belowAsking', { percent: discountPct })}
               </Text>
             </View>
           )}
@@ -348,7 +350,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   style={[styles.quickOfferChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}
                   onPress={() => applyQuickOffer(pct)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Quick offer: ${Math.round(pct * 100)}% of asking price, ${currencySymbol}${displayAmount.toFixed(0)}`}
+                  accessibilityLabel={t('makeOffer.a11y.quickOffer', { percent: Math.round(pct * 100), amount: `${currencySymbol}${displayAmount.toFixed(0)}` })}
                 >
                   <Text style={[styles.quickOfferChipLabel, { color: colors.textPrimary }]}>
                     {label}
@@ -368,7 +370,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <View style={[styles.counterCompareBox, { backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.counterCompareCol}>
                 <Text style={[styles.counterCompareLabel, { color: colors.textMuted }]}>
-                  Previous offer
+                  {t('makeOffer.counter.previousOffer')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.textSecondary }]}>
                   {formatFromFiat(previousOffer, DEFAULT_CURRENCY_CODE)}
@@ -377,7 +379,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
               <View style={styles.counterCompareCol}>
                 <Text style={[styles.counterCompareLabel, { color: colors.brand }]}>
-                  Your counter
+                  {t('makeOffer.counter.yourCounter')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.brand }]}>
                   {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE) : '—'}
@@ -394,7 +396,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <View style={styles.contextRow}>
                 <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.contextText, { color: colors.textSecondary }]}>
-                  Seller's minimum offer: {formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE)}
+                  {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) })}
                 </Text>
               </View>
             );
@@ -408,7 +410,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         <View>
         <View style={styles.expirySection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            Offer valid for
+            {t('makeOffer.expiry.validFor')}
           </Text>
           <View style={styles.expiryRow}>
             {expiryOptions.map((hours) => {
@@ -423,7 +425,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   ]}
                   onPress={() => { setExpiryHours(hours); haptics.tap(); }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Offer valid for ${hours} hours`}
+                  accessibilityLabel={t('makeOffer.a11y.offerValidFor', { hours })}
                   accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[
@@ -437,7 +439,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             })}
           </View>
           <Text style={[styles.expiryHint, { color: colors.textMuted }]}>
-            Seller has {expiryHours} hours to respond. After that, the offer expires automatically.
+            {t('makeOffer.expiry.hint', { hours: expiryHours })}
           </Text>
         </View>
         </View>

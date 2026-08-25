@@ -35,6 +35,8 @@ import {
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { haptics } from '../utils/haptics';
+import { t } from '../i18n';
+
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 

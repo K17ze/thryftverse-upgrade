@@ -44,9 +44,11 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { t } from '../i18n';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'Postage'>;
 
 type LoadState = 'loading' | 'populated' | 'error';
@@ -74,8 +76,8 @@ function toCarrierRow(c: CapabilityCarrier, selectedKey: string): CarrierRowData
 }
 
 function formatEta(min: number, max: number): string {
-  if (min === max) return `${min} day${min === 1 ? '' : 's'}`;
-  return `${min}–${max} days`;
+  if (min === max) return t('postage.eta.single', { days: min, plural: min === 1 ? '' : 's' });
+  return t('postage.eta.range', { min, max });
 }
 
 export default function PostageScreen({ navigation }: Props) {
@@ -128,31 +130,31 @@ export default function PostageScreen({ navigation }: Props) {
     setCarriers((prev) => prev.map((c) => ({ ...c, selected: c.key === key })));
     updatePostagePreferences({ carrierKey: key });
     if (carrier) {
-      show(`${carrier.label} set as default carrier`, 'success');
+      show(t('postage.toast.carrierSet', { label: carrier.label }), 'success');
     }
   }, [carriers, updatePostagePreferences, show]);
 
   const handleFreeShippingToggle = useCallback((v: boolean) => {
     updatePostagePreferences({ freeShipping: v });
-    show(v ? 'Free shipping enabled' : 'Free shipping disabled', 'success');
+    show(v ? t('postage.toast.freeShippingEnabled') : t('postage.toast.freeShippingDisabled'), 'success');
   }, [updatePostagePreferences, show]);
 
   const handleBundleDiscountToggle = useCallback((v: boolean) => {
     updatePostagePreferences({ bundleDiscount: v });
-    show(v ? 'Bundle discount enabled' : 'Bundle discount disabled', 'success');
+    show(v ? t('postage.toast.bundleEnabled') : t('postage.toast.bundleDisabled'), 'success');
   }, [updatePostagePreferences, show]);
 
   const freeShipping = postagePreferences.freeShipping;
   const bundleDiscount = postagePreferences.bundleDiscount;
   const selectedCarrier = carriers.find((c) => c.selected);
-  const addressCount = savedAddress ? '1 saved' : 'None saved';
+  const addressCount = savedAddress ? t('postage.address.saved') : t('postage.address.noneSaved');
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Shipping preferences"
-          subtitle="Carrier and postage defaults"
+          title={t('postage.header.title')}
+          subtitle={t('postage.header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -160,12 +162,12 @@ export default function PostageScreen({ navigation }: Props) {
       {/* ── Flat summary block — dominant object is the selected carrier ── */}
       <View style={styles.summaryBlock}>
         <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
-          {selectedCarrier ? selectedCarrier.label : 'Select a default carrier'}
+          {selectedCarrier ? selectedCarrier.label : t('postage.summary.selectCarrier')}
         </Text>
         <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
           {selectedCarrier
-            ? `from ${formatFromFiat(selectedCarrier.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} · ${formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays)}${selectedCarrier.tracking ? ' · tracking' : ''}`
-            : 'Select a default carrier below.'}
+            ? `${t('postage.carrier.from', { price: formatFromFiat(selectedCarrier.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }), eta: formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays) })}${selectedCarrier.tracking ? t('postage.carrier.trackingSuffix') : ''}`
+            : t('postage.summary.selectCarrierHint')}
         </Text>
       </View>
 
@@ -173,13 +175,13 @@ export default function PostageScreen({ navigation }: Props) {
       {loadState === 'error' ? (
         <FlagshipState
           variant="error"
-          title="Couldn't load carriers"
-          subtitle="Check your connection and try again."
-          actionLabel="Retry"
+          title={t('postage.error.loadFailed')}
+          subtitle={t('postage.error.checkConnection')}
+          actionLabel={t('postage.error.retry')}
           onAction={() => void hydrate()}
         />
       ) : loadState === 'loading' ? (
-        <SettingsSection title="Default carrier">
+        <SettingsSection title={t('postage.section.defaultCarrier')}>
           {[0, 1, 2].map((i) => (
             <View
               key={i}
@@ -202,15 +204,15 @@ export default function PostageScreen({ navigation }: Props) {
         <FlagshipState
           variant="empty"
           icon="cube-outline"
-          title="No carriers available"
-          subtitle="Shipping options unavailable for your region."
-          actionLabel="Retry"
+          title={t('postage.empty.title')}
+          subtitle={t('postage.empty.subtitle')}
+          actionLabel={t('postage.error.retry')}
           onAction={() => void hydrate()}
         />
       ) : (
         <SettingsSection
-          title="Default carrier"
-          description={carrierScopeLabel ? `Region: ${carrierScopeLabel}` : undefined}
+          title={t('postage.section.defaultCarrier')}
+          description={carrierScopeLabel ? t('postage.section.region', { scope: carrierScopeLabel }) : undefined}
         >
           {carriers.map((c, idx) => (
             <AnimatedPressable
@@ -223,7 +225,7 @@ export default function PostageScreen({ navigation }: Props) {
               hapticFeedback="light"
               accessibilityRole="radio"
               accessibilityState={{ checked: c.selected }}
-              accessibilityLabel={`${c.label}, from ${formatFromFiat(c.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}, ${formatEta(c.etaMinDays, c.etaMaxDays)}${c.tracking ? ', tracking included' : ''}`}
+              accessibilityLabel={`${t('postage.carrier.a11yLabel', { label: c.label, price: formatFromFiat(c.priceFromGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }), eta: formatEta(c.etaMinDays, c.etaMaxDays) })}${c.tracking ? t('postage.carrier.trackingIncludedSuffix') : ''}`}
             >
               <View style={styles.carrierText}>
                 <Text

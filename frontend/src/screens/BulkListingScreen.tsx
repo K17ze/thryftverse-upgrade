@@ -38,11 +38,13 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
 import {
+
   validateBulkListing,
   submitBulkListings,
   type BulkListingItem,
   type BulkListingResult,
 } from '../services/bulkListingApi';
+import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BulkListing'>;
 

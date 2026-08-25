@@ -28,6 +28,8 @@ import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderSupport'>;
 

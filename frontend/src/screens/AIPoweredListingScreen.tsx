@@ -61,9 +61,11 @@ import {
   type SmartSellConfig,
 } from '../services/smartSellApi';
 import {
+
   scoreListing,
   type ListingQualityScore,
 } from '../services/listingQualityApi';
+import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 

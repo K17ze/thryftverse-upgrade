@@ -23,6 +23,8 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddBankAccount'>;
 

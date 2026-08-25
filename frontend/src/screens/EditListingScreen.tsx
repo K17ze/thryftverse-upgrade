@@ -41,10 +41,12 @@ import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { calculateListingQuality } from '../utils/listingQuality';
 import {
+
   evaluateListingCompleteness,
   type ListingFieldValues,
   type ListingFieldKey,
 } from '../contracts/listingCategoryPolicy';
+import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -64,7 +66,7 @@ export default function EditListingScreen() {
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
   // via this themed proxy so the screen is fully dark-mode compatible.
-  const t = useMemo(() => ({
+  const themed = useMemo(() => ({
     navStatusText: { color: colors.textMuted },
     navStatusUnsaved: { color: colors.brand },
     errorTitle: { color: colors.textPrimary },
@@ -710,9 +712,9 @@ export default function EditListingScreen() {
       <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>Could not load listing</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>Could not load listing</Text>
           <Pressable
-            style={({ pressed }) => [styles.retryBtn, t.retryBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.7 }]}
             onPress={() => {
               setLoadError(false);
               setIsLoading(true);
@@ -751,7 +753,7 @@ export default function EditListingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Retry loading listing"
           >
-            <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
       </FlagshipScreen>
@@ -766,7 +768,7 @@ export default function EditListingScreen() {
           onBack={handleCancel}
           backIcon="close"
           rightAction={
-            <Text style={[styles.navStatusText, t.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && t.navStatusUnsaved]}>
+            <Text style={[styles.navStatusText, themed.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && themed.navStatusUnsaved]}>
               {hasChanges ? 'Unsaved' : 'Saved'}
             </Text>
           }
@@ -815,7 +817,7 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
-          <View style={[styles.photoGuideCard, t.photoGuideCard]}>
+          <View style={[styles.photoGuideCard, themed.photoGuideCard]}>
             <Pressable
               style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
               onPress={() => setPhotoGuideCollapsed((v) => !v)}
@@ -823,8 +825,8 @@ export default function EditListingScreen() {
               accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
             >
               <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-              <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
-              <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
+              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>Photo tips</Text>
+              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>Min 3 photos recommended</Text>
               <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
             {!photoGuideCollapsed && (
@@ -835,15 +837,15 @@ export default function EditListingScreen() {
               >
                 <View style={styles.photoGuideTipRow}>
                   <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Good lighting</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
                   <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Show all angles</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
                   <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Natural background</Text>
                 </View>
               </Reanimated.View>
             )}
@@ -852,33 +854,33 @@ export default function EditListingScreen() {
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
             <View style={styles.statusRow}>
-              <View style={[styles.statusDot, t.statusDot, listing?.status === 'active' && styles.statusDotActive, listing?.status === 'active' && t.statusDotActive]} />
-              <Text style={[styles.statusText, t.statusText]}>{listingStatusLabel}</Text>
+              <View style={[styles.statusDot, themed.statusDot, listing?.status === 'active' && styles.statusDotActive, listing?.status === 'active' && themed.statusDotActive]} />
+              <Text style={[styles.statusText, themed.statusText]}>{listingStatusLabel}</Text>
             </View>
           )}
 
           {isEditingRestricted && (
             <View style={styles.restrictedRow}>
               <Ionicons name="lock-closed" size={16} color={colors.textMuted} aria-hidden={true} />
-              <Text style={[styles.restrictedText, t.restrictedText]}>Editing is limited for this listing status.</Text>
+              <Text style={[styles.restrictedText, themed.restrictedText]}>Editing is limited for this listing status.</Text>
             </View>
           )}
 
           {/* ── 4. DETAILS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Title</Text>
                 {title.trim().length > 0 ? (
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                 )}
               </View>
               <TextInput
-                style={[styles.fieldInput, t.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
+                style={[styles.fieldInput, themed.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
                 placeholder="e.g. Vintage Levi's 501 Denim Jacket"
@@ -886,7 +888,7 @@ export default function EditListingScreen() {
                 returnKeyType="next"
                 editable={!isEditingRestricted}
               />
-              <View style={[styles.hairline, t.hairline]} />
+              <View style={[styles.hairline, themed.hairline]} />
             </View>
 
             <Pressable
@@ -897,20 +899,20 @@ export default function EditListingScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Category</Text>
                   {category ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !category && styles.pickerPlaceholder, !category && t.pickerPlaceholder]}>
+                <Text style={[styles.pickerValue, themed.pickerValue, !category && styles.pickerPlaceholder, !category && themed.pickerPlaceholder]}>
                   {category || 'Select category'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            <View style={[styles.hairline, t.hairline]} />
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -920,22 +922,22 @@ export default function EditListingScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Brand</Text>
                   {brand ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : editCompleteness.policy.brandlessValid ? (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !brand && styles.pickerPlaceholder, !brand && t.pickerPlaceholder]}>
+                <Text style={[styles.pickerValue, themed.pickerValue, !brand && styles.pickerPlaceholder, !brand && themed.pickerPlaceholder]}>
                   {brand || 'Select brand'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            <View style={[styles.hairline, t.hairline]} />
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -945,22 +947,22 @@ export default function EditListingScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Size</Text>
                   {size ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : editCompleteness.policy.sizelessValid ? (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !size && styles.pickerPlaceholder, !size && t.pickerPlaceholder]}>
+                <Text style={[styles.pickerValue, themed.pickerValue, !size && styles.pickerPlaceholder, !size && themed.pickerPlaceholder]}>
                   {size || 'Select size'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            <View style={[styles.hairline, t.hairline]} />
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -970,14 +972,14 @@ export default function EditListingScreen() {
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Condition</Text>
                   {condition ? (
                     <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                   )}
                 </View>
-                <Text style={[styles.pickerValue, t.pickerValue, !condition && styles.pickerPlaceholder, !condition && t.pickerPlaceholder]}>
+                <Text style={[styles.pickerValue, themed.pickerValue, !condition && styles.pickerPlaceholder, !condition && themed.pickerPlaceholder]}>
                   {condition || 'Select condition'}
                 </Text>
               </View>
@@ -987,21 +989,21 @@ export default function EditListingScreen() {
 
           {/* ── 5. PRICING ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Price</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Price</Text>
                 {hasValidPrice ? (
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                 )}
               </View>
               <View style={styles.priceRow}>
-                <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
-                  style={[styles.fieldInput, t.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
+                  style={[styles.fieldInput, themed.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
                   value={price}
                   onChangeText={(v) => { setPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
                   placeholder="0.00"
@@ -1011,13 +1013,13 @@ export default function EditListingScreen() {
                 />
               </View>
               {hasDiscount && (
-                <Text style={[styles.discountPreview, t.discountPreview]}>−{discountPercent}% off original</Text>
+                <Text style={[styles.discountPreview, themed.discountPreview]}>−{discountPercent}% off original</Text>
               )}
               {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                 <View style={styles.priceSuggestionBlock}>
                   <View style={styles.soldCompsHint}>
                     <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                    <Text style={[styles.soldCompsText, t.soldCompsText]}>
+                    <Text style={[styles.soldCompsText, themed.soldCompsText]}>
                       Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
                       {' '}({soldComps.sampleSize} sold)
                     </Text>
@@ -1025,7 +1027,7 @@ export default function EditListingScreen() {
                   {soldComps.medianPrice != null && (
                     <View style={styles.soldCompsHint}>
                       <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
-                      <Text style={[styles.soldCompsText, t.priceSuggestion]}>
+                      <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
                         Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
                       </Text>
                     </View>
@@ -1033,7 +1035,7 @@ export default function EditListingScreen() {
                   {priceVsMarket === 'above' && (
                     <View style={styles.soldCompsHint}>
                       <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
-                      <Text style={[styles.soldCompsText, t.priceMarketHigh]}>
+                      <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
                         Priced above recent sold range
                       </Text>
                     </View>
@@ -1041,7 +1043,7 @@ export default function EditListingScreen() {
                   {priceVsMarket === 'below' && (
                     <View style={styles.soldCompsHint}>
                       <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                      <Text style={[styles.soldCompsText, t.priceMarketLow]}>
+                      <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
                         Priced below recent sold range
                       </Text>
                     </View>
@@ -1049,7 +1051,7 @@ export default function EditListingScreen() {
                   {priceVsMarket === 'in_range' && (
                     <View style={styles.soldCompsHint}>
                       <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                      <Text style={[styles.soldCompsText, t.priceMarketGood]}>
+                      <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
                         Within recent sold range
                       </Text>
                     </View>
@@ -1058,20 +1060,20 @@ export default function EditListingScreen() {
               ) : (
                 <View style={styles.soldCompsHint}>
                   <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.soldCompsText, t.priceNoCompsHint]}>
+                  <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
                     Price competitively for faster sales
                   </Text>
                 </View>
               )}
-              <View style={[styles.hairline, t.hairline]} />
+              <View style={[styles.hairline, themed.hairline]} />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, t.fieldLabel]}>Original price</Text>
+              <Text style={[styles.fieldLabel, themed.fieldLabel]}>Original price</Text>
               <View style={styles.priceRow}>
-                <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
+                <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
-                  style={[styles.fieldInput, t.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
+                  style={[styles.fieldInput, themed.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
                   value={originalPrice}
                   onChangeText={(v) => { setOriginalPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
                   placeholder="0.00"
@@ -1085,18 +1087,18 @@ export default function EditListingScreen() {
 
           {/* ── 6. DESCRIPTION ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Description</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Description</Text>
                 {description.trim().length >= 10 ? (
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                 )}
               </View>
               <TextInput
-                style={[styles.descInput, t.descInput, isEditingRestricted && styles.fieldInputDisabled]}
+                style={[styles.descInput, themed.descInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={description}
                 onChangeText={(t) => { setDescription(t); setErrorMsg(''); }}
                 placeholder="Describe the item, condition, and any notable details…"
@@ -1106,7 +1108,7 @@ export default function EditListingScreen() {
                 textAlignVertical="top"
                 editable={!isEditingRestricted}
               />
-              <Text style={[styles.charCount, description.trim().length < 10 ? t.charCountWarn : t.charCount]}>
+              <Text style={[styles.charCount, description.trim().length < 10 ? themed.charCountWarn : themed.charCount]}>
                 {description.trim().length} characters{description.trim().length < 10 ? ' · min 10' : description.length < 60 ? ' · add more detail' : ''}
               </Text>
             </View>
@@ -1114,7 +1116,7 @@ export default function EditListingScreen() {
 
           {/* ── 7. SHIPPING ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Shipping</Text>
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1123,14 +1125,14 @@ export default function EditListingScreen() {
               accessibilityLabel="Toggle shipping method"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Shipping method</Text>
-                <Text style={[styles.pickerValue, t.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && t.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Shipping method</Text>
+                <Text style={[styles.pickerValue, themed.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && themed.pickerPlaceholder]}>
                   {shippingMethod === 'standard' ? 'Standard' : shippingMethod === 'express' ? 'Express' : 'Select method'}
                 </Text>
               </View>
               <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
             </Pressable>
-            <View style={[styles.hairline, t.hairline]} />
+            <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
@@ -1139,8 +1141,8 @@ export default function EditListingScreen() {
               accessibilityLabel="Toggle who pays shipping"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Who pays</Text>
-                <Text style={[styles.pickerValue, t.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && t.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Who pays</Text>
+                <Text style={[styles.pickerValue, themed.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && themed.pickerPlaceholder]}>
                   {shippingPayer === 'buyer' ? 'Buyer pays' : shippingPayer === 'seller' ? 'I pay' : 'Select payer'}
                 </Text>
               </View>
@@ -1152,7 +1154,7 @@ export default function EditListingScreen() {
           {errorMsg && saveStage !== 'idle' && (
             <View style={styles.inlineErrorRow}>
               <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
-              <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
+              <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
 
@@ -1183,7 +1185,7 @@ export default function EditListingScreen() {
 
       {/* ── 8b. COMPACT LISTING QUALITY METER (fixed above save footer) ── */}
       {isOwner && (
-        <View style={[styles.qualityBar, t.qualityBar]}>
+        <View style={[styles.qualityBar, themed.qualityBar]}>
           <View style={styles.qualityBarRow}>
             <View style={styles.qualityBarLeft}>
               <Ionicons
@@ -1192,11 +1194,11 @@ export default function EditListingScreen() {
                 color={colors.textSecondary}
                 aria-hidden={true}
               />
-              <Text style={[styles.qualityBarLabel, t.qualityBarLabel]}>Listing quality</Text>
+              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>Listing quality</Text>
             </View>
             <View style={styles.qualityBarRight}>
-              <Text style={[styles.qualityBarScore, t.qualityBarScore]}>{qualityResult.score}%</Text>
-              <Text style={[styles.qualityBarTier, t.qualityBarTier]}>{qualityResult.tierLabel}</Text>
+              <Text style={[styles.qualityBarScore, themed.qualityBarScore]}>{qualityResult.score}%</Text>
+              <Text style={[styles.qualityBarTier, themed.qualityBarTier]}>{qualityResult.tierLabel}</Text>
               <Pressable
                 hitSlop={8}
                 onPress={() => setQualityTipsExpanded((v) => !v)}
@@ -1204,7 +1206,7 @@ export default function EditListingScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
               >
-                <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
+                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>Tips to improve</Text>
                 <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} aria-hidden={true} />
               </Pressable>
             </View>
@@ -1216,12 +1218,12 @@ export default function EditListingScreen() {
             <Reanimated.View
               entering={reducedMotion ? undefined : FadeIn.duration(200)}
               exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-              style={[styles.qualityTipsRow, t.qualityTipsRow]}
+              style={[styles.qualityTipsRow, themed.qualityTipsRow]}
             >
               {qualityResult.missingItems.slice(0, 6).map((item) => (
                 <View key={item.key} style={styles.qualityTipChip}>
                   <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{item.label}</Text>
+                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{item.label}</Text>
                 </View>
               ))}
             </Reanimated.View>
@@ -1234,8 +1236,8 @@ export default function EditListingScreen() {
             >
               {qualityResult.tips.slice(0, 4).map((tip, i) => (
                 <View key={i} style={styles.qualityTipBulletRow}>
-                  <Text style={[styles.qualityTipBullet, t.qualityTipsText]}>•</Text>
-                  <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{tip}</Text>
+                  <Text style={[styles.qualityTipBullet, themed.qualityTipsText]}>•</Text>
+                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{tip}</Text>
                 </View>
               ))}
             </Reanimated.View>

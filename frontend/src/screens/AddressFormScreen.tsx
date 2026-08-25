@@ -26,6 +26,8 @@ import {
 import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { t } from '../i18n';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddressForm'>;
 

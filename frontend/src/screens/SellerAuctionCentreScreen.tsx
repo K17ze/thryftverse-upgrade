@@ -37,9 +37,11 @@ import { RetryState } from '../components/RetryState';
 import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
+
   listAuctions,
   type MarketAuction,
 } from '../services/marketApi';
+import { t } from '../i18n';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

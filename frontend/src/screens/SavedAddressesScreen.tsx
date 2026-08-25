@@ -25,6 +25,8 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { t } from '../i18n';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'SavedAddresses'>;
 
 type LoadState = 'loading' | 'populated' | 'empty' | 'error';

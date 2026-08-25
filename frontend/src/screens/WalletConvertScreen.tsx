@@ -36,6 +36,7 @@ import { COPY } from '../constants/copy';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 import {
+
   Typography,
   Space,
   Radius,
@@ -45,6 +46,7 @@ import {
   LetterSpacing,
   IconGrammar,
 } from '../theme/designTokens';
+import { t } from '../i18n';
 
 // ── Platform fee rate for 1ZE → fiat conversion (2%) ──
 const CONVERT_FEE_RATE = 0.02;

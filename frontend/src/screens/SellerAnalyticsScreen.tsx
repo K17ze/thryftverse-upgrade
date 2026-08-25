@@ -16,6 +16,8 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useFeatureFlag, track } from '../analytics';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

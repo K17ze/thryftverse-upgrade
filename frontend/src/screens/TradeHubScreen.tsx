@@ -53,6 +53,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { t } from '../i18n';
+
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
